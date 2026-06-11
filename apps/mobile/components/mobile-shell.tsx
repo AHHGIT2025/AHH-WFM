@@ -27,16 +27,16 @@ export const MobileShell: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   return (
-    <div className="min-h-screen bg-slate-100 flex items-center justify-center py-6 px-4 font-sans antialiased">
+    <div className="min-h-screen bg-slate-100 sm:py-6 sm:px-4 flex items-center justify-center font-sans antialiased">
       {/* Smartphone Frame Simulator Container */}
-      <div className="w-full max-w-[430px] h-[884px] bg-background border-[8px] border-slate-800 rounded-[40px] shadow-2xl relative flex flex-col overflow-hidden">
-        {/* Dynamic Island / Device Notch */}
-        <div className="absolute top-2 left-1/2 -translate-x-1/2 w-32 h-6 bg-slate-800 rounded-full z-[100] flex items-center justify-center">
+      <div className="w-full h-screen sm:h-[884px] sm:max-w-[430px] bg-background sm:border-[8px] sm:border-slate-800 sm:rounded-[40px] sm:shadow-2xl relative flex flex-col overflow-hidden">
+        {/* Dynamic Island / Device Notch - Displayed on desktop simulator only */}
+        <div className="absolute top-2 left-1/2 -translate-x-1/2 w-32 h-6 bg-slate-800 rounded-full z-[100] hidden sm:flex items-center justify-center">
           <div className="w-3.5 h-3.5 bg-slate-900 rounded-full ml-auto mr-3 border border-slate-700"></div>
         </div>
 
         {/* Top App Header */}
-        <header className="flex justify-between items-center px-4 pt-10 pb-3 w-full sticky top-0 z-50 bg-surface border-b border-outline-variant/30 shadow-sm">
+        <header className="flex justify-between items-center px-4 sm:pt-10 pt-4 pb-3 w-full sticky top-0 z-50 bg-surface border-b border-outline-variant/30 shadow-sm">
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-full bg-primary-fixed flex items-center justify-center overflow-hidden border border-primary/10">
               <img
