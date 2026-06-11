@@ -1,0 +1,14 @@
+node_modules
+.next
+.env
+.env.local
+dist
+build
+.system_generated
+out
+.eslintcache
+.next-env.d.ts
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
