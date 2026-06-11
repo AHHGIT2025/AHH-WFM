@@ -1,0 +1,9 @@
+{
+  "name": "@ahh-wfm/config",
+  "version": "1.0.0",
+  "main": "tailwind-preset.js",
+  "scripts": {
+    "build": "echo no-build"
+  },
+  "private": true
+}
