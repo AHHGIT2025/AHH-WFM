@@ -1,0 +1,14 @@
+{
+  "name": "@ahh-wfm/ui",
+  "version": "1.0.0",
+  "main": "src/index.tsx",
+  "types": "src/index.tsx",
+  "scripts": {
+    "build": "echo no-build"
+  },
+  "dependencies": {
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0"
+  },
+  "private": true
+}
