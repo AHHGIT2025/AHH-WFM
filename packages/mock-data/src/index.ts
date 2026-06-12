@@ -2,7 +2,24 @@ import { Employee, AttendanceRecord, Shift, LeaveRequest, SapMapping, SyncLog, A
 import * as fs from "fs";
 import * as path from "path";
 
-// In-memory fallback
+// Initialize Prisma dynamically if DATABASE_URL is available
+let prismaClient: any = null;
+const isDbConnected = () => {
+  if (typeof window !== "undefined") return false;
+  if (!process.env.DATABASE_URL) return false;
+  
+  if (!prismaClient) {
+    try {
+      const { prisma } = require("@ahh-wfm/database");
+      prismaClient = prisma;
+    } catch (e) {
+      console.error("Failed to load @ahh-wfm/database package", e);
+    }
+  }
+  return !!prismaClient;
+};
+
+// In-memory fallback dataset (also used to seed MySQL)
 let memoryDb: {
   employees: Employee[];
   attendance: AttendanceRecord[];
@@ -53,12 +70,94 @@ let memoryDb: {
   ]
 };
 
-// JSON file database resolution on disk (Node.js environment)
+// Seeding helper to pre-fill MySQL with mock data if it is empty
+let isSeeded = false;
+const seedMySQL = async () => {
+  if (isSeeded) return;
+  if (!isDbConnected()) return;
+  
+  try {
+    const empCount = await prismaClient.employee.count();
+    if (empCount === 0) {
+      console.log("MySQL database is empty. Seeding mock data...");
+      
+      // Seed employees
+      for (const emp of memoryDb.employees) {
+        await prismaClient.employee.create({ data: emp });
+      }
+      
+      // Seed shifts
+      for (const shift of memoryDb.shifts) {
+        await prismaClient.shift.create({ data: shift });
+      }
+      
+      // Seed attendance records
+      for (const att of memoryDb.attendance) {
+        await prismaClient.attendanceRecord.create({
+          data: {
+            id: att.id,
+            employeeId: att.employeeId,
+            employeeName: att.employeeName,
+            checkIn: new Date(att.checkIn),
+            checkOut: att.checkOut ? new Date(att.checkOut) : null,
+            lat: att.lat,
+            lng: att.lng,
+            device: att.device,
+            status: att.status,
+            locationName: att.locationName
+          }
+        });
+      }
+      
+      // Seed leaves
+      for (const leave of memoryDb.leaves) {
+        await prismaClient.leaveRequest.create({ data: leave });
+      }
+      
+      // Seed SAP mapping
+      for (const map of memoryDb.sapMappings) {
+        await prismaClient.sapMapping.create({ data: map });
+      }
+      
+      // Seed logs
+      for (const log of memoryDb.syncLogs) {
+        await prismaClient.syncLog.create({
+          data: {
+            id: log.id,
+            timestamp: new Date(log.timestamp.replace(" ", "T") + "Z"),
+            operation: log.operation,
+            subject: log.subject,
+            status: log.status,
+            details: log.details
+          }
+        });
+      }
+      
+      // Seed announcements
+      for (const ann of memoryDb.announcements) {
+        await prismaClient.announcement.create({
+          data: {
+            id: ann.id,
+            title: ann.title,
+            content: ann.content,
+            timestamp: new Date(ann.timestamp),
+            author: ann.author,
+            category: ann.category
+          }
+        });
+      }
+      console.log("MySQL Database seeded successfully!");
+    }
+    isSeeded = true;
+  } catch (e) {
+    console.error("Failed to seed MySQL database", e);
+  }
+};
+
+// JSON file database resolution on disk (Node.js environment fallback)
 const getDbPath = () => {
-  // If running in browser, path resolution is unavailable
   if (typeof window !== "undefined") return "";
   
-  // Save database inside the packages/mock-data folder
   try {
     const rootPath = "D:\\AI Projects\\AHH WFM\\app";
     const dbDir = path.join(rootPath, "packages", "mock-data");
@@ -100,13 +199,62 @@ const writeDb = (data: typeof memoryDb) => {
   }
 };
 
-// Database CRUD Actions API
+// Data Mapper Helpers for Prisma Types -> TypeScript Interfaces
+const mapAttendance = (rec: any): AttendanceRecord => ({
+  id: rec.id,
+  employeeId: rec.employeeId,
+  employeeName: rec.employeeName,
+  checkIn: rec.checkIn.toISOString(),
+  checkOut: rec.checkOut ? rec.checkOut.toISOString() : undefined,
+  lat: rec.lat,
+  lng: rec.lng,
+  device: rec.device,
+  status: rec.status,
+  locationName: rec.locationName
+});
+
+const mapSyncLog = (log: any): SyncLog => ({
+  id: log.id,
+  timestamp: log.timestamp.toISOString().replace("T", " ").substring(0, 19),
+  operation: log.operation,
+  subject: log.subject,
+  status: log.status,
+  details: log.details
+});
+
+const mapAnnouncement = (ann: any): Announcement => ({
+  id: ann.id,
+  title: ann.title,
+  content: ann.content,
+  timestamp: ann.timestamp.toISOString(),
+  author: ann.author,
+  category: ann.category
+});
+
+// Database CRUD Actions API (All Async to support DB connection)
 export const mockDb = {
   // Employees
-  getEmployees: (): Employee[] => {
+  getEmployees: async (): Promise<Employee[]> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      return await prismaClient.employee.findMany();
+    }
     return readDb().employees;
   },
-  updateEmployeeStatus: (id: string, status: Employee["status"]): Employee | null => {
+  updateEmployeeStatus: async (id: string, status: Employee["status"]): Promise<Employee | null> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      try {
+        const emp = await prismaClient.employee.update({
+          where: { id },
+          data: { status }
+        });
+        return emp;
+      } catch (e) {
+        return null;
+      }
+    }
+    
     const db = readDb();
     const employee = db.employees.find(e => e.id === id);
     if (!employee) return null;
@@ -116,15 +264,59 @@ export const mockDb = {
   },
   
   // Attendance
-  getAttendance: (): AttendanceRecord[] => {
+  getAttendance: async (): Promise<AttendanceRecord[]> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      const records = await prismaClient.attendanceRecord.findMany({
+        orderBy: { checkIn: "desc" }
+      });
+      return records.map(mapAttendance);
+    }
     return readDb().attendance;
   },
-  checkIn: (employeeId: string, lat: number, lng: number, device: string, locationName: string): AttendanceRecord => {
+  checkIn: async (employeeId: string, lat: number, lng: number, device: string, locationName: string): Promise<AttendanceRecord> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      const employee = await prismaClient.employee.findUnique({ where: { id: employeeId } });
+      const employeeName = employee ? employee.name : "Unknown Employee";
+      
+      if (employee) {
+        await prismaClient.employee.update({
+          where: { id: employeeId },
+          data: { status: "On Duty" }
+        });
+      }
+      
+      const record = await prismaClient.attendanceRecord.create({
+        data: {
+          employeeId,
+          employeeName,
+          lat,
+          lng,
+          device,
+          status: "On Time",
+          locationName,
+          checkIn: new Date()
+        }
+      });
+      
+      await prismaClient.syncLog.create({
+        data: {
+          operation: "Data Push",
+          subject: `Attendance_${employeeId}`,
+          status: "Success",
+          details: `Checked In from mobile at ${locationName}`,
+          timestamp: new Date()
+        }
+      });
+      
+      return mapAttendance(record);
+    }
+
     const db = readDb();
     const employee = db.employees.find(e => e.id === employeeId);
     const employeeName = employee ? employee.name : "Unknown Employee";
     
-    // Set employee status to "On Duty"
     if (employee) {
       employee.status = "On Duty";
     }
@@ -137,13 +329,12 @@ export const mockDb = {
       lat,
       lng,
       device,
-      status: "On Time", // In mock, check-ins are always on time unless late threshold is exceeded
+      status: "On Time",
       locationName
     };
     
     db.attendance.unshift(record);
     
-    // Add a sync log too
     db.syncLogs.unshift({
       id: `LOG-${Date.now()}`,
       timestamp: new Date().toISOString().replace("T", " ").substring(0, 19),
@@ -156,7 +347,28 @@ export const mockDb = {
     writeDb(db);
     return record;
   },
-  checkOut: (employeeId: string): AttendanceRecord | null => {
+  checkOut: async (employeeId: string): Promise<AttendanceRecord | null> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      const record = await prismaClient.attendanceRecord.findFirst({
+        where: { employeeId, checkOut: null },
+        orderBy: { checkIn: "desc" }
+      });
+      if (!record) return null;
+      
+      const updated = await prismaClient.attendanceRecord.update({
+        where: { id: record.id },
+        data: { checkOut: new Date() }
+      });
+      
+      await prismaClient.employee.update({
+        where: { id: employeeId },
+        data: { status: "Offline" }
+      });
+      
+      return mapAttendance(updated);
+    }
+
     const db = readDb();
     const record = db.attendance.find(r => r.employeeId === employeeId && !r.checkOut);
     if (!record) return null;
@@ -173,10 +385,36 @@ export const mockDb = {
   },
   
   // Shifts
-  getShifts: (): Shift[] => {
+  getShifts: async (): Promise<Shift[]> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      return await prismaClient.shift.findMany();
+    }
     return readDb().shifts;
   },
-  addShift: (shift: Omit<Shift, "id">): Shift => {
+  addShift: async (shift: Omit<Shift, "id">): Promise<Shift> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      const newShift = await prismaClient.shift.create({
+        data: {
+          id: shift.code,
+          ...shift
+        }
+      });
+      
+      await prismaClient.syncLog.create({
+        data: {
+          operation: "Schema Update",
+          subject: `Shift_${shift.code}`,
+          status: "Success",
+          details: `Created new shift ${shift.name} (${shift.timeRange})`,
+          timestamp: new Date()
+        }
+      });
+      
+      return newShift;
+    }
+
     const db = readDb();
     const newShift: Shift = {
       ...shift,
@@ -198,10 +436,33 @@ export const mockDb = {
   },
   
   // Leaves
-  getLeaves: (): LeaveRequest[] => {
+  getLeaves: async (): Promise<LeaveRequest[]> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      return await prismaClient.leaveRequest.findMany();
+    }
     return readDb().leaves;
   },
-  applyLeave: (employeeId: string, type: string, dateRange: string, reason: string): LeaveRequest => {
+  applyLeave: async (employeeId: string, type: string, dateRange: string, reason: string): Promise<LeaveRequest> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      const employee = await prismaClient.employee.findUnique({ where: { id: employeeId } });
+      const employeeName = employee ? employee.name : "Unknown Employee";
+      
+      const request = await prismaClient.leaveRequest.create({
+        data: {
+          employeeId,
+          employeeName,
+          type,
+          dateRange,
+          reason,
+          status: "Pending Approval"
+        }
+      });
+      
+      return request;
+    }
+
     const db = readDb();
     const employee = db.employees.find(e => e.id === employeeId);
     const employeeName = employee ? employee.name : "Unknown Employee";
@@ -219,13 +480,33 @@ export const mockDb = {
     writeDb(db);
     return request;
   },
-  updateLeaveStatus: (id: string, status: LeaveRequest["status"]): LeaveRequest | null => {
+  updateLeaveStatus: async (id: string, status: LeaveRequest["status"]): Promise<LeaveRequest | null> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      try {
+        const request = await prismaClient.leaveRequest.update({
+          where: { id },
+          data: { status }
+        });
+        
+        if (status === "Approved") {
+          await prismaClient.employee.update({
+            where: { id: request.employeeId },
+            data: { status: "On Leave" }
+          });
+        }
+        
+        return request;
+      } catch (e) {
+        return null;
+      }
+    }
+
     const db = readDb();
     const request = db.leaves.find(l => l.id === id);
     if (!request) return null;
     request.status = status;
     
-    // Update employee status if leave is approved and active
     if (status === "Approved") {
       const employee = db.employees.find(e => e.id === request.employeeId);
       if (employee) {
@@ -237,11 +518,28 @@ export const mockDb = {
     return request;
   },
   
-  // SAP mappings
-  getSapMappings: (): SapMapping[] => {
+  // SAP Mappings
+  getSapMappings: async (): Promise<SapMapping[]> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      return await prismaClient.sapMapping.findMany();
+    }
     return readDb().sapMappings;
   },
-  updateSapMappingStatus: (id: string, status: SapMapping["status"]): SapMapping | null => {
+  updateSapMappingStatus: async (id: string, status: SapMapping["status"]): Promise<SapMapping | null> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      try {
+        const mapping = await prismaClient.sapMapping.update({
+          where: { id },
+          data: { status }
+        });
+        return mapping;
+      } catch (e) {
+        return null;
+      }
+    }
+
     const db = readDb();
     const mapping = db.sapMappings.find(m => m.id === id);
     if (!mapping) return null;
@@ -251,10 +549,28 @@ export const mockDb = {
   },
   
   // Sync Logs
-  getSyncLogs: (): SyncLog[] => {
+  getSyncLogs: async (): Promise<SyncLog[]> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      const logs = await prismaClient.syncLog.findMany({
+        orderBy: { timestamp: "desc" }
+      });
+      return logs.map(mapSyncLog);
+    }
     return readDb().syncLogs;
   },
-  addSyncLog: (log: Omit<SyncLog, "id" | "timestamp">): SyncLog => {
+  addSyncLog: async (log: Omit<SyncLog, "id" | "timestamp">): Promise<SyncLog> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      const newLog = await prismaClient.syncLog.create({
+        data: {
+          ...log,
+          timestamp: new Date()
+        }
+      });
+      return mapSyncLog(newLog);
+    }
+
     const db = readDb();
     const newLog: SyncLog = {
       ...log,
@@ -267,7 +583,14 @@ export const mockDb = {
   },
   
   // Announcements
-  getAnnouncements: (): Announcement[] => {
+  getAnnouncements: async (): Promise<Announcement[]> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      const announcements = await prismaClient.announcement.findMany({
+        orderBy: { timestamp: "desc" }
+      });
+      return announcements.map(mapAnnouncement);
+    }
     return readDb().announcements;
   }
 };

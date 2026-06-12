@@ -1,0 +1,81 @@
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Employee {
+  id         String             @id
+  name       String
+  department String
+  role       String
+  status     String             // "On Duty" | "On Break" | "Offline" | "On Leave"
+  email      String             @unique
+  phone      String?
+  shiftId    String?
+  attendance AttendanceRecord[]
+  leaves     LeaveRequest[]
+}
+
+model AttendanceRecord {
+  id           String    @id @default(uuid())
+  employeeId   String
+  employeeName String
+  checkIn      DateTime  @default(now())
+  checkOut     DateTime?
+  lat          Float
+  lng          Float
+  device       String
+  status       String    // "On Time" | "Late" | "Absent" | "Sync Exception"
+  locationName String
+  employee     Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+}
+
+model Shift {
+  id            String @id
+  name          String
+  code          String @unique
+  timeRange     String
+  breakDuration String
+  status        String // "Active" | "Inactive"
+}
+
+model LeaveRequest {
+  id           String   @id @default(uuid())
+  employeeId   String
+  employeeName String
+  type         String
+  dateRange    String
+  reason       String
+  status       String   // "Approved" | "Rejected" | "Pending Approval"
+  employee     Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+}
+
+model SapMapping {
+  id                 String @id
+  sourceField        String
+  targetField        String
+  transformationRule String
+  status             String // "Mapped" | "Conflict" | "Unmapped"
+}
+
+model SyncLog {
+  id        String   @id @default(uuid())
+  timestamp DateTime @default(now())
+  operation String
+  subject   String
+  status    String   // "Success" | "Failed" | "Warning"
+  details   String
+}
+
+model Announcement {
+  id        String   @id @default(uuid())
+  title     String
+  content   String   @db.Text
+  timestamp DateTime @default(now())
+  author    String
+  category  String   // "General" | "Urgent" | "System Update"
+}
