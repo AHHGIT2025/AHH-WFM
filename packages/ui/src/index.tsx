@@ -22,7 +22,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
           size === "md" && "px-4 py-2 text-sm",
           size === "lg" && "px-6 py-3 text-base",
           // Variants
-          variant === "primary" && "bg-primary text-on-primary hover:opacity-90",
+          variant === "primary" && "bg-secondary text-white hover:bg-[#0047a3] focus:ring-2 focus:ring-[rgba(0,88,190,0.35)] outline-none",
           variant === "secondary" && "bg-surface-container-high border border-outline-variant text-on-surface hover:bg-surface-container-highest",
           variant === "ghost" && "bg-transparent text-on-surface-variant hover:bg-surface-container-low",
           variant === "success" && "bg-status-success text-white hover:opacity-90",

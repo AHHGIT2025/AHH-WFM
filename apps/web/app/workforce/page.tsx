@@ -286,7 +286,7 @@ export default function WorkforcePage() {
         </div>
         <div className="flex gap-2 self-start sm:self-auto">
           <Button
-            variant="secondary"
+            variant="primary"
             onClick={() => {
               setNewDeptName("");
               setEditingDeptId(null);
@@ -294,10 +294,11 @@ export default function WorkforcePage() {
             }}
             className="font-bold flex items-center gap-1.5 text-xs"
           >
-            <span className="material-symbols-outlined text-[18px]">domain</span>
+            <span className="material-symbols-outlined text-[18px] w-4 h-4 text-white">domain</span>
             <span>Departments</span>
           </Button>
           <Button
+            variant="primary"
             onClick={() => {
               setValidationError(null);
               setEmpId("");
@@ -312,7 +313,7 @@ export default function WorkforcePage() {
             }}
             className="font-bold flex items-center gap-1.5 text-xs"
           >
-            <span className="material-symbols-outlined text-[18px]">person_add</span>
+            <span className="material-symbols-outlined text-[18px] w-4 h-4 text-white">person_add</span>
             <span>Add Employee</span>
           </Button>
         </div>
