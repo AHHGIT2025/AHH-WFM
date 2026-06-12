@@ -17,11 +17,17 @@ export default function ShiftsPage() {
 
   const fetchDb = async () => {
     try {
-      const res = await fetch("/api/db");
-      if (res.ok) {
-        const json = await res.json();
-        setShifts(json.shifts);
-        setAuditLogs(json.syncLogs.filter((l: SyncLog) => l.operation === "Schema Update" || l.subject.startsWith("Shift_")));
+      const [shiftsRes, logsRes] = await Promise.all([
+        fetch("/api/v1/shifts"),
+        fetch("/api/v1/sap/logs")
+      ]);
+      if (shiftsRes.ok && logsRes.ok) {
+        const [shifts, logs] = await Promise.all([
+          shiftsRes.json(),
+          logsRes.json()
+        ]);
+        setShifts(shifts);
+        setAuditLogs(logs.filter((l: SyncLog) => l.operation === "Schema Update" || l.subject.startsWith("Shift_")));
       }
     } catch (e) {
       console.error(e);
@@ -37,18 +43,15 @@ export default function ShiftsPage() {
     if (!name || !code || !timeRange || !breakDuration) return;
 
     try {
-      const res = await fetch("/api/db", {
+      const res = await fetch("/api/v1/shifts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          action: "addShift",
-          payload: {
-            name,
-            code: code.toUpperCase(),
-            timeRange,
-            breakDuration,
-            status: "Active"
-          }
+          name,
+          code: code.toUpperCase(),
+          timeRange,
+          breakDuration,
+          status: "Active"
         })
       });
       if (res.ok) {

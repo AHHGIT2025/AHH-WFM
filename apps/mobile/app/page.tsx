@@ -19,14 +19,18 @@ export default function MobileHomePage() {
 
   const fetchDb = async () => {
     try {
-      const res = await fetch("/api/db");
-      if (res.ok) {
-        const json = await res.json();
-        setData({
-          employees: json.employees,
-          attendance: json.attendance,
-          leaves: json.leaves
-        });
+      const [empRes, attRes, lvRes] = await Promise.all([
+        fetch("/api/v1/employees"),
+        fetch("/api/v1/attendance"),
+        fetch("/api/v1/leaves")
+      ]);
+      if (empRes.ok && attRes.ok && lvRes.ok) {
+        const [employees, attendance, leaves] = await Promise.all([
+          empRes.json(),
+          attRes.json(),
+          lvRes.json()
+        ]);
+        setData({ employees, attendance, leaves });
       }
     } catch (e) {
       console.error(e);
@@ -55,28 +59,22 @@ export default function MobileHomePage() {
     try {
       if (activeRecord) {
         // Clock out
-        await fetch("/api/db", {
+        await fetch("/api/v1/attendance/check-out", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            action: "checkOut",
-            payload: { employeeId }
-          })
+          body: JSON.stringify({ employeeId })
         });
       } else {
         // Clock in
-        await fetch("/api/db", {
+        await fetch("/api/v1/attendance/check-in", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            action: "checkIn",
-            payload: {
-              employeeId,
-              lat: 25.2861,
-              lng: 51.5348,
-              device: "iPhone 15 Pro Max · GPS Active",
-              locationName: "Al Hattab HQ Doha"
-            }
+            employeeId,
+            lat: 25.2861,
+            lng: 51.5348,
+            device: "iPhone 15 Pro Max · GPS Active",
+            locationName: "Al Hattab HQ Doha"
           })
         });
       }

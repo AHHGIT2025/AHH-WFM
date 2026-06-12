@@ -10,10 +10,10 @@ export default function MobileHistoryPage() {
 
   const fetchAttendance = async () => {
     try {
-      const res = await fetch("/api/db");
+      const res = await fetch(`/api/v1/attendance/${employeeId}`);
       if (res.ok) {
         const json = await res.json();
-        setRecords(json.attendance.filter((rec: AttendanceRecord) => rec.employeeId === employeeId));
+        setRecords(json);
       }
     } catch (e) {
       console.error(e);

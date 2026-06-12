@@ -15,10 +15,10 @@ export default function MobileLeavePage() {
 
   const fetchLeaves = async () => {
     try {
-      const res = await fetch("/api/db");
+      const res = await fetch("/api/v1/leaves");
       if (res.ok) {
         const json = await res.json();
-        setLeaves(json.leaves.filter((l: LeaveRequest) => l.employeeId === employeeId));
+        setLeaves(json.filter((l: LeaveRequest) => l.employeeId === employeeId));
       }
     } catch (e) {
       console.error(e);
@@ -35,17 +35,14 @@ export default function MobileLeavePage() {
 
     setSubmitting(true);
     try {
-      const res = await fetch("/api/db", {
+      const res = await fetch("/api/v1/leaves", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          action: "applyLeave",
-          payload: {
-            employeeId,
-            type,
-            dateRange,
-            reason
-          }
+          employeeId,
+          type,
+          dateRange,
+          reason
         })
       });
       if (res.ok) {

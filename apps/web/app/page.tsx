@@ -19,14 +19,18 @@ export default function DashboardPage() {
   // Poll for database changes
   const fetchDb = async () => {
     try {
-      const res = await fetch("/api/db");
-      if (res.ok) {
-        const json = await res.json();
-        setData({
-          employees: json.employees,
-          attendance: json.attendance,
-          leaves: json.leaves
-        });
+      const [empRes, attRes, lvRes] = await Promise.all([
+        fetch("/api/v1/employees"),
+        fetch("/api/v1/attendance"),
+        fetch("/api/v1/leaves")
+      ]);
+      if (empRes.ok && attRes.ok && lvRes.ok) {
+        const [employees, attendance, leaves] = await Promise.all([
+          empRes.json(),
+          attRes.json(),
+          lvRes.json()
+        ]);
+        setData({ employees, attendance, leaves });
       }
     } catch (e) {
       console.error("Failed to fetch WFM DB", e);
@@ -50,13 +54,10 @@ export default function DashboardPage() {
   // Handle leave approval
   const handleLeaveAction = async (id: string, status: "Approved" | "Rejected") => {
     try {
-      const res = await fetch("/api/db", {
-        method: "POST",
+      const res = await fetch(`/api/v1/leaves/${id}`, {
+        method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "updateLeaveStatus",
-          payload: { id, status }
-        })
+        body: JSON.stringify({ status })
       });
       if (res.ok) {
         fetchDb();
@@ -70,17 +71,14 @@ export default function DashboardPage() {
   const handleSyncWorker = async (employeeId: string) => {
     setSyncingId(employeeId);
     try {
-      await fetch("/api/db", {
+      await fetch("/api/v1/sap/logs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          action: "addSyncLog",
-          payload: {
-            operation: "Data Push",
-            subject: `Sync_${employeeId}`,
-            status: "Success",
-            details: `Manually synchronized employee record for ID ${employeeId}`
-          }
+          operation: "Data Push",
+          subject: `Sync_${employeeId}`,
+          status: "Success",
+          details: `Manually synchronized employee record for ID ${employeeId}`
         })
       });
       setTimeout(() => {

@@ -12,10 +12,10 @@ export default function SapPage() {
 
   const fetchLogs = async () => {
     try {
-      const res = await fetch("/api/db");
+      const res = await fetch("/api/v1/sap/logs");
       if (res.ok) {
         const json = await res.json();
-        setLogs(json.syncLogs);
+        setLogs(json);
       }
     } catch (e) {
       console.error(e);
@@ -31,17 +31,14 @@ export default function SapPage() {
   const handleGlobalSync = async () => {
     setSyncing(true);
     try {
-      await fetch("/api/db", {
+      await fetch("/api/v1/sap/logs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          action: "addSyncLog",
-          payload: {
-            operation: "Data Pull",
-            subject: "Global_SF_Schema",
-            status: "Success",
-            details: "Pulled and synchronized schema properties for 48 fields successfully."
-          }
+          operation: "Data Pull",
+          subject: "Global_SF_Schema",
+          status: "Success",
+          details: "Pulled and synchronized schema properties for 48 fields successfully."
         })
       });
       setTimeout(() => {

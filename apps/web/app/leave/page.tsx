@@ -10,10 +10,10 @@ export default function LeavePage() {
 
   const fetchLeaves = async () => {
     try {
-      const res = await fetch("/api/db");
+      const res = await fetch("/api/v1/leaves");
       if (res.ok) {
         const json = await res.json();
-        setLeaves(json.leaves);
+        setLeaves(json);
       }
     } catch (e) {
       console.error(e);
@@ -28,13 +28,10 @@ export default function LeavePage() {
 
   const handleAction = async (id: string, status: "Approved" | "Rejected") => {
     try {
-      const res = await fetch("/api/db", {
-        method: "POST",
+      const res = await fetch(`/api/v1/leaves/${id}`, {
+        method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "updateLeaveStatus",
-          payload: { id, status }
-        })
+        body: JSON.stringify({ status })
       });
       if (res.ok) {
         fetchLeaves();

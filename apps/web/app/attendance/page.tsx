@@ -10,10 +10,10 @@ export default function AttendancePage() {
 
   const fetchAttendance = async () => {
     try {
-      const res = await fetch("/api/db");
+      const res = await fetch("/api/v1/attendance");
       if (res.ok) {
         const json = await res.json();
-        setAttendance(json.attendance);
+        setAttendance(json);
       }
     } catch (e) {
       console.error(e);

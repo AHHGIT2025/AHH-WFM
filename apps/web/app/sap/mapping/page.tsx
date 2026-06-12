@@ -9,10 +9,10 @@ export default function SapMappingPage() {
 
   const fetchMappings = async () => {
     try {
-      const res = await fetch("/api/db");
+      const res = await fetch("/api/v1/sap/mapping");
       if (res.ok) {
         const json = await res.json();
-        setMappings(json.sapMappings);
+        setMappings(json);
       }
     } catch (e) {
       console.error(e);
@@ -25,13 +25,10 @@ export default function SapMappingPage() {
 
   const handleResolveConflict = async (id: string) => {
     try {
-      const res = await fetch("/api/db", {
-        method: "POST",
+      const res = await fetch(`/api/v1/sap/mapping/${id}`, {
+        method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "updateSapMappingStatus",
-          payload: { id, status: "Mapped" }
-        })
+        body: JSON.stringify({ status: "Mapped" })
       });
       if (res.ok) {
         fetchMappings();

@@ -10,10 +10,10 @@ export default function MobileProfilePage() {
 
   const fetchProfile = async () => {
     try {
-      const res = await fetch("/api/db");
+      const res = await fetch(`/api/v1/employees/${employeeId}`);
       if (res.ok) {
         const json = await res.json();
-        setEmployee(json.employees.find((e: Employee) => e.id === employeeId) || null);
+        setEmployee(json);
       }
     } catch (e) {
       console.error(e);

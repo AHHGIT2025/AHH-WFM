@@ -11,10 +11,10 @@ export default function WorkforcePage() {
 
   const fetchEmployees = async () => {
     try {
-      const res = await fetch("/api/db");
+      const res = await fetch("/api/v1/employees");
       if (res.ok) {
         const json = await res.json();
-        setEmployees(json.employees);
+        setEmployees(json);
       }
     } catch (e) {
       console.error(e);
