@@ -20,17 +20,48 @@ export interface Employee {
   isActive?: boolean;
 }
 
+export interface Worksite {
+  id: string;
+  name: string;
+  lat: number;
+  lng: number;
+  radiusMeters: number;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface AttendanceCorrection {
+  id: string;
+  attendanceRecordId: string;
+  requestedCheckIn?: string;
+  requestedCheckOut?: string;
+  reason: string;
+  status: "Pending" | "Approved" | "Rejected" | string;
+  reviewedById?: string;
+  reviewNotes?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface AttendanceRecord {
   id: string;
   employeeId: string;
   employeeName: string;
-  checkIn: string; // ISO timestamp
-  checkOut?: string; // ISO timestamp
+  checkIn: string; // ISO timestamp (effective)
+  checkOut?: string; // ISO timestamp (effective)
+  originalCheckIn: string; // original check-in timestamp
+  originalCheckOut?: string; // original check-out timestamp
   lat: number;
   lng: number;
   device: string;
-  status: "On Time" | "Late" | "Absent" | "Sync Exception";
+  status: "ON_TIME" | "LATE" | "OUT_OF_ZONE" | "ABSENT" | "PENDING_CORRECTION" | "CORRECTED" | string;
   locationName: string;
+  worksiteId?: string;
+  shiftId?: string;
+  shiftStartSnapshot?: string;
+  shiftEndSnapshot?: string;
+  lateMinutes: number;
 }
 
 export interface Shift {

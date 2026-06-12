@@ -10,7 +10,7 @@ export async function POST(request: Request) {
     const payload = await request.json();
     const result = await mockDb.checkOut(payload.employeeId);
     return NextResponse.json(result);
-  } catch (e) {
-    return NextResponse.json({ error: "Failed to check out" }, { status: 500 });
+  } catch (e: any) {
+    return NextResponse.json({ error: e.message || "Failed to check out" }, { status: 400 });
   }
 }

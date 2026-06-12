@@ -16,7 +16,7 @@ export async function POST(request: Request) {
       payload.locationName
     );
     return NextResponse.json(result);
-  } catch (e) {
-    return NextResponse.json({ error: "Failed to check in" }, { status: 500 });
+  } catch (e: any) {
+    return NextResponse.json({ error: e.message || "Failed to check in" }, { status: 400 });
   }
 }

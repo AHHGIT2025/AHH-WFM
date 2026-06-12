@@ -33,17 +33,52 @@ model Department {
 }
 
 model AttendanceRecord {
-  id           String    @id @default(uuid())
-  employeeId   String
-  employeeName String
-  checkIn      DateTime  @default(now())
-  checkOut     DateTime?
-  lat          Float
-  lng          Float
-  device       String
-  status       String    // "On Time" | "Late" | "Absent" | "Sync Exception"
-  locationName String
-  employee     Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  id                 String                 @id @default(uuid())
+  employeeId         String
+  employeeName       String
+  checkIn            DateTime               @default(now())
+  checkOut           DateTime?
+  originalCheckIn    DateTime               @default(now())
+  originalCheckOut   DateTime?
+  lat                Float
+  lng                Float
+  device             String
+  status             String                 // "ON_TIME" | "LATE" | "OUT_OF_ZONE" | "ABSENT" | "PENDING_CORRECTION" | "CORRECTED"
+  locationName       String
+  worksiteId         String?
+  worksite           Worksite?              @relation(fields: [worksiteId], references: [id], onDelete: SetNull)
+  shiftId            String?
+  shiftStartSnapshot String?
+  shiftEndSnapshot   String?
+  lateMinutes        Int                    @default(0)
+  employee           Employee               @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  corrections        AttendanceCorrection[]
+}
+
+model Worksite {
+  id                String             @id @default(uuid())
+  name              String             @unique
+  lat               Float
+  lng               Float
+  radiusMeters      Float
+  isActive          Boolean            @default(true)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  attendanceRecords AttendanceRecord[]
+}
+
+model AttendanceCorrection {
+  id                 String           @id @default(uuid())
+  attendanceRecordId String
+  attendanceRecord   AttendanceRecord @relation(fields: [attendanceRecordId], references: [id], onDelete: Cascade)
+  requestedCheckIn   DateTime?
+  requestedCheckOut  DateTime?
+  reason             String           @db.Text
+  status             String           // "Pending" | "Approved" | "Rejected"
+  reviewedById       String?
+  reviewNotes        String?          @db.Text
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
 }
 
 model Shift {
