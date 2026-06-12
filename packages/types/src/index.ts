@@ -85,6 +85,59 @@ export interface LeaveRequest {
   endDate?: string;
   totalDays?: number;
   leaveTypeId?: string;
+  currentStep?: number;
+  totalSteps?: number;
+  workflowId?: string;
+  submittedAt?: string;
+  firstActionAt?: string;
+  approvedAt?: string;
+  approvalDurationHours?: number;
+  escalationCount?: number;
+}
+
+export interface LeaveApprovalWorkflow {
+  id: string;
+  name: string;
+  description?: string;
+  isActive: boolean;
+  conditionExpr?: string; // JSON configuration string
+  steps?: LeaveApprovalStep[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface LeaveApprovalStep {
+  id: string;
+  workflowId: string;
+  stepNumber: number;
+  roleRequired: string; // "SUPERVISOR" | "MANAGER" | "HR"
+  autoApprove: boolean;
+  departmentFilter?: string;
+  gradeFilter?: string;
+  employeeGroupFilter?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface LeaveApprovalHistory {
+  id: string;
+  leaveRequestId: string;
+  approverId?: string;
+  action: "SUBMIT" | "APPROVE" | "REJECT" | "ESCALATE" | "REMIND" | "AUTO_APPROVE" | string;
+  remarks?: string;
+  previousStatus: string;
+  newStatus: string;
+  createdAt?: string;
+}
+
+export interface LeaveApprovalDelegation {
+  id: string;
+  employeeId: string; // original approver
+  delegateApproverId: string; // delegate approver
+  validFrom: string; // ISO date string
+  validTo: string; // ISO date string
+  reason: string;
+  createdAt?: string;
 }
 
 export interface LeaveType {

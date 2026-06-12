@@ -143,19 +143,77 @@ model LeaveBalanceLedger {
 }
 
 model LeaveRequest {
-  id           String     @id @default(uuid())
-  employeeId   String
-  employeeName String
-  type         String
-  dateRange    String
-  reason       String
-  status       String     // "Approved" | "Rejected" | "Pending Approval"
-  startDate    DateTime?
-  endDate      DateTime?
-  totalDays    Float?
-  leaveTypeId  String?
-  leaveType    LeaveType? @relation(fields: [leaveTypeId], references: [id], onDelete: Restrict)
-  employee     Employee   @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  id                    String                 @id @default(uuid())
+  employeeId            String
+  employeeName          String
+  type                  String
+  dateRange             String
+  reason                String
+  status                String                 // "Approved" | "Rejected" | "Pending Approval"
+  startDate             DateTime?
+  endDate               DateTime?
+  totalDays             Float?
+  leaveTypeId           String?
+  leaveType             LeaveType?             @relation(fields: [leaveTypeId], references: [id], onDelete: Restrict)
+  employee              Employee               @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  currentStep           Int                    @default(1)
+  totalSteps            Int                    @default(1)
+  workflowId            String?
+  submittedAt           DateTime               @default(now())
+  firstActionAt         DateTime?
+  approvedAt            DateTime?
+  approvalDurationHours Float?
+  escalationCount       Int                    @default(0)
+  approvalHistory       LeaveApprovalHistory[]
+}
+
+model LeaveApprovalWorkflow {
+  id            String              @id @default(uuid())
+  name          String
+  description   String?
+  isActive      Boolean             @default(true)
+  conditionExpr String?             @db.Text // JSON configuration string
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+  steps         LeaveApprovalStep[]
+}
+
+model LeaveApprovalStep {
+  id                  String                @id @default(uuid())
+  workflowId          String
+  workflow            LeaveApprovalWorkflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  stepNumber          Int
+  roleRequired        String                // "SUPERVISOR" | "MANAGER" | "HR"
+  autoApprove         Boolean               @default(false)
+  departmentFilter    String?
+  gradeFilter         String?
+  employeeGroupFilter String?
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+
+  @@unique([workflowId, stepNumber])
+}
+
+model LeaveApprovalHistory {
+  id             String       @id @default(uuid())
+  leaveRequestId String
+  leaveRequest   LeaveRequest @relation(fields: [leaveRequestId], references: [id], onDelete: Cascade)
+  approverId     String?      // Email or User ID, null if SYSTEM auto-approved
+  action         String       // "SUBMIT" | "APPROVE" | "REJECT" | "ESCALATE" | "REMIND" | "AUTO_APPROVE"
+  remarks        String?      @db.Text
+  previousStatus String
+  newStatus      String
+  createdAt      DateTime     @default(now())
+}
+
+model LeaveApprovalDelegation {
+  id                 String   @id @default(uuid())
+  employeeId         String   // Original approver employeeId
+  delegateApproverId String   // Delegate employeeId
+  validFrom          DateTime
+  validTo            DateTime
+  reason             String   @db.Text
+  createdAt          DateTime @default(now())
 }
 
 model Holiday {

@@ -16,6 +16,33 @@ export default function MobileLeavePage() {
   const [reason, setReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
+  // Phase 3B state
+  const [expandedRequestId, setExpandedRequestId] = useState<string | null>(null);
+  const [historyMap, setHistoryMap] = useState<Record<string, any[]>>({});
+  const [loadingHistory, setLoadingHistory] = useState<Record<string, boolean>>({});
+
+  const toggleExpand = async (requestId: string) => {
+    if (expandedRequestId === requestId) {
+      setExpandedRequestId(null);
+      return;
+    }
+    setExpandedRequestId(requestId);
+    if (!historyMap[requestId] && !loadingHistory[requestId]) {
+      setLoadingHistory(prev => ({ ...prev, [requestId]: true }));
+      try {
+        const res = await fetch(`/api/v1/leaves/history?id=${requestId}`);
+        if (res.ok) {
+          const data = await res.json();
+          setHistoryMap(prev => ({ ...prev, [requestId]: data }));
+        }
+      } catch (e) {
+        console.error("Failed to fetch history", e);
+      } finally {
+        setLoadingHistory(prev => ({ ...prev, [requestId]: false }));
+      }
+    }
+  };
+
   const employeeId = "AA-1001";
 
   const fetchLeaves = async () => {
@@ -279,23 +306,143 @@ export default function MobileLeavePage() {
           {leaves.length === 0 ? (
             <p className="text-xs text-on-surface-variant italic p-4 text-center">No leave requests submitted yet.</p>
           ) : (
-            leaves.map((l) => (
-              <div key={l.id} className="bg-surface-container-low p-3.5 rounded-xl border border-outline-variant/30 flex justify-between items-center gap-3">
-                <div className="space-y-1">
-                  <p className="text-xs font-bold text-primary">{l.type}</p>
-                  <p className="text-[10px] text-on-surface-variant font-semibold">{l.dateRange}</p>
-                  {l.totalDays !== undefined && (
-                    <Badge variant="info" className="text-[9px] px-1 py-0.5">
-                      {l.totalDays} working days charged
-                    </Badge>
+            leaves.map((l) => {
+              const isExpanded = expandedRequestId === l.id;
+              const history = historyMap[l.id] || [];
+              const isLoading = loadingHistory[l.id];
+
+              // Simple logic to define workflow steps for rendering
+              const workflowSteps = l.workflowId === "WF-ANNUAL" 
+                ? ["Supervisor", "Manager", "HR"]
+                : l.workflowId === "WF-SICK"
+                ? ["Supervisor", "HR"]
+                : l.workflowId === "WF-BUSINESS-AUTO"
+                ? ["Auto-HR"]
+                : ["Supervisor"];
+
+              const currentStepIndex = (l.currentStep || 1) - 1;
+
+              return (
+                <div key={l.id} className="bg-surface-container-low rounded-xl border border-outline-variant/30 overflow-hidden transition-all duration-200">
+                  <div 
+                    onClick={() => toggleExpand(l.id)}
+                    className="p-3.5 flex justify-between items-center gap-3 cursor-pointer hover:bg-surface-container-high/30 transition-colors"
+                  >
+                    <div className="space-y-1 flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className="text-xs font-bold text-primary">{l.type}</p>
+                        {l.escalationCount !== undefined && l.escalationCount > 0 && (
+                          <Badge variant="warning" className="text-[8px] px-1 py-0 font-extrabold uppercase">
+                            Escalated x{l.escalationCount}
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-on-surface-variant font-semibold">{l.dateRange}</p>
+                      {l.totalDays !== undefined && (
+                        <Badge variant="info" className="text-[9px] px-1 py-0.5">
+                          {l.totalDays} working days charged
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="flex flex-col items-end gap-1.5">
+                      <Badge variant={l.status === "Approved" ? "success" : l.status === "Rejected" ? "error" : "warning"}>
+                        {l.status}
+                      </Badge>
+                      <span className="material-symbols-outlined text-xs text-on-surface-variant transition-transform duration-200" style={{ transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)" }}>
+                        expand_more
+                      </span>
+                    </div>
+                  </div>
+
+                  {isExpanded && (
+                    <div className="px-3.5 pb-4 pt-1 border-t border-outline-variant/20 bg-surface-container-lowest/50 text-xs space-y-3">
+                      {/* Step Progress Tracker */}
+                      {l.status !== "Rejected" && l.status !== "Approved" && (
+                        <div className="space-y-1.5 pt-1">
+                          <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Approval Progress Tracker</p>
+                          <div className="flex items-center gap-1">
+                            {workflowSteps.map((step, idx) => {
+                              const isCompleted = idx < currentStepIndex;
+                              const isActive = idx === currentStepIndex;
+                              return (
+                                <React.Fragment key={idx}>
+                                  {idx > 0 && <div className={`flex-1 h-0.5 ${isCompleted ? 'bg-status-success' : 'bg-outline-variant'}`} />}
+                                  <div className="flex items-center gap-1">
+                                    <div className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold ${
+                                      isCompleted ? 'bg-status-success text-white' : isActive ? 'bg-secondary text-white ring-2 ring-secondary/20 animate-pulse' : 'bg-surface-container-high text-on-surface-variant'
+                                    }`}>
+                                      {isCompleted ? '✓' : idx + 1}
+                                    </div>
+                                    <span className={`text-[10px] font-medium ${isActive ? 'text-secondary font-bold' : 'text-on-surface-variant'}`}>{step}</span>
+                                  </div>
+                                </React.Fragment>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Request Info & SLA Metrics */}
+                      <div className="grid grid-cols-2 gap-2 bg-surface-container-low/40 p-2 rounded-lg text-[10px] text-on-surface-variant border border-outline-variant/10">
+                        <div>
+                          <span className="font-semibold block text-[9px] uppercase tracking-wider opacity-75">Submitted At</span>
+                          <span className="font-mono">{new Date(l.submittedAt || "").toLocaleString()}</span>
+                        </div>
+                        {l.approvedAt && (
+                          <div>
+                            <span className="font-semibold block text-[9px] uppercase tracking-wider opacity-75">Approved At</span>
+                            <span className="font-mono">{new Date(l.approvedAt || "").toLocaleString()}</span>
+                          </div>
+                        )}
+                        {l.approvalDurationHours !== undefined && l.approvalDurationHours !== null && (
+                          <div className="col-span-2">
+                            <span className="font-semibold block text-[9px] uppercase tracking-wider opacity-75">Approval Duration</span>
+                            <span className="font-mono font-bold text-primary">{l.approvalDurationHours.toFixed(1)} hours total</span>
+                          </div>
+                        )}
+                        <div className="col-span-2">
+                          <span className="font-semibold block text-[9px] uppercase tracking-wider opacity-75">Reason / Comments</span>
+                          <span className="italic">"{l.reason}"</span>
+                        </div>
+                      </div>
+
+                      {/* Timeline History */}
+                      <div className="space-y-1.5">
+                        <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Workflow Step Timeline</p>
+                        {isLoading ? (
+                          <p className="text-[10px] text-on-surface-variant italic animate-pulse">Loading steps...</p>
+                        ) : history.length === 0 ? (
+                          <p className="text-[10px] text-on-surface-variant italic">No workflow actions recorded yet.</p>
+                        ) : (
+                          <div className="border-l border-outline-variant pl-3.5 space-y-2.5 relative">
+                            {history.map((hist, index) => (
+                              <div key={hist.id || index} className="relative text-[11px]">
+                                {/* Dot indicator */}
+                                <div className={`absolute -left-[19px] top-1 w-2.5 h-2.5 rounded-full border-2 border-white ${
+                                  hist.action === 'APPROVE' ? 'bg-status-success' : 'bg-status-error'
+                                }`} />
+                                <div className="flex justify-between items-center">
+                                  <span className="font-bold text-primary">
+                                    {hist.action === 'APPROVE' ? 'Approved' : 'Rejected'}
+                                  </span>
+                                  <span className="text-[9px] text-on-surface-variant font-mono">{new Date(hist.createdAt).toLocaleString()}</span>
+                                </div>
+                                <p className="text-on-surface-variant font-medium">By: {hist.approverId}</p>
+                                {hist.remarks && (
+                                  <p className="text-[10px] text-yellow-800 bg-yellow-50/50 dark:bg-yellow-950/20 px-2 py-0.5 rounded border border-yellow-100/50 mt-0.5 italic">
+                                    Comment: "{hist.remarks}"
+                                  </p>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
                   )}
-                  <p className="text-[9px] italic text-on-surface-variant mt-1">"{l.reason}"</p>
                 </div>
-                <Badge variant={l.status === "Approved" ? "success" : l.status === "Rejected" ? "error" : "warning"}>
-                  {l.status}
-                </Badge>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </section>

@@ -1,4 +1,4 @@
-import { Employee, AttendanceRecord, Shift, LeaveRequest, SapMapping, SyncLog, Announcement, Department, Worksite, AttendanceCorrection, LeaveType, LeaveBalance, LeaveBalanceLedger, Holiday } from "@ahh-wfm/types";
+import { Employee, AttendanceRecord, Shift, LeaveRequest, SapMapping, SyncLog, Announcement, Department, Worksite, AttendanceCorrection, LeaveType, LeaveBalance, LeaveBalanceLedger, Holiday, LeaveApprovalWorkflow, LeaveApprovalStep, LeaveApprovalHistory, LeaveApprovalDelegation } from "@ahh-wfm/types";
 import * as fs from "fs";
 import * as path from "path";
 import * as bcrypt from "bcryptjs";
@@ -68,6 +68,10 @@ let memoryDb: {
   leaveBalances: LeaveBalance[];
   leaveBalanceLedgers: LeaveBalanceLedger[];
   holidays: Holiday[];
+  leaveApprovalWorkflows: LeaveApprovalWorkflow[];
+  leaveApprovalSteps: LeaveApprovalStep[];
+  leaveApprovalHistories: LeaveApprovalHistory[];
+  leaveApprovalDelegations: LeaveApprovalDelegation[];
 } = {
   departments: [
     { id: "DEPT-001", name: "Operations", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
@@ -134,7 +138,24 @@ let memoryDb: {
     { id: "HOL-004", name: "Company Eid Al-Adha Break", date: "2026-05-27T00:00:00Z", isRecurring: false, scope: "COMPANY" }
   ],
   leaveBalances: [],
-  leaveBalanceLedgers: []
+  leaveBalanceLedgers: [],
+  leaveApprovalWorkflows: [
+    { id: "WF-ANNUAL", name: "Standard Annual Leave Workflow", description: "Multi-level approval flow for annual vacations", isActive: true },
+    { id: "WF-SICK", name: "Sick & Emergency Leave Workflow", description: "Shortened approval flow for health emergencies", isActive: true },
+    { id: "WF-BUSINESS-AUTO", name: "Auto Approval for Short Business Travel", description: "Instant approval for business trips <= 1 day", isActive: true }
+  ],
+  leaveApprovalSteps: [
+    { id: "WFS-ANNUAL-1", workflowId: "WF-ANNUAL", stepNumber: 1, roleRequired: "SUPERVISOR", autoApprove: false },
+    { id: "WFS-ANNUAL-2", workflowId: "WF-ANNUAL", stepNumber: 2, roleRequired: "MANAGER", autoApprove: false },
+    { id: "WFS-ANNUAL-3", workflowId: "WF-ANNUAL", stepNumber: 3, roleRequired: "HR", autoApprove: false },
+    { id: "WFS-SICK-1", workflowId: "WF-SICK", stepNumber: 1, roleRequired: "SUPERVISOR", autoApprove: false },
+    { id: "WFS-SICK-2", workflowId: "WF-SICK", stepNumber: 2, roleRequired: "HR", autoApprove: false },
+    { id: "WFS-BUSINESS-1", workflowId: "WF-BUSINESS-AUTO", stepNumber: 1, roleRequired: "HR", autoApprove: true, employeeGroupFilter: "all" }
+  ],
+  leaveApprovalHistories: [],
+  leaveApprovalDelegations: [
+    { id: "DELEG-001", employeeId: "SK-90210", delegateApproverId: "AD-0001", validFrom: "2026-06-01T00:00:00Z", validTo: "2026-06-30T00:00:00Z", reason: "Annual leave coverage" }
+  ]
 };
 
 // Seeding helper to pre-fill MySQL with mock data if it is empty
@@ -210,6 +231,30 @@ const seedMySQL = async () => {
       // Seed Leave Types
       for (const lt of memoryDb.leaveTypes) {
         await prismaClient.leaveType.create({ data: lt });
+      }
+
+      // Seed Workflows
+      for (const wf of memoryDb.leaveApprovalWorkflows) {
+        await prismaClient.leaveApprovalWorkflow.create({ data: wf });
+      }
+      
+      // Seed Steps
+      for (const step of memoryDb.leaveApprovalSteps) {
+        await prismaClient.leaveApprovalStep.create({ data: step });
+      }
+
+      // Seed Delegations
+      for (const del of memoryDb.leaveApprovalDelegations) {
+        await prismaClient.leaveApprovalDelegation.create({
+          data: {
+            id: del.id,
+            employeeId: del.employeeId,
+            delegateApproverId: del.delegateApproverId,
+            validFrom: new Date(del.validFrom),
+            validTo: new Date(del.validTo),
+            reason: del.reason
+          }
+        });
       }
 
       // Seed Holidays
@@ -423,6 +468,18 @@ const readDb = (): typeof memoryDb & { worksites: Worksite[]; attendanceCorrecti
     }
     if (!parsed.leaveBalanceLedgers) {
       parsed.leaveBalanceLedgers = [];
+    }
+    if (!parsed.leaveApprovalWorkflows) {
+      parsed.leaveApprovalWorkflows = memoryDb.leaveApprovalWorkflows;
+    }
+    if (!parsed.leaveApprovalSteps) {
+      parsed.leaveApprovalSteps = memoryDb.leaveApprovalSteps;
+    }
+    if (!parsed.leaveApprovalHistories) {
+      parsed.leaveApprovalHistories = [];
+    }
+    if (!parsed.leaveApprovalDelegations) {
+      parsed.leaveApprovalDelegations = memoryDb.leaveApprovalDelegations;
     }
     return parsed;
   } catch (e) {
@@ -919,7 +976,29 @@ export const mockDb = {
         current.setDate(current.getDate() + 1);
       }
 
-      if (leaveTypeId && leaveType.accruable) {
+      // Determine matching approval workflow
+      let workflowId = null;
+      let totalSteps = 1;
+      let status = "Pending Approval";
+      let approvedAt = null;
+      let approvalDurationHours = null;
+
+      if (type === "Business Travel" && totalDays <= 1) {
+        workflowId = "WF-BUSINESS-AUTO";
+        status = "Approved";
+        approvedAt = new Date();
+        approvalDurationHours = 0;
+      } else if (type === "Annual Leave") {
+        workflowId = "WF-ANNUAL";
+        totalSteps = 3;
+        status = "Pending Supervisor Approval";
+      } else if (type === "Sick Leave" || type === "Emergency Leave") {
+        workflowId = "WF-SICK";
+        totalSteps = 2;
+        status = "Pending Supervisor Approval";
+      }
+
+      if (leaveTypeId && leaveType.accruable && status !== "Approved") {
         const bal = await prismaClient.leaveBalance.findUnique({
           where: { employeeId_leaveTypeId: { employeeId, leaveTypeId } }
         });
@@ -931,6 +1010,30 @@ export const mockDb = {
         }
       }
 
+      // If auto-approved, handle balance immediately
+      if (status === "Approved" && leaveTypeId && leaveType.accruable) {
+        const bal = await prismaClient.leaveBalance.findUnique({
+          where: { employeeId_leaveTypeId: { employeeId, leaveTypeId } }
+        });
+        if (bal) {
+          await prismaClient.leaveBalance.update({
+            where: { id: bal.id },
+            data: { usedDays: bal.usedDays + totalDays }
+          });
+          await prismaClient.leaveBalanceLedger.create({
+            data: {
+              employeeId,
+              leaveTypeId,
+              actionType: "LEAVE_TAKEN",
+              amount: -totalDays,
+              balanceBefore: bal.allocatedDays,
+              balanceAfter: bal.allocatedDays - totalDays,
+              remarks: "Auto-approved Business Travel"
+            }
+          });
+        }
+      }
+
       const request = await prismaClient.leaveRequest.create({
         data: {
           employeeId,
@@ -938,13 +1041,47 @@ export const mockDb = {
           type,
           dateRange,
           reason,
-          status: "Pending Approval",
+          status,
           startDate: start,
           endDate: end,
           totalDays,
-          leaveTypeId
+          leaveTypeId,
+          currentStep: 1,
+          totalSteps,
+          workflowId,
+          submittedAt: new Date(),
+          approvedAt,
+          approvalDurationHours,
+          escalationCount: 0
         }
       });
+
+      // Write submission history
+      await prismaClient.leaveApprovalHistory.create({
+        data: {
+          leaveRequestId: request.id,
+          action: "SUBMIT",
+          remarks: "Leave request submitted by employee",
+          previousStatus: "INITIAL",
+          newStatus: status
+        }
+      });
+
+      if (status === "Approved") {
+        await prismaClient.leaveApprovalHistory.create({
+          data: {
+            leaveRequestId: request.id,
+            action: "AUTO_APPROVE",
+            remarks: "Request satisfies auto-approval threshold <= 1 day Business Travel",
+            previousStatus: status,
+            newStatus: "Approved"
+          }
+        });
+        await prismaClient.employee.update({
+          where: { id: employeeId },
+          data: { status: "On Leave" }
+        });
+      }
       
       return request;
     }
@@ -976,10 +1113,49 @@ export const mockDb = {
       current.setDate(current.getDate() + 1);
     }
 
-    if (leaveTypeId && leaveType?.accruable) {
+    let workflowId: string | undefined = undefined;
+    let totalSteps = 1;
+    let status = "Pending Approval";
+    let approvedAt: string | undefined = undefined;
+    let approvalDurationHours: number | undefined = undefined;
+
+    if (type === "Business Travel" && totalDays <= 1) {
+      workflowId = "WF-BUSINESS-AUTO";
+      status = "Approved";
+      approvedAt = new Date().toISOString();
+      approvalDurationHours = 0;
+    } else if (type === "Annual Leave") {
+      workflowId = "WF-ANNUAL";
+      totalSteps = 3;
+      status = "Pending Supervisor Approval";
+    } else if (type === "Sick Leave" || type === "Emergency Leave") {
+      workflowId = "WF-SICK";
+      totalSteps = 2;
+      status = "Pending Supervisor Approval";
+    }
+
+    if (leaveTypeId && leaveType?.accruable && status !== "Approved") {
       const bal = db.leaveBalances.find(b => b.employeeId === employeeId && b.leaveTypeId === leaveTypeId);
       if (bal) {
         bal.pendingDays += totalDays;
+      }
+    }
+
+    if (status === "Approved" && leaveTypeId && leaveType?.accruable) {
+      const bal = db.leaveBalances.find(b => b.employeeId === employeeId && b.leaveTypeId === leaveTypeId);
+      if (bal) {
+        bal.usedDays += totalDays;
+        db.leaveBalanceLedgers.push({
+          id: `LEDG-${Date.now()}`,
+          employeeId,
+          leaveTypeId,
+          actionType: "LEAVE_TAKEN",
+          amount: -totalDays,
+          balanceBefore: bal.allocatedDays,
+          balanceAfter: bal.allocatedDays - totalDays,
+          remarks: "Auto-approved Business Travel",
+          createdAt: new Date().toISOString()
+        });
       }
     }
 
@@ -990,17 +1166,52 @@ export const mockDb = {
       type,
       dateRange,
       reason,
-      status: "Pending Approval",
+      status,
       startDate: start.toISOString(),
       endDate: end.toISOString(),
       totalDays,
-      leaveTypeId: leaveTypeId || undefined
+      leaveTypeId: leaveTypeId || undefined,
+      currentStep: 1,
+      totalSteps,
+      workflowId: workflowId || undefined,
+      submittedAt: new Date().toISOString(),
+      approvedAt,
+      approvalDurationHours,
+      escalationCount: 0
     };
+
     db.leaves.unshift(request);
+    db.leaveApprovalHistories = db.leaveApprovalHistories || [];
+    db.leaveApprovalHistories.push({
+      id: `HIST-${Date.now()}`,
+      leaveRequestId: request.id,
+      action: "SUBMIT",
+      remarks: "Leave request submitted by employee",
+      previousStatus: "INITIAL",
+      newStatus: status,
+      createdAt: new Date().toISOString()
+    });
+
+    if (status === "Approved") {
+      db.leaveApprovalHistories.push({
+        id: `HIST-${Date.now()}-AUTO`,
+        leaveRequestId: request.id,
+        action: "AUTO_APPROVE",
+        remarks: "Request satisfies auto-approval threshold <= 1 day Business Travel",
+        previousStatus: status,
+        newStatus: "Approved",
+        createdAt: new Date().toISOString()
+      });
+      if (employee) {
+        employee.status = "On Leave";
+      }
+    }
+
     writeDb(db);
     return request;
   },
   updateLeaveStatus: async (id: string, status: LeaveRequest["status"]): Promise<LeaveRequest | null> => {
+    // Keep this for backward compatibility (bypass approval steps)
     if (isDbConnected()) {
       await seedMySQL();
       try {
@@ -1014,54 +1225,49 @@ export const mockDb = {
           data: { status }
         });
         
-        if (originalReq.status === "Pending Approval" && originalReq.leaveTypeId && originalReq.totalDays) {
+        if (originalReq.status !== "Approved" && status === "Approved" && originalReq.leaveTypeId && originalReq.totalDays) {
           const leaveType = await prismaClient.leaveType.findUnique({ where: { id: originalReq.leaveTypeId } });
           if (leaveType && leaveType.accruable) {
             const bal = await prismaClient.leaveBalance.findUnique({
               where: { employeeId_leaveTypeId: { employeeId: originalReq.employeeId, leaveTypeId: originalReq.leaveTypeId } }
             });
             if (bal) {
-              if (status === "Approved") {
-                const newPending = Math.max(0, bal.pendingDays - originalReq.totalDays);
-                const newUsed = bal.usedDays + originalReq.totalDays;
-                await prismaClient.leaveBalance.update({
-                  where: { id: bal.id },
-                  data: {
-                    pendingDays: newPending,
-                    usedDays: newUsed
-                  }
-                });
-                
-                await prismaClient.leaveBalanceLedger.create({
-                  data: {
-                    employeeId: originalReq.employeeId,
-                    leaveTypeId: originalReq.leaveTypeId,
-                    actionType: "LEAVE_TAKEN",
-                    amount: -originalReq.totalDays,
-                    balanceBefore: bal.allocatedDays - bal.usedDays,
-                    balanceAfter: bal.allocatedDays - newUsed,
-                    referenceId: originalReq.id,
-                    remarks: `Leave approved: ${originalReq.reason}`
-                  }
-                });
-              } else if (status === "Rejected") {
-                const newPending = Math.max(0, bal.pendingDays - originalReq.totalDays);
-                await prismaClient.leaveBalance.update({
-                  where: { id: bal.id },
-                  data: { pendingDays: newPending }
-                });
-              }
+              const newPending = Math.max(0, bal.pendingDays - originalReq.totalDays);
+              const newUsed = bal.usedDays + originalReq.totalDays;
+              await prismaClient.leaveBalance.update({
+                where: { id: bal.id },
+                data: { pendingDays: newPending, usedDays: newUsed }
+              });
+              await prismaClient.leaveBalanceLedger.create({
+                data: {
+                  employeeId: originalReq.employeeId,
+                  leaveTypeId: originalReq.leaveTypeId,
+                  actionType: "LEAVE_TAKEN",
+                  amount: -originalReq.totalDays,
+                  balanceBefore: bal.allocatedDays - bal.usedDays,
+                  balanceAfter: bal.allocatedDays - newUsed,
+                  referenceId: originalReq.id,
+                  remarks: `Admin bypass leave approved: ${originalReq.reason}`
+                }
+              });
             }
           }
-        }
-
-        if (status === "Approved") {
           await prismaClient.employee.update({
             where: { id: request.employeeId },
             data: { status: "On Leave" }
           });
         }
         
+        await prismaClient.leaveApprovalHistory.create({
+          data: {
+            leaveRequestId: id,
+            action: status === "Approved" ? "APPROVE" : "REJECT",
+            remarks: "Status overridden by supervisor/administrator",
+            previousStatus: originalReq.status,
+            newStatus: status
+          }
+        });
+
         return request;
       } catch (e) {
         console.error(e);
@@ -1075,42 +1281,46 @@ export const mockDb = {
     const oldStatus = request.status;
     request.status = status;
     
-    if (oldStatus === "Pending Approval" && request.leaveTypeId && request.totalDays) {
+    if (oldStatus !== "Approved" && status === "Approved" && request.leaveTypeId && request.totalDays) {
       const leaveType = db.leaveTypes.find(t => t.id === request.leaveTypeId);
       if (leaveType && leaveType.accruable) {
         const bal = db.leaveBalances.find(b => b.employeeId === request.employeeId && b.leaveTypeId === request.leaveTypeId);
         if (bal) {
-          if (status === "Approved") {
-            const newPending = Math.max(0, bal.pendingDays - request.totalDays);
-            const newUsed = bal.usedDays + request.totalDays;
-            bal.pendingDays = newPending;
-            bal.usedDays = newUsed;
-            
-            db.leaveBalanceLedgers.push({
-              id: `LEDG-${Date.now()}`,
-              employeeId: request.employeeId,
-              leaveTypeId: request.leaveTypeId,
-              actionType: "LEAVE_TAKEN",
-              amount: -request.totalDays,
-              balanceBefore: bal.allocatedDays - (bal.usedDays - request.totalDays),
-              balanceAfter: bal.allocatedDays - newUsed,
-              referenceId: request.id,
-              remarks: `Leave approved: ${request.reason}`,
-              createdAt: new Date().toISOString()
-            });
-          } else if (status === "Rejected") {
-            bal.pendingDays = Math.max(0, bal.pendingDays - request.totalDays);
-          }
+          const newPending = Math.max(0, bal.pendingDays - request.totalDays);
+          const newUsed = bal.usedDays + request.totalDays;
+          bal.pendingDays = newPending;
+          bal.usedDays = newUsed;
+          
+          db.leaveBalanceLedgers.push({
+            id: `LEDG-${Date.now()}`,
+            employeeId: request.employeeId,
+            leaveTypeId: request.leaveTypeId,
+            actionType: "LEAVE_TAKEN",
+            amount: -request.totalDays,
+            balanceBefore: bal.allocatedDays - (bal.usedDays - request.totalDays),
+            balanceAfter: bal.allocatedDays - newUsed,
+            referenceId: request.id,
+            remarks: `Admin bypass leave approved: ${request.reason}`,
+            createdAt: new Date().toISOString()
+          });
         }
       }
-    }
-
-    if (status === "Approved") {
       const employee = db.employees.find(e => e.id === request.employeeId);
       if (employee) {
         employee.status = "On Leave";
       }
     }
+
+    db.leaveApprovalHistories = db.leaveApprovalHistories || [];
+    db.leaveApprovalHistories.push({
+      id: `HIST-${Date.now()}`,
+      leaveRequestId: id,
+      action: status === "Approved" ? "APPROVE" : "REJECT",
+      remarks: "Status overridden by supervisor/administrator",
+      previousStatus: oldStatus,
+      newStatus: status,
+      createdAt: new Date().toISOString()
+    });
     
     writeDb(db);
     return request;
@@ -1348,6 +1558,548 @@ export const mockDb = {
     }
     writeDb(db);
     return { success: true, count: annualBalances.length };
+  },
+
+  // Phase 3B Approval Workflows & SLA Checks
+  approveLeaveRequest: async (requestId: string, remarks: string, approverEmail: string): Promise<LeaveRequest | null> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      try {
+        const request = await prismaClient.leaveRequest.findUnique({
+          where: { id: requestId }
+        });
+        if (!request) return null;
+
+        const previousStatus = request.status;
+        const nextStep = request.currentStep + 1;
+        
+        let newStatus = request.status;
+        let approvedAt = null;
+        let approvalDurationHours = null;
+        
+        const firstActionAt = request.firstActionAt || new Date();
+
+        if (nextStep > request.totalSteps) {
+          newStatus = "Approved";
+          approvedAt = new Date();
+          const durationMs = approvedAt.getTime() - new Date(request.submittedAt).getTime();
+          approvalDurationHours = durationMs / (1000 * 60 * 60);
+
+          // Update balances
+          if (request.leaveTypeId && request.totalDays) {
+            const bal = await prismaClient.leaveBalance.findUnique({
+              where: { employeeId_leaveTypeId: { employeeId: request.employeeId, leaveTypeId: request.leaveTypeId } }
+            });
+            if (bal) {
+              const newPending = Math.max(0, bal.pendingDays - request.totalDays);
+              const newUsed = bal.usedDays + request.totalDays;
+              await prismaClient.leaveBalance.update({
+                where: { id: bal.id },
+                data: { pendingDays: newPending, usedDays: newUsed }
+              });
+              await prismaClient.leaveBalanceLedger.create({
+                data: {
+                  employeeId: request.employeeId,
+                  leaveTypeId: request.leaveTypeId,
+                  actionType: "LEAVE_TAKEN",
+                  amount: -request.totalDays,
+                  balanceBefore: bal.allocatedDays - bal.usedDays,
+                  balanceAfter: bal.allocatedDays - newUsed,
+                  referenceId: request.id,
+                  remarks: `Approved in workflow: ${remarks}`
+                }
+              });
+            }
+          }
+          await prismaClient.employee.update({
+            where: { id: request.employeeId },
+            data: { status: "On Leave" }
+          });
+        } else {
+          // Move to next step roles e.g., MANAGER or HR
+          if (request.workflowId === "WF-ANNUAL") {
+            newStatus = nextStep === 2 ? "Pending Manager Approval" : "Pending HR Approval";
+          } else if (request.workflowId === "WF-SICK") {
+            newStatus = "Pending HR Approval";
+          } else {
+            newStatus = "Pending Approval";
+          }
+        }
+
+        const updated = await prismaClient.leaveRequest.update({
+          where: { id: requestId },
+          data: {
+            currentStep: nextStep > request.totalSteps ? request.currentStep : nextStep,
+            status: newStatus,
+            firstActionAt,
+            approvedAt,
+            approvalDurationHours
+          }
+        });
+
+        await prismaClient.leaveApprovalHistory.create({
+          data: {
+            leaveRequestId: requestId,
+            approverId: approverEmail,
+            action: "APPROVE",
+            remarks,
+            previousStatus,
+            newStatus
+          }
+        });
+
+        return updated;
+      } catch (e) {
+        console.error(e);
+        return null;
+      }
+    }
+
+    const db = readDb();
+    const request = db.leaves.find(l => l.id === requestId);
+    if (!request) return null;
+
+    const previousStatus = request.status;
+    const nextStep = (request.currentStep || 1) + 1;
+    const totalSteps = request.totalSteps || 1;
+    
+    let newStatus = request.status;
+    let approvedAt: string | undefined = undefined;
+    let approvalDurationHours: number | undefined = undefined;
+    
+    const firstActionAt = request.firstActionAt || new Date().toISOString();
+
+    if (nextStep > totalSteps) {
+      newStatus = "Approved";
+      approvedAt = new Date().toISOString();
+      const durationMs = new Date(approvedAt).getTime() - new Date(request.submittedAt || "").getTime();
+      approvalDurationHours = durationMs / (1000 * 60 * 60);
+
+      if (request.leaveTypeId && request.totalDays) {
+        const bal = db.leaveBalances.find(b => b.employeeId === request.employeeId && b.leaveTypeId === request.leaveTypeId);
+        if (bal) {
+          const newPending = Math.max(0, bal.pendingDays - request.totalDays);
+          const newUsed = bal.usedDays + request.totalDays;
+          bal.pendingDays = newPending;
+          bal.usedDays = newUsed;
+          
+          db.leaveBalanceLedgers.push({
+            id: `LEDG-${Date.now()}`,
+            employeeId: request.employeeId,
+            leaveTypeId: request.leaveTypeId,
+            actionType: "LEAVE_TAKEN",
+            amount: -request.totalDays,
+            balanceBefore: bal.allocatedDays - (bal.usedDays - request.totalDays),
+            balanceAfter: bal.allocatedDays - newUsed,
+            referenceId: request.id,
+            remarks: `Approved in workflow: ${remarks}`,
+            createdAt: new Date().toISOString()
+          });
+        }
+      }
+      const employee = db.employees.find(e => e.id === request.employeeId);
+      if (employee) {
+        employee.status = "On Leave";
+      }
+    } else {
+      if (request.workflowId === "WF-ANNUAL") {
+        newStatus = nextStep === 2 ? "Pending Manager Approval" : "Pending HR Approval";
+      } else if (request.workflowId === "WF-SICK") {
+        newStatus = "Pending HR Approval";
+      } else {
+        newStatus = "Pending Approval";
+      }
+    }
+
+    request.currentStep = nextStep > totalSteps ? request.currentStep : nextStep;
+    request.status = newStatus;
+    request.firstActionAt = firstActionAt;
+    request.approvedAt = approvedAt;
+    request.approvalDurationHours = approvalDurationHours;
+
+    db.leaveApprovalHistories = db.leaveApprovalHistories || [];
+    db.leaveApprovalHistories.push({
+      id: `HIST-${Date.now()}`,
+      leaveRequestId: requestId,
+      approverId: approverEmail,
+      action: "APPROVE",
+      remarks,
+      previousStatus,
+      newStatus,
+      createdAt: new Date().toISOString()
+    });
+
+    writeDb(db);
+    return request;
+  },
+
+  rejectLeaveRequest: async (requestId: string, remarks: string, approverEmail: string): Promise<LeaveRequest | null> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      try {
+        const request = await prismaClient.leaveRequest.findUnique({
+          where: { id: requestId }
+        });
+        if (!request) return null;
+
+        const previousStatus = request.status;
+        const newStatus = "Rejected";
+        const firstActionAt = request.firstActionAt || new Date();
+
+        const updated = await prismaClient.leaveRequest.update({
+          where: { id: requestId },
+          data: { status: newStatus, firstActionAt }
+        });
+
+        // Revert pending balances
+        if (request.leaveTypeId && request.totalDays) {
+          const bal = await prismaClient.leaveBalance.findUnique({
+            where: { employeeId_leaveTypeId: { employeeId: request.employeeId, leaveTypeId: request.leaveTypeId } }
+          });
+          if (bal) {
+            await prismaClient.leaveBalance.update({
+              where: { id: bal.id },
+              data: { pendingDays: Math.max(0, bal.pendingDays - request.totalDays) }
+            });
+          }
+        }
+
+        await prismaClient.leaveApprovalHistory.create({
+          data: {
+            leaveRequestId: requestId,
+            approverId: approverEmail,
+            action: "REJECT",
+            remarks,
+            previousStatus,
+            newStatus
+          }
+        });
+
+        return updated;
+      } catch (e) {
+        console.error(e);
+        return null;
+      }
+    }
+
+    const db = readDb();
+    const request = db.leaves.find(l => l.id === requestId);
+    if (!request) return null;
+
+    const previousStatus = request.status;
+    const newStatus = "Rejected";
+    const firstActionAt = request.firstActionAt || new Date().toISOString();
+
+    request.status = newStatus;
+    request.firstActionAt = firstActionAt;
+
+    if (request.leaveTypeId && request.totalDays) {
+      const bal = db.leaveBalances.find(b => b.employeeId === request.employeeId && b.leaveTypeId === request.leaveTypeId);
+      if (bal) {
+        bal.pendingDays = Math.max(0, bal.pendingDays - request.totalDays);
+      }
+    }
+
+    db.leaveApprovalHistories = db.leaveApprovalHistories || [];
+    db.leaveApprovalHistories.push({
+      id: `HIST-${Date.now()}`,
+      leaveRequestId: requestId,
+      approverId: approverEmail,
+      action: "REJECT",
+      remarks,
+      previousStatus,
+      newStatus,
+      createdAt: new Date().toISOString()
+    });
+
+    writeDb(db);
+    return request;
+  },
+
+  getLeaveApprovalHistory: async (requestId: string): Promise<LeaveApprovalHistory[]> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      const records = await prismaClient.leaveApprovalHistory.findMany({
+        where: { leaveRequestId: requestId },
+        orderBy: { createdAt: "asc" }
+      });
+      return records.map((h: any) => ({
+        id: h.id,
+        leaveRequestId: h.leaveRequestId,
+        approverId: h.approverId || undefined,
+        action: h.action,
+        remarks: h.remarks || undefined,
+        previousStatus: h.previousStatus,
+        newStatus: h.newStatus,
+        createdAt: h.createdAt.toISOString()
+      }));
+    }
+    const db = readDb();
+    db.leaveApprovalHistories = db.leaveApprovalHistories || [];
+    return db.leaveApprovalHistories.filter(h => h.leaveRequestId === requestId);
+  },
+
+  getLeaveApprovalWorkflows: async (): Promise<LeaveApprovalWorkflow[]> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      return await prismaClient.leaveApprovalWorkflow.findMany({
+        include: { steps: true }
+      });
+    }
+    const db = readDb();
+    return db.leaveApprovalWorkflows.map(w => ({
+      ...w,
+      steps: db.leaveApprovalSteps.filter(s => s.workflowId === w.id)
+    }));
+  },
+
+  createLeaveApprovalWorkflow: async (name: string, description: string, isActive: boolean, steps: Array<{ stepNumber: number; roleRequired: string; autoApprove: boolean; departmentFilter?: string; gradeFilter?: string; employeeGroupFilter?: string }>): Promise<LeaveApprovalWorkflow> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      const workflow = await prismaClient.leaveApprovalWorkflow.create({
+        data: {
+          name,
+          description,
+          isActive,
+          steps: {
+            create: steps.map(s => ({
+              stepNumber: s.stepNumber,
+              roleRequired: s.roleRequired,
+              autoApprove: s.autoApprove,
+              departmentFilter: s.departmentFilter,
+              gradeFilter: s.gradeFilter,
+              employeeGroupFilter: s.employeeGroupFilter
+            }))
+          }
+        },
+        include: { steps: true }
+      });
+      return workflow;
+    }
+
+    const db = readDb();
+    const workflowId = `WF-${Date.now()}`;
+    const newWorkflow: LeaveApprovalWorkflow = {
+      id: workflowId,
+      name,
+      description,
+      isActive,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    db.leaveApprovalWorkflows = db.leaveApprovalWorkflows || [];
+    db.leaveApprovalWorkflows.push(newWorkflow);
+
+    db.leaveApprovalSteps = db.leaveApprovalSteps || [];
+    const createdSteps = steps.map(s => {
+      const step = {
+        id: `STEP-${Date.now()}-${s.stepNumber}`,
+        workflowId,
+        stepNumber: s.stepNumber,
+        roleRequired: s.roleRequired,
+        autoApprove: s.autoApprove,
+        departmentFilter: s.departmentFilter || undefined,
+        gradeFilter: s.gradeFilter || undefined,
+        employeeGroupFilter: s.employeeGroupFilter || undefined,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      db.leaveApprovalSteps.push(step);
+      return step;
+    });
+
+    writeDb(db);
+    return { ...newWorkflow, steps: createdSteps };
+  },
+
+  getLeaveApprovalDelegations: async (): Promise<LeaveApprovalDelegation[]> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      const records = await prismaClient.leaveApprovalDelegation.findMany();
+      return records.map((d: any) => ({
+        id: d.id,
+        employeeId: d.employeeId,
+        delegateApproverId: d.delegateApproverId,
+        validFrom: d.validFrom.toISOString(),
+        validTo: d.validTo.toISOString(),
+        reason: d.reason,
+        createdAt: d.createdAt.toISOString()
+      }));
+    }
+    return readDb().leaveApprovalDelegations || [];
+  },
+
+  createLeaveApprovalDelegation: async (employeeId: string, delegateApproverId: string, validFrom: string, validTo: string, reason: string): Promise<LeaveApprovalDelegation> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      const record = await prismaClient.leaveApprovalDelegation.create({
+        data: {
+          employeeId,
+          delegateApproverId,
+          validFrom: new Date(validFrom),
+          validTo: new Date(validTo),
+          reason
+        }
+      });
+      return {
+        id: record.id,
+        employeeId: record.employeeId,
+        delegateApproverId: record.delegateApproverId,
+        validFrom: record.validFrom.toISOString(),
+        validTo: record.validTo.toISOString(),
+        reason: record.reason,
+        createdAt: record.createdAt.toISOString()
+      };
+    }
+    const db = readDb();
+    const newDelegation: LeaveApprovalDelegation = {
+      id: `DELEG-${Date.now()}`,
+      employeeId,
+      delegateApproverId,
+      validFrom,
+      validTo,
+      reason,
+      createdAt: new Date().toISOString()
+    };
+    db.leaveApprovalDelegations = db.leaveApprovalDelegations || [];
+    db.leaveApprovalDelegations.push(newDelegation);
+    writeDb(db);
+    return newDelegation;
+  },
+
+  runEscalationCheck: async (): Promise<{ success: boolean; warnings: number; escalations: number }> => {
+    let warningCount = 0;
+    let escalationCount = 0;
+    const now = new Date();
+
+    if (isDbConnected()) {
+      await seedMySQL();
+      try {
+        const pendingLeaves = await prismaClient.leaveRequest.findMany({
+          where: {
+            status: { in: ["Pending Supervisor Approval", "Pending Manager Approval", "Pending HR Approval", "Pending Approval"] }
+          }
+        });
+
+        for (const req of pendingLeaves) {
+          // Mock escalation checking: diff between now and req.submittedAt in hours
+          const lastDate = req.firstActionAt || req.submittedAt || new Date();
+          const diffHours = (now.getTime() - new Date(lastDate).getTime()) / (1000 * 60 * 60);
+
+          if (diffHours > 72) {
+            // SLA Escalation threshold exceeded: auto-advance
+            const nextStep = req.currentStep + 1;
+            let newStatus = req.status;
+
+            if (nextStep <= req.totalSteps) {
+              if (req.workflowId === "WF-ANNUAL") {
+                newStatus = nextStep === 2 ? "Pending Manager Approval" : "Pending HR Approval";
+              } else if (req.workflowId === "WF-SICK") {
+                newStatus = "Pending HR Approval";
+              }
+              
+              await prismaClient.leaveRequest.update({
+                where: { id: req.id },
+                data: {
+                  currentStep: nextStep,
+                  status: newStatus,
+                  escalationCount: req.escalationCount + 1
+                }
+              });
+
+              await prismaClient.leaveApprovalHistory.create({
+                data: {
+                  leaveRequestId: req.id,
+                  action: "ESCALATE",
+                  remarks: "Auto-escalated due to 72 hours inactivity at current level",
+                  previousStatus: req.status,
+                  newStatus
+                }
+              });
+              escalationCount++;
+            }
+          } else if (diffHours > 24 && req.escalationCount === 0) {
+            // Log 24h escalation warning
+            const historyExists = await prismaClient.leaveApprovalHistory.findFirst({
+              where: { leaveRequestId: req.id, action: "ESCALATE", remarks: { startsWith: "SLA Warning" } }
+            });
+            if (!historyExists) {
+              await prismaClient.leaveApprovalHistory.create({
+                data: {
+                  leaveRequestId: req.id,
+                  action: "ESCALATE",
+                  remarks: "SLA Warning: Pending for more than 24 hours.",
+                  previousStatus: req.status,
+                  newStatus: req.status
+                }
+              });
+              warningCount++;
+            }
+          }
+        }
+        return { success: true, warnings: warningCount, escalations: escalationCount };
+      } catch (e) {
+        console.error(e);
+        return { success: false, warnings: 0, escalations: 0 };
+      }
+    }
+
+    const db = readDb();
+    const pending = db.leaves.filter(l => ["Pending Supervisor Approval", "Pending Manager Approval", "Pending HR Approval", "Pending Approval"].includes(l.status));
+    
+    for (const req of pending) {
+      const lastDate = req.firstActionAt || req.submittedAt || new Date().toISOString();
+      const diffHours = (now.getTime() - new Date(lastDate).getTime()) / (1000 * 60 * 60);
+
+      if (diffHours > 72) {
+        const nextStep = (req.currentStep || 1) + 1;
+        const totalSteps = req.totalSteps || 1;
+        const previousStatus = req.status;
+        let newStatus = req.status;
+
+        if (nextStep <= totalSteps) {
+          if (req.workflowId === "WF-ANNUAL") {
+            newStatus = nextStep === 2 ? "Pending Manager Approval" : "Pending HR Approval";
+          } else if (req.workflowId === "WF-SICK") {
+            newStatus = "Pending HR Approval";
+          }
+
+          req.currentStep = nextStep;
+          req.status = newStatus;
+          req.escalationCount = (req.escalationCount || 0) + 1;
+
+          db.leaveApprovalHistories = db.leaveApprovalHistories || [];
+          db.leaveApprovalHistories.push({
+            id: `HIST-${Date.now()}`,
+            leaveRequestId: req.id,
+            action: "ESCALATE",
+            remarks: "Auto-escalated due to 72 hours inactivity at current level",
+            previousStatus: previousStatus,
+            newStatus,
+            createdAt: new Date().toISOString()
+          });
+          escalationCount++;
+        }
+      } else if (diffHours > 24 && (req.escalationCount || 0) === 0) {
+        const warningExists = db.leaveApprovalHistories?.some(h => h.leaveRequestId === req.id && h.action === "ESCALATE" && h.remarks?.startsWith("SLA Warning"));
+        if (!warningExists) {
+          db.leaveApprovalHistories = db.leaveApprovalHistories || [];
+          db.leaveApprovalHistories.push({
+            id: `HIST-${Date.now()}`,
+            leaveRequestId: req.id,
+            action: "ESCALATE",
+            remarks: "SLA Warning: Pending for more than 24 hours.",
+            previousStatus: req.status,
+            newStatus: req.status,
+            createdAt: new Date().toISOString()
+          });
+          warningCount++;
+        }
+      }
+    }
+
+    writeDb(db);
+    return { success: true, warnings: warningCount, escalations: escalationCount };
   },
   
   // SAP Mappings
