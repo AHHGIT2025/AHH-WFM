@@ -28,6 +28,8 @@ AHH WFM is a full-stack, enterprise-grade workforce management application built
 | **Phase 3B** | Completed | `v0.7-enterprise-leave-workflow-complete` | Multi-level approval workflows, delegation, SLA tracking, and thresholds. |
 | **Phase 4A** | Completed | `v0.8-shift-scheduling-complete` | Shift templates, rotation templates, shift assignments, and conflict detection. |
 | **Phase 4B** | Completed | `v0.9-scheduling-roster-overtime-complete` | Overtime auto-calculation, rates, coverage heatmap, drag-and-drop, and shift swaps. |
+| **Phase 5A** | Completed | `v0.10-sap-integration-foundation` | SAP SuccessFactors integration database models, mock sync engine, and Web Admin dashboard. |
+
 
 
 ---
@@ -76,6 +78,14 @@ AHH WFM is a full-stack, enterprise-grade workforce management application built
 - **Togglable Heatmaps:** Graphical coverage visualization overlaying red (understaffed), green (optimized), and yellow (overstaffed) status on the roster boards.
 - **Drag-and-Drop Board:** Enabled rescheduling by moving shift cards between employee dates with inline conflict safety checks.
 - **Shift Swaps Console:** Mobile requisition wizard for bilateral exchanges, and a web admin swap manager for atomic swap approvals.
+
+### Phase 5A: SAP Integration Foundation
+- **Database Schema Models:** Added `SapConnection`, `SapSyncJob`, `SapSyncLog`, `SapFieldMapping`, and `SapRetryQueue` models to the MySQL schema.
+- **Sync Sandbox Engine:** Built simulation-ready inbound sync loop for employees, departments, cost centers, and locations.
+- **Master Data Mapping & Deactivations:** Sync updates existing records and registers new employees. Marks employees as inactive (`isActive = false`) and status `Offline` locally when the SAP payload flags them as `TERMINATED`.
+- **Fault-Tolerance Controls:** Logs failures in the `SapSyncLog` and caches invalid configurations inside the `SapRetryQueue` under pending states.
+- **Web Admin Dashboard:** Integrated a connection status monitor card, sync trigger controls panel, job execution history grid, active mappings editor console, and retry queue manager.
+
 
 
 

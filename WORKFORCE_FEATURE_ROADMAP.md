@@ -187,16 +187,21 @@ This document outlines the evolutionary development roadmap for the **AHH WFM** 
 
 ## Phase 5: SAP SuccessFactors Integration Hub
 
-### 5.1 Employee Sync
+### 5.1 Employee Sync (Completed - Phase 5A)
 *   **Business Purpose**: Replicate employee records, contract types, and status data automatically from SuccessFactors to local MySQL database.
-*   **Database Impact**: Writes update logs, inserts new users, and disables separated employees.
+*   **Database Impact**: Writes update logs, inserts new users, and disables separated employees. Added connections, jobs, logs, mappings, and retry queue models.
 *   **API Endpoints Required**:
-    *   `POST /api/v1/sap/sync/employees` (Triggers employee sync)
+    *   `GET/POST /api/v1/sap/connections`
+    *   `GET/POST /api/v1/sap/sync`
+    *   `GET /api/v1/sap/jobs`
+    *   `GET /api/v1/sap/logs`
+    *   `GET/POST/PUT /api/v1/sap/mappings`
+    *   `POST /api/v1/sap/retry`
 *   **UI Screens Affected**:
-    *   Web: SAP SuccessFactors Hub (`/sap`) - Sync indicators.
-*   **Estimated Implementation Effort**: 4 Days
+    *   Web: SAP SuccessFactors Hub (`/sap`) - Sync indicators, configurations, retry logs, and mapping rules.
+*   **Estimated Implementation Effort**: Completed
 
-### 5.2 Leave Sync
+### 5.2 Leave Sync (Pending - Phase 5B)
 *   **Business Purpose**: Synchronize approved leaves and time-off request entries between the WFM application and SAP.
 *   **Database Impact**: Syncs `LeaveRequest` status changes.
 *   **API Endpoints Required**:
@@ -205,7 +210,7 @@ This document outlines the evolutionary development roadmap for the **AHH WFM** 
     *   Web: SAP SuccessFactors Hub (`/sap`) - Leave replication tables.
 *   **Estimated Implementation Effort**: 4 Days
 
-### 5.3 Attendance Sync
+### 5.3 Attendance Sync (Pending - Phase 5B)
 *   **Business Purpose**: Replicate local verified check-in data into SAP timesheets for salary processing.
 *   **Database Impact**: Flags `isSyncedToSap` in `AttendanceRecord` schema.
 *   **API Endpoints Required**:
@@ -213,3 +218,4 @@ This document outlines the evolutionary development roadmap for the **AHH WFM** 
 *   **UI Screens Affected**:
     *   Web: SAP SuccessFactors Hub (`/sap`) - Timesheet transfer diagnostics.
 *   **Estimated Implementation Effort**: 4 Days
+

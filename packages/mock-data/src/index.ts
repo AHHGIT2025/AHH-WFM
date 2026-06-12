@@ -1,4 +1,4 @@
-import { Employee, AttendanceRecord, Shift, LeaveRequest, SapMapping, SyncLog, Announcement, Department, Worksite, AttendanceCorrection, LeaveType, LeaveBalance, LeaveBalanceLedger, Holiday, LeaveApprovalWorkflow, LeaveApprovalStep, LeaveApprovalHistory, LeaveApprovalDelegation, ShiftTemplate, RotationTemplate, ShiftAssignment, ShiftSwapRequest, OvertimeRate } from "@ahh-wfm/types";
+import { Employee, AttendanceRecord, Shift, LeaveRequest, SapMapping, SyncLog, Announcement, Department, Worksite, AttendanceCorrection, LeaveType, LeaveBalance, LeaveBalanceLedger, Holiday, LeaveApprovalWorkflow, LeaveApprovalStep, LeaveApprovalHistory, LeaveApprovalDelegation, ShiftTemplate, RotationTemplate, ShiftAssignment, ShiftSwapRequest, OvertimeRate, SapConnection, SapSyncJob, SapSyncLog, SapFieldMapping, SapRetryQueue } from "@ahh-wfm/types";
 import * as fs from "fs";
 import * as path from "path";
 import * as bcrypt from "bcryptjs";
@@ -77,6 +77,11 @@ let memoryDb: {
   shiftAssignments: ShiftAssignment[];
   shiftSwaps: ShiftSwapRequest[];
   overtimeRates: OvertimeRate[];
+  sapConnections: SapConnection[];
+  sapSyncJobs: SapSyncJob[];
+  sapSyncLogs: SapSyncLog[];
+  sapFieldMappings: SapFieldMapping[];
+  sapRetryQueues: SapRetryQueue[];
 } = {
   departments: [
     { id: "DEPT-001", name: "Operations", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
@@ -186,7 +191,30 @@ let memoryDb: {
     { id: "RATE-HOL", name: "Holiday Overtime Rate", overtimeType: "HOLIDAY_OT", multiplier: 2.0, currency: "QAR", appliesOnWeekend: false, appliesOnHoliday: true, appliesAfterMinutes: 0, isActive: true },
     { id: "RATE-NGT", name: "Night Overtime Rate", overtimeType: "NIGHT_OT", multiplier: 1.25, currency: "QAR", appliesOnWeekend: false, appliesOnHoliday: false, appliesAfterMinutes: 0, isActive: true },
     { id: "RATE-SPC", name: "Special Event Overtime Rate", overtimeType: "SPECIAL_EVENT_OT", multiplier: 1.5, currency: "QAR", appliesOnWeekend: false, appliesOnHoliday: false, appliesAfterMinutes: 0, isActive: true }
-  ]
+  ],
+  sapConnections: [
+    {
+      id: "CONN-SF-SANDBOX",
+      systemName: "SAP SuccessFactors Sandbox",
+      odataUrl: "https://api.sandbox.successfactors.eu/odata/v2",
+      clientId: "AHH_WFM_INTEGRATION_CLIENT",
+      companyId: "AlHattabWFM",
+      userId: "sf_sync_user",
+      privateKeyVaultId: "VAULT_REF_SF_SANDBOX_KEY",
+      isActive: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    }
+  ],
+  sapFieldMappings: [
+    { id: "FMAP-001", module: "EMPLOYEE", sourceField: "personalInfo.firstName", targetField: "name", transformRule: "Direct", validationRules: "REQUIRED", isRequired: true, isActive: true },
+    { id: "FMAP-002", module: "EMPLOYEE", sourceField: "personalInfo.email", targetField: "email", transformRule: "Lowercase", validationRules: "EMAIL", isRequired: true, isActive: true },
+    { id: "FMAP-003", module: "EMPLOYEE", sourceField: "jobInfo.department", targetField: "department", transformRule: "Lookup", validationRules: "REQUIRED", isRequired: true, isActive: true },
+    { id: "FMAP-004", module: "EMPLOYEE", sourceField: "jobInfo.status", targetField: "status", transformRule: "ValueMap", validationRules: "", isRequired: false, isActive: true }
+  ],
+  sapSyncJobs: [],
+  sapSyncLogs: [],
+  sapRetryQueues: []
 };
 
 // Seeding helper to pre-fill MySQL with mock data if it is empty
@@ -441,6 +469,40 @@ const seedMySQL = async () => {
             appliesOnHoliday: rate.appliesOnHoliday,
             appliesAfterMinutes: rate.appliesAfterMinutes || 0,
             isActive: rate.isActive
+          }
+        });
+      }
+
+      // Seed SAP Connections
+      for (const conn of memoryDb.sapConnections) {
+        await prismaClient.sapConnection.create({
+          data: {
+            id: conn.id,
+            systemName: conn.systemName,
+            odataUrl: conn.odataUrl,
+            clientId: conn.clientId,
+            companyId: conn.companyId,
+            userId: conn.userId,
+            privateKeyVaultId: conn.privateKeyVaultId,
+            isActive: conn.isActive,
+            createdAt: new Date(conn.createdAt!),
+            updatedAt: new Date(conn.updatedAt!)
+          }
+        });
+      }
+
+      // Seed SAP Field Mappings
+      for (const fmap of memoryDb.sapFieldMappings) {
+        await prismaClient.sapFieldMapping.create({
+          data: {
+            id: fmap.id,
+            module: fmap.module,
+            sourceField: fmap.sourceField,
+            targetField: fmap.targetField,
+            transformRule: fmap.transformRule || null,
+            validationRules: fmap.validationRules || null,
+            isRequired: fmap.isRequired,
+            isActive: fmap.isActive
           }
         });
       }
@@ -3649,6 +3711,530 @@ export const mockDb = {
     
     writeDb(db);
     return mapAttendance(rec);
+  },
+
+  // SAP Connections
+  getSapConnections: async (): Promise<SapConnection[]> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      return await prismaClient.sapConnection.findMany();
+    }
+    const db = readDb();
+    return db.sapConnections || [];
+  },
+
+  createSapConnection: async (data: any): Promise<SapConnection> => {
+    const id = data.id || `CONN-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
+    const newConn = {
+      ...data,
+      id,
+      isActive: data.isActive !== undefined ? data.isActive : true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    if (isDbConnected()) {
+      await seedMySQL();
+      return await prismaClient.sapConnection.create({ data: newConn });
+    }
+
+    const db = readDb();
+    db.sapConnections = db.sapConnections || [];
+    db.sapConnections.push(newConn);
+    writeDb(db);
+    return newConn;
+  },
+
+  // SAP Sync Jobs
+  getSapSyncJobs: async (): Promise<SapSyncJob[]> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      return await prismaClient.sapSyncJob.findMany({
+        orderBy: { startedAt: "desc" }
+      });
+    }
+    const db = readDb();
+    return (db.sapSyncJobs || []).sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
+  },
+
+  createSapSyncJob: async (data: any): Promise<SapSyncJob> => {
+    const id = data.id || `JOB-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
+    const newJob = {
+      ...data,
+      id,
+      recordsProcessed: data.recordsProcessed || 0,
+      recordsSucceeded: data.recordsSucceeded || 0,
+      recordsFailed: data.recordsFailed || 0,
+      startedAt: new Date().toISOString(),
+      completedAt: null,
+      errorMessage: null,
+      deltaToken: data.deltaToken || null
+    };
+
+    if (isDbConnected()) {
+      await seedMySQL();
+      const job = await prismaClient.sapSyncJob.create({
+        data: {
+          ...newJob,
+          startedAt: new Date(newJob.startedAt)
+        }
+      });
+      return {
+        ...job,
+        startedAt: job.startedAt.toISOString(),
+        completedAt: job.completedAt ? job.completedAt.toISOString() : undefined
+      };
+    }
+
+    const db = readDb();
+    db.sapSyncJobs = db.sapSyncJobs || [];
+    db.sapSyncJobs.push(newJob);
+    writeDb(db);
+    return newJob;
+  },
+
+  updateSapSyncJob: async (id: string, data: any): Promise<SapSyncJob> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      const updateData: any = { ...data };
+      if (data.startedAt) updateData.startedAt = new Date(data.startedAt);
+      if (data.completedAt) updateData.completedAt = new Date(data.completedAt);
+
+      const job = await prismaClient.sapSyncJob.update({
+        where: { id },
+        data: updateData
+      });
+      return {
+        ...job,
+        startedAt: job.startedAt.toISOString(),
+        completedAt: job.completedAt ? job.completedAt.toISOString() : undefined
+      };
+    }
+
+    const db = readDb();
+    const index = db.sapSyncJobs.findIndex(j => j.id === id);
+    if (index === -1) throw new Error("Sync job not found");
+    db.sapSyncJobs[index] = {
+      ...db.sapSyncJobs[index],
+      ...data,
+      updatedAt: new Date().toISOString()
+    };
+    writeDb(db);
+    return db.sapSyncJobs[index];
+  },
+
+  // SAP Sync Logs
+  getSapSyncLogs: async (jobId?: string): Promise<SapSyncLog[]> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      return await prismaClient.sapSyncLog.findMany({
+        where: jobId ? { jobId } : undefined,
+        orderBy: { createdAt: "desc" }
+      });
+    }
+    const db = readDb();
+    let logs = db.sapSyncLogs || [];
+    if (jobId) {
+      logs = logs.filter(l => l.jobId === jobId);
+    }
+    return logs;
+  },
+
+  createSapSyncLog: async (data: any): Promise<SapSyncLog> => {
+    const id = data.id || `SLOG-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
+    const newLog = {
+      ...data,
+      id,
+      createdAt: new Date().toISOString()
+    };
+
+    if (isDbConnected()) {
+      await seedMySQL();
+      const log = await prismaClient.sapSyncLog.create({
+        data: {
+          ...newLog,
+          createdAt: new Date(newLog.createdAt)
+        }
+      });
+      return {
+        ...log,
+        createdAt: log.createdAt.toISOString()
+      };
+    }
+
+    const db = readDb();
+    db.sapSyncLogs = db.sapSyncLogs || [];
+    db.sapSyncLogs.push(newLog);
+    writeDb(db);
+    return newLog;
+  },
+
+  // SAP Field Mappings
+  getSapFieldMappings: async (): Promise<SapFieldMapping[]> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      return await prismaClient.sapFieldMapping.findMany();
+    }
+    const db = readDb();
+    return db.sapFieldMappings || [];
+  },
+
+  createSapFieldMapping: async (data: any): Promise<SapFieldMapping> => {
+    const id = data.id || `FMAP-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
+    const newMapping = {
+      ...data,
+      id,
+      isRequired: data.isRequired || false,
+      isActive: data.isActive !== undefined ? data.isActive : true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    if (isDbConnected()) {
+      await seedMySQL();
+      return await prismaClient.sapFieldMapping.create({ data: newMapping });
+    }
+
+    const db = readDb();
+    db.sapFieldMappings = db.sapFieldMappings || [];
+    db.sapFieldMappings.push(newMapping);
+    writeDb(db);
+    return newMapping;
+  },
+
+  updateSapFieldMapping: async (id: string, data: any): Promise<SapFieldMapping> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      return await prismaClient.sapFieldMapping.update({
+        where: { id },
+        data: {
+          ...data,
+          updatedAt: new Date()
+        }
+      });
+    }
+
+    const db = readDb();
+    const index = db.sapFieldMappings.findIndex(m => m.id === id);
+    if (index === -1) throw new Error("Field mapping not found");
+    db.sapFieldMappings[index] = {
+      ...db.sapFieldMappings[index],
+      ...data,
+      updatedAt: new Date().toISOString()
+    };
+    writeDb(db);
+    return db.sapFieldMappings[index];
+  },
+
+  // SAP Retry Queue
+  getSapRetryQueue: async (): Promise<SapRetryQueue[]> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      return await prismaClient.sapRetryQueue.findMany({
+        orderBy: { createdAt: "desc" }
+      });
+    }
+    const db = readDb();
+    return db.sapRetryQueues || [];
+  },
+
+  createSapRetryQueueItem: async (data: any): Promise<SapRetryQueue> => {
+    const id = data.id || `RQ-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
+    const newItem = {
+      ...data,
+      id,
+      retryCount: data.retryCount || 0,
+      status: data.status || "PENDING",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    if (isDbConnected()) {
+      await seedMySQL();
+      const queue = await prismaClient.sapRetryQueue.create({
+        data: {
+          ...newItem,
+          nextAttemptAt: new Date(newItem.nextAttemptAt)
+        }
+      });
+      return {
+        ...queue,
+        nextAttemptAt: queue.nextAttemptAt.toISOString()
+      };
+    }
+
+    const db = readDb();
+    db.sapRetryQueues = db.sapRetryQueues || [];
+    db.sapRetryQueues.push(newItem);
+    writeDb(db);
+    return newItem;
+  },
+
+  updateSapRetryQueueItem: async (id: string, data: any): Promise<SapRetryQueue> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      const updateData: any = { ...data };
+      if (data.nextAttemptAt) updateData.nextAttemptAt = new Date(data.nextAttemptAt);
+
+      const queue = await prismaClient.sapRetryQueue.update({
+        where: { id },
+        data: updateData
+      });
+      return {
+        ...queue,
+        nextAttemptAt: queue.nextAttemptAt.toISOString()
+      };
+    }
+
+    const db = readDb();
+    const index = db.sapRetryQueues.findIndex(rq => rq.id === id);
+    if (index === -1) throw new Error("Retry queue item not found");
+    db.sapRetryQueues[index] = {
+      ...db.sapRetryQueues[index],
+      ...data,
+      updatedAt: new Date().toISOString()
+    };
+    writeDb(db);
+    return db.sapRetryQueues[index];
+  },
+
+  // Mock Engine for SAP Integration Sync
+  triggerSapSync: async (connectionId: string, module: string, syncType: string): Promise<SapSyncJob> => {
+    // 1. Create a sync job in processing status
+    const job = await mockDb.createSapSyncJob({
+      connectionId,
+      module,
+      syncType,
+      status: "PROCESSING"
+    });
+
+    try {
+      // Create trace connection verification logs
+      await mockDb.createSapSyncLog({
+        jobId: job.id,
+        severity: "INFO",
+        message: "Initiating connection to SAP SuccessFactors endpoint... OAuth SAML flow validation skipped in mock."
+      });
+
+      if (module === "EMPLOYEE") {
+        await mockDb.createSapSyncLog({
+          jobId: job.id,
+          severity: "INFO",
+          message: "Syncing Organization Structure (Departments, Cost Centers, Locations)..."
+        });
+
+        // Org mock upserts:
+        // Seeding Department "HR" and Cost Center mappings
+        const hrDept = { id: "DEPT-006", name: "Human Resources", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+        if (isDbConnected()) {
+          const exists = await prismaClient.department.findUnique({ where: { id: "DEPT-006" } });
+          if (!exists) {
+            await prismaClient.department.create({ data: hrDept });
+          }
+        } else {
+          const db = readDb();
+          if (!db.departments.some(d => d.id === "DEPT-006")) {
+            db.departments.push(hrDept);
+            writeDb(db);
+          }
+        }
+        await mockDb.createSapSyncLog({
+          jobId: job.id,
+          severity: "INFO",
+          message: `Upserted department HR (ID: DEPT-006) matching Cost Center CC-202 successfully.`,
+          entityName: "Department",
+          entityId: "DEPT-006"
+        });
+
+        // Upsert Location: Lusail Site geofence check
+        await mockDb.createSapSyncLog({
+          jobId: job.id,
+          severity: "INFO",
+          message: `Upserted worksite location Lusail Site (ID: WORK-002) matching SAP Location Code LOC-LUS.`,
+          entityName: "Worksite",
+          entityId: "WORK-002"
+        });
+
+        // 2. Perform Mock Employees Sync Inbound
+        // Record 1: Ahmed Ali (existing) - updated
+        await mockDb.createSapSyncLog({
+          jobId: job.id,
+          severity: "INFO",
+          message: "Synchronizing employee AA-1001 (Ahmed Ali) - Active status confirmed.",
+          entityName: "Employee",
+          entityId: "AA-1001"
+        });
+
+        // Record 2: Ahmed Hassan (NEW) - created
+        const newEmp: Employee = {
+          id: "AH-2026",
+          name: "Ahmed Hassan",
+          department: "Operations",
+          departmentId: "DEPT-001",
+          role: "EMPLOYEE",
+          status: "Offline",
+          email: "ahmed.h@alhattab.qa",
+          phone: "+974 5555 9999",
+          shiftId: "GEN-001",
+          passwordHash: defaultHash,
+          isActive: true
+        };
+        if (isDbConnected()) {
+          const exists = await prismaClient.employee.findUnique({ where: { id: "AH-2026" } });
+          if (!exists) {
+            await prismaClient.employee.create({ data: newEmp });
+          }
+        } else {
+          const db = readDb();
+          if (!db.employees.some(e => e.id === "AH-2026")) {
+            db.employees.push(newEmp);
+            writeDb(db);
+          }
+        }
+        await mockDb.createSapSyncLog({
+          jobId: job.id,
+          severity: "INFO",
+          message: "Created new employee AH-2026 (Ahmed Hassan) matching SAP personal record successfully.",
+          entityName: "Employee",
+          entityId: "AH-2026"
+        });
+
+        // Record 3: Fatima Al-Thani (NEW) - created under HR
+        const hrEmp: Employee = {
+          id: "FT-3033",
+          name: "Fatima Al-Thani",
+          department: "Human Resources",
+          departmentId: "DEPT-006",
+          role: "SUPERVISOR",
+          status: "Offline",
+          email: "fatima.t@alhattab.qa",
+          phone: "+974 6666 8888",
+          shiftId: "GEN-001",
+          passwordHash: defaultHash,
+          isActive: true
+        };
+        if (isDbConnected()) {
+          const exists = await prismaClient.employee.findUnique({ where: { id: "FT-3033" } });
+          if (!exists) {
+            await prismaClient.employee.create({ data: hrEmp });
+          }
+        } else {
+          const db = readDb();
+          if (!db.employees.some(e => e.id === "FT-3033")) {
+            db.employees.push(hrEmp);
+            writeDb(db);
+          }
+        }
+        await mockDb.createSapSyncLog({
+          jobId: job.id,
+          severity: "INFO",
+          message: "Created supervisor FT-3033 (Fatima Al-Thani) and linked to Department HR successfully.",
+          entityName: "Employee",
+          entityId: "FT-3033"
+        });
+
+        // Record 4: Alex Martinez (existing) - Terminated! Set isActive=false locally
+        if (isDbConnected()) {
+          await prismaClient.employee.update({
+            where: { id: "AM-8821" },
+            data: { isActive: false, status: "Offline" }
+          });
+        } else {
+          const db = readDb();
+          const idx = db.employees.findIndex(e => e.id === "AM-8821");
+          if (idx !== -1) {
+            db.employees[idx].isActive = false;
+            db.employees[idx].status = "Offline";
+            writeDb(db);
+          }
+        }
+        await mockDb.createSapSyncLog({
+          jobId: job.id,
+          severity: "WARN",
+          message: "Employee AM-8821 (Alex Martinez) marked as TERMINATED in SAP payload. Local account deactivated (isActive=false).",
+          entityName: "Employee",
+          entityId: "AM-8821"
+        });
+
+        // Record 5: Invalid Record (missing email) - fails validation and goes to Retry Queue / DLQ
+        await mockDb.createSapSyncLog({
+          jobId: job.id,
+          severity: "ERROR",
+          message: "Validation Error: Employee ERR-09 (Invalid Operative) has no valid email address. Blocked sync.",
+          entityName: "Employee",
+          entityId: "ERR-09"
+        });
+
+        await mockDb.createSapRetryQueueItem({
+          module: "EMPLOYEE",
+          entityId: "ERR-09",
+          payload: JSON.stringify({ id: "ERR-09", name: "Invalid Operative", department: "Logistics", phone: "+974 1234 5678" }),
+          retryCount: 0,
+          nextAttemptAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(), // next attempt in 1 hour
+          lastError: "Validation Error: Email address must satisfy validation rule EMAIL.",
+          status: "PENDING"
+        });
+
+        // Complete job metrics
+        await mockDb.updateSapSyncJob(job.id, {
+          status: "COMPLETED",
+          recordsProcessed: 5,
+          recordsSucceeded: 4,
+          recordsFailed: 1,
+          completedAt: new Date().toISOString()
+        });
+      } else {
+        // Log skip message for other modules (since outbound sync is not requested yet)
+        await mockDb.createSapSyncLog({
+          jobId: job.id,
+          severity: "WARN",
+          message: `Module ${module} is currently outbound and skipped in Phase 5A foundation.`
+        });
+        await mockDb.updateSapSyncJob(job.id, {
+          status: "COMPLETED",
+          recordsProcessed: 0,
+          recordsSucceeded: 0,
+          recordsFailed: 0,
+          completedAt: new Date().toISOString()
+        });
+      }
+    } catch (err: any) {
+      await mockDb.updateSapSyncJob(job.id, {
+        status: "FAILED",
+        errorMessage: err.message || "Unknown synchronization error",
+        completedAt: new Date().toISOString()
+      });
+    }
+
+    const updatedJob = await mockDb.getSapSyncJobs();
+    return updatedJob.find(j => j.id === job.id) || job;
+  },
+
+  triggerSapRetry: async (): Promise<boolean> => {
+    // 1. Fetch pending retry items
+    const items = await mockDb.getSapRetryQueue();
+    const pendingItems = items.filter(i => i.status === "PENDING");
+
+    for (const item of pendingItems) {
+      // Mock retry logic: Simulate that admin corrected mapping or added missing email
+      // We resolve the item in the queue:
+      await mockDb.updateSapRetryQueueItem(item.id, {
+        status: "RESOLVED",
+        retryCount: item.retryCount + 1,
+        lastError: null
+      });
+
+      // Log success resolution
+      await mockDb.createSapSyncLog({
+        jobId: `RETRY-${item.id}`,
+        severity: "INFO",
+        message: `[Retry Success] Re-processed retry item ${item.entityId} successfully after credentials/validations correction.`,
+        entityName: item.module,
+        entityId: item.entityId
+      });
+    }
+
+    return true;
   }
 };
 

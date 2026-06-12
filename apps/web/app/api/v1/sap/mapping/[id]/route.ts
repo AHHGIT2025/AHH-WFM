@@ -17,9 +17,9 @@ export async function PUT(request: Request, { params }: RouteParams) {
     if (!status) {
       return NextResponse.json({ error: "Missing status" }, { status: 400 });
     }
-    const result = await mockDb.updateSapMappingStatus(params.id, status);
+    const result = await mockDb.updateSapFieldMapping(params.id, { isActive: status === "Mapped" });
     return NextResponse.json(result);
-  } catch (e) {
-    return NextResponse.json({ error: "Failed to update SAP mapping status" }, { status: 500 });
+  } catch (e: any) {
+    return NextResponse.json({ error: e.message || "Failed to update SAP mapping status" }, { status: 500 });
   }
 }

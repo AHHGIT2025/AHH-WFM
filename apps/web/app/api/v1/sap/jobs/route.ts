@@ -7,9 +7,9 @@ export async function GET() {
   if (auth.error) return auth.error;
 
   try {
-    const mappings = await mockDb.getSapFieldMappings();
-    return NextResponse.json(mappings);
+    const jobs = await mockDb.getSapSyncJobs();
+    return NextResponse.json(jobs);
   } catch (e: any) {
-    return NextResponse.json({ error: e.message || "Failed to fetch SAP mappings" }, { status: 500 });
+    return NextResponse.json({ error: e.message || "Failed to fetch sync jobs" }, { status: 500 });
   }
 }

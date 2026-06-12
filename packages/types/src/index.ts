@@ -295,3 +295,69 @@ export interface OvertimeRate {
   updatedAt?: string;
 }
 
+export interface SapConnection {
+  id: string;
+  systemName: string;
+  odataUrl: string;
+  clientId: string;
+  companyId: string;
+  userId: string;
+  privateKeyVaultId: string;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface SapSyncJob {
+  id: string;
+  connectionId: string;
+  connection?: SapConnection;
+  module: "EMPLOYEE" | "LEAVE" | "ATTENDANCE" | "OVERTIME" | "ROSTER" | string;
+  syncType: "FULL" | "INCREMENTAL" | "MANUAL" | string;
+  status: "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED" | string;
+  recordsProcessed: number;
+  recordsSucceeded: number;
+  recordsFailed: number;
+  startedAt: string;
+  completedAt?: string;
+  errorMessage?: string;
+  deltaToken?: string;
+}
+
+export interface SapSyncLog {
+  id: string;
+  jobId: string;
+  severity: "INFO" | "WARN" | "ERROR" | string;
+  entityName?: string;
+  entityId?: string;
+  message: string;
+  createdAt?: string;
+}
+
+export interface SapFieldMapping {
+  id: string;
+  module: "EMPLOYEE" | "LEAVE" | "ATTENDANCE" | string;
+  sourceField: string;
+  targetField: string;
+  transformRule?: string;
+  validationRules?: string;
+  isRequired: boolean;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface SapRetryQueue {
+  id: string;
+  module: "EMPLOYEE" | "LEAVE" | "ATTENDANCE" | string;
+  entityId: string;
+  payload: string;
+  retryCount: number;
+  nextAttemptAt: string;
+  lastError?: string;
+  status: "PENDING" | "FAILED_DLQ" | "RESOLVED" | string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+

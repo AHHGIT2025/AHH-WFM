@@ -1,199 +1,520 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { SyncLog } from "@ahh-wfm/types";
+import { SapConnection, SapSyncJob, SapSyncLog, SapFieldMapping, SapRetryQueue } from "@ahh-wfm/types";
 import { Card, Badge, Button, Modal } from "@ahh-wfm/ui/src";
 
-export default function SapPage() {
-  const [logs, setLogs] = useState<SyncLog[]>([]);
-  const [syncing, setSyncing] = useState(false);
-  const [activeTab, setActiveTab] = useState<"all" | "Failed" | "Success">("all");
-  const [selectedLog, setSelectedLog] = useState<SyncLog | null>(null);
+export default function SapIntegrationHub() {
+  const [connections, setConnections] = useState<SapConnection[]>([]);
+  const [jobs, setJobs] = useState<SapSyncJob[]>([]);
+  const [logs, setLogs] = useState<SapSyncLog[]>([]);
+  const [mappings, setMappings] = useState<SapFieldMapping[]>([]);
+  const [retryQueue, setRetryQueue] = useState<SapRetryQueue[]>([]);
 
-  const fetchLogs = async () => {
+  const [activeTab, setActiveTab] = useState<"dashboard" | "mappings" | "retry">("dashboard");
+  const [syncing, setSyncing] = useState(false);
+  const [retrying, setRetrying] = useState(false);
+  
+  // Form states for Connection creation
+  const [showConnModal, setShowConnModal] = useState(false);
+  const [systemName, setSystemName] = useState("SAP SuccessFactors Sandbox");
+  const [odataUrl, setOdataUrl] = useState("https://api.sandbox.successfactors.eu/odata/v2");
+  const [clientId, setClientId] = useState("AHH_WFM_CLIENT_MOCK");
+  const [companyId, setCompanyId] = useState("AlHattabWFM");
+  const [userId, setUserId] = useState("sf_sync_user");
+  const [privateKeyVaultId, setPrivateKeyVaultId] = useState("VAULT_SF_SANDBOX_KEY_REF");
+
+  // Form states for Field Mapping creation
+  const [showMappingModal, setShowMappingModal] = useState(false);
+  const [mapModule, setMapModule] = useState("EMPLOYEE");
+  const [mapSource, setMapSource] = useState("");
+  const [mapTarget, setMapTarget] = useState("");
+  const [mapTransform, setMapTransform] = useState("Direct");
+  const [mapValidations, setMapValidations] = useState("REQUIRED");
+  const [mapRequired, setMapRequired] = useState(true);
+
+  // Sync Trigger settings
+  const [selectedConn, setSelectedConn] = useState("");
+  const [selectedModule, setSelectedModule] = useState("EMPLOYEE");
+  const [selectedSyncType, setSelectedSyncType] = useState("INCREMENTAL");
+
+  // Log Modal state
+  const [selectedLog, setSelectedLog] = useState<SapSyncLog | null>(null);
+  const [selectedJob, setSelectedJob] = useState<SapSyncJob | null>(null);
+
+  const fetchData = async () => {
     try {
-      const res = await fetch("/api/v1/sap/logs");
+      const connRes = await fetch("/api/v1/sap/connections");
+      if (connRes.ok) {
+        const json = await connRes.json();
+        setConnections(json);
+        if (json.length > 0 && !selectedConn) {
+          setSelectedConn(json[0].id);
+        }
+      }
+
+      const jobsRes = await fetch("/api/v1/sap/jobs");
+      if (jobsRes.ok) setJobs(await jobsRes.json());
+
+      const logsRes = await fetch("/api/v1/sap/logs");
+      if (logsRes.ok) setLogs(await logsRes.json());
+
+      const mapsRes = await fetch("/api/v1/sap/mappings");
+      if (mapsRes.ok) setMappings(await mapsRes.json());
+
+      const retryRes = await fetch("/api/v1/sap/retry");
+      if (retryRes.ok) setRetryQueue(await retryRes.json());
+    } catch (e) {
+      console.error("Failed to load SAP integration hub data", e);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+    const interval = setInterval(fetchData, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleCreateConnection = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const res = await fetch("/api/v1/sap/connections", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          systemName,
+          odataUrl,
+          clientId,
+          companyId,
+          userId,
+          privateKeyVaultId,
+          isActive: true
+        })
+      });
       if (res.ok) {
-        const json = await res.json();
-        setLogs(json);
+        setShowConnModal(false);
+        fetchData();
       }
     } catch (e) {
       console.error(e);
     }
   };
 
-  useEffect(() => {
-    fetchLogs();
-    const interval = setInterval(fetchLogs, 5000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const handleGlobalSync = async () => {
-    setSyncing(true);
+  const handleCreateMapping = async (e: React.FormEvent) => {
+    e.preventDefault();
     try {
-      await fetch("/api/v1/sap/logs", {
+      const res = await fetch("/api/v1/sap/mappings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          operation: "Data Pull",
-          subject: "Global_SF_Schema",
-          status: "Success",
-          details: "Pulled and synchronized schema properties for 48 fields successfully."
+          module: mapModule,
+          sourceField: mapSource,
+          targetField: mapTarget,
+          transformRule: mapTransform,
+          validationRules: mapValidations,
+          isRequired: mapRequired,
+          isActive: true
         })
       });
-      setTimeout(() => {
+      if (res.ok) {
+        setShowMappingModal(false);
+        setMapSource("");
+        setMapTarget("");
+        fetchData();
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleToggleMapping = async (id: string, currentActive: boolean) => {
+    try {
+      await fetch("/api/v1/sap/mappings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id,
+          isActive: !currentActive
+        })
+      });
+      fetchData();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleTriggerSync = async () => {
+    if (!selectedConn) return;
+    setSyncing(true);
+    try {
+      const res = await fetch("/api/v1/sap/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          connectionId: selectedConn,
+          module: selectedModule,
+          syncType: selectedSyncType
+        })
+      });
+      if (res.ok) {
+        setTimeout(() => {
+          setSyncing(false);
+          fetchData();
+        }, 1500);
+      } else {
         setSyncing(false);
-        fetchLogs();
-      }, 1500);
+      }
     } catch (e) {
       setSyncing(false);
     }
   };
 
-  const filteredLogs = logs.filter((log) => {
-    if (activeTab === "all") return true;
-    return log.status === activeTab;
-  });
+  const handleTriggerRetry = async () => {
+    setRetrying(true);
+    try {
+      const res = await fetch("/api/v1/sap/retry", {
+        method: "POST"
+      });
+      if (res.ok) {
+        setTimeout(() => {
+          setRetrying(false);
+          fetchData();
+        }, 1500);
+      } else {
+        setRetrying(false);
+      }
+    } catch (e) {
+      setRetrying(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
-      {/* Title & Header Actions */}
+      {/* Page Title & Tab Selector */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-primary">SAP SuccessFactors Hub</h1>
-          <p className="text-sm text-on-surface-variant">Real-time sync controls and data-feed health diagnostics</p>
+          <h1 className="text-2xl font-bold text-primary">SAP SuccessFactors Integration Hub</h1>
+          <p className="text-sm text-on-surface-variant">Manage inbound master data sync, schema field transformations, and logs</p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="secondary" className="font-bold flex items-center gap-1.5 text-xs">
-            <span className="material-symbols-outlined text-sm">download</span> Export Report
-          </Button>
-          <Button
-            onClick={handleGlobalSync}
-            disabled={syncing}
-            className="font-bold flex items-center gap-1.5 text-xs"
+        <div className="flex bg-surface-container border border-outline-variant p-0.5 rounded-lg text-xs font-bold">
+          <button
+            onClick={() => setActiveTab("dashboard")}
+            className={`py-1.5 px-3 rounded-md transition-colors ${
+              activeTab === "dashboard" ? "bg-primary text-white" : "hover:bg-surface-container-high text-on-surface-variant"
+            }`}
           >
-            <span className={`material-symbols-outlined text-sm ${syncing ? "animate-spin" : ""}`}>
-              sync
-            </span>
-            <span>{syncing ? "Syncing Schema..." : "Sync Global Schema"}</span>
-          </Button>
+            Dashboard
+          </button>
+          <button
+            onClick={() => setActiveTab("mappings")}
+            className={`py-1.5 px-3 rounded-md transition-colors ${
+              activeTab === "mappings" ? "bg-primary text-white" : "hover:bg-surface-container-high text-on-surface-variant"
+            }`}
+          >
+            Field Mappings
+          </button>
+          <button
+            onClick={() => setActiveTab("retry")}
+            className={`py-1.5 px-3 rounded-md transition-colors ${
+              activeTab === "retry" ? "bg-primary text-white" : "hover:bg-surface-container-high text-on-surface-variant"
+            }`}
+          >
+            Retry Queue ({retryQueue.filter(i => i.status === "PENDING").length})
+          </button>
         </div>
       </div>
 
-      {/* Grid of status cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="hover:shadow-md transition-shadow">
-          <div className="flex justify-between items-start mb-4">
-            <div className="p-2 bg-green-50 rounded-lg text-green-600">
-              <span className="material-symbols-outlined">cloud_done</span>
-            </div>
-            <Badge variant="success">ACTIVE</Badge>
-          </div>
-          <p className="text-outline-variant font-bold text-[10px] uppercase tracking-wider mb-0.5">API Health</p>
-          <h3 className="text-lg font-bold text-primary">SuccessFactors Live</h3>
-          <p className="text-xs text-on-surface-variant mt-2">Latency: 142ms</p>
-        </Card>
+      {activeTab === "dashboard" && (
+        <>
+          {/* Dashboard Summary Cards */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <Card className="hover:shadow-md transition-shadow">
+              <div className="flex justify-between items-start mb-4">
+                <div className="p-2 bg-green-50 rounded-lg text-green-600">
+                  <span className="material-symbols-outlined">cloud_sync</span>
+                </div>
+                <Badge variant="success">SANDBOX MOCK</Badge>
+              </div>
+              <p className="text-outline-variant font-bold text-[10px] uppercase tracking-wider mb-0.5">Connection State</p>
+              <h3 className="text-lg font-bold text-primary">Connected</h3>
+              <p className="text-xs text-on-surface-variant mt-2">SF Endpoint is simulation-ready</p>
+            </Card>
 
-        <Card className="hover:shadow-md transition-shadow">
-          <div className="flex justify-between items-start mb-4">
-            <div className="p-2 bg-amber-50 rounded-lg text-amber-600">
-              <span className="material-symbols-outlined">pending_actions</span>
-            </div>
-          </div>
-          <p className="text-outline-variant font-bold text-[10px] uppercase tracking-wider mb-0.5">In Queue</p>
-          <h3 className="text-lg font-bold text-primary">0 Records</h3>
-          <p className="text-xs text-on-surface-variant mt-2">All batches ingested</p>
-        </Card>
+            <Card className="hover:shadow-md transition-shadow">
+              <div className="flex justify-between items-start mb-4">
+                <div className="p-2 bg-blue-50 rounded-lg text-secondary">
+                  <span className="material-symbols-outlined">schedule_send</span>
+                </div>
+              </div>
+              <p className="text-outline-variant font-bold text-[10px] uppercase tracking-wider mb-0.5">Sync Inbound Metrics</p>
+              <h3 className="text-lg font-bold text-primary">
+                {jobs.length > 0 ? jobs.reduce((acc, job) => acc + job.recordsSucceeded, 0) : 0} Success
+              </h3>
+              <p className="text-xs text-on-surface-variant mt-2">
+                Failed: {jobs.length > 0 ? jobs.reduce((acc, job) => acc + job.recordsFailed, 0) : 0} items
+              </p>
+            </Card>
 
-        <Card className="hover:shadow-md transition-shadow">
-          <div className="flex justify-between items-start mb-4">
-            <div className="p-2 bg-blue-50 rounded-lg text-secondary">
-              <span className="material-symbols-outlined">analytics</span>
-            </div>
-          </div>
-          <p className="text-outline-variant font-bold text-[10px] uppercase tracking-wider mb-0.5">Sync Success Rate</p>
-          <h3 className="text-lg font-bold text-primary">99.8%</h3>
-          <div className="w-full bg-surface-container rounded-full h-1.5 mt-3 overflow-hidden">
-            <div className="bg-secondary h-full" style={{ width: "99.8%" }}></div>
-          </div>
-        </Card>
+            <Card className="hover:shadow-md transition-shadow">
+              <div className="flex justify-between items-start mb-4">
+                <div className="p-2 bg-purple-50 rounded-lg text-purple-600">
+                  <span className="material-symbols-outlined">rule</span>
+                </div>
+              </div>
+              <p className="text-outline-variant font-bold text-[10px] uppercase tracking-wider mb-0.5">Total Mapping Rules</p>
+              <h3 className="text-lg font-bold text-primary">{mappings.length} Active Rules</h3>
+              <p className="text-xs text-on-surface-variant mt-2">Employee & Org hierarchies</p>
+            </Card>
 
-        <Card className="hover:shadow-md transition-shadow">
-          <div className="flex justify-between items-start mb-4">
-            <div className="p-2 bg-red-50 rounded-lg text-status-error">
-              <span className="material-symbols-outlined">warning</span>
-            </div>
+            <Card className="hover:shadow-md transition-shadow">
+              <div className="flex justify-between items-start mb-4">
+                <div className="p-2 bg-red-50 rounded-lg text-status-error">
+                  <span className="material-symbols-outlined">warning</span>
+                </div>
+              </div>
+              <p className="text-outline-variant font-bold text-[10px] uppercase tracking-wider mb-0.5">In Retry Queue</p>
+              <h3 className="text-lg font-bold text-primary">{retryQueue.filter(i => i.status === "PENDING").length} Pending</h3>
+              <p className="text-xs text-status-error mt-2 font-semibold flex items-center gap-1">
+                <span className="material-symbols-outlined text-sm">hourglass_empty</span> Queued for retry
+              </p>
+            </Card>
           </div>
-          <p className="text-outline-variant font-bold text-[10px] uppercase tracking-wider mb-0.5">Issues Flagged</p>
-          <h3 className="text-lg font-bold text-primary">1 Mapping Conflict</h3>
-          <p className="text-xs text-status-error mt-2 font-medium flex items-center gap-1">
-            <span className="material-symbols-outlined text-sm">error</span> Resolve immediately
-          </p>
-        </Card>
-      </div>
 
-      {/* Main visual section */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Sync Log Feed */}
-        <Card className="lg:col-span-2 flex flex-col p-0">
-          <div className="p-4 border-b border-border-subtle bg-surface-container-low flex justify-between items-center rounded-t-xl">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Sync Controls Panel & Connections */}
+            <div className="space-y-6">
+              <Card>
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-sm font-bold text-primary flex items-center gap-2">
+                    <span className="material-symbols-outlined text-secondary">power</span> Connection Configurations
+                  </h3>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="text-[10px] py-1 font-bold"
+                    onClick={() => setShowConnModal(true)}
+                  >
+                    Add Connection
+                  </Button>
+                </div>
+                {connections.length === 0 ? (
+                  <p className="text-xs text-on-surface-variant p-4 text-center">No connection defined.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {connections.map((conn) => (
+                      <div key={conn.id} className="p-3 border border-border-subtle rounded-lg text-xs space-y-1 bg-surface-container-low">
+                        <div className="flex justify-between items-center">
+                          <span className="font-bold text-primary">{conn.systemName}</span>
+                          <Badge variant={conn.isActive ? "success" : "neutral"}>
+                            {conn.isActive ? "Active" : "Disabled"}
+                          </Badge>
+                        </div>
+                        <p className="text-on-surface-variant font-mono text-[10px] overflow-hidden truncate">{conn.odataUrl}</p>
+                        <div className="grid grid-cols-2 gap-2 text-[10px] text-outline-variant mt-2 pt-2 border-t border-border-subtle/50">
+                          <div>
+                            <span className="font-semibold text-on-surface-variant">Client ID:</span> {conn.clientId}
+                          </div>
+                          <div>
+                            <span className="font-semibold text-on-surface-variant">Company:</span> {conn.companyId}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Card>
+
+              <Card>
+                <h3 className="text-sm font-bold text-primary flex items-center gap-2 mb-4">
+                  <span className="material-symbols-outlined text-secondary">sync_alt</span> Trigger Integration Sync
+                </h3>
+                <div className="space-y-4 text-xs">
+                  <div>
+                    <label className="block font-semibold text-on-surface-variant mb-1">Target Connection</label>
+                    <select
+                      value={selectedConn}
+                      onChange={(e) => setSelectedConn(e.target.value)}
+                      className="w-full p-2 border border-outline-variant rounded-md bg-white text-xs"
+                    >
+                      <option value="">Select connection...</option>
+                      {connections.map(c => (
+                        <option key={c.id} value={c.id}>{c.systemName}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-on-surface-variant mb-1">Integration Module</label>
+                    <select
+                      value={selectedModule}
+                      onChange={(e) => setSelectedModule(e.target.value)}
+                      className="w-full p-2 border border-outline-variant rounded-md bg-white text-xs"
+                    >
+                      <option value="EMPLOYEE">Organization & Employee Sync (Inbound)</option>
+                      <option value="LEAVE">Leave Sync (Outbound - Skip Mock)</option>
+                      <option value="ATTENDANCE">Attendance Sync (Outbound - Skip Mock)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-on-surface-variant mb-1">Sync Type Mode</label>
+                    <select
+                      value={selectedSyncType}
+                      onChange={(e) => setSelectedSyncType(e.target.value)}
+                      className="w-full p-2 border border-outline-variant rounded-md bg-white text-xs"
+                    >
+                      <option value="INCREMENTAL">Incremental Ingestion (Delta Token)</option>
+                      <option value="FULL">Full Synchronisation</option>
+                      <option value="MANUAL">Manual Diagnostics Sync</option>
+                    </select>
+                  </div>
+                  <Button
+                    onClick={handleTriggerSync}
+                    disabled={syncing || !selectedConn}
+                    className="w-full text-xs font-bold flex items-center justify-center gap-1.5"
+                  >
+                    <span className={`material-symbols-outlined text-sm ${syncing ? "animate-spin" : ""}`}>
+                      sync
+                    </span>
+                    <span>{syncing ? "Ingesting SAP data..." : "Trigger Manual Sync"}</span>
+                  </Button>
+                </div>
+              </Card>
+            </div>
+
+            {/* Sync Job History Table */}
+            <Card className="lg:col-span-2 flex flex-col p-0">
+              <div className="p-4 border-b border-border-subtle bg-surface-container-low flex items-center gap-2 rounded-t-xl">
+                <span className="material-symbols-outlined text-primary">history</span>
+                <h3 className="text-xs font-bold uppercase text-primary">Sync Job Execution History</h3>
+              </div>
+              <div className="overflow-x-auto flex-1">
+                <table className="w-full text-left">
+                  <thead className="bg-surface-container text-[10px] font-bold uppercase tracking-wider text-on-surface-variant border-b border-border-subtle">
+                    <tr>
+                      <th className="p-3">Job ID</th>
+                      <th className="p-3">Module</th>
+                      <th className="p-3">Type</th>
+                      <th className="p-3">Status</th>
+                      <th className="p-3 text-center">Records (S/F/P)</th>
+                      <th className="p-3 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border-subtle text-xs">
+                    {jobs.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="p-6 text-center text-on-surface-variant text-xs">
+                          No sync jobs run yet. Click "Trigger Manual Sync" to run simulation.
+                        </td>
+                      </tr>
+                    ) : (
+                      jobs.map((job) => (
+                        <tr key={job.id} className="hover:bg-surface-container-low transition-colors">
+                          <td className="p-3 font-mono font-bold text-[10px] text-primary">{job.id}</td>
+                          <td className="p-3 font-semibold text-primary">{job.module}</td>
+                          <td className="p-3 text-on-surface-variant">{job.syncType}</td>
+                          <td className="p-3">
+                            <Badge
+                              variant={
+                                job.status === "COMPLETED"
+                                  ? "success"
+                                  : job.status === "FAILED"
+                                  ? "error"
+                                  : "warning"
+                              }
+                            >
+                              {job.status}
+                            </Badge>
+                          </td>
+                          <td className="p-3 text-center text-[11px] font-mono">
+                            <span className="text-green-600 font-bold">{job.recordsSucceeded}</span>/
+                            <span className="text-red-500 font-bold">{job.recordsFailed}</span>/
+                            <span className="text-outline-variant">{job.recordsProcessed}</span>
+                          </td>
+                          <td className="p-3 text-right">
+                            <button
+                              onClick={() => setSelectedJob(job)}
+                              className="text-secondary hover:underline font-bold text-[10px]"
+                            >
+                              Check Audit Logs
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          </div>
+        </>
+      )}
+
+      {activeTab === "mappings" && (
+        <Card className="p-0 overflow-hidden">
+          <div className="p-4 border-b border-border-subtle bg-surface-container-low flex justify-between items-center">
             <div className="flex items-center gap-2">
-              <span className="material-symbols-outlined text-primary">list_alt</span>
-              <h3 className="text-xs font-bold uppercase text-primary">Sync Log Audits</h3>
+              <span className="material-symbols-outlined text-primary">schema</span>
+              <h3 className="text-xs font-bold uppercase text-primary font-bold">Field Mapping & Schema Translations</h3>
             </div>
-            <div className="flex border border-outline-variant rounded-lg overflow-hidden text-[10px] font-bold bg-white">
-              {(["all", "Success", "Failed"] as const).map((tab) => (
-                <button
-                  key={tab}
-                  onClick={() => setActiveTab(tab)}
-                  className={`py-1.5 px-3 border-r border-outline-variant last:border-none ${
-                    activeTab === tab ? "bg-secondary text-white" : "hover:bg-surface-container text-on-surface-variant"
-                  }`}
-                >
-                  {tab === "all" ? "All Logs" : tab}
-                </button>
-              ))}
-            </div>
+            <Button
+              size="sm"
+              className="text-[10px] py-1 font-bold flex items-center gap-1"
+              onClick={() => setShowMappingModal(true)}
+            >
+              <span className="material-symbols-outlined text-sm">add</span> New Rule Mapping
+            </Button>
           </div>
-
-          <div className="overflow-x-auto flex-1">
+          <div className="overflow-x-auto">
             <table className="w-full text-left">
               <thead className="bg-surface-container text-[10px] font-bold uppercase tracking-wider text-on-surface-variant border-b border-border-subtle">
                 <tr>
-                  <th className="p-3">Timestamp</th>
-                  <th className="p-3">Operation</th>
-                  <th className="p-3">Subject</th>
-                  <th className="p-3">Status</th>
-                  <th className="p-3 text-right">Details</th>
+                  <th className="p-4">Integration Module</th>
+                  <th className="p-4">SAP OData Property (Source)</th>
+                  <th className="p-4">WFM Local Field (Target)</th>
+                  <th className="p-4">Transform Formula</th>
+                  <th className="p-4">Validations</th>
+                  <th className="p-4 text-center">Required</th>
+                  <th className="p-4 text-center">Active</th>
+                  <th className="p-4 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border-subtle text-xs">
-                {filteredLogs.length === 0 ? (
+                {mappings.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="p-6 text-center text-on-surface-variant">
-                      No logs found.
+                    <td colSpan={8} className="p-6 text-center text-on-surface-variant">
+                      No field mapping rules registered.
                     </td>
                   </tr>
                 ) : (
-                  filteredLogs.map((log) => (
-                    <tr key={log.id} className="hover:bg-surface-container-low transition-colors">
-                      <td className="p-3 font-mono text-[10px] text-on-surface-variant whitespace-nowrap">
-                        {log.timestamp}
+                  mappings.map((mapping) => (
+                    <tr key={mapping.id} className="hover:bg-surface-container-low transition-colors">
+                      <td className="p-4 font-bold text-primary">{mapping.module}</td>
+                      <td className="p-4 font-mono text-primary text-[11px] font-bold bg-surface-container-low/50">
+                        {mapping.sourceField}
                       </td>
-                      <td className="p-3 font-semibold text-primary">{log.operation}</td>
-                      <td className="p-3 font-mono text-[11px]">{log.subject}</td>
-                      <td className="p-3">
-                        <Badge variant={log.status === "Success" ? "success" : log.status === "Failed" ? "error" : "warning"}>
-                          {log.status}
+                      <td className="p-4 font-mono text-secondary text-[11px] font-bold">
+                        {mapping.targetField}
+                      </td>
+                      <td className="p-4 font-semibold text-on-surface-variant">{mapping.transformRule}</td>
+                      <td className="p-4 font-mono text-[10px] text-outline-variant">{mapping.validationRules || "-"}</td>
+                      <td className="p-4 text-center">
+                        <Badge variant={mapping.isRequired ? "error" : "neutral"}>
+                          {mapping.isRequired ? "Yes" : "No"}
                         </Badge>
                       </td>
-                      <td className="p-3 text-right">
-                        <button
-                          onClick={() => setSelectedLog(log)}
-                          className="text-secondary hover:underline font-bold text-[10px]"
+                      <td className="p-4 text-center">
+                        <Badge variant={mapping.isActive ? "success" : "neutral"}>
+                          {mapping.isActive ? "Active" : "Disabled"}
+                        </Badge>
+                      </td>
+                      <td className="p-4 text-right">
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          className="text-[10px] py-1 px-2.5 font-bold"
+                          onClick={() => handleToggleMapping(mapping.id, mapping.isActive)}
                         >
-                          View Details
-                        </button>
+                          {mapping.isActive ? "Disable" : "Enable"}
+                        </Button>
                       </td>
                     </tr>
                   ))
@@ -202,102 +523,298 @@ export default function SapPage() {
             </table>
           </div>
         </Card>
+      )}
 
-        {/* Node latency viz */}
-        <Card className="bg-primary text-white flex flex-col justify-between">
+      {activeTab === "retry" && (
+        <Card className="p-0 overflow-hidden">
+          <div className="p-4 border-b border-border-subtle bg-surface-container-low flex justify-between items-center">
+            <div className="flex items-center gap-2">
+              <span className="material-symbols-outlined text-primary">warning</span>
+              <h3 className="text-xs font-bold uppercase text-primary font-bold">SAP Retry Queue & Dead-Letter Logs</h3>
+            </div>
+            <Button
+              size="sm"
+              disabled={retrying || retryQueue.filter(i => i.status === "PENDING").length === 0}
+              className="text-[10px] py-1.5 font-bold flex items-center gap-1 bg-amber-600 hover:bg-amber-700 text-white"
+              onClick={handleTriggerRetry}
+            >
+              <span className={`material-symbols-outlined text-sm ${retrying ? "animate-spin" : ""}`}>
+                replay
+              </span>
+              <span>{retrying ? "Re-processing queue..." : "Run Queue Retry Now"}</span>
+            </Button>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead className="bg-surface-container text-[10px] font-bold uppercase tracking-wider text-on-surface-variant border-b border-border-subtle">
+                <tr>
+                  <th className="p-4">Queue Item ID</th>
+                  <th className="p-4">Module</th>
+                  <th className="p-4">Entity ID Reference</th>
+                  <th className="p-4 text-center">Retry Count</th>
+                  <th className="p-4">Next Attempt Scheduled</th>
+                  <th className="p-4">Last Error Reason</th>
+                  <th className="p-4">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border-subtle text-xs">
+                {retryQueue.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="p-6 text-center text-on-surface-variant">
+                      Retry queue is empty. Trigger a sync job with missing fields to verify.
+                    </td>
+                  </tr>
+                ) : (
+                  retryQueue.map((item) => (
+                    <tr key={item.id} className="hover:bg-surface-container-low transition-colors">
+                      <td className="p-4 font-mono font-bold text-[10px] text-primary">{item.id}</td>
+                      <td className="p-4 font-bold text-on-surface-variant">{item.module}</td>
+                      <td className="p-4 font-mono text-[11px] font-semibold text-secondary">{item.entityId}</td>
+                      <td className="p-4 text-center font-mono font-semibold">{item.retryCount}</td>
+                      <td className="p-4 font-mono text-[10px] text-outline-variant">{item.nextAttemptAt}</td>
+                      <td className="p-4 text-status-error font-medium truncate max-w-xs">{item.lastError || "None"}</td>
+                      <td className="p-4">
+                        <Badge
+                          variant={
+                            item.status === "RESOLVED"
+                              ? "success"
+                              : item.status === "FAILED_DLQ"
+                              ? "error"
+                              : "warning"
+                          }
+                        >
+                          {item.status}
+                        </Badge>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      {/* Add Connection Modal */}
+      <Modal
+        isOpen={showConnModal}
+        onClose={() => setShowConnModal(false)}
+        title="Add SAP SuccessFactors Connection"
+      >
+        <form onSubmit={handleCreateConnection} className="space-y-4 text-xs">
           <div>
-            <h3 className="text-sm font-bold mb-0.5">Regional Nodes Health</h3>
-            <p className="text-[10px] text-outline-variant opacity-75">SAP API Cluster Sync</p>
-
-            <div className="mt-8 space-y-6">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <span className="material-symbols-outlined text-green-400">dns</span>
-                  <div>
-                    <p className="text-xs font-bold">Doha Node (AP-South-Q)</p>
-                    <p className="text-[9px] text-outline-variant opacity-75">Primary Site Hub</p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className="text-xs font-bold text-green-400">99.9%</p>
-                  <p className="text-[9px] text-green-400">Optimal</p>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <span className="material-symbols-outlined text-green-400">dns</span>
-                  <div>
-                    <p className="text-xs font-bold">Frankfurt Node (EU-Central)</p>
-                    <p className="text-[9px] text-outline-variant opacity-75">Active Mirror Site</p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className="text-xs font-bold text-green-400">99.7%</p>
-                  <p className="text-[9px] text-green-400">Synced</p>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <span className="material-symbols-outlined text-amber-400">dns</span>
-                  <div>
-                    <p className="text-xs font-bold">Singapore Node (AP-East)</p>
-                    <p className="text-[9px] text-outline-variant opacity-75">Fallback Standby</p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className="text-xs font-bold text-amber-400">95.4%</p>
-                  <p className="text-[9px] text-amber-400">Delayed</p>
-                </div>
-              </div>
+            <label className="block font-semibold text-on-surface-variant mb-1">System Environment Name</label>
+            <input
+              type="text"
+              value={systemName}
+              onChange={(e) => setSystemName(e.target.value)}
+              className="w-full p-2 border border-outline-variant rounded-md text-xs"
+              required
+            />
+          </div>
+          <div>
+            <label className="block font-semibold text-on-surface-variant mb-1">SAP OData API URL Endpoint</label>
+            <input
+              type="url"
+              value={odataUrl}
+              onChange={(e) => setOdataUrl(e.target.value)}
+              className="w-full p-2 border border-outline-variant rounded-md text-xs"
+              required
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block font-semibold text-on-surface-variant mb-1">OAuth Client ID</label>
+              <input
+                type="text"
+                value={clientId}
+                onChange={(e) => setClientId(e.target.value)}
+                className="w-full p-2 border border-outline-variant rounded-md text-xs"
+                required
+              />
+            </div>
+            <div>
+              <label className="block font-semibold text-on-surface-variant mb-1">Company ID</label>
+              <input
+                type="text"
+                value={companyId}
+                onChange={(e) => setCompanyId(e.target.value)}
+                className="w-full p-2 border border-outline-variant rounded-md text-xs"
+                required
+              />
             </div>
           </div>
-          <Button variant="secondary" className="w-full text-xs font-bold bg-white/10 border-white/20 text-white hover:bg-white/20 mt-8">
-            Re-optimize Nodes
-          </Button>
-        </Card>
-      </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block font-semibold text-on-surface-variant mb-1">Sync Service User ID</label>
+              <input
+                type="text"
+                value={userId}
+                onChange={(e) => setUserId(e.target.value)}
+                className="w-full p-2 border border-outline-variant rounded-md text-xs"
+                required
+              />
+            </div>
+            <div>
+              <label className="block font-semibold text-on-surface-variant mb-1">Private Key Vault reference ID</label>
+              <input
+                type="text"
+                value={privateKeyVaultId}
+                onChange={(e) => setPrivateKeyVaultId(e.target.value)}
+                className="w-full p-2 border border-outline-variant rounded-md text-xs"
+                required
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 border-t border-border-subtle pt-4 mt-6">
+            <Button variant="secondary" onClick={() => setShowConnModal(false)}>Cancel</Button>
+            <Button type="submit">Register Endpoint Connection</Button>
+          </div>
+        </form>
+      </Modal>
 
-      {/* Log Details Diagnostic Modal */}
+      {/* Add Field Mapping Modal */}
       <Modal
-        isOpen={!!selectedLog}
-        onClose={() => setSelectedLog(null)}
-        title={`Diagnostic Log: ${selectedLog?.id}`}
+        isOpen={showMappingModal}
+        onClose={() => setShowMappingModal(false)}
+        title="Add SAP Field Schema Mapping Rule"
       >
-        {selectedLog && (
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4 text-xs">
+        <form onSubmit={handleCreateMapping} className="space-y-4 text-xs">
+          <div>
+            <label className="block font-semibold text-on-surface-variant mb-1">Integration Module</label>
+            <select
+              value={mapModule}
+              onChange={(e) => setMapModule(e.target.value)}
+              className="w-full p-2 border border-outline-variant rounded-md bg-white text-xs"
+            >
+              <option value="EMPLOYEE">ORGANIZATION & EMPLOYEE MASTER</option>
+              <option value="LEAVE">LEAVE BALANCES & ACCRUALS</option>
+              <option value="ATTENDANCE">ATTENDANCE TIMESHEETS</option>
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block font-semibold text-on-surface-variant mb-1">SAP OData Property (Source)</label>
+              <input
+                type="text"
+                value={mapSource}
+                onChange={(e) => setMapSource(e.target.value)}
+                placeholder="e.g. personalInfo.firstName"
+                className="w-full p-2 border border-outline-variant rounded-md text-xs"
+                required
+              />
+            </div>
+            <div>
+              <label className="block font-semibold text-on-surface-variant mb-1">WFM Local Field (Target)</label>
+              <input
+                type="text"
+                value={mapTarget}
+                onChange={(e) => setMapTarget(e.target.value)}
+                placeholder="e.g. name"
+                className="w-full p-2 border border-outline-variant rounded-md text-xs"
+                required
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block font-semibold text-on-surface-variant mb-1">Transformation Formula</label>
+              <select
+                value={mapTransform}
+                onChange={(e) => setMapTransform(e.target.value)}
+                className="w-full p-2 border border-outline-variant rounded-md bg-white text-xs"
+              >
+                <option value="Direct">Direct string mapping</option>
+                <option value="Lowercase">Cast to Lowercase</option>
+                <option value="Uppercase">Cast to Uppercase</option>
+                <option value="Lookup">Code Table Lookup</option>
+                <option value="ValueMap">Custom Value Matrix</option>
+              </select>
+            </div>
+            <div>
+              <label className="block font-semibold text-on-surface-variant mb-1">Schema Validation Rules</label>
+              <input
+                type="text"
+                value={mapValidations}
+                onChange={(e) => setMapValidations(e.target.value)}
+                placeholder="e.g. EMAIL or REQUIRED"
+                className="w-full p-2 border border-outline-variant rounded-md text-xs"
+              />
+            </div>
+          </div>
+          <div className="flex items-center gap-2 py-2">
+            <input
+              type="checkbox"
+              id="mapRequired"
+              checked={mapRequired}
+              onChange={(e) => setMapRequired(e.target.checked)}
+              className="w-4 h-4 rounded text-primary"
+            />
+            <label htmlFor="mapRequired" className="font-semibold text-on-surface-variant">Mandatory verification constraint</label>
+          </div>
+          <div className="flex justify-end gap-2 border-t border-border-subtle pt-4 mt-6">
+            <Button variant="secondary" onClick={() => setShowMappingModal(false)}>Cancel</Button>
+            <Button type="submit">Save Translation Rule</Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Sync Job Audit Details Modal */}
+      <Modal
+        isOpen={!!selectedJob}
+        onClose={() => setSelectedJob(null)}
+        title={`Sync Job Details: ${selectedJob?.id}`}
+      >
+        {selectedJob && (
+          <div className="space-y-4 text-xs">
+            <div className="grid grid-cols-2 gap-4 bg-surface-container p-3 rounded-lg border border-border-subtle">
               <div>
-                <p className="font-bold text-on-surface-variant uppercase tracking-wider text-[10px]">Timestamp</p>
-                <p className="font-mono mt-0.5 text-primary font-semibold">{selectedLog.timestamp}</p>
+                <span className="font-semibold text-outline-variant uppercase text-[10px]">Job Module / Type</span>
+                <p className="font-bold text-primary">{selectedJob.module} / {selectedJob.syncType}</p>
               </div>
               <div>
-                <p className="font-bold text-on-surface-variant uppercase tracking-wider text-[10px]">Operation</p>
-                <p className="font-bold text-primary mt-0.5">{selectedLog.operation}</p>
+                <span className="font-semibold text-outline-variant uppercase text-[10px]">Status</span>
+                <p className="mt-0.5"><Badge variant="success">{selectedJob.status}</Badge></p>
               </div>
               <div>
-                <p className="font-bold text-on-surface-variant uppercase tracking-wider text-[10px]">Subject</p>
-                <p className="font-mono mt-0.5 text-primary font-semibold">{selectedLog.subject}</p>
+                <span className="font-semibold text-outline-variant uppercase text-[10px]">Started At</span>
+                <p className="font-mono text-primary font-semibold">{selectedJob.startedAt}</p>
               </div>
               <div>
-                <p className="font-bold text-on-surface-variant uppercase tracking-wider text-[10px]">Status</p>
-                <div className="mt-1">
-                  <Badge variant={selectedLog.status === "Success" ? "success" : selectedLog.status === "Failed" ? "error" : "warning"}>
-                    {selectedLog.status}
-                  </Badge>
-                </div>
+                <span className="font-semibold text-outline-variant uppercase text-[10px]">Completed At</span>
+                <p className="font-mono text-primary font-semibold">{selectedJob.completedAt || "-"}</p>
               </div>
             </div>
+
             <div className="border-t border-border-subtle pt-4">
-              <p className="font-bold text-on-surface-variant uppercase tracking-wider text-[10px] mb-1">Response details</p>
-              <pre className="bg-surface p-3 rounded-lg text-xs font-mono overflow-x-auto text-primary border border-border-subtle max-h-40 whitespace-pre-wrap">
-                {selectedLog.details}
-              </pre>
+              <h4 className="font-bold text-primary uppercase text-[10px] tracking-wider mb-2">Job Run Trace Logs</h4>
+              <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                {logs
+                  .filter((log) => log.jobId === selectedJob.id || log.jobId === `RETRY-RQ-${selectedJob.id.split("-")[1]}`)
+                  .map((log) => (
+                    <div key={log.id} className="p-2.5 border border-border-subtle rounded bg-surface-container-low text-xs flex items-start gap-2">
+                      <span className={`material-symbols-outlined text-sm mt-0.5 ${
+                        log.severity === "ERROR" ? "text-status-error" : log.severity === "WARN" ? "text-amber-500" : "text-green-600"
+                      }`}>
+                        {log.severity === "ERROR" ? "error" : log.severity === "WARN" ? "warning" : "info"}
+                      </span>
+                      <div className="flex-1 space-y-1">
+                        <div className="flex justify-between items-center text-[10px] text-outline-variant font-mono">
+                          <span>{log.createdAt}</span>
+                          <span>{log.severity}</span>
+                        </div>
+                        <p className="text-on-surface text-primary font-medium">{log.message}</p>
+                      </div>
+                    </div>
+                  ))}
+                {logs.filter((log) => log.jobId === selectedJob.id).length === 0 && (
+                  <p className="text-center text-on-surface-variant p-4">No diagnostic logs found for this job run.</p>
+                )}
+              </div>
             </div>
-            <div className="flex justify-end gap-2 border-t border-border-subtle pt-4 mt-6">
-              <Button variant="secondary" onClick={() => setSelectedLog(null)}>Close</Button>
-              <Button onClick={() => alert("Diagnosing WFM-SAP Bridge connectivity... Healthy.")}>Re-test API Bridge</Button>
+
+            <div className="flex justify-end border-t border-border-subtle pt-4 mt-6">
+              <Button variant="secondary" onClick={() => setSelectedJob(null)}>Close View</Button>
             </div>
           </div>
         )}
