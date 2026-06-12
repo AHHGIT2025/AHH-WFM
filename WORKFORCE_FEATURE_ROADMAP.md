@@ -92,9 +92,9 @@ This document outlines the evolutionary development roadmap for the **AHH WFM** 
 
 ---
 
-## Phase 3: Leave Management & Calendar Integration
+## Phase 3: Leave Management & Calendar Integration (Phase 3A Completed)
 
-### 3.1 Leave Balances
+### 3.1 Leave Balances (Completed)
 *   **Business Purpose**: Maintain precise tracking of available annual, sick, and unpaid leave allowances for each employee.
 *   **Database Impact**: Create a `LeaveBalance` model (New Table) mapping `employeeId` to categories and count balances.
 *   **API Endpoints Required**:
@@ -104,7 +104,7 @@ This document outlines the evolutionary development roadmap for the **AHH WFM** 
     *   Mobile: Leave Request Dashboard (`/leave`) - Remaining balance meters.
 *   **Estimated Implementation Effort**: 2 Days
 
-### 3.2 Leave Accruals
+### 3.2 Leave Accruals (Completed)
 *   **Business Purpose**: Automatically increment employee leave balances monthly or annually based on service tenure and contract regulations.
 *   **Database Impact**: Cron job trigger updating the `LeaveBalance` records. Audit trail saved in `AccrualLog` (New Table).
 *   **API Endpoints Required**:
@@ -123,7 +123,7 @@ This document outlines the evolutionary development roadmap for the **AHH WFM** 
     *   Web: Leave & Approvals console (`/leave`) - Segmented review queues.
 *   **Estimated Implementation Effort**: 4 Days
 
-### 3.4 Holiday Calendar Integration
+### 3.4 Holiday Calendar Integration (Completed)
 *   **Business Purpose**: Import public holidays to automatically skip check-in expectations and adjust leave charge calculations.
 *   **Database Impact**: Create a `PublicHoliday` model (New Table) storing calendar dates, country rules, and work exclusions.
 *   **API Endpoints Required**:

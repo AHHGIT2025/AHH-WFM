@@ -24,7 +24,8 @@ AHH WFM is a full-stack, enterprise-grade workforce management application built
 | **Milestone 3** | Completed | `v0.3-modular-rest-complete` | Migration of unified `/api/db` to secure REST endpoints. |
 | **Milestone 4 (Phase 1)** | Completed | `v0.4-workforce-directory-complete` | Employee CRUD, soft deletes, and Department models. |
 | **Milestone 4 (Phase 2)** | Completed | `v0.5-attendance-geofencing-complete` | Geofencing validation, late tracking, and corrections. |
-| **Phase 3** | Pending | - | Leave balances, accruals, and multi-level approvals. |
+| **Milestone 5 (Phase 3A)**| Completed | `v0.6-leave-balance-engine-complete` | Leave types, dynamic balances, audit ledger, holidays, and calculations. |
+| **Phase 3B** | Pending | - | Multi-level approval workflows and thresholds. |
 
 ---
 
@@ -41,3 +42,10 @@ AHH WFM is a full-stack, enterprise-grade workforce management application built
 - **Attendance Corrections:** Employees submit corrections from mobile logs, retaining the original check-in values (`originalCheckIn`) while updating effective parameters on supervisor approval.
 - **Double Action Guarding:** Restricts concurrent check-ins, check-outs without open check-ins, deactivated employees checking in, and validates coordinate payloads.
 - **GPS simulation:** Built directly into the mobile homepage selector to ease verification testing.
+
+### Phase 3A: Leave Balances & Holiday Calendar
+- **Leave Type Configurations:** Defined configurations for Annual, Sick, Emergency, Unpaid, and Business Travel leave categories.
+- **Ledger-based Balances:** Integrated a dynamic `LeaveBalance` tracker and `LeaveBalanceLedger` writing INITIAL, ACCRUAL, MANUAL_ADJUSTMENT, and LEAVE_TAKEN logs.
+- **Holiday Calendar Registry:** Seeded default Qatar national and company breaks, dynamically adjusting leave request durations.
+- **Calculation Engine:** Weekend-aware (Friday/Saturday) and holiday-aware deduction calculations, excluding non-working days from leave charges.
+- **Manual Adjustment Console:** Admin page tools to adjust balance allotments with audit reasoning.
