@@ -8,17 +8,28 @@ generator client {
 }
 
 model Employee {
-  id           String             @id
-  name         String
-  department   String
-  role         String             // "ADMIN" | "SUPERVISOR" | "EMPLOYEE"
-  status       String             // "On Duty" | "On Break" | "Offline" | "On Leave"
-  email        String             @unique
-  phone        String?
-  shiftId      String?
-  passwordHash String?
-  attendance   AttendanceRecord[]
-  leaves       LeaveRequest[]
+  id            String             @id
+  name          String
+  department    String             // Keeps compatibility name
+  departmentId  String?
+  departmentRef Department?        @relation(fields: [departmentId], references: [id])
+  role          String             // "ADMIN" | "SUPERVISOR" | "EMPLOYEE"
+  status        String             // "On Duty" | "On Break" | "Offline" | "On Leave"
+  email         String             @unique
+  phone         String?
+  shiftId       String?
+  passwordHash  String?
+  isActive      Boolean            @default(true)
+  attendance    AttendanceRecord[]
+  leaves        LeaveRequest[]
+}
+
+model Department {
+  id        String     @id @default(uuid())
+  name      String     @unique
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  employees Employee[]
 }
 
 model AttendanceRecord {

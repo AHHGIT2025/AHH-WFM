@@ -1,14 +1,23 @@
+export interface Department {
+  id: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Employee {
   id: string;
   name: string;
-  department: string;
+  department: string; // compatibility string
+  departmentId?: string;
   role: string;
-  status: "On Duty" | "On Break" | "Offline" | "On Leave";
+  status: "On Duty" | "On Break" | "Offline" | "On Leave" | string;
   avatarUrl?: string;
   email: string;
   phone?: string;
   shiftId?: string;
   passwordHash?: string;
+  isActive?: boolean;
 }
 
 export interface AttendanceRecord {

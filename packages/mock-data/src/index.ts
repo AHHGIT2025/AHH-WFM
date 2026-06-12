@@ -1,4 +1,4 @@
-import { Employee, AttendanceRecord, Shift, LeaveRequest, SapMapping, SyncLog, Announcement } from "@ahh-wfm/types";
+import { Employee, AttendanceRecord, Shift, LeaveRequest, SapMapping, SyncLog, Announcement, Department } from "@ahh-wfm/types";
 import * as fs from "fs";
 import * as path from "path";
 import * as bcrypt from "bcryptjs";
@@ -32,14 +32,22 @@ let memoryDb: {
   sapMappings: SapMapping[];
   syncLogs: SyncLog[];
   announcements: Announcement[];
+  departments: Department[];
 } = {
+  departments: [
+    { id: "DEPT-001", name: "Operations", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+    { id: "DEPT-002", name: "Engineering", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+    { id: "DEPT-003", name: "Logistics", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+    { id: "DEPT-004", name: "Sales", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+    { id: "DEPT-005", name: "IT", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
+  ],
   employees: [
-    { id: "SK-90210", name: "Sarah Kim", department: "Operations", role: "SUPERVISOR", status: "On Break", email: "sarah.kim@alhattab.qa", phone: "+974 5555 1234", shiftId: "MOR-102", passwordHash: defaultHash },
-    { id: "AM-8821", name: "Alex Martinez", department: "Engineering", role: "EMPLOYEE", status: "On Duty", email: "alex.m@alhattab.qa", phone: "+974 5555 5678", shiftId: "GEN-001", passwordHash: defaultHash },
-    { id: "BR-8823", name: "Brandon Reed", department: "Logistics", role: "EMPLOYEE", status: "On Duty", email: "brandon.r@alhattab.qa", phone: "+974 5555 9012", shiftId: "AFT-103", passwordHash: defaultHash },
-    { id: "JL-8824", name: "Jordan Lee", department: "Sales", role: "EMPLOYEE", status: "Offline", email: "jordan.lee@alhattab.qa", phone: "+974 5555 3456", shiftId: "ROT-A", passwordHash: defaultHash },
-    { id: "AA-1001", name: "Ahmed Ali", department: "Operations", role: "EMPLOYEE", status: "Offline", email: "ahmed.ali@alhattab.qa", phone: "+974 6666 1111", shiftId: "GEN-001", passwordHash: defaultHash },
-    { id: "AD-0001", name: "System Administrator", department: "IT", role: "ADMIN", status: "Offline", email: "admin@alhattab.qa", phone: "+974 0000 0000", shiftId: "GEN-001", passwordHash: defaultHash }
+    { id: "SK-90210", name: "Sarah Kim", department: "Operations", departmentId: "DEPT-001", role: "SUPERVISOR", status: "On Break", email: "sarah.kim@alhattab.qa", phone: "+974 5555 1234", shiftId: "MOR-102", passwordHash: defaultHash, isActive: true },
+    { id: "AM-8821", name: "Alex Martinez", department: "Engineering", departmentId: "DEPT-002", role: "EMPLOYEE", status: "On Duty", email: "alex.m@alhattab.qa", phone: "+974 5555 5678", shiftId: "GEN-001", passwordHash: defaultHash, isActive: true },
+    { id: "BR-8823", name: "Brandon Reed", department: "Logistics", departmentId: "DEPT-003", role: "EMPLOYEE", status: "On Duty", email: "brandon.r@alhattab.qa", phone: "+974 5555 9012", shiftId: "AFT-103", passwordHash: defaultHash, isActive: true },
+    { id: "JL-8824", name: "Jordan Lee", department: "Sales", departmentId: "DEPT-004", role: "EMPLOYEE", status: "Offline", email: "jordan.lee@alhattab.qa", phone: "+974 5555 3456", shiftId: "ROT-A", passwordHash: defaultHash, isActive: true },
+    { id: "AA-1001", name: "Ahmed Ali", department: "Operations", departmentId: "DEPT-001", role: "EMPLOYEE", status: "Offline", email: "ahmed.ali@alhattab.qa", phone: "+974 6666 1111", shiftId: "GEN-001", passwordHash: defaultHash, isActive: true },
+    { id: "AD-0001", name: "System Administrator", department: "IT", departmentId: "DEPT-005", role: "ADMIN", status: "Offline", email: "admin@alhattab.qa", phone: "+974 0000 0000", shiftId: "GEN-001", passwordHash: defaultHash, isActive: true }
   ],
   attendance: [
     { id: "ATT-001", employeeId: "AM-8821", employeeName: "Alex Martinez", checkIn: "2026-06-11T08:55:00Z", checkOut: "2026-06-11T18:02:00Z", lat: 25.2854, lng: 51.5310, device: "Galaxy S23 · 5G · GPS Active", status: "On Time", locationName: "Doha Headquarters" },
@@ -85,6 +93,18 @@ const seedMySQL = async () => {
     const empCount = await prismaClient.employee.count();
     if (empCount === 0) {
       console.log("MySQL database is empty. Seeding mock data...");
+      
+      // Seed departments
+      for (const dept of memoryDb.departments) {
+        await prismaClient.department.create({
+          data: {
+            id: dept.id,
+            name: dept.name,
+            createdAt: new Date(dept.createdAt),
+            updatedAt: new Date(dept.updatedAt)
+          }
+        });
+      }
       
       // Seed employees
       for (const emp of memoryDb.employees) {
@@ -597,5 +617,177 @@ export const mockDb = {
       return announcements.map(mapAnnouncement);
     }
     return readDb().announcements;
+  },
+
+  // Departments CRUD
+  getDepartments: async (): Promise<Department[]> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      const departments = await prismaClient.department.findMany({
+        orderBy: { name: "asc" }
+      });
+      return departments.map((d: any) => ({
+        id: d.id,
+        name: d.name,
+        createdAt: d.createdAt.toISOString(),
+        updatedAt: d.updatedAt.toISOString()
+      }));
+    }
+    const db = readDb();
+    if (!db.departments) {
+      db.departments = [
+        { id: "DEPT-001", name: "Operations", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+        { id: "DEPT-002", name: "Engineering", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+        { id: "DEPT-003", name: "Logistics", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+        { id: "DEPT-004", name: "Sales", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+        { id: "DEPT-005", name: "IT", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
+      ];
+      writeDb(db);
+    }
+    return db.departments;
+  },
+  createDepartment: async (name: string): Promise<Department> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      const dept = await prismaClient.department.create({
+        data: { name }
+      });
+      return {
+        id: dept.id,
+        name: dept.name,
+        createdAt: dept.createdAt.toISOString(),
+        updatedAt: dept.updatedAt.toISOString()
+      };
+    }
+    const db = readDb();
+    if (!db.departments) db.departments = [];
+    const newDept: Department = {
+      id: `DEPT-${Date.now()}`,
+      name,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    db.departments.push(newDept);
+    writeDb(db);
+    return newDept;
+  },
+  updateDepartment: async (id: string, name: string): Promise<Department | null> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      try {
+        const dept = await prismaClient.department.update({
+          where: { id },
+          data: { name }
+        });
+        return {
+          id: dept.id,
+          name: dept.name,
+          createdAt: dept.createdAt.toISOString(),
+          updatedAt: dept.updatedAt.toISOString()
+        };
+      } catch (e) {
+        return null;
+      }
+    }
+    const db = readDb();
+    if (!db.departments) db.departments = [];
+    const dept = db.departments.find(d => d.id === id);
+    if (!dept) return null;
+    dept.name = name;
+    dept.updatedAt = new Date().toISOString();
+    writeDb(db);
+    return dept;
+  },
+
+  // Employees Extended CRUD
+  createEmployee: async (data: Omit<Employee, "passwordHash"> & { password?: string }): Promise<Employee> => {
+    const passwordHash = data.password ? bcrypt.hashSync(data.password, 10) : defaultHash;
+    const { password, ...empData } = data;
+    
+    // Auto-resolve department name for compatibility string
+    let departmentName = empData.department;
+    if (empData.departmentId) {
+      const depts = await mockDb.getDepartments();
+      const matched = depts.find(d => d.id === empData.departmentId);
+      if (matched) {
+        departmentName = matched.name;
+      }
+    }
+
+    const payload = {
+      ...empData,
+      department: departmentName,
+      passwordHash,
+      isActive: true
+    };
+
+    if (isDbConnected()) {
+      await seedMySQL();
+      const emp = await prismaClient.employee.create({
+        data: payload
+      });
+      return emp;
+    }
+
+    const db = readDb();
+    db.employees.push(payload);
+    writeDb(db);
+    return payload;
+  },
+  updateEmployee: async (id: string, data: Partial<Employee>): Promise<Employee | null> => {
+    let departmentName = data.department;
+    if (data.departmentId && !departmentName) {
+      const depts = await mockDb.getDepartments();
+      const matched = depts.find(d => d.id === data.departmentId);
+      if (matched) {
+        departmentName = matched.name;
+      }
+    }
+
+    const payload = {
+      ...data,
+      ...(departmentName ? { department: departmentName } : {})
+    };
+
+    if (isDbConnected()) {
+      await seedMySQL();
+      try {
+        const emp = await prismaClient.employee.update({
+          where: { id },
+          data: payload as any
+        });
+        return emp;
+      } catch (e) {
+        return null;
+      }
+    }
+
+    const db = readDb();
+    const employee = db.employees.find(e => e.id === id);
+    if (!employee) return null;
+    Object.assign(employee, payload);
+    writeDb(db);
+    return employee;
+  },
+  deactivateEmployee: async (id: string): Promise<Employee | null> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      try {
+        const emp = await prismaClient.employee.update({
+          where: { id },
+          data: { isActive: false }
+        });
+        return emp;
+      } catch (e) {
+        return null;
+      }
+    }
+
+    const db = readDb();
+    const employee = db.employees.find(e => e.id === id);
+    if (!employee) return null;
+    employee.isActive = false;
+    writeDb(db);
+    return employee;
   }
 };
