@@ -8,20 +8,22 @@ generator client {
 }
 
 model Employee {
-  id            String             @id
+  id            String               @id
   name          String
-  department    String             // Keeps compatibility name
+  department    String               // Keeps compatibility name
   departmentId  String?
-  departmentRef Department?        @relation(fields: [departmentId], references: [id])
-  role          String             // "ADMIN" | "SUPERVISOR" | "EMPLOYEE"
-  status        String             // "On Duty" | "On Break" | "Offline" | "On Leave"
-  email         String             @unique
+  departmentRef Department?          @relation(fields: [departmentId], references: [id])
+  role          String               // "ADMIN" | "SUPERVISOR" | "EMPLOYEE"
+  status        String               // "On Duty" | "On Break" | "Offline" | "On Leave"
+  email         String               @unique
   phone         String?
   shiftId       String?
   passwordHash  String?
-  isActive      Boolean            @default(true)
+  isActive      Boolean              @default(true)
   attendance    AttendanceRecord[]
   leaves        LeaveRequest[]
+  leaveBalances LeaveBalance[]
+  ledgers       LeaveBalanceLedger[]
 }
 
 model Department {
@@ -90,15 +92,81 @@ model Shift {
   status        String // "Active" | "Inactive"
 }
 
+model LeaveType {
+  id            String         @id @default(uuid())
+  name          String         @unique // e.g. "Annual Leave"
+  code          String         @unique // e.g. "ANNUAL"
+  isActive      Boolean        @default(true)
+  accruable     Boolean        @default(true)
+  carryForward  Boolean        @default(true)
+  maxCarryOver  Float          @default(0.0)
+  expiryMonths  Int            @default(12)
+  colorCode     String         @default("#0058be")
+  sapExternalId String?        @unique
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  balances      LeaveBalance[]
+  requests      LeaveRequest[]
+  ledgers       LeaveBalanceLedger[]
+}
+
+model LeaveBalance {
+  id            String       @id @default(uuid())
+  employeeId    String
+  employee      Employee     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  leaveTypeId   String
+  leaveType     LeaveType    @relation(fields: [leaveTypeId], references: [id], onDelete: Restrict)
+  allocatedDays Float        @default(0.0)
+  usedDays      Float        @default(0.0)
+  pendingDays   Float        @default(0.0)
+  carriedOver   Float        @default(0.0)
+  sapExternalId String?      @unique
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@unique([employeeId, leaveTypeId])
+}
+
+model LeaveBalanceLedger {
+  id            String    @id @default(uuid())
+  employeeId    String
+  employee      Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  leaveTypeId   String
+  leaveType     LeaveType @relation(fields: [leaveTypeId], references: [id], onDelete: Restrict)
+  actionType    String    // "INITIAL" | "ACCRUAL" | "LEAVE_TAKEN" | "CARRY_FORWARD" | "EXPIRY" | "MANUAL_ADJUSTMENT"
+  amount        Float
+  balanceBefore Float
+  balanceAfter  Float
+  referenceId   String?
+  remarks       String?
+  createdAt     DateTime  @default(now())
+}
+
 model LeaveRequest {
-  id           String   @id @default(uuid())
+  id           String     @id @default(uuid())
   employeeId   String
   employeeName String
   type         String
   dateRange    String
   reason       String
-  status       String   // "Approved" | "Rejected" | "Pending Approval"
-  employee     Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  status       String     // "Approved" | "Rejected" | "Pending Approval"
+  startDate    DateTime?
+  endDate      DateTime?
+  totalDays    Float?
+  leaveTypeId  String?
+  leaveType    LeaveType? @relation(fields: [leaveTypeId], references: [id], onDelete: Restrict)
+  employee     Employee   @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+}
+
+model Holiday {
+  id          String   @id @default(uuid())
+  name        String
+  date        DateTime @unique
+  isRecurring Boolean  @default(false)
+  scope       String   // "NATIONAL" | "COMPANY" | "SITE"
+  siteId      String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 model SapMapping {

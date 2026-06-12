@@ -80,7 +80,65 @@ export interface LeaveRequest {
   type: string; // e.g. "Annual Leave", "Sick Leave"
   dateRange: string; // e.g. "25 Oct - 27 Oct 2023"
   reason: string;
-  status: "Approved" | "Rejected" | "Pending Approval";
+  status: "Approved" | "Rejected" | "Pending Approval" | string;
+  startDate?: string;
+  endDate?: string;
+  totalDays?: number;
+  leaveTypeId?: string;
+}
+
+export interface LeaveType {
+  id: string;
+  name: string;
+  code: string;
+  isActive: boolean;
+  accruable: boolean;
+  carryForward: boolean;
+  maxCarryOver: number;
+  expiryMonths: number;
+  colorCode: string;
+  sapExternalId?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface LeaveBalance {
+  id: string;
+  employeeId: string;
+  leaveTypeId: string;
+  leaveType?: LeaveType;
+  allocatedDays: number;
+  usedDays: number;
+  pendingDays: number;
+  carriedOver: number;
+  sapExternalId?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface LeaveBalanceLedger {
+  id: string;
+  employeeId: string;
+  leaveTypeId: string;
+  leaveType?: LeaveType;
+  actionType: "INITIAL" | "ACCRUAL" | "LEAVE_TAKEN" | "CARRY_FORWARD" | "EXPIRY" | "MANUAL_ADJUSTMENT" | string;
+  amount: number;
+  balanceBefore: number;
+  balanceAfter: number;
+  referenceId?: string;
+  remarks?: string;
+  createdAt?: string;
+}
+
+export interface Holiday {
+  id: string;
+  name: string;
+  date: string; // ISO date string (YYYY-MM-DD)
+  isRecurring: boolean;
+  scope: "NATIONAL" | "COMPANY" | "SITE" | string;
+  siteId?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface SapMapping {

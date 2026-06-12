@@ -1,4 +1,4 @@
-import { Employee, AttendanceRecord, Shift, LeaveRequest, SapMapping, SyncLog, Announcement, Department, Worksite, AttendanceCorrection } from "@ahh-wfm/types";
+import { Employee, AttendanceRecord, Shift, LeaveRequest, SapMapping, SyncLog, Announcement, Department, Worksite, AttendanceCorrection, LeaveType, LeaveBalance, LeaveBalanceLedger, Holiday } from "@ahh-wfm/types";
 import * as fs from "fs";
 import * as path from "path";
 import * as bcrypt from "bcryptjs";
@@ -23,6 +23,35 @@ const isDbConnected = () => {
   return !!prismaClient;
 };
 
+// Helper utilities for Leave Calculations
+function isWeekend(date: Date): boolean {
+  const day = date.getDay();
+  return day === 5 || day === 6; // Friday and Saturday (Qatar)
+}
+
+function parseDateRange(dateRange: string): { start: Date; end: Date } {
+  try {
+    const parts = dateRange.split(/—|-|to/);
+    if (parts.length === 2) {
+      let startStr = parts[0].trim();
+      let endStr = parts[1].trim();
+      
+      const yearMatch = endStr.match(/\d{4}/);
+      if (yearMatch && !startStr.match(/\d{4}/)) {
+        startStr += ` ${yearMatch[0]}`;
+      }
+      
+      const start = new Date(startStr);
+      const end = new Date(endStr);
+      if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
+        return { start, end };
+      }
+    }
+  } catch (e) {}
+  const now = new Date();
+  return { start: now, end: now };
+}
+
 // In-memory fallback dataset (also used to seed MySQL)
 let memoryDb: {
   employees: Employee[];
@@ -35,6 +64,10 @@ let memoryDb: {
   departments: Department[];
   worksites: Worksite[];
   attendanceCorrections: AttendanceCorrection[];
+  leaveTypes: LeaveType[];
+  leaveBalances: LeaveBalance[];
+  leaveBalanceLedgers: LeaveBalanceLedger[];
+  holidays: Holiday[];
 } = {
   departments: [
     { id: "DEPT-001", name: "Operations", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
@@ -86,7 +119,22 @@ let memoryDb: {
   worksites: [
     { id: "WORK-001", name: "Doha Headquarters (West Bay)", lat: 25.3186, lng: 51.5284, radiusMeters: 150.0, isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
   ],
-  attendanceCorrections: []
+  attendanceCorrections: [],
+  leaveTypes: [
+    { id: "LTYPE-ANNUAL", name: "Annual Leave", code: "ANNUAL", isActive: true, accruable: true, carryForward: true, maxCarryOver: 5.0, expiryMonths: 12, colorCode: "#0058be" },
+    { id: "LTYPE-SICK", name: "Sick Leave", code: "SICK", isActive: true, accruable: false, carryForward: false, maxCarryOver: 0.0, expiryMonths: 0, colorCode: "#ea4335" },
+    { id: "LTYPE-EMERGENCY", name: "Emergency Leave", code: "EMERGENCY", isActive: true, accruable: false, carryForward: false, maxCarryOver: 0.0, expiryMonths: 0, colorCode: "#fbbc05" },
+    { id: "LTYPE-UNPAID", name: "Unpaid Leave", code: "UNPAID", isActive: true, accruable: false, carryForward: false, maxCarryOver: 0.0, expiryMonths: 0, colorCode: "#70757a" },
+    { id: "LTYPE-BUSINESS", name: "Business Travel", code: "BUSINESS_TRAVEL", isActive: true, accruable: false, carryForward: false, maxCarryOver: 0.0, expiryMonths: 0, colorCode: "#34a853" }
+  ],
+  holidays: [
+    { id: "HOL-001", name: "Qatar National Sports Day", date: "2026-02-10T00:00:00Z", isRecurring: true, scope: "NATIONAL" },
+    { id: "HOL-002", name: "Qatar National Day", date: "2026-12-18T00:00:00Z", isRecurring: true, scope: "NATIONAL" },
+    { id: "HOL-003", name: "Company Eid Al-Fitr Break", date: "2026-03-20T00:00:00Z", isRecurring: false, scope: "COMPANY" },
+    { id: "HOL-004", name: "Company Eid Al-Adha Break", date: "2026-05-27T00:00:00Z", isRecurring: false, scope: "COMPANY" }
+  ],
+  leaveBalances: [],
+  leaveBalanceLedgers: []
 };
 
 // Seeding helper to pre-fill MySQL with mock data if it is empty
@@ -158,10 +206,95 @@ const seedMySQL = async () => {
           }
         });
       }
+
+      // Seed Leave Types
+      for (const lt of memoryDb.leaveTypes) {
+        await prismaClient.leaveType.create({ data: lt });
+      }
+
+      // Seed Holidays
+      for (const hol of memoryDb.holidays) {
+        await prismaClient.holiday.create({
+          data: {
+            id: hol.id,
+            name: hol.name,
+            date: new Date(hol.date),
+            isRecurring: hol.isRecurring,
+            scope: hol.scope
+          }
+        });
+      }
+
+      // Seed Employee balances
+      const employees = await prismaClient.employee.findMany();
+      for (const emp of employees) {
+        // Annual Leave
+        const balAnnual = await prismaClient.leaveBalance.create({
+          data: {
+            employeeId: emp.id,
+            leaveTypeId: "LTYPE-ANNUAL",
+            allocatedDays: 22.0,
+            usedDays: 0.0,
+            pendingDays: 0.0,
+            carriedOver: 0.0
+          }
+        });
+        await prismaClient.leaveBalanceLedger.create({
+          data: {
+            employeeId: emp.id,
+            leaveTypeId: "LTYPE-ANNUAL",
+            actionType: "INITIAL",
+            amount: 22.0,
+            balanceBefore: 0.0,
+            balanceAfter: 22.0,
+            remarks: "Initial seed allotment"
+          }
+        });
+
+        // Sick Leave
+        const balSick = await prismaClient.leaveBalance.create({
+          data: {
+            employeeId: emp.id,
+            leaveTypeId: "LTYPE-SICK",
+            allocatedDays: 15.0,
+            usedDays: 0.0,
+            pendingDays: 0.0,
+            carriedOver: 0.0
+          }
+        });
+        await prismaClient.leaveBalanceLedger.create({
+          data: {
+            employeeId: emp.id,
+            leaveTypeId: "LTYPE-SICK",
+            actionType: "INITIAL",
+            amount: 15.0,
+            balanceBefore: 0.0,
+            balanceAfter: 15.0,
+            remarks: "Initial seed allotment"
+          }
+        });
+      }
       
       // Seed leaves
       for (const leave of memoryDb.leaves) {
-        await prismaClient.leaveRequest.create({ data: leave });
+        // Find matching leave type by name mapping
+        const lt = memoryDb.leaveTypes.find(t => t.name === leave.type);
+        const { start, end } = parseDateRange(leave.dateRange);
+        await prismaClient.leaveRequest.create({
+          data: {
+            id: leave.id,
+            employeeId: leave.employeeId,
+            employeeName: leave.employeeName,
+            type: leave.type,
+            dateRange: leave.dateRange,
+            reason: leave.reason,
+            status: leave.status,
+            startDate: start,
+            endDate: end,
+            totalDays: 2.0, // approximate
+            leaveTypeId: lt ? lt.id : null
+          }
+        });
       }
       
       // Seed SAP mapping
@@ -236,6 +369,60 @@ const readDb = (): typeof memoryDb & { worksites: Worksite[]; attendanceCorrecti
     }
     if (!parsed.attendanceCorrections) {
       parsed.attendanceCorrections = [];
+    }
+    if (!parsed.leaveTypes) {
+      parsed.leaveTypes = memoryDb.leaveTypes;
+    }
+    if (!parsed.holidays) {
+      parsed.holidays = memoryDb.holidays;
+    }
+    if (!parsed.leaveBalances || parsed.leaveBalances.length === 0) {
+      parsed.leaveBalances = [];
+      parsed.leaveBalanceLedgers = parsed.leaveBalanceLedgers || [];
+      const employeesList = parsed.employees || memoryDb.employees;
+      for (const emp of employeesList) {
+        parsed.leaveBalances.push({
+          id: `BAL-ANNUAL-${emp.id}`,
+          employeeId: emp.id,
+          leaveTypeId: "LTYPE-ANNUAL",
+          allocatedDays: 22.0,
+          usedDays: 0.0,
+          pendingDays: 0.0,
+          carriedOver: 0.0
+        });
+        parsed.leaveBalances.push({
+          id: `BAL-SICK-${emp.id}`,
+          employeeId: emp.id,
+          leaveTypeId: "LTYPE-SICK",
+          allocatedDays: 15.0,
+          usedDays: 0.0,
+          pendingDays: 0.0,
+          carriedOver: 0.0
+        });
+        parsed.leaveBalanceLedgers.push({
+          id: `LEDG-ANNUAL-${emp.id}-${Date.now()}`,
+          employeeId: emp.id,
+          leaveTypeId: "LTYPE-ANNUAL",
+          actionType: "INITIAL",
+          amount: 22.0,
+          balanceBefore: 0.0,
+          balanceAfter: 22.0,
+          remarks: "Initial seed allotment"
+        });
+        parsed.leaveBalanceLedgers.push({
+          id: `LEDG-SICK-${emp.id}-${Date.now()}`,
+          employeeId: emp.id,
+          leaveTypeId: "LTYPE-SICK",
+          actionType: "INITIAL",
+          amount: 15.0,
+          balanceBefore: 0.0,
+          balanceAfter: 15.0,
+          remarks: "Initial seed allotment"
+        });
+      }
+    }
+    if (!parsed.leaveBalanceLedgers) {
+      parsed.leaveBalanceLedgers = [];
     }
     return parsed;
   } catch (e) {
@@ -699,11 +886,51 @@ export const mockDb = {
     return readDb().leaves;
   },
   applyLeave: async (employeeId: string, type: string, dateRange: string, reason: string): Promise<LeaveRequest> => {
+    const { start, end } = parseDateRange(dateRange);
+    
     if (isDbConnected()) {
       await seedMySQL();
       const employee = await prismaClient.employee.findUnique({ where: { id: employeeId } });
       const employeeName = employee ? employee.name : "Unknown Employee";
       
+      const leaveType = await prismaClient.leaveType.findFirst({
+        where: { name: { equals: type } }
+      });
+      const leaveTypeId = leaveType ? leaveType.id : null;
+      
+      const holidays = await prismaClient.holiday.findMany();
+      let totalDays = 0;
+      const current = new Date(start.getTime());
+      current.setHours(12, 0, 0, 0);
+      const target = new Date(end.getTime());
+      target.setHours(12, 0, 0, 0);
+      while (current <= target) {
+        const dayOfWeek = current.getDay();
+        const isWeekendVal = dayOfWeek === 5 || dayOfWeek === 6; // Friday & Saturday
+        const isHolidayVal = holidays.some((h: any) => {
+          const hDate = new Date(h.date);
+          return hDate.getFullYear() === current.getFullYear() &&
+                 hDate.getMonth() === current.getMonth() &&
+                 hDate.getDate() === current.getDate();
+        });
+        if (!isWeekendVal && !isHolidayVal) {
+          totalDays++;
+        }
+        current.setDate(current.getDate() + 1);
+      }
+
+      if (leaveTypeId && leaveType.accruable) {
+        const bal = await prismaClient.leaveBalance.findUnique({
+          where: { employeeId_leaveTypeId: { employeeId, leaveTypeId } }
+        });
+        if (bal) {
+          await prismaClient.leaveBalance.update({
+            where: { id: bal.id },
+            data: { pendingDays: bal.pendingDays + totalDays }
+          });
+        }
+      }
+
       const request = await prismaClient.leaveRequest.create({
         data: {
           employeeId,
@@ -711,7 +938,11 @@ export const mockDb = {
           type,
           dateRange,
           reason,
-          status: "Pending Approval"
+          status: "Pending Approval",
+          startDate: start,
+          endDate: end,
+          totalDays,
+          leaveTypeId
         }
       });
       
@@ -722,6 +953,36 @@ export const mockDb = {
     const employee = db.employees.find(e => e.id === employeeId);
     const employeeName = employee ? employee.name : "Unknown Employee";
     
+    const leaveType = db.leaveTypes.find(t => t.name === type);
+    const leaveTypeId = leaveType ? leaveType.id : null;
+    
+    let totalDays = 0;
+    const current = new Date(start.getTime());
+    current.setHours(12, 0, 0, 0);
+    const target = new Date(end.getTime());
+    target.setHours(12, 0, 0, 0);
+    while (current <= target) {
+      const dayOfWeek = current.getDay();
+      const isWeekendVal = dayOfWeek === 5 || dayOfWeek === 6;
+      const isHolidayVal = db.holidays.some(h => {
+        const hDate = new Date(h.date);
+        return hDate.getFullYear() === current.getFullYear() &&
+               hDate.getMonth() === current.getMonth() &&
+               hDate.getDate() === current.getDate();
+      });
+      if (!isWeekendVal && !isHolidayVal) {
+        totalDays++;
+      }
+      current.setDate(current.getDate() + 1);
+    }
+
+    if (leaveTypeId && leaveType?.accruable) {
+      const bal = db.leaveBalances.find(b => b.employeeId === employeeId && b.leaveTypeId === leaveTypeId);
+      if (bal) {
+        bal.pendingDays += totalDays;
+      }
+    }
+
     const request: LeaveRequest = {
       id: `LV-${Date.now()}`,
       employeeId,
@@ -729,7 +990,11 @@ export const mockDb = {
       type,
       dateRange,
       reason,
-      status: "Pending Approval"
+      status: "Pending Approval",
+      startDate: start.toISOString(),
+      endDate: end.toISOString(),
+      totalDays,
+      leaveTypeId: leaveTypeId || undefined
     };
     db.leaves.unshift(request);
     writeDb(db);
@@ -739,11 +1004,57 @@ export const mockDb = {
     if (isDbConnected()) {
       await seedMySQL();
       try {
+        const originalReq = await prismaClient.leaveRequest.findUnique({
+          where: { id }
+        });
+        if (!originalReq) return null;
+
         const request = await prismaClient.leaveRequest.update({
           where: { id },
           data: { status }
         });
         
+        if (originalReq.status === "Pending Approval" && originalReq.leaveTypeId && originalReq.totalDays) {
+          const leaveType = await prismaClient.leaveType.findUnique({ where: { id: originalReq.leaveTypeId } });
+          if (leaveType && leaveType.accruable) {
+            const bal = await prismaClient.leaveBalance.findUnique({
+              where: { employeeId_leaveTypeId: { employeeId: originalReq.employeeId, leaveTypeId: originalReq.leaveTypeId } }
+            });
+            if (bal) {
+              if (status === "Approved") {
+                const newPending = Math.max(0, bal.pendingDays - originalReq.totalDays);
+                const newUsed = bal.usedDays + originalReq.totalDays;
+                await prismaClient.leaveBalance.update({
+                  where: { id: bal.id },
+                  data: {
+                    pendingDays: newPending,
+                    usedDays: newUsed
+                  }
+                });
+                
+                await prismaClient.leaveBalanceLedger.create({
+                  data: {
+                    employeeId: originalReq.employeeId,
+                    leaveTypeId: originalReq.leaveTypeId,
+                    actionType: "LEAVE_TAKEN",
+                    amount: -originalReq.totalDays,
+                    balanceBefore: bal.allocatedDays - bal.usedDays,
+                    balanceAfter: bal.allocatedDays - newUsed,
+                    referenceId: originalReq.id,
+                    remarks: `Leave approved: ${originalReq.reason}`
+                  }
+                });
+              } else if (status === "Rejected") {
+                const newPending = Math.max(0, bal.pendingDays - originalReq.totalDays);
+                await prismaClient.leaveBalance.update({
+                  where: { id: bal.id },
+                  data: { pendingDays: newPending }
+                });
+              }
+            }
+          }
+        }
+
         if (status === "Approved") {
           await prismaClient.employee.update({
             where: { id: request.employeeId },
@@ -753,6 +1064,7 @@ export const mockDb = {
         
         return request;
       } catch (e) {
+        console.error(e);
         return null;
       }
     }
@@ -760,8 +1072,39 @@ export const mockDb = {
     const db = readDb();
     const request = db.leaves.find(l => l.id === id);
     if (!request) return null;
+    const oldStatus = request.status;
     request.status = status;
     
+    if (oldStatus === "Pending Approval" && request.leaveTypeId && request.totalDays) {
+      const leaveType = db.leaveTypes.find(t => t.id === request.leaveTypeId);
+      if (leaveType && leaveType.accruable) {
+        const bal = db.leaveBalances.find(b => b.employeeId === request.employeeId && b.leaveTypeId === request.leaveTypeId);
+        if (bal) {
+          if (status === "Approved") {
+            const newPending = Math.max(0, bal.pendingDays - request.totalDays);
+            const newUsed = bal.usedDays + request.totalDays;
+            bal.pendingDays = newPending;
+            bal.usedDays = newUsed;
+            
+            db.leaveBalanceLedgers.push({
+              id: `LEDG-${Date.now()}`,
+              employeeId: request.employeeId,
+              leaveTypeId: request.leaveTypeId,
+              actionType: "LEAVE_TAKEN",
+              amount: -request.totalDays,
+              balanceBefore: bal.allocatedDays - (bal.usedDays - request.totalDays),
+              balanceAfter: bal.allocatedDays - newUsed,
+              referenceId: request.id,
+              remarks: `Leave approved: ${request.reason}`,
+              createdAt: new Date().toISOString()
+            });
+          } else if (status === "Rejected") {
+            bal.pendingDays = Math.max(0, bal.pendingDays - request.totalDays);
+          }
+        }
+      }
+    }
+
     if (status === "Approved") {
       const employee = db.employees.find(e => e.id === request.employeeId);
       if (employee) {
@@ -771,6 +1114,240 @@ export const mockDb = {
     
     writeDb(db);
     return request;
+  },
+
+  // Leave Types
+  getLeaveTypes: async (): Promise<LeaveType[]> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      return await prismaClient.leaveType.findMany({
+        orderBy: { code: "asc" }
+      });
+    }
+    return readDb().leaveTypes;
+  },
+
+  // Holidays
+  getHolidays: async (): Promise<Holiday[]> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      const records = await prismaClient.holiday.findMany({
+        orderBy: { date: "asc" }
+      });
+      return records.map((h: any) => ({
+        id: h.id,
+        name: h.name,
+        date: h.date.toISOString(),
+        isRecurring: h.isRecurring,
+        scope: h.scope,
+        siteId: h.siteId || undefined
+      }));
+    }
+    return readDb().holidays;
+  },
+  createHoliday: async (name: string, date: string, scope: string, isRecurring: boolean, siteId?: string): Promise<Holiday> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      const record = await prismaClient.holiday.create({
+        data: { name, date: new Date(date), scope, isRecurring, siteId }
+      });
+      return {
+        id: record.id,
+        name: record.name,
+        date: record.date.toISOString(),
+        isRecurring: record.isRecurring,
+        scope: record.scope,
+        siteId: record.siteId || undefined
+      };
+    }
+    const db = readDb();
+    const newHoliday: Holiday = {
+      id: `HOL-${Date.now()}`,
+      name,
+      date,
+      scope,
+      isRecurring,
+      siteId
+    };
+    db.holidays.push(newHoliday);
+    writeDb(db);
+    return newHoliday;
+  },
+
+  // Leave Balances
+  getLeaveBalances: async (employeeId?: string): Promise<LeaveBalance[]> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      const balances = await prismaClient.leaveBalance.findMany({
+        where: employeeId ? { employeeId } : undefined,
+        include: { leaveType: true }
+      });
+      return balances.map((b: any) => ({
+        id: b.id,
+        employeeId: b.employeeId,
+        leaveTypeId: b.leaveTypeId,
+        leaveType: b.leaveType,
+        allocatedDays: b.allocatedDays,
+        usedDays: b.usedDays,
+        pendingDays: b.pendingDays,
+        carriedOver: b.carriedOver,
+        sapExternalId: b.sapExternalId || undefined
+      }));
+    }
+    const db = readDb();
+    let balances = db.leaveBalances;
+    if (employeeId) {
+      balances = balances.filter(b => b.employeeId === employeeId);
+    }
+    return balances.map(b => ({
+      ...b,
+      leaveType: db.leaveTypes.find(t => t.id === b.leaveTypeId)
+    }));
+  },
+  
+  adjustLeaveBalance: async (employeeId: string, leaveTypeId: string, amount: number, reason: string, adjustedById: string): Promise<LeaveBalance | null> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      try {
+        const bal = await prismaClient.leaveBalance.findUnique({
+          where: { employeeId_leaveTypeId: { employeeId, leaveTypeId } }
+        });
+        if (!bal) return null;
+
+        const balanceBefore = bal.allocatedDays;
+        const balanceAfter = balanceBefore + amount;
+
+        const updated = await prismaClient.leaveBalance.update({
+          where: { id: bal.id },
+          data: { allocatedDays: balanceAfter }
+        });
+
+        await prismaClient.leaveBalanceLedger.create({
+          data: {
+            employeeId,
+            leaveTypeId,
+            actionType: "MANUAL_ADJUSTMENT",
+            amount,
+            balanceBefore,
+            balanceAfter,
+            remarks: `${reason} (Adjusted by ${adjustedById})`
+          }
+        });
+        return {
+          id: updated.id,
+          employeeId: updated.employeeId,
+          leaveTypeId: updated.leaveTypeId,
+          allocatedDays: updated.allocatedDays,
+          usedDays: updated.usedDays,
+          pendingDays: updated.pendingDays,
+          carriedOver: updated.carriedOver,
+          sapExternalId: updated.sapExternalId || undefined
+        };
+      } catch (e) {
+        console.error(e);
+        return null;
+      }
+    }
+
+    const db = readDb();
+    const bal = db.leaveBalances.find(b => b.employeeId === employeeId && b.leaveTypeId === leaveTypeId);
+    if (!bal) return null;
+
+    const balanceBefore = bal.allocatedDays;
+    const balanceAfter = balanceBefore + amount;
+    bal.allocatedDays = balanceAfter;
+
+    db.leaveBalanceLedgers.push({
+      id: `LEDG-${Date.now()}`,
+      employeeId,
+      leaveTypeId,
+      actionType: "MANUAL_ADJUSTMENT",
+      amount,
+      balanceBefore,
+      balanceAfter,
+      remarks: `${reason} (Adjusted by ${adjustedById})`,
+      createdAt: new Date().toISOString()
+    });
+
+    writeDb(db);
+    return bal;
+  },
+
+  getLeaveBalanceLedger: async (employeeId?: string): Promise<LeaveBalanceLedger[]> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      const logs = await prismaClient.leaveBalanceLedger.findMany({
+        where: employeeId ? { employeeId } : undefined,
+        orderBy: { createdAt: "desc" },
+        include: { leaveType: true }
+      });
+      return logs;
+    }
+    const db = readDb();
+    let logs = db.leaveBalanceLedgers || [];
+    if (employeeId) {
+      logs = logs.filter(l => l.employeeId === employeeId);
+    }
+    return logs.map(l => ({
+      ...l,
+      leaveType: db.leaveTypes.find(t => t.id === l.leaveTypeId)
+    }));
+  },
+
+  runMonthlyAccrual: async (): Promise<{ success: boolean; count: number }> => {
+    const accrualAmount = 1.833;
+    if (isDbConnected()) {
+      await seedMySQL();
+      try {
+        const balances = await prismaClient.leaveBalance.findMany({
+          where: { leaveTypeId: "LTYPE-ANNUAL" }
+        });
+        for (const bal of balances) {
+          const balanceBefore = bal.allocatedDays;
+          const balanceAfter = balanceBefore + accrualAmount;
+          await prismaClient.leaveBalance.update({
+            where: { id: bal.id },
+            data: { allocatedDays: balanceAfter }
+          });
+          await prismaClient.leaveBalanceLedger.create({
+            data: {
+              employeeId: bal.employeeId,
+              leaveTypeId: "LTYPE-ANNUAL",
+              actionType: "ACCRUAL",
+              amount: accrualAmount,
+              balanceBefore,
+              balanceAfter,
+              remarks: "Monthly pro-rata accrual"
+            }
+          });
+        }
+        return { success: true, count: balances.length };
+      } catch (e) {
+        console.error(e);
+        return { success: false, count: 0 };
+      }
+    }
+
+    const db = readDb();
+    const annualBalances = db.leaveBalances.filter(b => b.leaveTypeId === "LTYPE-ANNUAL");
+    for (const bal of annualBalances) {
+      const balanceBefore = bal.allocatedDays;
+      const balanceAfter = balanceBefore + accrualAmount;
+      bal.allocatedDays = balanceAfter;
+      db.leaveBalanceLedgers.push({
+        id: `LEDG-${Date.now()}-${Math.random()}`,
+        employeeId: bal.employeeId,
+        leaveTypeId: "LTYPE-ANNUAL",
+        actionType: "ACCRUAL",
+        amount: accrualAmount,
+        balanceBefore,
+        balanceAfter,
+        remarks: "Monthly pro-rata accrual",
+        createdAt: new Date().toISOString()
+      });
+    }
+    writeDb(db);
+    return { success: true, count: annualBalances.length };
   },
   
   // SAP Mappings
