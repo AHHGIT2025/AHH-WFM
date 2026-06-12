@@ -1,6 +1,10 @@
 import { Employee, AttendanceRecord, Shift, LeaveRequest, SapMapping, SyncLog, Announcement } from "@ahh-wfm/types";
 import * as fs from "fs";
 import * as path from "path";
+import * as bcrypt from "bcryptjs";
+
+// Generate default hash for mock passwords during local development
+const defaultHash = bcrypt.hashSync("Password123!", 10);
 
 // Initialize Prisma dynamically if DATABASE_URL is available
 let prismaClient: any = null;
@@ -30,11 +34,12 @@ let memoryDb: {
   announcements: Announcement[];
 } = {
   employees: [
-    { id: "SK-90210", name: "Sarah Kim", department: "Operations", role: "Site Inspector", status: "On Break", email: "sarah.kim@alhattab.qa", phone: "+974 5555 1234", shiftId: "MOR-102" },
-    { id: "AM-8821", name: "Alex Martinez", department: "Engineering", role: "Field Engineer", status: "On Duty", email: "alex.m@alhattab.qa", phone: "+974 5555 5678", shiftId: "GEN-001" },
-    { id: "BR-8823", name: "Brandon Reed", department: "Logistics", role: "Logistics Driver", status: "On Duty", email: "brandon.r@alhattab.qa", phone: "+974 5555 9012", shiftId: "AFT-103" },
-    { id: "JL-8824", name: "Jordan Lee", department: "Sales", role: "Field Sales", status: "Offline", email: "jordan.lee@alhattab.qa", phone: "+974 5555 3456", shiftId: "ROT-A" },
-    { id: "AA-1001", name: "Ahmed Ali", department: "Operations", role: "Maintenance Lead", status: "Offline", email: "ahmed.ali@alhattab.qa", phone: "+974 6666 1111", shiftId: "GEN-001" }
+    { id: "SK-90210", name: "Sarah Kim", department: "Operations", role: "SUPERVISOR", status: "On Break", email: "sarah.kim@alhattab.qa", phone: "+974 5555 1234", shiftId: "MOR-102", passwordHash: defaultHash },
+    { id: "AM-8821", name: "Alex Martinez", department: "Engineering", role: "EMPLOYEE", status: "On Duty", email: "alex.m@alhattab.qa", phone: "+974 5555 5678", shiftId: "GEN-001", passwordHash: defaultHash },
+    { id: "BR-8823", name: "Brandon Reed", department: "Logistics", role: "EMPLOYEE", status: "On Duty", email: "brandon.r@alhattab.qa", phone: "+974 5555 9012", shiftId: "AFT-103", passwordHash: defaultHash },
+    { id: "JL-8824", name: "Jordan Lee", department: "Sales", role: "EMPLOYEE", status: "Offline", email: "jordan.lee@alhattab.qa", phone: "+974 5555 3456", shiftId: "ROT-A", passwordHash: defaultHash },
+    { id: "AA-1001", name: "Ahmed Ali", department: "Operations", role: "EMPLOYEE", status: "Offline", email: "ahmed.ali@alhattab.qa", phone: "+974 6666 1111", shiftId: "GEN-001", passwordHash: defaultHash },
+    { id: "AD-0001", name: "System Administrator", department: "IT", role: "ADMIN", status: "Offline", email: "admin@alhattab.qa", phone: "+974 0000 0000", shiftId: "GEN-001", passwordHash: defaultHash }
   ],
   attendance: [
     { id: "ATT-001", employeeId: "AM-8821", employeeName: "Alex Martinez", checkIn: "2026-06-11T08:55:00Z", checkOut: "2026-06-11T18:02:00Z", lat: 25.2854, lng: 51.5310, device: "Galaxy S23 · 5G · GPS Active", status: "On Time", locationName: "Doha Headquarters" },

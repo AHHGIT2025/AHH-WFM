@@ -8,16 +8,17 @@ generator client {
 }
 
 model Employee {
-  id         String             @id
-  name       String
-  department String
-  role       String
-  status     String             // "On Duty" | "On Break" | "Offline" | "On Leave"
-  email      String             @unique
-  phone      String?
-  shiftId    String?
-  attendance AttendanceRecord[]
-  leaves     LeaveRequest[]
+  id           String             @id
+  name         String
+  department   String
+  role         String             // "ADMIN" | "SUPERVISOR" | "EMPLOYEE"
+  status       String             // "On Duty" | "On Break" | "Offline" | "On Leave"
+  email        String             @unique
+  phone        String?
+  shiftId      String?
+  passwordHash String?
+  attendance   AttendanceRecord[]
+  leaves       LeaveRequest[]
 }
 
 model AttendanceRecord {

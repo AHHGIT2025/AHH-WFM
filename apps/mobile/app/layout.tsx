@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import AuthProvider from "../components/auth-provider";
 import { MobileShell } from "../components/mobile-shell";
 import "./globals.css";
 
@@ -15,7 +16,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className="antialiased">
-        <MobileShell>{children}</MobileShell>
+        <AuthProvider>
+          <MobileShell>{children}</MobileShell>
+        </AuthProvider>
       </body>
     </html>
   );

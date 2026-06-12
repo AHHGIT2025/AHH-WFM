@@ -3,6 +3,7 @@
 import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useSession, signOut } from "next-auth/react";
 
 export interface MobileNavItem {
   label: string;
@@ -20,6 +21,7 @@ const navItems: MobileNavItem[] = [
 
 export const MobileShell: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const pathname = usePathname();
+  const { data: session } = useSession();
 
   const isActive = (path: string) => {
     if (path === "/") return pathname === "/";
@@ -47,13 +49,20 @@ export const MobileShell: React.FC<{ children: React.ReactNode }> = ({ children 
             </div>
             <div>
               <p className="text-[10px] text-on-surface-variant leading-tight">Welcome back,</p>
-              <h1 className="text-xs font-bold text-primary">Ahmed Ali</h1>
+              <h1 className="text-xs font-bold text-primary">{session?.user?.name || "Ahmed Ali"}</h1>
             </div>
           </div>
           <div className="flex items-center gap-1">
             <button className="p-2 rounded-full hover:bg-surface-container-high text-primary transition-colors relative">
               <span className="material-symbols-outlined text-[20px]">notifications</span>
               <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-status-error rounded-full"></span>
+            </button>
+            <button
+              onClick={() => signOut({ callbackUrl: "/login" })}
+              className="p-2 rounded-full hover:bg-surface-container-high text-status-error transition-colors"
+              title="Sign Out"
+            >
+              <span className="material-symbols-outlined text-[20px]">logout</span>
             </button>
           </div>
         </header>

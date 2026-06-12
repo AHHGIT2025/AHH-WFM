@@ -7,8 +7,9 @@
     "build": "echo no-build"
   },
   "dependencies": {
+    "@ahh-wfm/database": "*",
     "@ahh-wfm/types": "*",
-    "@ahh-wfm/database": "*"
+    "bcryptjs": "^3.0.3"
   },
   "private": true
 }

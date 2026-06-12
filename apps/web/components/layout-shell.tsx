@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useSession, signOut } from "next-auth/react";
 
 // Class merging helper
 const cn = (...classes: (string | undefined | boolean)[]) => classes.filter(Boolean).join(" ");
@@ -27,6 +28,7 @@ const navItems: NavItem[] = [
 export const LayoutShell: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const pathname = usePathname();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const { data: session } = useSession();
 
   const isActive = (path: string) => {
     if (path === "/") {
@@ -88,9 +90,16 @@ export const LayoutShell: React.FC<{ children: React.ReactNode }> = ({ children 
               />
             </div>
             <div>
-              <p className="text-xs font-bold text-primary hidden md:block">System Administrator</p>
-              <p className="text-[10px] text-on-surface-variant leading-none hidden md:block">Command Center Control</p>
+              <p className="text-xs font-bold text-primary hidden md:block">{session?.user?.name || "System Admin"}</p>
+              <p className="text-[10px] text-on-surface-variant leading-none hidden md:block">{(session?.user as any)?.role || "Admin Console"}</p>
             </div>
+            <button
+              onClick={() => signOut({ callbackUrl: "/login" })}
+              className="p-1.5 hover:bg-surface-container-low rounded-lg text-on-surface-variant hover:text-status-error transition-colors flex items-center justify-center"
+              title="Sign Out"
+            >
+              <span className="material-symbols-outlined text-[18px]">logout</span>
+            </button>
           </div>
         </div>
       </header>

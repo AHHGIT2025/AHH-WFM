@@ -8,6 +8,7 @@ export interface Employee {
   email: string;
   phone?: string;
   shiftId?: string;
+  passwordHash?: string;
 }
 
 export interface AttendanceRecord {
