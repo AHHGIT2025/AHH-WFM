@@ -241,6 +241,23 @@ export default function MobileHomePage() {
         </section>
       )}
 
+      {/* Shifts Quick Action Card */}
+      <Card 
+        onClick={() => window.location.href = "/shifts"}
+        className="bg-secondary/5 border border-secondary/20 p-4 rounded-xl flex items-center justify-between cursor-pointer hover:bg-secondary/10 transition-colors"
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-full bg-secondary/10 text-secondary flex items-center justify-center">
+            <span className="material-symbols-outlined text-base">calendar_today</span>
+          </div>
+          <div>
+            <h4 className="text-xs font-bold text-primary">Work Schedule Roster</h4>
+            <p className="text-[10px] text-on-surface-variant leading-tight mt-0.5">View active templates & rotational shifts</p>
+          </div>
+        </div>
+        <span className="material-symbols-outlined text-sm text-secondary">chevron_right</span>
+      </Card>
+
       {/* Bento Grid */}
       <section className="space-y-3">
         <h2 className="text-xs font-bold text-primary uppercase tracking-wider px-1">This Month</h2>

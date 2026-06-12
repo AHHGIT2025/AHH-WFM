@@ -26,6 +26,7 @@ AHH WFM is a full-stack, enterprise-grade workforce management application built
 | **Milestone 4 (Phase 2)** | Completed | `v0.5-attendance-geofencing-complete` | Geofencing validation, late tracking, and corrections. |
 | **Milestone 5 (Phase 3A)**| Completed | `v0.6-leave-balance-engine-complete` | Leave types, dynamic balances, audit ledger, holidays, and calculations. |
 | **Phase 3B** | Completed | `v0.7-enterprise-leave-workflow-complete` | Multi-level approval workflows, delegation, SLA tracking, and thresholds. |
+| **Phase 4A** | Completed | `v0.8-shift-scheduling-complete` | Shift templates, rotation templates, shift assignments, and conflict detection. |
 
 ---
 
@@ -57,4 +58,13 @@ AHH WFM is a full-stack, enterprise-grade workforce management application built
 - **Escalation Rules:** Automatically warning and escalates requests pending beyond SLA threshold times (e.g. 72 hours).
 - **History Timeline Log:** Full audit records of step approvals and comment history transitions.
 - **Approvals Dashboard:** Segmented consoles in Web console separating direct queue, delegated items, and escalated items.
+
+### Phase 4A: Shift Scheduling, Rotations & Conflict Detection
+- **Shift Template Management:** Seeded default templates (Morning, Evening, Night, Split, Flexible) and integrated customizable rules for core hours and split shifts.
+- **Rotation Schedules:** Seeded default templates (5x2, 6x1, 4 On/4 Off) enabling cyclically mapped assignments.
+- **Conflict Checking:** Integrated real-time checker blocking assignments to inactive employees, warning about overlapping shifts, and highlighting conflicts against approved leaves.
+- **REST Endpoints:** Added unified backend APIs under `/api/v1/shifts/` for templates, assignments, bulk applications, and rotations.
+- **Scheduler Grid Web Board:** Built planner grid highlighting warning conflict badges and providing controls for bulk assignments.
+- **Mobile Rosters:** Added a `/shifts` page on mobile allowing operatives to browse their My Shifts and Upcoming Shifts calendar logs.
+
 

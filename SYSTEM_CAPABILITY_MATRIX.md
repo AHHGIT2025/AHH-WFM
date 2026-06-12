@@ -39,6 +39,14 @@ This document provides a comprehensive summary of all completed architectural mo
   - Inactivity alerts and auto-escalation after 72 hours.
   - Detailed action step logs (timestamps, remarks, actors).
 
+### 📅 1.5 Shift Scheduling & Rotations
+- **Description:** Shift scheduling rosters, cyclical rotations, and conflict checking logic.
+- **Capabilities:**
+  - **Shift Templates:** Core parameters for Morning, Evening, Night, Split, and Flexible templates.
+  - **Rotation Schedules:** Cyclic patterns (5x2, 6x1, 4 On/4 Off) for multi-employee assignments.
+  - **Conflict Guarding Engine:** Block assignments to inactive employees, warn on overlaps, and flag leaves.
+  - **Safety Rotation Applicator:** Reports conflict warnings instead of silently overriding rosters.
+
 ---
 
 ## 2. Complete REST v1 API Matrix
@@ -75,3 +83,12 @@ All endpoints reside under `/api/v1` and require RBAC verification filters.
 | `/api/v1/approval-workflows`| `POST` | ADMIN | Adds a custom workflow. |
 | `/api/v1/approval-delegations`| `GET`| ALL | Lists registered delegations. |
 | `/api/v1/approval-delegations`| `POST`| ALL | Configures a new delegation rule. |
+| `/api/v1/shifts/templates` | `GET` | ALL | Lists configured shift templates. |
+| `/api/v1/shifts/templates` | `POST` | ADMIN, SUPERVISOR | Creates a new shift template. |
+| `/api/v1/shifts/assignments` | `GET` | ALL | Lists active shift assignments. |
+| `/api/v1/shifts/assignments` | `POST` | ADMIN, SUPERVISOR | Schedules a single shift assignment. |
+| `/api/v1/shifts/assignments/bulk` | `POST` | ADMIN, SUPERVISOR | Bulk assigns shift templates across date ranges. |
+| `/api/v1/shifts/assignments/rotations` | `POST` | ADMIN, SUPERVISOR | Applies a rotation template with conflict checking. |
+| `/api/v1/shifts/rotations` | `GET` | ALL | Lists configured rotation templates. |
+| `/api/v1/shifts/rotations` | `POST` | ADMIN, SUPERVISOR | Creates a new rotation template. |
+

@@ -137,45 +137,48 @@ This document outlines the evolutionary development roadmap for the **AHH WFM** 
 
 ---
 
-## Phase 4: Scheduling & Resource Optimization
+## Phase 4: Scheduling & Resource Optimization (Phase 4A Completed)
 
-### 4.1 Shift Scheduling
-*   **Business Purpose**: Assign employees to shift blocks, creating structured weekly work allocations.
-*   **Database Impact**: Create a `ScheduleAssignment` model (New Table) linking `employeeId`, `shiftId`, and `date`.
+### 4.1 Shift Templates & Assignments (Completed - Phase 4A)
+*   **Business Purpose**: Configure shift blocks (Morning, Evening, Night, Split, Flexible) and assign employees to dates, running real-time conflict checking.
+*   **Database Impact**: Create `ShiftTemplate` and `ShiftAssignment` models.
 *   **API Endpoints Required**:
-    *   `GET /api/v1/schedules` (Get active roster calendar schedule)
-    *   `POST /api/v1/schedules/assign` (Bulk assign employees to shifts)
+    *   `GET/POST /api/v1/shifts/templates` (View/create templates)
+    *   `GET/POST /api/v1/shifts/assignments` (Roster viewing/individual scheduling)
+    *   `POST /api/v1/shifts/assignments/bulk` (Bulk scheduler)
 *   **UI Screens Affected**:
-    *   Web: Shift Management (`/shifts`) - Interactive schedule calendar view.
-*   **Estimated Implementation Effort**: 5 Days
+    *   Web: Shift Planner Board (`/shifts`) - Grid timeline showing active rosters, bulk scheduling actions, conflict warning tooltips.
+    *   Mobile: Shifts Log (`/shifts`) - Roster views for employees.
+*   **Estimated Implementation Effort**: Completed
 
-### 4.2 Rotation Templates
-*   **Business Purpose**: Automate cyclical shift patterns (e.g., *2 Weeks Day Shift followed by 2 Weeks Night Shift*) for large employee pools.
-*   **Database Impact**: Create a `RotationTemplate` model (New Table) containing shift sequence order rules.
+### 4.2 Rotation Templates & Assignments (Completed - Phase 4A)
+*   **Business Purpose**: Deploy cyclical patterns (e.g. 5x2, 6x1, 4 On/4 Off) across employees while warning of approved leaves, inactive employees, or overlaps.
+*   **Database Impact**: Create `RotationTemplate` model.
 *   **API Endpoints Required**:
-    *   `GET /api/v1/shifts/rotations` (Get template configurations)
-    *   `POST /api/v1/shifts/rotations/apply` (Execute rotation script)
+    *   `GET/POST /api/v1/shifts/rotations` (View/create rotation templates)
+    *   `POST /api/v1/shifts/assignments/rotations` (Apply rotation and get conflict logs)
 *   **UI Screens Affected**:
-    *   Web: Shift Management (`/shifts`) - Rotation configurations panel.
-*   **Estimated Implementation Effort**: 4 Days
+    *   Web: Shift Management (`/shifts`) - Rotation applicator form.
+*   **Estimated Implementation Effort**: Completed
 
-### 4.3 Overtime Calculations
-*   **Business Purpose**: Automatically calculate work hours exceeding standard shifts for automated timesheet preparation.
-*   **Database Impact**: Store `overtimeMinutes` and `overtimeStatus` in the `AttendanceRecord` model.
+### 4.3 Overtime Calculations (Pending - Phase 4B)
+*   **Business Purpose**: Calculate work hours exceeding standard shifts (Weekend, Holiday, standard Overtime) for payroll.
+*   **Database Impact**: Store `overtimeMinutes` in the `AttendanceRecord` model.
 *   **API Endpoints Required**:
-    *   `GET /api/v1/reports/overtime` (Retrieve overtime log audits)
+    *   `GET /api/v1/reports/overtime` (Retrieve overtime audits)
 *   **UI Screens Affected**:
     *   Web: Attendance Monitor and Payroll Reports.
 *   **Estimated Implementation Effort**: 3 Days
 
-### 4.4 Workforce Coverage Analysis
-*   **Business Purpose**: Visualize staff coverage percentages across departments against predefined project targets to ensure operational readiness.
-*   **Database Impact**: Analytical queries comparing scheduled allocations against actual active clock-ins.
+### 4.4 Workforce Coverage & Heatmaps (Pending - Phase 4B)
+*   **Business Purpose**: Coverage gap analysis comparing scheduled headcounts vs actual operative clock-ins.
+*   **Database Impact**: Analytical coverage calculations.
 *   **API Endpoints Required**:
-    *   `GET /api/v1/analytics/coverage` (Retrieve coverage metrics)
+    *   `GET /api/v1/analytics/coverage`
 *   **UI Screens Affected**:
-    *   Web: Overview Dashboard (`/`) - Live coverage widgets and charts.
+    *   Web: Overview Dashboard and Planner heatmap.
 *   **Estimated Implementation Effort**: 3 Days
+
 
 ---
 

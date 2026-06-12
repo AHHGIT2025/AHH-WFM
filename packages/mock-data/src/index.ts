@@ -1,4 +1,4 @@
-import { Employee, AttendanceRecord, Shift, LeaveRequest, SapMapping, SyncLog, Announcement, Department, Worksite, AttendanceCorrection, LeaveType, LeaveBalance, LeaveBalanceLedger, Holiday, LeaveApprovalWorkflow, LeaveApprovalStep, LeaveApprovalHistory, LeaveApprovalDelegation } from "@ahh-wfm/types";
+import { Employee, AttendanceRecord, Shift, LeaveRequest, SapMapping, SyncLog, Announcement, Department, Worksite, AttendanceCorrection, LeaveType, LeaveBalance, LeaveBalanceLedger, Holiday, LeaveApprovalWorkflow, LeaveApprovalStep, LeaveApprovalHistory, LeaveApprovalDelegation, ShiftTemplate, RotationTemplate, ShiftAssignment } from "@ahh-wfm/types";
 import * as fs from "fs";
 import * as path from "path";
 import * as bcrypt from "bcryptjs";
@@ -72,6 +72,9 @@ let memoryDb: {
   leaveApprovalSteps: LeaveApprovalStep[];
   leaveApprovalHistories: LeaveApprovalHistory[];
   leaveApprovalDelegations: LeaveApprovalDelegation[];
+  shiftTemplates: ShiftTemplate[];
+  rotationTemplates: RotationTemplate[];
+  shiftAssignments: ShiftAssignment[];
 } = {
   departments: [
     { id: "DEPT-001", name: "Operations", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
@@ -155,6 +158,24 @@ let memoryDb: {
   leaveApprovalHistories: [],
   leaveApprovalDelegations: [
     { id: "DELEG-001", employeeId: "SK-90210", delegateApproverId: "AD-0001", validFrom: "2026-06-01T00:00:00Z", validTo: "2026-06-30T00:00:00Z", reason: "Annual leave coverage" }
+  ],
+  shiftTemplates: [
+    { id: "WF-SH-MORN", name: "Morning Shift", startTime: "06:00", endTime: "14:00", isSplit: false, isFlexible: false },
+    { id: "WF-SH-EVE", name: "Evening Shift", startTime: "14:00", endTime: "22:00", isSplit: false, isFlexible: false },
+    { id: "WF-SH-NIGHT", name: "Night Shift", startTime: "22:00", endTime: "06:00", isSplit: false, isFlexible: false },
+    { id: "WF-SH-SPLIT", name: "Split Shift", startTime: "08:00", endTime: "12:00", isSplit: true, splitStart: "16:00", splitEnd: "20:00", isFlexible: false },
+    { id: "WF-SH-FLEX", name: "Flexible Shift", startTime: "00:00", endTime: "24:00", isSplit: false, isFlexible: true, coreHours: 8.0 }
+  ],
+  rotationTemplates: [
+    { id: "ROT-5X2", name: "5x2 Pattern", cycleDays: 7, patternJson: '["WF-SH-MORN","WF-SH-MORN","WF-SH-MORN","WF-SH-MORN","WF-SH-MORN","REST","REST"]' },
+    { id: "ROT-6X1", name: "6x1 Pattern", cycleDays: 7, patternJson: '["WF-SH-MORN","WF-SH-MORN","WF-SH-MORN","WF-SH-MORN","WF-SH-MORN","WF-SH-MORN","REST"]' },
+    { id: "ROT-4X4", name: "4 On / 4 Off", cycleDays: 8, patternJson: '["WF-SH-MORN","WF-SH-MORN","WF-SH-MORN","WF-SH-MORN","REST","REST","REST","REST"]' }
+  ],
+  shiftAssignments: [
+    { id: "ASSIGN-001", employeeId: "AA-1001", employeeName: "Ahmed Ali", shiftTemplateId: "WF-SH-MORN", date: "2026-06-12" },
+    { id: "ASSIGN-002", employeeId: "AA-1001", employeeName: "Ahmed Ali", shiftTemplateId: "WF-SH-MORN", date: "2026-06-13" },
+    { id: "ASSIGN-003", employeeId: "AA-1001", employeeName: "Ahmed Ali", shiftTemplateId: "WF-SH-MORN", date: "2026-06-14" },
+    { id: "ASSIGN-004", employeeId: "AA-1001", employeeName: "Ahmed Ali", shiftTemplateId: "WF-SH-MORN", date: "2026-06-15" }
   ]
 };
 
@@ -374,6 +395,28 @@ const seedMySQL = async () => {
           }
         });
       }
+      // Seed Shift Templates
+      for (const st of memoryDb.shiftTemplates) {
+        await prismaClient.shiftTemplate.create({ data: st });
+      }
+
+      // Seed Rotation Templates
+      for (const rt of memoryDb.rotationTemplates) {
+        await prismaClient.rotationTemplate.create({ data: rt });
+      }
+
+      // Seed Shift Assignments
+      for (const sa of memoryDb.shiftAssignments) {
+        await prismaClient.shiftAssignment.create({
+          data: {
+            id: sa.id,
+            employeeId: sa.employeeId,
+            shiftTemplateId: sa.shiftTemplateId,
+            date: new Date(sa.date)
+          }
+        });
+      }
+
       console.log("MySQL Database seeded successfully!");
     }
     isSeeded = true;
@@ -480,6 +523,15 @@ const readDb = (): typeof memoryDb & { worksites: Worksite[]; attendanceCorrecti
     }
     if (!parsed.leaveApprovalDelegations) {
       parsed.leaveApprovalDelegations = memoryDb.leaveApprovalDelegations;
+    }
+    if (!parsed.shiftTemplates) {
+      parsed.shiftTemplates = memoryDb.shiftTemplates;
+    }
+    if (!parsed.rotationTemplates) {
+      parsed.rotationTemplates = memoryDb.rotationTemplates;
+    }
+    if (!parsed.shiftAssignments) {
+      parsed.shiftAssignments = memoryDb.shiftAssignments;
     }
     return parsed;
   } catch (e) {
@@ -2588,5 +2640,405 @@ export const mockDb = {
 
     writeDb(db);
     return correction;
+  },
+
+  // Phase 4A Scheduling & Rotations Methods
+  getShiftTemplates: async (): Promise<ShiftTemplate[]> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      const records = await prismaClient.shiftTemplate.findMany();
+      return records.map((r: any) => ({
+        id: r.id,
+        name: r.name,
+        startTime: r.startTime,
+        endTime: r.endTime,
+        isSplit: r.isSplit,
+        splitStart: r.splitStart || undefined,
+        splitEnd: r.splitEnd || undefined,
+        isFlexible: r.isFlexible,
+        coreHours: r.coreHours || undefined,
+        createdAt: r.createdAt.toISOString(),
+        updatedAt: r.updatedAt.toISOString()
+      }));
+    }
+    return readDb().shiftTemplates || [];
+  },
+
+  createShiftTemplate: async (name: string, startTime: string, endTime: string, isSplit?: boolean, splitStart?: string, splitEnd?: string, isFlexible?: boolean, coreHours?: number): Promise<ShiftTemplate> => {
+    const actualIsSplit = !!isSplit;
+    const actualIsFlexible = !!isFlexible;
+    if (isDbConnected()) {
+      await seedMySQL();
+      const record = await prismaClient.shiftTemplate.create({
+        data: {
+          name,
+          startTime,
+          endTime,
+          isSplit: actualIsSplit,
+          splitStart: splitStart || null,
+          splitEnd: splitEnd || null,
+          isFlexible: actualIsFlexible,
+          coreHours: coreHours || null
+        }
+      });
+      return {
+        id: record.id,
+        name: record.name,
+        startTime: record.startTime,
+        endTime: record.endTime,
+        isSplit: record.isSplit,
+        splitStart: record.splitStart || undefined,
+        splitEnd: record.splitEnd || undefined,
+        isFlexible: record.isFlexible,
+        coreHours: record.coreHours || undefined,
+        createdAt: record.createdAt.toISOString(),
+        updatedAt: record.updatedAt.toISOString()
+      };
+    }
+
+    const db = readDb();
+    const newTemplate: ShiftTemplate = {
+      id: `WF-SH-${Date.now()}`,
+      name,
+      startTime,
+      endTime,
+      isSplit: actualIsSplit,
+      splitStart,
+      splitEnd,
+      isFlexible: actualIsFlexible,
+      coreHours,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    db.shiftTemplates = db.shiftTemplates || [];
+    db.shiftTemplates.push(newTemplate);
+    writeDb(db);
+    return newTemplate;
+  },
+
+  getRotationTemplates: async (): Promise<RotationTemplate[]> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      const records = await prismaClient.rotationTemplate.findMany();
+      return records.map((r: any) => ({
+        id: r.id,
+        name: r.name,
+        cycleDays: r.cycleDays,
+        patternJson: r.patternJson,
+        createdAt: r.createdAt.toISOString(),
+        updatedAt: r.updatedAt.toISOString()
+      }));
+    }
+    return readDb().rotationTemplates || [];
+  },
+
+  createRotationTemplate: async (name: string, cycleDays: number, patternJson: string): Promise<RotationTemplate> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      const record = await prismaClient.rotationTemplate.create({
+        data: { name, cycleDays, patternJson }
+      });
+      return {
+        id: record.id,
+        name: record.name,
+        cycleDays: record.cycleDays,
+        patternJson: record.patternJson,
+        createdAt: record.createdAt.toISOString(),
+        updatedAt: record.updatedAt.toISOString()
+      };
+    }
+
+    const db = readDb();
+    const newTemplate: RotationTemplate = {
+      id: `ROT-${Date.now()}`,
+      name,
+      cycleDays,
+      patternJson,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    db.rotationTemplates = db.rotationTemplates || [];
+    db.rotationTemplates.push(newTemplate);
+    writeDb(db);
+    return newTemplate;
+  },
+
+  getShiftAssignments: async (): Promise<ShiftAssignment[]> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      const records = await prismaClient.shiftAssignment.findMany({
+        include: { shiftTemplate: true }
+      });
+      
+      const employees = await prismaClient.employee.findMany();
+
+      return records.map((r: any) => {
+        const emp = employees.find((e: any) => e.id === r.employeeId);
+        return {
+          id: r.id,
+          employeeId: r.employeeId,
+          employeeName: emp ? emp.name : "Unknown",
+          shiftTemplateId: r.shiftTemplateId,
+          shiftTemplate: {
+            id: r.shiftTemplate.id,
+            name: r.shiftTemplate.name,
+            startTime: r.shiftTemplate.startTime,
+            endTime: r.shiftTemplate.endTime,
+            isSplit: r.shiftTemplate.isSplit,
+            splitStart: r.shiftTemplate.splitStart || undefined,
+            splitEnd: r.shiftTemplate.splitEnd || undefined,
+            isFlexible: r.shiftTemplate.isFlexible,
+            coreHours: r.shiftTemplate.coreHours || undefined
+          },
+          date: r.date.toISOString().substring(0, 10),
+          createdAt: r.createdAt.toISOString(),
+          updatedAt: r.updatedAt.toISOString()
+        };
+      });
+    }
+
+    const db = readDb();
+    db.shiftAssignments = db.shiftAssignments || [];
+    return db.shiftAssignments.map(sa => {
+      const emp = db.employees.find(e => e.id === sa.employeeId);
+      const st = db.shiftTemplates?.find(t => t.id === sa.shiftTemplateId);
+      return {
+        ...sa,
+        employeeName: emp ? emp.name : "Unknown",
+        shiftTemplate: st
+      };
+    });
+  },
+
+  checkAssignmentConflicts: async (employeeId: string, dateStr: string): Promise<string[]> => {
+    const conflicts: string[] = [];
+    
+    // 1. Inactive employee check
+    const employees = await mockDb.getEmployees();
+    const emp = employees.find(e => e.id === employeeId);
+    if (!emp) {
+      conflicts.push("Employee not found");
+      return conflicts;
+    }
+    if (emp.isActive === false) {
+      conflicts.push(`Employee ${emp.name} (${employeeId}) is inactive`);
+    }
+
+    // 2. Overlapping shift checks (on same date)
+    const assignments = await mockDb.getShiftAssignments();
+    const hasOverlap = assignments.some(a => a.employeeId === employeeId && a.date === dateStr);
+    if (hasOverlap) {
+      conflicts.push(`Employee ${emp.name} already has a shift assigned on ${dateStr}`);
+    }
+
+    // 3. Approved leave checks
+    const leaves = await mockDb.getLeaves();
+    const onLeave = leaves.some(l => {
+      if (l.employeeId !== employeeId || l.status !== "Approved") return false;
+      if (!l.startDate || !l.endDate) return false;
+      
+      const checkDate = new Date(dateStr);
+      const startDate = new Date(l.startDate);
+      const endDate = new Date(l.endDate);
+      
+      checkDate.setHours(0, 0, 0, 0);
+      startDate.setHours(0, 0, 0, 0);
+      endDate.setHours(0, 0, 0, 0);
+      
+      return checkDate >= startDate && checkDate <= endDate;
+    });
+    if (onLeave) {
+      conflicts.push(`Employee ${emp.name} is on approved leave on ${dateStr}`);
+    }
+
+    return conflicts;
+  },
+
+  createShiftAssignment: async (employeeId: string, shiftTemplateId: string, dateStr: string): Promise<{ success: boolean; assignment?: ShiftAssignment; errors?: string[] }> => {
+    const conflicts = await mockDb.checkAssignmentConflicts(employeeId, dateStr);
+    if (conflicts.length > 0) {
+      return { success: false, errors: conflicts };
+    }
+
+    if (isDbConnected()) {
+      await seedMySQL();
+      const record = await prismaClient.shiftAssignment.create({
+        data: {
+          employeeId,
+          shiftTemplateId,
+          date: new Date(dateStr)
+        },
+        include: { shiftTemplate: true }
+      });
+      return {
+        success: true,
+        assignment: {
+          id: record.id,
+          employeeId: record.employeeId,
+          shiftTemplateId: record.shiftTemplateId,
+          date: record.date.toISOString().substring(0, 10),
+          createdAt: record.createdAt.toISOString(),
+          updatedAt: record.updatedAt.toISOString()
+        }
+      };
+    }
+
+    const db = readDb();
+    const newAssignment: ShiftAssignment = {
+      id: `ASSIGN-${Date.now()}`,
+      employeeId,
+      shiftTemplateId,
+      date: dateStr,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    db.shiftAssignments = db.shiftAssignments || [];
+    db.shiftAssignments.push(newAssignment);
+    writeDb(db);
+
+    return {
+      success: true,
+      assignment: newAssignment
+    };
+  },
+
+  createBulkShiftAssignments: async (employeeIds: string[], shiftTemplateId: string, dates: string[]): Promise<{ success: boolean; createdCount: number; errors?: string[] }> => {
+    const allErrors: string[] = [];
+    
+    // Check conflicts for all employee-date combinations
+    for (const empId of employeeIds) {
+      for (const d of dates) {
+        const conflicts = await mockDb.checkAssignmentConflicts(empId, d);
+        if (conflicts.length > 0) {
+          allErrors.push(...conflicts);
+        }
+      }
+    }
+
+    if (allErrors.length > 0) {
+      return { success: false, createdCount: 0, errors: allErrors };
+    }
+
+    let count = 0;
+    if (isDbConnected()) {
+      await seedMySQL();
+      for (const empId of employeeIds) {
+        for (const d of dates) {
+          await prismaClient.shiftAssignment.create({
+            data: {
+              employeeId: empId,
+              shiftTemplateId,
+              date: new Date(d)
+            }
+          });
+          count++;
+        }
+      }
+    } else {
+      const db = readDb();
+      db.shiftAssignments = db.shiftAssignments || [];
+      for (const empId of employeeIds) {
+        for (const d of dates) {
+          db.shiftAssignments.push({
+            id: `ASSIGN-${Date.now()}-${count}`,
+            employeeId: empId,
+            shiftTemplateId,
+            date: d,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          });
+          count++;
+        }
+      }
+      writeDb(db);
+    }
+
+    return { success: true, createdCount: count };
+  },
+
+  applyRotationAssignments: async (employeeIds: string[], rotationTemplateId: string, startDateStr: string, occurrences: number): Promise<{ success: boolean; createdCount: number; conflicts: Array<{ employeeId: string; date: string; reasons: string[] }> }> => {
+    const db = readDb();
+    
+    // Find rotation template
+    const rt = (isDbConnected()) 
+      ? await prismaClient.rotationTemplate.findUnique({ where: { id: rotationTemplateId } })
+      : db.rotationTemplates?.find(r => r.id === rotationTemplateId);
+      
+    if (!rt) {
+      return { success: false, createdCount: 0, conflicts: [{ employeeId: "ALL", date: "ALL", reasons: ["Rotation template not found"] }] };
+    }
+
+    const pattern: string[] = JSON.parse(rt.patternJson);
+    const conflictsList: Array<{ employeeId: string; date: string; reasons: string[] }> = [];
+    const assignmentsToWrite: Array<{ employeeId: string; shiftTemplateId: string; date: string }> = [];
+
+    // Calculate dates and check conflicts
+    for (const empId of employeeIds) {
+      const start = new Date(startDateStr);
+      for (let i = 0; i < occurrences; i++) {
+        const currentDate = new Date(start);
+        currentDate.setDate(start.getDate() + i);
+        const dateStr = currentDate.toISOString().substring(0, 10);
+        
+        const patternIndex = i % pattern.length;
+        const shiftTemplateId = pattern[patternIndex];
+
+        if (shiftTemplateId !== "REST") {
+          // Check conflicts
+          const conflicts = await mockDb.checkAssignmentConflicts(empId, dateStr);
+          if (conflicts.length > 0) {
+            conflictsList.push({
+              employeeId: empId,
+              date: dateStr,
+              reasons: conflicts
+            });
+          } else {
+            assignmentsToWrite.push({
+              employeeId: empId,
+              shiftTemplateId,
+              date: dateStr
+            });
+          }
+        }
+      }
+    }
+
+    // Report conflicts instead of silently writing if any exist
+    if (conflictsList.length > 0) {
+      return { success: false, createdCount: 0, conflicts: conflictsList };
+    }
+
+    // Write all assignments
+    let count = 0;
+    if (isDbConnected()) {
+      await seedMySQL();
+      for (const sa of assignmentsToWrite) {
+        await prismaClient.shiftAssignment.create({
+          data: {
+            employeeId: sa.employeeId,
+            shiftTemplateId: sa.shiftTemplateId,
+            date: new Date(sa.date)
+          }
+        });
+        count++;
+      }
+    } else {
+      db.shiftAssignments = db.shiftAssignments || [];
+      for (const sa of assignmentsToWrite) {
+        db.shiftAssignments.push({
+          id: `ASSIGN-${Date.now()}-${count}`,
+          employeeId: sa.employeeId,
+          shiftTemplateId: sa.shiftTemplateId,
+          date: sa.date,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        });
+        count++;
+      }
+      writeDb(db);
+    }
+
+    return { success: true, createdCount: count, conflicts: [] };
   }
 };
+

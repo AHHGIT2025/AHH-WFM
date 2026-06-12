@@ -71,6 +71,18 @@ export default function MobileProfilePage() {
         </div>
       </Card>
 
+      {/* Actions Card */}
+      <Card className="p-4 border border-outline-variant space-y-3">
+        <h3 className="text-xs font-bold uppercase tracking-wider text-primary border-b border-border-subtle pb-2">Roster &amp; Schedules</h3>
+        <Button 
+          variant="secondary" 
+          className="w-full font-bold text-xs py-2 flex items-center justify-center gap-1.5"
+          onClick={() => window.location.href = "/shifts"}
+        >
+          <span className="material-symbols-outlined text-base">calendar_month</span> View Work Shift Calendar
+        </Button>
+      </Card>
+
       {/* Certifications Card */}
       <Card className="p-4 border border-outline-variant space-y-3.5">
         <h3 className="text-xs font-bold uppercase tracking-wider text-primary border-b border-border-subtle pb-2">Credentials &amp; Certs</h3>

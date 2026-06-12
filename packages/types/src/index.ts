@@ -219,3 +219,37 @@ export interface Announcement {
   author: string;
   category: "General" | "Urgent" | "System Update";
 }
+
+export interface ShiftTemplate {
+  id: string;
+  name: string;
+  startTime: string;
+  endTime: string;
+  isSplit: boolean;
+  splitStart?: string;
+  splitEnd?: string;
+  isFlexible: boolean;
+  coreHours?: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface RotationTemplate {
+  id: string;
+  name: string;
+  cycleDays: number;
+  patternJson: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ShiftAssignment {
+  id: string;
+  employeeId: string;
+  employeeName?: string;
+  shiftTemplateId: string;
+  shiftTemplate?: ShiftTemplate;
+  date: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
