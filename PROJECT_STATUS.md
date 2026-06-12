@@ -29,6 +29,7 @@ AHH WFM is a full-stack, enterprise-grade workforce management application built
 | **Phase 4A** | Completed | `v0.8-shift-scheduling-complete` | Shift templates, rotation templates, shift assignments, and conflict detection. |
 | **Phase 4B** | Completed | `v0.9-scheduling-roster-overtime-complete` | Overtime auto-calculation, rates, coverage heatmap, drag-and-drop, and shift swaps. |
 | **Phase 5A** | Completed | `v0.10-sap-integration-foundation` | SAP SuccessFactors integration database models, mock sync engine, and Web Admin dashboard. |
+| **Phase 5B.1**| Completed | `v0.11-sap-operational-sync-leave-attendance` | SAP SuccessFactors outbound integration for Leave (EmployeeTime) and Attendance (TimeSheetEntry), idempotency, and reconciliation. |
 
 
 
@@ -85,6 +86,14 @@ AHH WFM is a full-stack, enterprise-grade workforce management application built
 - **Master Data Mapping & Deactivations:** Sync updates existing records and registers new employees. Marks employees as inactive (`isActive = false`) and status `Offline` locally when the SAP payload flags them as `TERMINATED`.
 - **Fault-Tolerance Controls:** Logs failures in the `SapSyncLog` and caches invalid configurations inside the `SapRetryQueue` under pending states.
 - **Web Admin Dashboard:** Integrated a connection status monitor card, sync trigger controls panel, job execution history grid, active mappings editor console, and retry queue manager.
+
+### Phase 5B.1: SAP Leave & Attendance Sync
+- **Outbound Sync Queue:** Exports approved leave requests and completed attendance check-outs into `SapExportQueue`.
+- **Mock OData Payloads:** Generates sandbox `EmployeeTime` and `TimeSheetEntry` schemas.
+- **Idempotency Controls:** Enforces uniqueness using `LEAVE_EXPORT_[ID]` and `ATT_EXPORT_[ID]` keys to block duplicate syncing.
+- **Acknowledgement Tracking:** Records SuccessFactors API tracking IDs, statuses, and timestamps.
+- **Reconciliation Engine:** Compares local WFM database hours with SAP timesheet hours to detect and flag gaps.
+
 
 
 

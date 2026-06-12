@@ -360,4 +360,59 @@ export interface SapRetryQueue {
   updatedAt?: string;
 }
 
+export interface SapExportQueue {
+  id: string;
+  module: "LEAVE" | "ATTENDANCE" | "OVERTIME" | "ROSTER" | string;
+  recordId: string;
+  payload: string;
+  status: "PENDING" | "PROCESSING" | "SENT" | "FAILED" | string;
+  idempotencyKey: string;
+  sapAckId?: string;
+  sapAckStatus?: string;
+  sapAckTimestamp?: string;
+  retryCount: number;
+  lastError?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface SapPayrollStage {
+  id: string;
+  employeeId: string;
+  payrollPeriod: string;
+  wageType: string;
+  calculatedHours: number;
+  calculatedPay: number;
+  isApproved: boolean;
+  isExported: boolean;
+  exportedJobId?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface SapReconciliationLog {
+  id: string;
+  employeeId: string;
+  period: string;
+  module: "LEAVE" | "ATTENDANCE" | "OVERTIME" | string;
+  wfmHours: number;
+  sapHours: number;
+  discrepancy: number;
+  status: "MATCHED" | "DISCREPANCY" | "RESOLVED" | string;
+  comments?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface SapPayrollPeriodLock {
+  id: string;
+  period: string;
+  locked: boolean;
+  lockedById?: string;
+  lockedAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+
 

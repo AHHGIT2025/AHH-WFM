@@ -1,4 +1,4 @@
-import { Employee, AttendanceRecord, Shift, LeaveRequest, SapMapping, SyncLog, Announcement, Department, Worksite, AttendanceCorrection, LeaveType, LeaveBalance, LeaveBalanceLedger, Holiday, LeaveApprovalWorkflow, LeaveApprovalStep, LeaveApprovalHistory, LeaveApprovalDelegation, ShiftTemplate, RotationTemplate, ShiftAssignment, ShiftSwapRequest, OvertimeRate, SapConnection, SapSyncJob, SapSyncLog, SapFieldMapping, SapRetryQueue } from "@ahh-wfm/types";
+import { Employee, AttendanceRecord, Shift, LeaveRequest, SapMapping, SyncLog, Announcement, Department, Worksite, AttendanceCorrection, LeaveType, LeaveBalance, LeaveBalanceLedger, Holiday, LeaveApprovalWorkflow, LeaveApprovalStep, LeaveApprovalHistory, LeaveApprovalDelegation, ShiftTemplate, RotationTemplate, ShiftAssignment, ShiftSwapRequest, OvertimeRate, SapConnection, SapSyncJob, SapSyncLog, SapFieldMapping, SapRetryQueue, SapExportQueue, SapPayrollStage, SapReconciliationLog, SapPayrollPeriodLock } from "@ahh-wfm/types";
 import * as fs from "fs";
 import * as path from "path";
 import * as bcrypt from "bcryptjs";
@@ -82,6 +82,10 @@ let memoryDb: {
   sapSyncLogs: SapSyncLog[];
   sapFieldMappings: SapFieldMapping[];
   sapRetryQueues: SapRetryQueue[];
+  sapExportQueue: SapExportQueue[];
+  sapPayrollStages: SapPayrollStage[];
+  sapReconciliationLogs: SapReconciliationLog[];
+  sapPayrollPeriodLocks: SapPayrollPeriodLock[];
 } = {
   departments: [
     { id: "DEPT-001", name: "Operations", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
@@ -214,7 +218,11 @@ let memoryDb: {
   ],
   sapSyncJobs: [],
   sapSyncLogs: [],
-  sapRetryQueues: []
+  sapRetryQueues: [],
+  sapExportQueue: [],
+  sapPayrollStages: [],
+  sapReconciliationLogs: [],
+  sapPayrollPeriodLocks: []
 };
 
 // Seeding helper to pre-fill MySQL with mock data if it is empty
@@ -4235,6 +4243,416 @@ export const mockDb = {
     }
 
     return true;
+  },
+
+  // SAP Export Queue
+  getSapExportQueue: async (): Promise<SapExportQueue[]> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      return await prismaClient.sapExportQueue.findMany({
+        orderBy: { createdAt: "desc" }
+      });
+    }
+    const db = readDb();
+    return db.sapExportQueue || [];
+  },
+
+  createSapExportQueueItem: async (data: any): Promise<SapExportQueue> => {
+    const id = data.id || `EXP-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
+    const idempotencyKey = data.idempotencyKey || `${data.module}_${data.recordId}`;
+    
+    // Duplicate check for Idempotency
+    if (isDbConnected()) {
+      await seedMySQL();
+      const existing = await prismaClient.sapExportQueue.findUnique({
+        where: { idempotencyKey }
+      });
+      if (existing) return existing;
+
+      const item = await prismaClient.sapExportQueue.create({
+        data: {
+          ...data,
+          id,
+          idempotencyKey,
+          status: data.status || "PENDING",
+          retryCount: 0
+        }
+      });
+      return item;
+    }
+
+    const db = readDb();
+    db.sapExportQueue = db.sapExportQueue || [];
+    const existing = db.sapExportQueue.find(i => i.idempotencyKey === idempotencyKey);
+    if (existing) return existing;
+
+    const newItem = {
+      ...data,
+      id,
+      idempotencyKey,
+      status: data.status || "PENDING",
+      retryCount: 0,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    db.sapExportQueue.push(newItem);
+    writeDb(db);
+    return newItem;
+  },
+
+  updateSapExportQueueItem: async (id: string, data: any): Promise<SapExportQueue> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      const updateData: any = { ...data };
+      if (data.sapAckTimestamp) updateData.sapAckTimestamp = new Date(data.sapAckTimestamp);
+      
+      const item = await prismaClient.sapExportQueue.update({
+        where: { id },
+        data: updateData
+      });
+      return {
+        ...item,
+        sapAckTimestamp: item.sapAckTimestamp ? item.sapAckTimestamp.toISOString() : undefined
+      };
+    }
+
+    const db = readDb();
+    const index = db.sapExportQueue.findIndex(i => i.id === id);
+    if (index === -1) throw new Error("Export queue item not found");
+    db.sapExportQueue[index] = {
+      ...db.sapExportQueue[index],
+      ...data,
+      updatedAt: new Date().toISOString()
+    };
+    writeDb(db);
+    return db.sapExportQueue[index];
+  },
+
+  // SAP Reconciliation
+  getSapReconciliationLogs: async (): Promise<SapReconciliationLog[]> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      return await prismaClient.sapReconciliationLog.findMany({
+        orderBy: { createdAt: "desc" }
+      });
+    }
+    const db = readDb();
+    return db.sapReconciliationLogs || [];
+  },
+
+  runSapReconciliation: async (period: string, module: string): Promise<SapReconciliationLog[]> => {
+    // Generates a mock reconciliation discrepancies log between WFM and SAP
+    const results: any[] = [];
+    const employees = await mockDb.getEmployees();
+
+    for (const emp of employees) {
+      if (!emp.isActive) continue;
+      // Mock discrepancy rules:
+      let wfmHours = 176.0;
+      let sapHours = 176.0;
+      let status = "MATCHED";
+      let comments = "Hours matched successfully with SAP Timesheets.";
+
+      // Mock a discrepancy for Alex Martinez (or Brandon Reed in simulation)
+      if (emp.id === "BR-8823" && module === "ATTENDANCE") {
+        wfmHours = 176.0;
+        sapHours = 168.0; // SAP is missing 8 hours
+        status = "DISCREPANCY";
+        comments = "Discrepancy: WFM logged 176 hours, SAP has 168 hours. Discrepancy is +8.0 hours due to manual timecard adjustments in WFM.";
+      }
+
+      const discrepancy = wfmHours - sapHours;
+      const logData = {
+        id: `REC-${Math.random().toString(36).substring(2, 9).toUpperCase()}`,
+        employeeId: emp.id,
+        period,
+        module,
+        wfmHours,
+        sapHours,
+        discrepancy,
+        status,
+        comments,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+
+      if (isDbConnected()) {
+        await seedMySQL();
+        await prismaClient.sapReconciliationLog.create({
+          data: {
+            ...logData,
+            createdAt: new Date(logData.createdAt),
+            updatedAt: new Date(logData.updatedAt)
+          }
+        });
+      } else {
+        const db = readDb();
+        db.sapReconciliationLogs = db.sapReconciliationLogs || [];
+        db.sapReconciliationLogs.push(logData);
+        writeDb(db);
+      }
+      results.push(logData);
+    }
+    return results;
+  },
+
+  // SAP Outbound Export Processing Engine (Phase 5B.1)
+  triggerSapExport: async (connectionId: string, module: string): Promise<SapExportQueue[]> => {
+    const results: SapExportQueue[] = [];
+    
+    // Log job trigger inside sync log
+    const mockJob = await mockDb.createSapSyncJob({
+      connectionId,
+      module,
+      syncType: "INCREMENTAL",
+      status: "PROCESSING"
+    });
+
+    await mockDb.createSapSyncLog({
+      jobId: mockJob.id,
+      severity: "INFO",
+      message: `Initiating export queue parsing for module ${module}...`
+    });
+
+    if (module === "LEAVE") {
+      const leaves = await mockDb.getLeaves();
+      const approvedLeaves = leaves.filter(l => l.status === "Approved");
+
+      for (const leave of approvedLeaves) {
+        const idempotencyKey = `LEAVE_EXPORT_${leave.id}`;
+        
+        // 1. Duplicate Prevention check
+        const queueItem = await mockDb.createSapExportQueueItem({
+          module: "LEAVE",
+          recordId: leave.id,
+          payload: JSON.stringify({
+            employeeId: leave.employeeId,
+            startDate: leave.startDate,
+            endDate: leave.endDate,
+            typeCode: "1001", // SAP Annual leave code
+            reason: leave.reason
+          }),
+          status: "PENDING",
+          idempotencyKey
+        });
+
+        if (queueItem.status === "SENT") {
+          // Already sent, skip to prevent duplicates
+          await mockDb.createSapSyncLog({
+            jobId: mockJob.id,
+            severity: "INFO",
+            message: `Skipping leave export item ${leave.id} - Already synchronized.`
+          });
+          continue;
+        }
+
+        // 2. Perform Mock Outbound Call to SAP OData
+        await mockDb.updateSapExportQueueItem(queueItem.id, { status: "PROCESSING" });
+
+        // Generate mock SAP Acknowledgement details
+        const sapAckId = `SAP-ACK-LV-${Math.floor(100000 + Math.random() * 900000)}`;
+        const sapAckStatus = "ACKNOWLEDGED";
+        const sapAckTimestamp = new Date().toISOString();
+
+        await mockDb.updateSapExportQueueItem(queueItem.id, {
+          status: "SENT",
+          sapAckId,
+          sapAckStatus,
+          sapAckTimestamp
+        });
+
+        // Update local LeaveRequest to store external SAP ref
+        if (isDbConnected()) {
+          await prismaClient.leaveRequest.update({
+            where: { id: leave.id },
+            data: { leaveTypeId: "LTYPE-ANNUAL" } // Simulating association mapping update
+          });
+        } else {
+          const db = readDb();
+          const idx = db.leaves.findIndex(l => l.id === leave.id);
+          if (idx !== -1) {
+            db.leaves[idx].leaveTypeId = "LTYPE-ANNUAL";
+            writeDb(db);
+          }
+        }
+
+        await mockDb.createSapSyncLog({
+          jobId: mockJob.id,
+          severity: "INFO",
+          message: `Leave Request ${leave.id} exported successfully. SAP Ack ID: ${sapAckId}`,
+          entityName: "LeaveRequest",
+          entityId: leave.id
+        });
+
+        const updatedItem = await mockDb.getSapExportQueue();
+        results.push(updatedItem.find(i => i.id === queueItem.id) || queueItem);
+      }
+    } else if (module === "ATTENDANCE") {
+      const attendance = await mockDb.getAttendance();
+      
+      for (const rec of attendance) {
+        if (!rec.checkOut) continue; // Outbound is only for completed check-out records
+
+        const idempotencyKey = `ATT_EXPORT_${rec.id}`;
+        
+        // 1. Duplicate check
+        const queueItem = await mockDb.createSapExportQueueItem({
+          module: "ATTENDANCE",
+          recordId: rec.id,
+          payload: JSON.stringify({
+            employeeId: rec.employeeId,
+            checkIn: rec.checkIn,
+            checkOut: rec.checkOut,
+            locationCode: "LOC-DOHA",
+            lateMinutes: rec.lateMinutes
+          }),
+          status: "PENDING",
+          idempotencyKey
+        });
+
+        if (queueItem.status === "SENT") {
+          continue;
+        }
+
+        // 2. Perform Mock Outbound Call
+        await mockDb.updateSapExportQueueItem(queueItem.id, { status: "PROCESSING" });
+
+        const sapAckId = `SAP-ACK-AT-${Math.floor(100000 + Math.random() * 900000)}`;
+        const sapAckStatus = "ACKNOWLEDGED";
+        const sapAckTimestamp = new Date().toISOString();
+
+        await mockDb.updateSapExportQueueItem(queueItem.id, {
+          status: "SENT",
+          sapAckId,
+          sapAckStatus,
+          sapAckTimestamp
+        });
+
+        await mockDb.createSapSyncLog({
+          jobId: mockJob.id,
+          severity: "INFO",
+          message: `Attendance record ${rec.id} exported successfully. SAP Ack ID: ${sapAckId}`,
+          entityName: "AttendanceRecord",
+          entityId: rec.id
+        });
+
+        const updatedItem = await mockDb.getSapExportQueue();
+        results.push(updatedItem.find(i => i.id === queueItem.id) || queueItem);
+      }
+    }
+
+    // Complete Job run
+    await mockDb.updateSapSyncJob(mockJob.id, {
+      status: "COMPLETED",
+      recordsProcessed: results.length,
+      recordsSucceeded: results.filter(r => r.status === "SENT").length,
+      recordsFailed: results.filter(r => r.status === "FAILED").length,
+      completedAt: new Date().toISOString()
+    });
+
+    return results;
+  },
+
+  triggerSapExportRetry: async (): Promise<boolean> => {
+    const queue = await mockDb.getSapExportQueue();
+    const pendingRetry = queue.filter(q => q.status === "FAILED" || q.status === "PENDING");
+
+    for (const item of pendingRetry) {
+      const sapAckId = `SAP-ACK-RET-${Math.floor(100000 + Math.random() * 900000)}`;
+      
+      await mockDb.updateSapExportQueueItem(item.id, {
+        status: "SENT",
+        sapAckId,
+        sapAckStatus: "ACKNOWLEDGED",
+        sapAckTimestamp: new Date().toISOString(),
+        retryCount: item.retryCount + 1,
+        lastError: null
+      });
+
+      await mockDb.createSapSyncLog({
+        jobId: `RETRY-EXP-${item.id}`,
+        severity: "INFO",
+        message: `[Export Queue Retry] Successfully re-sent export queue item ${item.id} (Record: ${item.recordId}). SAP Ack: ${sapAckId}`,
+        entityName: item.module,
+        entityId: item.recordId
+      });
+    }
+
+    return true;
+  },
+
+  // Stubs for Phase 5B.2 to compile correctly
+  getSapPayrollStages: async (): Promise<SapPayrollStage[]> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      return await prismaClient.sapPayrollStage.findMany();
+    }
+    const db = readDb();
+    return db.sapPayrollStages || [];
+  },
+
+  getSapPayrollPeriodLocks: async (): Promise<SapPayrollPeriodLock[]> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      return await prismaClient.sapPayrollPeriodLock.findMany();
+    }
+    const db = readDb();
+    return db.sapPayrollPeriodLocks || [];
+  },
+
+  lockSapPayrollPeriod: async (period: string, locked: boolean, lockedBy?: string): Promise<SapPayrollPeriodLock> => {
+    const id = `LOCK-${period}`;
+    const lockData: SapPayrollPeriodLock = {
+      id,
+      period,
+      locked,
+      lockedById: lockedBy || undefined,
+      lockedAt: locked ? new Date().toISOString() : undefined,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    if (isDbConnected()) {
+      await seedMySQL();
+      const updated = await prismaClient.sapPayrollPeriodLock.upsert({
+        where: { period },
+        update: {
+          locked,
+          lockedById: lockedBy || null,
+          lockedAt: locked ? new Date() : null
+        },
+        create: {
+          period,
+          locked,
+          lockedById: lockedBy || null,
+          lockedAt: locked ? new Date() : null
+        }
+      });
+      return {
+        ...updated,
+        lockedById: updated.lockedById || undefined,
+        lockedAt: updated.lockedAt ? updated.lockedAt.toISOString() : undefined,
+        createdAt: updated.createdAt.toISOString(),
+        updatedAt: updated.updatedAt.toISOString()
+      };
+    }
+
+    const db = readDb();
+    db.sapPayrollPeriodLocks = db.sapPayrollPeriodLocks || [];
+    const index = db.sapPayrollPeriodLocks.findIndex(l => l.period === period);
+    if (index === -1) {
+      db.sapPayrollPeriodLocks.push(lockData);
+    } else {
+      db.sapPayrollPeriodLocks[index] = {
+        ...db.sapPayrollPeriodLocks[index],
+        locked,
+        lockedById: lockedBy || undefined,
+        lockedAt: locked ? new Date().toISOString() : undefined,
+        updatedAt: new Date().toISOString()
+      };
+    }
+    writeDb(db);
+    return index === -1 ? lockData : db.sapPayrollPeriodLocks[index];
   }
 };
 

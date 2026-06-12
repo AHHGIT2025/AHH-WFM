@@ -201,21 +201,24 @@ This document outlines the evolutionary development roadmap for the **AHH WFM** 
     *   Web: SAP SuccessFactors Hub (`/sap`) - Sync indicators, configurations, retry logs, and mapping rules.
 *   **Estimated Implementation Effort**: Completed
 
-### 5.2 Leave Sync (Pending - Phase 5B)
+### 5.2 Leave Sync (Completed - Phase 5B.1)
 *   **Business Purpose**: Synchronize approved leaves and time-off request entries between the WFM application and SAP.
-*   **Database Impact**: Syncs `LeaveRequest` status changes.
+*   **Database Impact**: Writes to `SapExportQueue` using idempotency key `LEAVE_EXPORT_[ID]`, records SAP Ack ID.
 *   **API Endpoints Required**:
-    *   `POST /api/v1/sap/sync/leaves` (Bidirectional sync of leave bookings)
+    *   `GET/POST /api/v1/sap/export` (For queue fetching and triggering outbound sync)
+    *   `POST /api/v1/sap/export/retry` (For queue items retry)
 *   **UI Screens Affected**:
-    *   Web: SAP SuccessFactors Hub (`/sap`) - Leave replication tables.
-*   **Estimated Implementation Effort**: 4 Days
+    *   Web: SAP SuccessFactors Hub (`/sap`) - Outbound export logs panel.
+*   **Estimated Implementation Effort**: Completed
 
-### 5.3 Attendance Sync (Pending - Phase 5B)
+### 5.3 Attendance Sync (Completed - Phase 5B.1)
 *   **Business Purpose**: Replicate local verified check-in data into SAP timesheets for salary processing.
-*   **Database Impact**: Flags `isSyncedToSap` in `AttendanceRecord` schema.
+*   **Database Impact**: Writes to `SapExportQueue` using idempotency key `ATT_EXPORT_[ID]`, records SAP Ack ID, updates reconciliation logs in `SapReconciliationLog`.
 *   **API Endpoints Required**:
-    *   `POST /api/v1/sap/sync/attendance` (Push finalized attendance logs)
+    *   `GET/POST /api/v1/sap/export` (For queue fetching and triggering outbound sync)
+    *   `GET/POST /api/v1/sap/reconciliation` (For run comparing local vs SAP hours)
 *   **UI Screens Affected**:
-    *   Web: SAP SuccessFactors Hub (`/sap`) - Timesheet transfer diagnostics.
-*   **Estimated Implementation Effort**: 4 Days
+    *   Web: SAP SuccessFactors Hub (`/sap`) - Reconciliation Board and Timesheet logs.
+*   **Estimated Implementation Effort**: Completed
+
 

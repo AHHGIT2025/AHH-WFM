@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { SapConnection, SapSyncJob, SapSyncLog, SapFieldMapping, SapRetryQueue } from "@ahh-wfm/types";
+import { SapConnection, SapSyncJob, SapSyncLog, SapFieldMapping, SapRetryQueue, SapExportQueue, SapReconciliationLog } from "@ahh-wfm/types";
 import { Card, Badge, Button, Modal } from "@ahh-wfm/ui/src";
 
 export default function SapIntegrationHub() {
@@ -10,11 +10,18 @@ export default function SapIntegrationHub() {
   const [logs, setLogs] = useState<SapSyncLog[]>([]);
   const [mappings, setMappings] = useState<SapFieldMapping[]>([]);
   const [retryQueue, setRetryQueue] = useState<SapRetryQueue[]>([]);
+  const [exportQueue, setExportQueue] = useState<SapExportQueue[]>([]);
+  const [reconciliationLogs, setReconciliationLogs] = useState<SapReconciliationLog[]>([]);
 
-  const [activeTab, setActiveTab] = useState<"dashboard" | "mappings" | "retry">("dashboard");
+  const [activeTab, setActiveTab] = useState<"dashboard" | "mappings" | "retry" | "export" | "reconciliation">("dashboard");
   const [syncing, setSyncing] = useState(false);
   const [retrying, setRetrying] = useState(false);
+  const [reconciling, setReconciling] = useState(false);
   
+  // Reconciliation settings
+  const [reconPeriod, setReconPeriod] = useState("2026-06");
+  const [reconModule, setReconModule] = useState("ATTENDANCE");
+
   // Form states for Connection creation
   const [showConnModal, setShowConnModal] = useState(false);
   const [systemName, setSystemName] = useState("SAP SuccessFactors Sandbox");
@@ -64,6 +71,12 @@ export default function SapIntegrationHub() {
 
       const retryRes = await fetch("/api/v1/sap/retry");
       if (retryRes.ok) setRetryQueue(await retryRes.json());
+
+      const exportRes = await fetch("/api/v1/sap/export");
+      if (exportRes.ok) setExportQueue(await exportRes.json());
+
+      const reconRes = await fetch("/api/v1/sap/reconciliation");
+      if (reconRes.ok) setReconciliationLogs(await reconRes.json());
     } catch (e) {
       console.error("Failed to load SAP integration hub data", e);
     }
@@ -73,7 +86,7 @@ export default function SapIntegrationHub() {
     fetchData();
     const interval = setInterval(fetchData, 5000);
     return () => clearInterval(interval);
-  }, []);
+  }, [selectedConn]);
 
   const handleCreateConnection = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -147,7 +160,11 @@ export default function SapIntegrationHub() {
     if (!selectedConn) return;
     setSyncing(true);
     try {
-      const res = await fetch("/api/v1/sap/sync", {
+      const endpoint = (selectedModule === "LEAVE" || selectedModule === "ATTENDANCE")
+        ? "/api/v1/sap/export"
+        : "/api/v1/sap/sync";
+
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -188,6 +205,50 @@ export default function SapIntegrationHub() {
     }
   };
 
+  const handleTriggerExportRetry = async () => {
+    setRetrying(true);
+    try {
+      const res = await fetch("/api/v1/sap/export/retry", {
+        method: "POST"
+      });
+      if (res.ok) {
+        setTimeout(() => {
+          setRetrying(false);
+          fetchData();
+        }, 1500);
+      } else {
+        setRetrying(false);
+      }
+    } catch (e) {
+      setRetrying(false);
+    }
+  };
+
+  const handleTriggerReconciliation = async () => {
+    setReconciling(true);
+    try {
+      const res = await fetch("/api/v1/sap/reconciliation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          period: reconPeriod,
+          module: reconModule
+        })
+      });
+      if (res.ok) {
+        setTimeout(() => {
+          setReconciling(false);
+          fetchData();
+        }, 1500);
+      } else {
+        setReconciling(false);
+      }
+    } catch (e) {
+      setReconciling(false);
+    }
+  };
+
+
   return (
     <div className="space-y-6">
       {/* Page Title & Tab Selector */}
@@ -196,7 +257,7 @@ export default function SapIntegrationHub() {
           <h1 className="text-2xl font-bold text-primary">SAP SuccessFactors Integration Hub</h1>
           <p className="text-sm text-on-surface-variant">Manage inbound master data sync, schema field transformations, and logs</p>
         </div>
-        <div className="flex bg-surface-container border border-outline-variant p-0.5 rounded-lg text-xs font-bold">
+        <div className="flex bg-surface-container border border-outline-variant p-0.5 rounded-lg text-xs font-bold gap-1">
           <button
             onClick={() => setActiveTab("dashboard")}
             className={`py-1.5 px-3 rounded-md transition-colors ${
@@ -204,6 +265,22 @@ export default function SapIntegrationHub() {
             }`}
           >
             Dashboard
+          </button>
+          <button
+            onClick={() => setActiveTab("export")}
+            className={`py-1.5 px-3 rounded-md transition-colors ${
+              activeTab === "export" ? "bg-primary text-white" : "hover:bg-surface-container-high text-on-surface-variant"
+            }`}
+          >
+            Export Queue ({exportQueue.filter(i => i.status === "PENDING" || i.status === "FAILED").length})
+          </button>
+          <button
+            onClick={() => setActiveTab("reconciliation")}
+            className={`py-1.5 px-3 rounded-md transition-colors ${
+              activeTab === "reconciliation" ? "bg-primary text-white" : "hover:bg-surface-container-high text-on-surface-variant"
+            }`}
+          >
+            Reconciliation Board
           </button>
           <button
             onClick={() => setActiveTab("mappings")}
@@ -219,7 +296,7 @@ export default function SapIntegrationHub() {
               activeTab === "retry" ? "bg-primary text-white" : "hover:bg-surface-container-high text-on-surface-variant"
             }`}
           >
-            Retry Queue ({retryQueue.filter(i => i.status === "PENDING").length})
+            Inbound Retry ({retryQueue.filter(i => i.status === "PENDING").length})
           </button>
         </div>
       </div>
@@ -261,9 +338,11 @@ export default function SapIntegrationHub() {
                   <span className="material-symbols-outlined">rule</span>
                 </div>
               </div>
-              <p className="text-outline-variant font-bold text-[10px] uppercase tracking-wider mb-0.5">Total Mapping Rules</p>
-              <h3 className="text-lg font-bold text-primary">{mappings.length} Active Rules</h3>
-              <p className="text-xs text-on-surface-variant mt-2">Employee & Org hierarchies</p>
+              <p className="text-outline-variant font-bold text-[10px] uppercase tracking-wider mb-0.5">Outbound Export Queue</p>
+              <h3 className="text-lg font-bold text-primary">{exportQueue.length} Total Items</h3>
+              <p className="text-xs text-on-surface-variant mt-2">
+                Pending: {exportQueue.filter(i => i.status === "PENDING" || i.status === "FAILED").length} items
+              </p>
             </Card>
 
             <Card className="hover:shadow-md transition-shadow">
@@ -272,7 +351,7 @@ export default function SapIntegrationHub() {
                   <span className="material-symbols-outlined">warning</span>
                 </div>
               </div>
-              <p className="text-outline-variant font-bold text-[10px] uppercase tracking-wider mb-0.5">In Retry Queue</p>
+              <p className="text-outline-variant font-bold text-[10px] uppercase tracking-wider mb-0.5">Inbound Retry Queue</p>
               <h3 className="text-lg font-bold text-primary">{retryQueue.filter(i => i.status === "PENDING").length} Pending</h3>
               <p className="text-xs text-status-error mt-2 font-semibold flex items-center gap-1">
                 <span className="material-symbols-outlined text-sm">hourglass_empty</span> Queued for retry
@@ -350,8 +429,8 @@ export default function SapIntegrationHub() {
                       className="w-full p-2 border border-outline-variant rounded-md bg-white text-xs"
                     >
                       <option value="EMPLOYEE">Organization & Employee Sync (Inbound)</option>
-                      <option value="LEAVE">Leave Sync (Outbound - Skip Mock)</option>
-                      <option value="ATTENDANCE">Attendance Sync (Outbound - Skip Mock)</option>
+                      <option value="LEAVE">Leave Outbound Sync (EmployeeTime)</option>
+                      <option value="ATTENDANCE">Attendance Outbound Sync (TimeSheetEntry)</option>
                     </select>
                   </div>
                   <div>
@@ -361,7 +440,7 @@ export default function SapIntegrationHub() {
                       onChange={(e) => setSelectedSyncType(e.target.value)}
                       className="w-full p-2 border border-outline-variant rounded-md bg-white text-xs"
                     >
-                      <option value="INCREMENTAL">Incremental Ingestion (Delta Token)</option>
+                      <option value="INCREMENTAL">Incremental Ingestion / Export</option>
                       <option value="FULL">Full Synchronisation</option>
                       <option value="MANUAL">Manual Diagnostics Sync</option>
                     </select>
@@ -374,7 +453,14 @@ export default function SapIntegrationHub() {
                     <span className={`material-symbols-outlined text-sm ${syncing ? "animate-spin" : ""}`}>
                       sync
                     </span>
-                    <span>{syncing ? "Ingesting SAP data..." : "Trigger Manual Sync"}</span>
+                    <span>
+                      {syncing
+                        ? "Processing Integration data..."
+                        : (selectedModule === "LEAVE" || selectedModule === "ATTENDANCE")
+                          ? "Trigger Outbound Export"
+                          : "Trigger Inbound Sync"
+                      }
+                    </span>
                   </Button>
                 </div>
               </Card>
@@ -593,6 +679,195 @@ export default function SapIntegrationHub() {
             </table>
           </div>
         </Card>
+      )}
+
+      {activeTab === "export" && (
+        <Card className="p-0 overflow-hidden">
+          <div className="p-4 border-b border-border-subtle bg-surface-container-low flex justify-between items-center">
+            <div className="flex items-center gap-2">
+              <span className="material-symbols-outlined text-primary">outbox</span>
+              <h3 className="text-xs font-bold uppercase text-primary font-bold">SAP Outbound Export Queue & Idempotency Logs</h3>
+            </div>
+            <Button
+              size="sm"
+              disabled={retrying || exportQueue.filter(i => i.status === "FAILED" || i.status === "PENDING").length === 0}
+              className="text-[10px] py-1.5 font-bold flex items-center gap-1 bg-amber-600 hover:bg-amber-700 text-white"
+              onClick={handleTriggerExportRetry}
+            >
+              <span className={`material-symbols-outlined text-sm ${retrying ? "animate-spin" : ""}`}>
+                replay
+              </span>
+              <span>{retrying ? "Re-processing exports..." : "Retry Failed/Pending Exports"}</span>
+            </Button>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left">
+              <thead className="bg-surface-container text-[10px] font-bold uppercase tracking-wider text-on-surface-variant border-b border-border-subtle">
+                <tr>
+                  <th className="p-4">Idempotency Key</th>
+                  <th className="p-4">Module</th>
+                  <th className="p-4">Record ID</th>
+                  <th className="p-4">SAP Ack ID</th>
+                  <th className="p-4">Ack Status</th>
+                  <th className="p-4">Ack Timestamp</th>
+                  <th className="p-4 text-center">Retries</th>
+                  <th className="p-4">Payload Preview</th>
+                  <th className="p-4">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border-subtle text-xs">
+                {exportQueue.length === 0 ? (
+                  <tr>
+                    <td colSpan={9} className="p-6 text-center text-on-surface-variant">
+                      No records exported yet. Trigger an outbound export from the dashboard.
+                    </td>
+                  </tr>
+                ) : (
+                  exportQueue.map((item) => (
+                    <tr key={item.id} className="hover:bg-surface-container-low transition-colors">
+                      <td className="p-4 font-mono font-bold text-[10px] text-primary">{item.idempotencyKey}</td>
+                      <td className="p-4 font-bold text-on-surface-variant">{item.module}</td>
+                      <td className="p-4 font-mono text-[11px] font-semibold text-secondary">{item.recordId}</td>
+                      <td className="p-4 font-mono text-[10px] text-primary font-bold">{item.sapAckId || "-"}</td>
+                      <td className="p-4">
+                        {item.sapAckStatus ? (
+                          <Badge variant="success">{item.sapAckStatus}</Badge>
+                        ) : (
+                          <span className="text-outline-variant font-medium">-</span>
+                        )}
+                      </td>
+                      <td className="p-4 font-mono text-[10px] text-outline-variant">{item.sapAckTimestamp || "-"}</td>
+                      <td className="p-4 text-center font-mono font-semibold">{item.retryCount}</td>
+                      <td className="p-4 max-w-xs">
+                        <div className="font-mono text-[10px] bg-surface-container p-1 rounded overflow-x-auto truncate select-all">
+                          {item.payload}
+                        </div>
+                      </td>
+                      <td className="p-4">
+                        <Badge
+                          variant={
+                            item.status === "SENT"
+                              ? "success"
+                              : item.status === "FAILED"
+                              ? "error"
+                              : "warning"
+                          }
+                        >
+                          {item.status}
+                        </Badge>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
+      {activeTab === "reconciliation" && (
+        <div className="space-y-6">
+          <Card>
+            <h3 className="text-sm font-bold text-primary flex items-center gap-2 mb-4">
+              <span className="material-symbols-outlined text-secondary">balance</span> Run Reconciliation Engine Audit
+            </h3>
+            <div className="flex flex-wrap items-end gap-4 text-xs">
+              <div className="w-48">
+                <label className="block font-semibold text-on-surface-variant mb-1">Payroll Period</label>
+                <select
+                  value={reconPeriod}
+                  onChange={(e) => setReconPeriod(e.target.value)}
+                  className="w-full p-2 border border-outline-variant rounded-md bg-white text-xs"
+                >
+                  <option value="2026-06">June 2026 (2026-06)</option>
+                  <option value="2026-07">July 2026 (2026-07)</option>
+                </select>
+              </div>
+              <div className="w-48">
+                <label className="block font-semibold text-on-surface-variant mb-1">Module</label>
+                <select
+                  value={reconModule}
+                  onChange={(e) => setReconModule(e.target.value)}
+                  className="w-full p-2 border border-outline-variant rounded-md bg-white text-xs"
+                >
+                  <option value="ATTENDANCE">Attendance Hours (TimeSheetEntry)</option>
+                  <option value="LEAVE">Leave Approvals (EmployeeTime)</option>
+                </select>
+              </div>
+              <Button
+                onClick={handleTriggerReconciliation}
+                disabled={reconciling}
+                className="text-xs font-bold flex items-center gap-1.5"
+              >
+                <span className={`material-symbols-outlined text-sm ${reconciling ? "animate-spin" : ""}`}>
+                  assessment
+                </span>
+                <span>{reconciling ? "Generating Audits..." : "Compare WFM vs SAP"}</span>
+              </Button>
+            </div>
+          </Card>
+
+          <Card className="p-0 overflow-hidden">
+            <div className="p-4 border-b border-border-subtle bg-surface-container-low flex items-center gap-2">
+              <span className="material-symbols-outlined text-primary">difference</span>
+              <h3 className="text-xs font-bold uppercase text-primary font-bold">WFM vs SAP Reconciliation Audit Logs</h3>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead className="bg-surface-container text-[10px] font-bold uppercase tracking-wider text-on-surface-variant border-b border-border-subtle">
+                  <tr>
+                    <th className="p-4">Audit ID</th>
+                    <th className="p-4">Employee ID</th>
+                    <th className="p-4">Period</th>
+                    <th className="p-4">Module</th>
+                    <th className="p-4 text-center">WFM Hours</th>
+                    <th className="p-4 text-center">SAP Hours</th>
+                    <th className="p-4 text-center">Discrepancy</th>
+                    <th className="p-4">Comments</th>
+                    <th className="p-4">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border-subtle text-xs">
+                  {reconciliationLogs.length === 0 ? (
+                    <tr>
+                      <td colSpan={9} className="p-6 text-center text-on-surface-variant">
+                        No reconciliation audits generated. Select a period and run audit.
+                      </td>
+                    </tr>
+                  ) : (
+                    reconciliationLogs.map((log) => (
+                      <tr key={log.id} className="hover:bg-surface-container-low transition-colors">
+                        <td className="p-4 font-mono font-bold text-[10px] text-primary">{log.id}</td>
+                        <td className="p-4 font-bold text-on-surface-variant">{log.employeeId}</td>
+                        <td className="p-4 font-mono text-[10px] text-outline-variant">{log.period}</td>
+                        <td className="p-4 font-semibold text-primary">{log.module}</td>
+                        <td className="p-4 text-center font-mono font-semibold">{log.wfmHours}h</td>
+                        <td className="p-4 text-center font-mono font-semibold">{log.sapHours}h</td>
+                        <td className={`p-4 text-center font-mono font-bold ${log.discrepancy !== 0 ? "text-status-error" : "text-green-600"}`}>
+                          {log.discrepancy > 0 ? `+${log.discrepancy}` : log.discrepancy}h
+                        </td>
+                        <td className="p-4 font-medium text-on-surface-variant max-w-xs truncate">{log.comments || "-"}</td>
+                        <td className="p-4">
+                          <Badge
+                            variant={
+                              log.status === "MATCHED"
+                                ? "success"
+                                : log.status === "RESOLVED"
+                                ? "info"
+                                : "error"
+                            }
+                          >
+                            {log.status}
+                          </Badge>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </div>
       )}
 
       {/* Add Connection Modal */}

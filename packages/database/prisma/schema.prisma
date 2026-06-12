@@ -396,4 +396,61 @@ model SapRetryQueue {
   updatedAt     DateTime    @updatedAt
 }
 
+model SapExportQueue {
+  id              String      @id @default(uuid())
+  module          String      // "LEAVE" | "ATTENDANCE" | "OVERTIME" | "ROSTER"
+  recordId        String
+  payload         String      @db.Text
+  status          String      @default("PENDING") // "PENDING" | "PROCESSING" | "SENT" | "FAILED"
+  idempotencyKey  String      @unique
+  sapAckId        String?
+  sapAckStatus    String?
+  sapAckTimestamp DateTime?
+  retryCount      Int         @default(0)
+  lastError       String?     @db.Text
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+}
+
+model SapPayrollStage {
+  id              String      @id @default(uuid())
+  employeeId      String
+  payrollPeriod   String      // e.g. "2026-06"
+  wageType        String      // e.g. "WT_OT_STD", "WT_OT_WKD"
+  calculatedHours Float
+  calculatedPay   Float       // Base currency QAR
+  isApproved      Boolean     @default(false)
+  isExported      Boolean     @default(false)
+  exportedJobId   String?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+  
+  @@unique([employeeId, payrollPeriod, wageType])
+}
+
+model SapReconciliationLog {
+  id            String      @id @default(uuid())
+  employeeId    String
+  period        String      // e.g. "2026-06"
+  module        String      // "LEAVE" | "ATTENDANCE" | "OVERTIME"
+  wfmHours      Float       // Local WFM record sum
+  sapHours      Float       // Queried SAP OData sum
+  discrepancy   Float       // Math difference (WFM - SAP)
+  status        String      @default("MATCHED") // "MATCHED" | "DISCREPANCY" | "RESOLVED"
+  comments      String?     @db.Text
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+}
+
+model SapPayrollPeriodLock {
+  id            String      @id @default(uuid())
+  period        String      @unique // e.g. "2026-06"
+  locked        Boolean     @default(false)
+  lockedById    String?
+  lockedAt      DateTime?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+}
+
+
 
