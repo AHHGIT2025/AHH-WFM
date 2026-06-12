@@ -1,4 +1,4 @@
-import { Employee, AttendanceRecord, Shift, LeaveRequest, SapMapping, SyncLog, Announcement, Department, Worksite, AttendanceCorrection, LeaveType, LeaveBalance, LeaveBalanceLedger, Holiday, LeaveApprovalWorkflow, LeaveApprovalStep, LeaveApprovalHistory, LeaveApprovalDelegation, ShiftTemplate, RotationTemplate, ShiftAssignment } from "@ahh-wfm/types";
+import { Employee, AttendanceRecord, Shift, LeaveRequest, SapMapping, SyncLog, Announcement, Department, Worksite, AttendanceCorrection, LeaveType, LeaveBalance, LeaveBalanceLedger, Holiday, LeaveApprovalWorkflow, LeaveApprovalStep, LeaveApprovalHistory, LeaveApprovalDelegation, ShiftTemplate, RotationTemplate, ShiftAssignment, ShiftSwapRequest, OvertimeRate } from "@ahh-wfm/types";
 import * as fs from "fs";
 import * as path from "path";
 import * as bcrypt from "bcryptjs";
@@ -75,6 +75,8 @@ let memoryDb: {
   shiftTemplates: ShiftTemplate[];
   rotationTemplates: RotationTemplate[];
   shiftAssignments: ShiftAssignment[];
+  shiftSwaps: ShiftSwapRequest[];
+  overtimeRates: OvertimeRate[];
 } = {
   departments: [
     { id: "DEPT-001", name: "Operations", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
@@ -176,6 +178,14 @@ let memoryDb: {
     { id: "ASSIGN-002", employeeId: "AA-1001", employeeName: "Ahmed Ali", shiftTemplateId: "WF-SH-MORN", date: "2026-06-13" },
     { id: "ASSIGN-003", employeeId: "AA-1001", employeeName: "Ahmed Ali", shiftTemplateId: "WF-SH-MORN", date: "2026-06-14" },
     { id: "ASSIGN-004", employeeId: "AA-1001", employeeName: "Ahmed Ali", shiftTemplateId: "WF-SH-MORN", date: "2026-06-15" }
+  ],
+  shiftSwaps: [],
+  overtimeRates: [
+    { id: "RATE-STD", name: "Standard Overtime Rate", overtimeType: "STANDARD_OT", multiplier: 1.25, currency: "QAR", appliesOnWeekend: false, appliesOnHoliday: false, appliesAfterMinutes: 0, isActive: true },
+    { id: "RATE-WKD", name: "Weekend Overtime Rate", overtimeType: "WEEKEND_OT", multiplier: 1.5, currency: "QAR", appliesOnWeekend: true, appliesOnHoliday: false, appliesAfterMinutes: 0, isActive: true },
+    { id: "RATE-HOL", name: "Holiday Overtime Rate", overtimeType: "HOLIDAY_OT", multiplier: 2.0, currency: "QAR", appliesOnWeekend: false, appliesOnHoliday: true, appliesAfterMinutes: 0, isActive: true },
+    { id: "RATE-NGT", name: "Night Overtime Rate", overtimeType: "NIGHT_OT", multiplier: 1.25, currency: "QAR", appliesOnWeekend: false, appliesOnHoliday: false, appliesAfterMinutes: 0, isActive: true },
+    { id: "RATE-SPC", name: "Special Event Overtime Rate", overtimeType: "SPECIAL_EVENT_OT", multiplier: 1.5, currency: "QAR", appliesOnWeekend: false, appliesOnHoliday: false, appliesAfterMinutes: 0, isActive: true }
   ]
 };
 
@@ -417,6 +427,24 @@ const seedMySQL = async () => {
         });
       }
 
+      // Seed Overtime Rates
+      for (const rate of memoryDb.overtimeRates) {
+        await prismaClient.overtimeRate.create({
+          data: {
+            id: rate.id,
+            name: rate.name,
+            overtimeType: rate.overtimeType,
+            multiplier: rate.multiplier,
+            fixedRateAmount: rate.fixedRateAmount || null,
+            currency: rate.currency || "QAR",
+            appliesOnWeekend: rate.appliesOnWeekend,
+            appliesOnHoliday: rate.appliesOnHoliday,
+            appliesAfterMinutes: rate.appliesAfterMinutes || 0,
+            isActive: rate.isActive
+          }
+        });
+      }
+
       console.log("MySQL Database seeded successfully!");
     }
     isSeeded = true;
@@ -533,6 +561,12 @@ const readDb = (): typeof memoryDb & { worksites: Worksite[]; attendanceCorrecti
     if (!parsed.shiftAssignments) {
       parsed.shiftAssignments = memoryDb.shiftAssignments;
     }
+    if (!parsed.shiftSwaps) {
+      parsed.shiftSwaps = memoryDb.shiftSwaps || [];
+    }
+    if (!parsed.overtimeRates) {
+      parsed.overtimeRates = memoryDb.overtimeRates || [];
+    }
     return parsed;
   } catch (e) {
     console.error("Failed to read JSON DB, using memory fallback", e);
@@ -603,7 +637,15 @@ const mapAttendance = (rec: any): AttendanceRecord => ({
   shiftId: rec.shiftId || undefined,
   shiftStartSnapshot: rec.shiftStartSnapshot || undefined,
   shiftEndSnapshot: rec.shiftEndSnapshot || undefined,
-  lateMinutes: rec.lateMinutes || 0
+  lateMinutes: rec.lateMinutes || 0,
+  standardOtMinutes: rec.standardOtMinutes || 0,
+  weekendOtMinutes: rec.weekendOtMinutes || 0,
+  holidayOtMinutes: rec.holidayOtMinutes || 0,
+  nightOtMinutes: rec.nightOtMinutes || 0,
+  specialEventOtMinutes: rec.specialEventOtMinutes || 0,
+  otApprovedMinutes: rec.otApprovedMinutes || 0,
+  overtimePayAmount: rec.overtimePayAmount || 0,
+  otStatus: rec.otStatus || "PENDING"
 });
 
 const mapWorksite = (rec: any): Worksite => ({
@@ -889,6 +931,11 @@ export const mockDb = {
     return record;
   },
   checkOut: async (employeeId: string): Promise<AttendanceRecord | null> => {
+    const parseTimeToMinutes = (t: string): number => {
+      const parts = t.split(":");
+      return parseInt(parts[0]) * 60 + parseInt(parts[1]);
+    };
+
     if (isDbConnected()) {
       await seedMySQL();
       const record = await prismaClient.attendanceRecord.findFirst({
@@ -899,12 +946,89 @@ export const mockDb = {
         throw new Error("No active check-in session found for this employee");
       }
 
+      const checkInTime = record.checkIn;
       const checkOutTime = new Date();
+      const actualDuration = Math.round((checkOutTime.getTime() - checkInTime.getTime()) / 60000);
+      const dateStr = checkInTime.toISOString().substring(0, 10);
+
+      const assignments = await prismaClient.shiftAssignment.findMany({
+        where: { employeeId },
+        include: { shiftTemplate: true }
+      });
+      const assignment = assignments.find((a: any) => a.date.toISOString().substring(0, 10) === dateStr);
+
+      let standardOt = 0;
+      let weekendOt = 0;
+      let holidayOt = 0;
+      let nightOt = 0;
+      let specialEventOt = 0;
+      let estimatedPay = 0;
+
+      const holidays = await prismaClient.holiday.findMany();
+      const isHoliday = holidays.some((h: any) => h.date.toISOString().substring(0, 10) === dateStr);
+      const dayOfWeek = checkInTime.getUTCDay();
+      const isWeekend = dayOfWeek === 5 || dayOfWeek === 6;
+
+      const rates = await prismaClient.overtimeRate.findMany({ where: { isActive: true } });
+      const stdRate = rates.find((r: any) => r.overtimeType === "STANDARD_OT")?.multiplier || 1.25;
+      const wkdRate = rates.find((r: any) => r.overtimeType === "WEEKEND_OT")?.multiplier || 1.5;
+      const holRate = rates.find((r: any) => r.overtimeType === "HOLIDAY_OT")?.multiplier || 2.0;
+      const nightRate = rates.find((r: any) => r.overtimeType === "NIGHT_OT")?.multiplier || 1.25;
+
+      let scheduledMinutes = 480;
+      if (assignment) {
+        const st = assignment.shiftTemplate;
+        if (st.isFlexible) {
+          scheduledMinutes = (st.coreHours || 8) * 60;
+        } else if (st.isSplit) {
+          const p1 = Math.abs(parseTimeToMinutes(st.endTime) - parseTimeToMinutes(st.startTime));
+          const p2 = st.splitStart && st.splitEnd ? Math.abs(parseTimeToMinutes(st.splitEnd) - parseTimeToMinutes(st.splitStart)) : 0;
+          scheduledMinutes = p1 + p2;
+        } else {
+          const endMin = parseTimeToMinutes(st.endTime);
+          const startMin = parseTimeToMinutes(st.startTime);
+          scheduledMinutes = endMin >= startMin ? (endMin - startMin) : (24*60 - startMin + endMin);
+        }
+      }
+
+      if (actualDuration > scheduledMinutes) {
+        for (let m = 0; m < actualDuration; m++) {
+          if (m >= scheduledMinutes) {
+            const minTime = new Date(checkInTime.getTime() + m * 60000);
+            const hour = minTime.getHours();
+            const isNight = hour >= 22 || hour < 6;
+            
+            if (isNight) {
+              nightOt++;
+            } else if (isHoliday) {
+              holidayOt++;
+            } else if (isWeekend) {
+              weekendOt++;
+            } else {
+              standardOt++;
+            }
+          }
+        }
+
+        const hourlyBase = 50.0;
+        estimatedPay = (standardOt / 60 * hourlyBase * stdRate) +
+                       (weekendOt / 60 * hourlyBase * wkdRate) +
+                       (holidayOt / 60 * hourlyBase * holRate) +
+                       (nightOt / 60 * hourlyBase * nightRate);
+      }
+
       const updated = await prismaClient.attendanceRecord.update({
         where: { id: record.id },
         data: {
           checkOut: checkOutTime,
-          originalCheckOut: checkOutTime
+          originalCheckOut: checkOutTime,
+          standardOtMinutes: standardOt,
+          weekendOtMinutes: weekendOt,
+          holidayOtMinutes: holidayOt,
+          nightOtMinutes: nightOt,
+          specialEventOtMinutes: specialEventOt,
+          overtimePayAmount: estimatedPay,
+          otStatus: "PENDING"
         }
       });
 
@@ -922,9 +1046,83 @@ export const mockDb = {
       throw new Error("No active check-in session found for this employee");
     }
 
-    const checkOutTimeStr = new Date().toISOString();
+    const checkInTime = new Date(record.checkIn);
+    const checkOutTime = new Date();
+    const checkOutTimeStr = checkOutTime.toISOString();
+    const actualDuration = Math.round((checkOutTime.getTime() - checkInTime.getTime()) / 60000);
+    const dateStr = record.checkIn.substring(0, 10);
+
+    const assignment = (db.shiftAssignments || []).find(a => a.employeeId === employeeId && a.date === dateStr);
+    
+    let standardOt = 0;
+    let weekendOt = 0;
+    let holidayOt = 0;
+    let nightOt = 0;
+    let specialEventOt = 0;
+    let estimatedPay = 0;
+
+    const isHoliday = (db.holidays || []).some(h => h.date.substring(0, 10) === dateStr);
+    const dayOfWeek = checkInTime.getUTCDay();
+    const isWeekend = dayOfWeek === 5 || dayOfWeek === 6;
+
+    const stdRate = (db.overtimeRates || []).find(r => r.overtimeType === "STANDARD_OT")?.multiplier || 1.25;
+    const wkdRate = (db.overtimeRates || []).find(r => r.overtimeType === "WEEKEND_OT")?.multiplier || 1.5;
+    const holRate = (db.overtimeRates || []).find(r => r.overtimeType === "HOLIDAY_OT")?.multiplier || 2.0;
+    const nightRate = (db.overtimeRates || []).find(r => r.overtimeType === "NIGHT_OT")?.multiplier || 1.25;
+
+    let scheduledMinutes = 480;
+    if (assignment) {
+      const st = (db.shiftTemplates || []).find(t => t.id === assignment.shiftTemplateId);
+      if (st) {
+        if (st.isFlexible) {
+          scheduledMinutes = (st.coreHours || 8) * 60;
+        } else if (st.isSplit) {
+          const p1 = Math.abs(parseTimeToMinutes(st.endTime) - parseTimeToMinutes(st.startTime));
+          const p2 = st.splitStart && st.splitEnd ? Math.abs(parseTimeToMinutes(st.splitEnd) - parseTimeToMinutes(st.splitStart)) : 0;
+          scheduledMinutes = p1 + p2;
+        } else {
+          const endMin = parseTimeToMinutes(st.endTime);
+          const startMin = parseTimeToMinutes(st.startTime);
+          scheduledMinutes = endMin >= startMin ? (endMin - startMin) : (24*60 - startMin + endMin);
+        }
+      }
+    }
+
+    if (actualDuration > scheduledMinutes) {
+      for (let m = 0; m < actualDuration; m++) {
+        if (m >= scheduledMinutes) {
+          const minTime = new Date(checkInTime.getTime() + m * 60000);
+          const hour = minTime.getHours();
+          const isNight = hour >= 22 || hour < 6;
+          
+          if (isNight) {
+            nightOt++;
+          } else if (isHoliday) {
+            holidayOt++;
+          } else if (isWeekend) {
+            weekendOt++;
+          } else {
+            standardOt++;
+          }
+        }
+      }
+
+      const hourlyBase = 50.0;
+      estimatedPay = (standardOt / 60 * hourlyBase * stdRate) +
+                     (weekendOt / 60 * hourlyBase * wkdRate) +
+                     (holidayOt / 60 * hourlyBase * holRate) +
+                     (nightOt / 60 * hourlyBase * nightRate);
+    }
+
     record.checkOut = checkOutTimeStr;
     record.originalCheckOut = checkOutTimeStr;
+    record.standardOtMinutes = standardOt;
+    record.weekendOtMinutes = weekendOt;
+    record.holidayOtMinutes = holidayOt;
+    record.nightOtMinutes = nightOt;
+    record.specialEventOtMinutes = specialEventOt;
+    record.overtimePayAmount = estimatedPay;
+    record.otStatus = "PENDING";
 
     const employee = db.employees.find(e => e.id === employeeId);
     if (employee) {
@@ -932,7 +1130,7 @@ export const mockDb = {
     }
 
     writeDb(db);
-    return record;
+    return mapAttendance(record);
   },
   
   // Shifts
@@ -3039,6 +3237,418 @@ export const mockDb = {
     }
 
     return { success: true, createdCount: count, conflicts: [] };
+  },
+
+  getOvertimeRates: async (): Promise<OvertimeRate[]> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      const records = await prismaClient.overtimeRate.findMany();
+      return records.map((r: any) => ({
+        id: r.id,
+        name: r.name,
+        overtimeType: r.overtimeType,
+        multiplier: r.multiplier,
+        fixedRateAmount: r.fixedRateAmount || undefined,
+        currency: r.currency,
+        appliesOnWeekend: r.appliesOnWeekend,
+        appliesOnHoliday: r.appliesOnHoliday,
+        appliesAfterMinutes: r.appliesAfterMinutes,
+        isActive: r.isActive,
+        createdAt: r.createdAt.toISOString(),
+        updatedAt: r.updatedAt.toISOString()
+      }));
+    }
+    const db = readDb();
+    return db.overtimeRates || [];
+  },
+
+  createOvertimeRate: async (name: string, overtimeType: string, multiplier: number, fixedRateAmount?: number, currency = "QAR", appliesOnWeekend = false, appliesOnHoliday = false, appliesAfterMinutes = 0, isActive = true): Promise<OvertimeRate> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      const record = await prismaClient.overtimeRate.create({
+        data: {
+          name,
+          overtimeType,
+          multiplier,
+          fixedRateAmount: fixedRateAmount || null,
+          currency,
+          appliesOnWeekend,
+          appliesOnHoliday,
+          appliesAfterMinutes,
+          isActive
+        }
+      });
+      return {
+        id: record.id,
+        name: record.name,
+        overtimeType: record.overtimeType,
+        multiplier: record.multiplier,
+        fixedRateAmount: record.fixedRateAmount || undefined,
+        currency: record.currency,
+        appliesOnWeekend: record.appliesOnWeekend,
+        appliesOnHoliday: record.appliesOnHoliday,
+        appliesAfterMinutes: record.appliesAfterMinutes,
+        isActive: record.isActive,
+        createdAt: record.createdAt.toISOString(),
+        updatedAt: record.updatedAt.toISOString()
+      };
+    }
+    const db = readDb();
+    const newRate: OvertimeRate = {
+      id: `RATE-${Date.now()}`,
+      name,
+      overtimeType,
+      multiplier,
+      fixedRateAmount,
+      currency,
+      appliesOnWeekend,
+      appliesOnHoliday,
+      appliesAfterMinutes,
+      isActive,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    db.overtimeRates = db.overtimeRates || [];
+    db.overtimeRates.push(newRate);
+    writeDb(db);
+    return newRate;
+  },
+
+  updateOvertimeRate: async (id: string, data: Partial<Omit<OvertimeRate, "id">>): Promise<OvertimeRate> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      const record = await prismaClient.overtimeRate.update({
+        where: { id },
+        data: {
+          name: data.name,
+          overtimeType: data.overtimeType,
+          multiplier: data.multiplier,
+          fixedRateAmount: data.fixedRateAmount !== undefined ? data.fixedRateAmount : undefined,
+          currency: data.currency,
+          appliesOnWeekend: data.appliesOnWeekend,
+          appliesOnHoliday: data.appliesOnHoliday,
+          appliesAfterMinutes: data.appliesAfterMinutes,
+          isActive: data.isActive
+        }
+      });
+      return {
+        id: record.id,
+        name: record.name,
+        overtimeType: record.overtimeType,
+        multiplier: record.multiplier,
+        fixedRateAmount: record.fixedRateAmount || undefined,
+        currency: record.currency,
+        appliesOnWeekend: record.appliesOnWeekend,
+        appliesOnHoliday: record.appliesOnHoliday,
+        appliesAfterMinutes: record.appliesAfterMinutes,
+        isActive: record.isActive,
+        createdAt: record.createdAt.toISOString(),
+        updatedAt: record.updatedAt.toISOString()
+      };
+    }
+    const db = readDb();
+    db.overtimeRates = db.overtimeRates || [];
+    const index = db.overtimeRates.findIndex(r => r.id === id);
+    if (index === -1) throw new Error("Overtime rate not found");
+    const updated = {
+      ...db.overtimeRates[index],
+      ...data,
+      updatedAt: new Date().toISOString()
+    };
+    db.overtimeRates[index] = updated;
+    writeDb(db);
+    return updated;
+  },
+
+  getShiftSwaps: async (): Promise<ShiftSwapRequest[]> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      const records = await prismaClient.shiftSwapRequest.findMany();
+      const employees = await prismaClient.employee.findMany();
+      const templates = await prismaClient.shiftTemplate.findMany();
+      return records.map((r: any) => {
+        const reqEmp = employees.find((e: any) => e.id === r.requestorId);
+        const tgtEmp = employees.find((e: any) => e.id === r.targetEmployeeId);
+        const reqSt = templates.find((t: any) => t.id === r.requestorShiftId);
+        const tgtSt = templates.find((t: any) => t.id === r.targetShiftId);
+        return {
+          id: r.id,
+          requestorId: r.requestorId,
+          requestorName: reqEmp ? reqEmp.name : "Unknown",
+          targetEmployeeId: r.targetEmployeeId,
+          targetEmployeeName: tgtEmp ? tgtEmp.name : "Unknown",
+          requestorShiftId: r.requestorShiftId,
+          requestorShiftName: reqSt ? reqSt.name : "Unknown",
+          targetShiftId: r.targetShiftId,
+          targetShiftName: tgtSt ? tgtSt.name : "Unknown",
+          status: r.status,
+          reason: r.reason || undefined,
+          reviewNotes: r.reviewNotes || undefined,
+          approvedById: r.approvedById || undefined,
+          createdAt: r.createdAt.toISOString(),
+          updatedAt: r.updatedAt.toISOString()
+        };
+      });
+    }
+    const db = readDb();
+    db.shiftSwaps = db.shiftSwaps || [];
+    return db.shiftSwaps.map(s => {
+      const reqEmp = db.employees.find(e => e.id === s.requestorId);
+      const tgtEmp = db.employees.find(e => e.id === s.targetEmployeeId);
+      const reqSt = db.shiftTemplates?.find(t => t.id === s.requestorShiftId);
+      const tgtSt = db.shiftTemplates?.find(t => t.id === s.targetShiftId);
+      return {
+        ...s,
+        requestorName: reqEmp ? reqEmp.name : "Unknown",
+        targetEmployeeName: tgtEmp ? tgtEmp.name : "Unknown",
+        requestorShiftName: reqSt ? reqSt.name : "Unknown",
+        targetShiftName: tgtSt ? tgtSt.name : "Unknown"
+      };
+    });
+  },
+
+  createShiftSwapRequest: async (requestorId: string, targetEmployeeId: string, requestorShiftId: string, targetShiftId: string, reason?: string): Promise<ShiftSwapRequest> => {
+    const employees = await mockDb.getEmployees();
+    const reqEmp = employees.find(e => e.id === requestorId);
+    const tgtEmp = employees.find(e => e.id === targetEmployeeId);
+    if (!reqEmp || !tgtEmp) {
+      throw new Error("One or both employees not found");
+    }
+    if (reqEmp.isActive === false || tgtEmp.isActive === false) {
+      throw new Error("Cannot request shift swaps involving inactive employees");
+    }
+
+    const assignments = await mockDb.getShiftAssignments();
+    const reqAsg = assignments.find(a => a.id === requestorShiftId);
+    const tgtAsg = assignments.find(a => a.id === targetShiftId);
+    if (!reqAsg || !tgtAsg) {
+      throw new Error("One or both shift assignments not found");
+    }
+
+    const leaves = await mockDb.getLeaves();
+    const reqLeaveConflict = leaves.some(l => l.employeeId === requestorId && l.status === "Approved" && l.startDate && l.endDate && tgtAsg.date >= l.startDate && tgtAsg.date <= l.endDate);
+    if (reqLeaveConflict) {
+      throw new Error(`Requestor has approved leave on target date ${tgtAsg.date}`);
+    }
+
+    const tgtLeaveConflict = leaves.some(l => l.employeeId === targetEmployeeId && l.status === "Approved" && l.startDate && l.endDate && reqAsg.date >= l.startDate && reqAsg.date <= l.endDate);
+    if (tgtLeaveConflict) {
+      throw new Error(`Target employee has approved leave on requestor date ${reqAsg.date}`);
+    }
+
+    if (isDbConnected()) {
+      await seedMySQL();
+      const record = await prismaClient.shiftSwapRequest.create({
+        data: {
+          requestorId,
+          targetEmployeeId,
+          requestorShiftId: reqAsg.shiftTemplateId,
+          targetShiftId: tgtAsg.shiftTemplateId,
+          status: "PENDING",
+          reason: reason || null
+        }
+      });
+      return {
+        id: record.id,
+        requestorId: record.requestorId,
+        requestorName: reqEmp.name,
+        targetEmployeeId: record.targetEmployeeId,
+        targetEmployeeName: tgtEmp.name,
+        requestorShiftId: record.requestorShiftId,
+        targetShiftId: record.targetShiftId,
+        status: record.status,
+        reason: record.reason || undefined,
+        createdAt: record.createdAt.toISOString(),
+        updatedAt: record.updatedAt.toISOString()
+      };
+    }
+
+    const db = readDb();
+    const newRequest: ShiftSwapRequest = {
+      id: `SWAP-${Date.now()}`,
+      requestorId,
+      targetEmployeeId,
+      requestorShiftId: reqAsg.shiftTemplateId,
+      targetShiftId: tgtAsg.shiftTemplateId,
+      status: "PENDING",
+      reason,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    db.shiftSwaps = db.shiftSwaps || [];
+    db.shiftSwaps.push(newRequest);
+    writeDb(db);
+    return newRequest;
+  },
+
+  actionShiftSwapRequest: async (swapId: string, status: "APPROVED" | "REJECTED", reviewNotes?: string, approvedById?: string): Promise<ShiftSwapRequest> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      const request = await prismaClient.shiftSwapRequest.findUnique({ where: { id: swapId } });
+      if (!request) throw new Error("Shift swap request not found");
+      if (request.status !== "PENDING") throw new Error("Shift swap request is already processed");
+
+      const updated = await prismaClient.shiftSwapRequest.update({
+        where: { id: swapId },
+        data: {
+          status,
+          reviewNotes: reviewNotes || null,
+          approvedById: approvedById || null
+        }
+      });
+
+      if (status === "APPROVED") {
+        const reqAsg = await prismaClient.shiftAssignment.findFirst({
+          where: { employeeId: request.requestorId, shiftTemplateId: request.requestorShiftId }
+        });
+        const tgtAsg = await prismaClient.shiftAssignment.findFirst({
+          where: { employeeId: request.targetEmployeeId, shiftTemplateId: request.targetShiftId }
+        });
+        
+        if (reqAsg && tgtAsg) {
+          const reqEmpId = reqAsg.employeeId;
+          const tgtEmpId = tgtAsg.employeeId;
+
+          await prismaClient.shiftAssignment.update({
+            where: { id: reqAsg.id },
+            data: { employeeId: "TEMP_SWAP_HOLDER" }
+          });
+          await prismaClient.shiftAssignment.update({
+            where: { id: tgtAsg.id },
+            data: { employeeId: reqEmpId }
+          });
+          await prismaClient.shiftAssignment.update({
+            where: { id: reqAsg.id },
+            data: { employeeId: tgtEmpId }
+          });
+        }
+      }
+
+      return {
+        id: updated.id,
+        requestorId: updated.requestorId,
+        targetEmployeeId: updated.targetEmployeeId,
+        requestorShiftId: updated.requestorShiftId,
+        targetShiftId: updated.targetShiftId,
+        status: updated.status,
+        reviewNotes: updated.reviewNotes || undefined,
+        approvedById: updated.approvedById || undefined,
+        createdAt: updated.createdAt.toISOString(),
+        updatedAt: updated.updatedAt.toISOString()
+      };
+    }
+
+    const db = readDb();
+    const index = db.shiftSwaps.findIndex(s => s.id === swapId);
+    if (index === -1) throw new Error("Shift swap request not found");
+    const swap = db.shiftSwaps[index];
+    if (swap.status !== "PENDING") throw new Error("Shift swap request is already processed");
+
+    swap.status = status;
+    swap.reviewNotes = reviewNotes;
+    swap.approvedById = approvedById;
+    swap.updatedAt = new Date().toISOString();
+
+    if (status === "APPROVED") {
+      const reqAsg = db.shiftAssignments.find(a => a.employeeId === swap.requestorId && a.shiftTemplateId === swap.requestorShiftId);
+      const tgtAsg = db.shiftAssignments.find(a => a.employeeId === swap.targetEmployeeId && a.shiftTemplateId === swap.targetShiftId);
+      if (reqAsg && tgtAsg) {
+        const temp = reqAsg.employeeId;
+        reqAsg.employeeId = tgtAsg.employeeId;
+        tgtAsg.employeeId = temp;
+      }
+    }
+
+    writeDb(db);
+    return swap;
+  },
+
+  getShiftCoverage: async (): Promise<any[]> => {
+    const assignments = await mockDb.getShiftAssignments();
+    const templates = await mockDb.getShiftTemplates();
+    
+    const groups: { [key: string]: number } = {};
+    for (const sa of assignments) {
+      const key = `${sa.date}_${sa.shiftTemplateId}`;
+      groups[key] = (groups[key] || 0) + 1;
+    }
+
+    const getTarget = (templateId: string): number => {
+      if (templateId.includes("MORN")) return 3;
+      if (templateId.includes("EVE")) return 2;
+      if (templateId.includes("NIGHT")) return 1;
+      if (templateId.includes("SPLIT")) return 2;
+      return 1;
+    };
+
+    const results: any[] = [];
+    const start = new Date();
+    for (let i = -2; i < 12; i++) {
+      const d = new Date(start);
+      d.setDate(start.getDate() + i);
+      const dateStr = d.toISOString().substring(0, 10);
+      
+      for (const t of templates) {
+        const scheduled = groups[`${dateStr}_${t.id}`] || 0;
+        const required = getTarget(t.id);
+        let status = "OPTIMIZED";
+        if (scheduled < required) status = "UNDERSTAFFED";
+        if (scheduled > required) status = "OVERSTAFFED";
+
+        results.push({
+          date: dateStr,
+          shiftTemplateId: t.id,
+          shiftTemplateName: t.name,
+          scheduled,
+          required,
+          status
+        });
+      }
+    }
+    return results;
+  },
+
+  getOvertimeRecords: async (): Promise<AttendanceRecord[]> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      const atts = await prismaClient.attendanceRecord.findMany({
+        where: { NOT: { otStatus: "PENDING" } }
+      });
+      return atts.map(mapAttendance);
+    }
+    const db = readDb();
+    return (db.attendance || []).map(mapAttendance);
+  },
+
+  actionOvertimeRecord: async (recordId: string, status: "APPROVED" | "REJECTED", approvedMinutes?: number, reviewNotes?: string): Promise<AttendanceRecord> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      const rec = await prismaClient.attendanceRecord.findUnique({ where: { id: recordId } });
+      if (!rec) throw new Error("Attendance record not found");
+      if (rec.checkOut === null) throw new Error("Cannot action overtime for incomplete attendance record");
+      
+      const updated = await prismaClient.attendanceRecord.update({
+        where: { id: recordId },
+        data: {
+          otStatus: status,
+          otApprovedMinutes: status === "APPROVED" ? (approvedMinutes !== undefined ? approvedMinutes : (rec.standardOtMinutes + rec.weekendOtMinutes + rec.holidayOtMinutes + rec.nightOtMinutes + rec.specialEventOtMinutes)) : 0
+        }
+      });
+      return mapAttendance(updated);
+    }
+
+    const db = readDb();
+    const index = db.attendance.findIndex(r => r.id === recordId);
+    if (index === -1) throw new Error("Attendance record not found");
+    const rec = db.attendance[index];
+    if (!rec.checkOut) throw new Error("Cannot action overtime for incomplete attendance record");
+
+    rec.otStatus = status;
+    const totalCalcMinutes = (rec.standardOtMinutes || 0) + (rec.weekendOtMinutes || 0) + (rec.holidayOtMinutes || 0) + (rec.nightOtMinutes || 0) + (rec.specialEventOtMinutes || 0);
+    rec.otApprovedMinutes = status === "APPROVED" ? (approvedMinutes !== undefined ? approvedMinutes : totalCalcMinutes) : 0;
+    
+    writeDb(db);
+    return mapAttendance(rec);
   }
 };
 

@@ -27,6 +27,8 @@ AHH WFM is a full-stack, enterprise-grade workforce management application built
 | **Milestone 5 (Phase 3A)**| Completed | `v0.6-leave-balance-engine-complete` | Leave types, dynamic balances, audit ledger, holidays, and calculations. |
 | **Phase 3B** | Completed | `v0.7-enterprise-leave-workflow-complete` | Multi-level approval workflows, delegation, SLA tracking, and thresholds. |
 | **Phase 4A** | Completed | `v0.8-shift-scheduling-complete` | Shift templates, rotation templates, shift assignments, and conflict detection. |
+| **Phase 4B** | Completed | `v0.9-scheduling-roster-overtime-complete` | Overtime auto-calculation, rates, coverage heatmap, drag-and-drop, and shift swaps. |
+
 
 ---
 
@@ -66,5 +68,14 @@ AHH WFM is a full-stack, enterprise-grade workforce management application built
 - **REST Endpoints:** Added unified backend APIs under `/api/v1/shifts/` for templates, assignments, bulk applications, and rotations.
 - **Scheduler Grid Web Board:** Built planner grid highlighting warning conflict badges and providing controls for bulk assignments.
 - **Mobile Rosters:** Added a `/shifts` page on mobile allowing operatives to browse their My Shifts and Upcoming Shifts calendar logs.
+
+### Phase 4B: Overtime, Coverage Heatmaps & Shift Swaps
+- **Overtime Engine:** Real-time auto-calculation of overtime (Standard, Weekend, Holiday, Night, Special Event) triggered immediately on checkout.
+- **Configurable Overtime Rates:** Managed through the `OvertimeRate` database model with custom multipliers, fixed rates, and active triggers. Seeded standard multipliers (1.25x, 1.5x, 2.0x).
+- **Manager Overtime Console:** Review workflow for calculated overtime with audit notes, locking in approved values.
+- **Togglable Heatmaps:** Graphical coverage visualization overlaying red (understaffed), green (optimized), and yellow (overstaffed) status on the roster boards.
+- **Drag-and-Drop Board:** Enabled rescheduling by moving shift cards between employee dates with inline conflict safety checks.
+- **Shift Swaps Console:** Mobile requisition wizard for bilateral exchanges, and a web admin swap manager for atomic swap approvals.
+
 
 

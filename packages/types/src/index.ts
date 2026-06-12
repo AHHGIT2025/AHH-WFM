@@ -62,6 +62,14 @@ export interface AttendanceRecord {
   shiftStartSnapshot?: string;
   shiftEndSnapshot?: string;
   lateMinutes: number;
+  standardOtMinutes?: number;
+  weekendOtMinutes?: number;
+  holidayOtMinutes?: number;
+  nightOtMinutes?: number;
+  specialEventOtMinutes?: number;
+  otApprovedMinutes?: number;
+  overtimePayAmount?: number;
+  otStatus?: "PENDING" | "APPROVED" | "REJECTED" | string;
 }
 
 export interface Shift {
@@ -253,3 +261,37 @@ export interface ShiftAssignment {
   createdAt?: string;
   updatedAt?: string;
 }
+
+export interface ShiftSwapRequest {
+  id: string;
+  requestorId: string;
+  requestorName?: string;
+  targetEmployeeId: string;
+  targetEmployeeName?: string;
+  requestorShiftId: string; // shift template id
+  requestorShiftName?: string;
+  targetShiftId: string; // shift template id
+  targetShiftName?: string;
+  status: "PENDING" | "APPROVED" | "REJECTED" | string;
+  reason?: string;
+  reviewNotes?: string;
+  approvedById?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface OvertimeRate {
+  id: string;
+  name: string;
+  overtimeType: "STANDARD_OT" | "WEEKEND_OT" | "HOLIDAY_OT" | "NIGHT_OT" | "SPECIAL_EVENT_OT" | string;
+  multiplier: number;
+  fixedRateAmount?: number;
+  currency: string;
+  appliesOnWeekend: boolean;
+  appliesOnHoliday: boolean;
+  appliesAfterMinutes: number;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+

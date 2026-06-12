@@ -161,23 +161,26 @@ This document outlines the evolutionary development roadmap for the **AHH WFM** 
     *   Web: Shift Management (`/shifts`) - Rotation applicator form.
 *   **Estimated Implementation Effort**: Completed
 
-### 4.3 Overtime Calculations (Pending - Phase 4B)
-*   **Business Purpose**: Calculate work hours exceeding standard shifts (Weekend, Holiday, standard Overtime) for payroll.
-*   **Database Impact**: Store `overtimeMinutes` in the `AttendanceRecord` model.
+### 4.3 Overtime Calculations (Completed - Phase 4B)
+*   **Business Purpose**: Calculate work hours exceeding standard shifts (Weekend, Holiday, standard Overtime, Night, Special Event) for payroll.
+*   **Database Impact**: Extended `AttendanceRecord` with standard, weekend, holiday, night, special event overtime columns, approved OT, amount, status, and created the `OvertimeRate` config table.
 *   **API Endpoints Required**:
-    *   `GET /api/v1/reports/overtime` (Retrieve overtime audits)
+    *   `GET/PUT /api/v1/shifts/overtime` (Overtime approvals management)
+    *   `GET/POST /api/v1/overtime-rates` and `PATCH /api/v1/overtime-rates/[id]` (Overtime rates setup)
 *   **UI Screens Affected**:
-    *   Web: Attendance Monitor and Payroll Reports.
-*   **Estimated Implementation Effort**: 3 Days
+    *   Web: Shifts Board (`/shifts`) - Overtime manager approvals and Rates setting tables.
+    *   Mobile: Shifts Calendar Portal (`/shifts`) - My Overtime status claim logger.
+*   **Estimated Implementation Effort**: Completed
 
-### 4.4 Workforce Coverage & Heatmaps (Pending - Phase 4B)
+### 4.4 Workforce Coverage & Heatmaps (Completed - Phase 4B)
 *   **Business Purpose**: Coverage gap analysis comparing scheduled headcounts vs actual operative clock-ins.
-*   **Database Impact**: Analytical coverage calculations.
+*   **Database Impact**: Analytical coverage aggregation comparing shift assignments headcount rules.
 *   **API Endpoints Required**:
-    *   `GET /api/v1/analytics/coverage`
+    *   `GET /api/v1/shifts/coverage`
 *   **UI Screens Affected**:
-    *   Web: Overview Dashboard and Planner heatmap.
-*   **Estimated Implementation Effort**: 3 Days
+    *   Web: Shifts Board planner (`/shifts`) - Togglable heat-map overlay layer.
+*   **Estimated Implementation Effort**: Completed
+
 
 
 ---

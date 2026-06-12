@@ -54,6 +54,14 @@ model AttendanceRecord {
   shiftStartSnapshot String?
   shiftEndSnapshot   String?
   lateMinutes        Int                    @default(0)
+  standardOtMinutes  Int                    @default(0)
+  weekendOtMinutes   Int                    @default(0)
+  holidayOtMinutes   Int                    @default(0)
+  nightOtMinutes     Int                    @default(0)
+  specialEventOtMinutes Int                 @default(0)
+  otApprovedMinutes  Int                    @default(0)
+  overtimePayAmount  Float                  @default(0.0)
+  otStatus           String                 @default("PENDING") // "PENDING" | "APPROVED" | "REJECTED"
   employee           Employee               @relation(fields: [employeeId], references: [id], onDelete: Cascade)
   corrections        AttendanceCorrection[]
 }
@@ -290,3 +298,33 @@ model ShiftAssignment {
 
   @@unique([employeeId, date])
 }
+
+model ShiftSwapRequest {
+  id                String          @id @default(uuid())
+  requestorId       String
+  targetEmployeeId  String
+  requestorShiftId  String
+  targetShiftId     String
+  status            String          // "PENDING", "APPROVED", "REJECTED"
+  reason            String?
+  reviewNotes       String?
+  approvedById      String?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+}
+
+model OvertimeRate {
+  id                 String          @id @default(uuid())
+  name               String
+  overtimeType       String          // "STANDARD_OT" | "WEEKEND_OT" | "HOLIDAY_OT" | "NIGHT_OT" | "SPECIAL_EVENT_OT"
+  multiplier         Float
+  fixedRateAmount    Float?
+  currency           String          @default("QAR")
+  appliesOnWeekend   Boolean         @default(false)
+  appliesOnHoliday   Boolean         @default(false)
+  appliesAfterMinutes Int            @default(0)
+  isActive           Boolean         @default(true)
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+}
+
