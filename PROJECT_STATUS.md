@@ -25,7 +25,7 @@ AHH WFM is a full-stack, enterprise-grade workforce management application built
 | **Milestone 4 (Phase 1)** | Completed | `v0.4-workforce-directory-complete` | Employee CRUD, soft deletes, and Department models. |
 | **Milestone 4 (Phase 2)** | Completed | `v0.5-attendance-geofencing-complete` | Geofencing validation, late tracking, and corrections. |
 | **Milestone 5 (Phase 3A)**| Completed | `v0.6-leave-balance-engine-complete` | Leave types, dynamic balances, audit ledger, holidays, and calculations. |
-| **Phase 3B** | Pending | - | Multi-level approval workflows and thresholds. |
+| **Phase 3B** | Completed | `v0.7-enterprise-leave-workflow-complete` | Multi-level approval workflows, delegation, SLA tracking, and thresholds. |
 
 ---
 
@@ -49,3 +49,12 @@ AHH WFM is a full-stack, enterprise-grade workforce management application built
 - **Holiday Calendar Registry:** Seeded default Qatar national and company breaks, dynamically adjusting leave request durations.
 - **Calculation Engine:** Weekend-aware (Friday/Saturday) and holiday-aware deduction calculations, excluding non-working days from leave charges.
 - **Manual Adjustment Console:** Admin page tools to adjust balance allotments with audit reasoning.
+
+### Phase 3B: Multi-Level Approval Workflows, SLA & Delegation
+- **Hierarchical Approval Steps:** Seeded structured workflows for Supervisor-only, Supervisor-Manager-HR sequential steps, and Auto-approvals.
+- **SLA Parameters:** Track submittedAt, firstActionAt, approvedAt, approvalDurationHours, and escalationCount.
+- **Approval Delegation:** Configure delegate authority (validFrom, validTo, reason) to route tasks away from absent approvers.
+- **Escalation Rules:** Automatically warning and escalates requests pending beyond SLA threshold times (e.g. 72 hours).
+- **History Timeline Log:** Full audit records of step approvals and comment history transitions.
+- **Approvals Dashboard:** Segmented consoles in Web console separating direct queue, delegated items, and escalated items.
+

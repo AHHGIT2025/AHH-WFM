@@ -113,14 +113,15 @@ This document outlines the evolutionary development roadmap for the **AHH WFM** 
     *   Web: Admin Settings (`/settings`) - Accrual rule settings and schedules.
 *   **Estimated Implementation Effort**: 3 Days
 
-### 3.3 Multi-Level Approvals
+### 3.3 Multi-Level Approvals (Completed)
 *   **Business Purpose**: Enforce a hierarchical workflow where leave requests must be approved by the Department Head first, followed by HR.
 *   **Database Impact**: Track approval workflows in `LeaveRequest` using states (e.g., `PENDING_SUPERVISOR`, `PENDING_HR`, `APPROVED`, `REJECTED`).
 *   **API Endpoints Required**:
-    *   `GET /api/v1/leaves/approvals/pending` (List approvals needed for the caller)
-    *   `PUT /api/v1/leaves/approvals/:id` (Approve/Reject step)
+    *   `POST /api/v1/leaves/approve` (Approve step)
+    *   `POST /api/v1/leaves/reject` (Reject step)
+    *   `GET /api/v1/leaves/history` (Timeline history)
 *   **UI Screens Affected**:
-    *   Web: Leave & Approvals console (`/leave`) - Segmented review queues.
+    *   Web: Leave & Approvals console (`/leave`) - Segmented review queues (Direct, Delegated, Escalated).
 *   **Estimated Implementation Effort**: 4 Days
 
 ### 3.4 Holiday Calendar Integration (Completed)
