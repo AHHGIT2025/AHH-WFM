@@ -24,8 +24,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Missing required parameters: connectionId and module" }, { status: 400 });
     }
 
-    if (body.module !== "LEAVE" && body.module !== "ATTENDANCE") {
-      return NextResponse.json({ error: "Only LEAVE and ATTENDANCE modules are supported in Phase 5B.1" }, { status: 400 });
+    if (body.module !== "LEAVE" && body.module !== "ATTENDANCE" && body.module !== "OVERTIME" && body.module !== "ROSTER") {
+      return NextResponse.json({ error: "Unsupported integration module" }, { status: 400 });
     }
 
     const results = await mockDb.triggerSapExport(body.connectionId, body.module);

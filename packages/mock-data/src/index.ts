@@ -4359,6 +4359,11 @@ export const mockDb = {
         sapHours = 168.0; // SAP is missing 8 hours
         status = "DISCREPANCY";
         comments = "Discrepancy: WFM logged 176 hours, SAP has 168 hours. Discrepancy is +8.0 hours due to manual timecard adjustments in WFM.";
+      } else if (emp.id === "BR-8823" && module === "OVERTIME") {
+        wfmHours = 24.5;
+        sapHours = 20.0; // SAP is missing 4.5 hours
+        status = "DISCREPANCY";
+        comments = "Discrepancy: WFM approved 24.5 OT hours, SAP comp allowance has 20.0 hours. Discrepancy is +4.5 hours due to pending manual supervisor override updates in SAP.";
       }
 
       const discrepancy = wfmHours - sapHours;
@@ -4539,6 +4544,62 @@ export const mockDb = {
         const updatedItem = await mockDb.getSapExportQueue();
         results.push(updatedItem.find(i => i.id === queueItem.id) || queueItem);
       }
+    } else if (module === "OVERTIME") {
+      const period = "2026-06";
+      const locks = await mockDb.getSapPayrollPeriodLocks();
+      const isLocked = locks.some(l => l.period === period && l.locked);
+      if (!isLocked) {
+        // Auto lock for convenience so the export manual run succeeds
+        await mockDb.lockSapPayrollPeriod(period, true, "SYSTEM");
+      }
+      const exported = await mockDb.exportSapPayrollPeriod(period, connectionId);
+      const queue = await mockDb.getSapExportQueue();
+      return queue.filter(q => q.module === "OVERTIME");
+    } else if (module === "ROSTER") {
+      const assignments = await mockDb.getShiftAssignments();
+      for (const assign of assignments) {
+        const idempotencyKey = `ROSTER_EXPORT_${assign.id}`;
+        
+        const queueItem = await mockDb.createSapExportQueueItem({
+          module: "ROSTER",
+          recordId: assign.id,
+          payload: JSON.stringify({
+            employeeId: assign.employeeId,
+            date: assign.date,
+            shiftTemplateId: assign.shiftTemplateId
+          }),
+          status: "PENDING",
+          idempotencyKey
+        });
+
+        if (queueItem.status === "SENT") {
+          continue;
+        }
+
+        await mockDb.updateSapExportQueueItem(queueItem.id, { status: "PROCESSING" });
+
+        const sapAckId = `SAP-ACK-RST-${Math.floor(100000 + Math.random() * 900000)}`;
+        const sapAckStatus = "ACKNOWLEDGED";
+        const sapAckTimestamp = new Date().toISOString();
+
+        await mockDb.updateSapExportQueueItem(queueItem.id, {
+          status: "SENT",
+          sapAckId,
+          sapAckStatus,
+          sapAckTimestamp
+        });
+
+        await mockDb.createSapSyncLog({
+          jobId: mockJob.id,
+          severity: "INFO",
+          message: `Roster assignment ${assign.id} for employee ${assign.employeeId} exported successfully. SAP Ack ID: ${sapAckId}`,
+          entityName: "ShiftAssignment",
+          entityId: assign.id
+        });
+
+        const updatedItem = await mockDb.getSapExportQueue();
+        results.push(updatedItem.find(i => i.id === queueItem.id) || queueItem);
+      }
     }
 
     // Complete Job run
@@ -4581,7 +4642,7 @@ export const mockDb = {
     return true;
   },
 
-  // Stubs for Phase 5B.2 to compile correctly
+  // SAP Payroll Staging and Period Locks (Phase 5B.2)
   getSapPayrollStages: async (): Promise<SapPayrollStage[]> => {
     if (isDbConnected()) {
       await seedMySQL();
@@ -4653,6 +4714,235 @@ export const mockDb = {
     }
     writeDb(db);
     return index === -1 ? lockData : db.sapPayrollPeriodLocks[index];
+  },
+
+  stageSapPayrollPeriod: async (period: string): Promise<SapPayrollStage[]> => {
+    // 1. Check if period is locked
+    const locks = await mockDb.getSapPayrollPeriodLocks();
+    const isLocked = locks.some(l => l.period === period && l.locked);
+    if (isLocked) {
+      throw new Error(`Payroll period ${period} is locked. Modifications are blocked.`);
+    }
+
+    // 2. Fetch approved overtime attendance records for the period
+    const attendance = await mockDb.getAttendance();
+    const filtered = attendance.filter(rec => {
+      if (rec.otStatus !== "APPROVED") return false;
+      const recPeriod = new Date(rec.checkIn).toISOString().substring(0, 7);
+      return recPeriod === period;
+    });
+
+    // 3. Map aggregates grouped by employeeId and wageType
+    const aggregates: Record<string, { calculatedHours: number; calculatedPay: number }> = {};
+
+    for (const rec of filtered) {
+      const empId = rec.employeeId;
+      
+      const stdHrs = (rec.standardOtMinutes || 0) / 60.0;
+      const wkdHrs = (rec.weekendOtMinutes || 0) / 60.0;
+      const holHrs = ((rec.holidayOtMinutes || 0) + (rec.specialEventOtMinutes || 0)) / 60.0;
+      const ngtHrs = (rec.nightOtMinutes || 0) / 60.0;
+
+      if (stdHrs > 0) {
+        const key = `${empId}_WT_OT_STD`;
+        aggregates[key] = aggregates[key] || { calculatedHours: 0, calculatedPay: 0 };
+        aggregates[key].calculatedHours += stdHrs;
+        aggregates[key].calculatedPay += stdHrs * 50.0 * 1.25;
+      }
+      if (wkdHrs > 0) {
+        const key = `${empId}_WT_OT_WKD`;
+        aggregates[key] = aggregates[key] || { calculatedHours: 0, calculatedPay: 0 };
+        aggregates[key].calculatedHours += wkdHrs;
+        aggregates[key].calculatedPay += wkdHrs * 50.0 * 1.5;
+      }
+      if (holHrs > 0) {
+        const key = `${empId}_WT_OT_HOL`;
+        aggregates[key] = aggregates[key] || { calculatedHours: 0, calculatedPay: 0 };
+        aggregates[key].calculatedHours += holHrs;
+        aggregates[key].calculatedPay += holHrs * 50.0 * 2.0;
+      }
+      if (ngtHrs > 0) {
+        const key = `${empId}_WT_OT_NGT`;
+        aggregates[key] = aggregates[key] || { calculatedHours: 0, calculatedPay: 0 };
+        aggregates[key].calculatedHours += ngtHrs;
+        aggregates[key].calculatedPay += ngtHrs * 50.0 * 1.25;
+      }
+    }
+
+    const results: SapPayrollStage[] = [];
+
+    if (isDbConnected()) {
+      for (const [key, val] of Object.entries(aggregates)) {
+        const [employeeId, wageType] = key.split("_WT_");
+        const fullWageType = `WT_${wageType}`;
+        const updated = await prismaClient.sapPayrollStage.upsert({
+          where: {
+            employeeId_payrollPeriod_wageType: {
+              employeeId,
+              payrollPeriod: period,
+              wageType: fullWageType
+            }
+          },
+          update: {
+            calculatedHours: val.calculatedHours,
+            calculatedPay: val.calculatedPay
+          },
+          create: {
+            employeeId,
+            payrollPeriod: period,
+            wageType: fullWageType,
+            calculatedHours: val.calculatedHours,
+            calculatedPay: val.calculatedPay,
+            isApproved: false,
+            isExported: false
+          }
+        });
+        results.push({
+          ...updated,
+          createdAt: updated.createdAt.toISOString(),
+          updatedAt: updated.updatedAt.toISOString()
+        });
+      }
+    } else {
+      const db = readDb();
+      db.sapPayrollStages = db.sapPayrollStages || [];
+      for (const [key, val] of Object.entries(aggregates)) {
+        const [employeeId, wageType] = key.split("_WT_");
+        const fullWageType = `WT_${wageType}`;
+        const existingIdx = db.sapPayrollStages.findIndex(s => s.employeeId === employeeId && s.payrollPeriod === period && s.wageType === fullWageType);
+        
+        const stageData: SapPayrollStage = {
+          id: existingIdx !== -1 ? db.sapPayrollStages[existingIdx].id : `STG-${Math.random().toString(36).substring(2, 9).toUpperCase()}`,
+          employeeId,
+          payrollPeriod: period,
+          wageType: fullWageType,
+          calculatedHours: val.calculatedHours,
+          calculatedPay: val.calculatedPay,
+          isApproved: existingIdx !== -1 ? db.sapPayrollStages[existingIdx].isApproved : false,
+          isExported: existingIdx !== -1 ? db.sapPayrollStages[existingIdx].isExported : false,
+          createdAt: existingIdx !== -1 ? db.sapPayrollStages[existingIdx].createdAt : new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+
+        if (existingIdx !== -1) {
+          db.sapPayrollStages[existingIdx] = stageData;
+        } else {
+          db.sapPayrollStages.push(stageData);
+        }
+        results.push(stageData);
+      }
+      writeDb(db);
+    }
+
+    return results;
+  },
+
+  approveSapPayrollStage: async (id: string, isApproved: boolean): Promise<SapPayrollStage | null> => {
+    if (isDbConnected()) {
+      const updated = await prismaClient.sapPayrollStage.update({
+        where: { id },
+        data: { isApproved }
+      });
+      return {
+        ...updated,
+        createdAt: updated.createdAt.toISOString(),
+        updatedAt: updated.updatedAt.toISOString()
+      };
+    }
+    const db = readDb();
+    const idx = db.sapPayrollStages.findIndex(s => s.id === id);
+    if (idx === -1) return null;
+    db.sapPayrollStages[idx].isApproved = isApproved;
+    db.sapPayrollStages[idx].updatedAt = new Date().toISOString();
+    writeDb(db);
+    return db.sapPayrollStages[idx];
+  },
+
+  exportSapPayrollPeriod: async (period: string, connectionId: string): Promise<SapPayrollStage[]> => {
+    const locks = await mockDb.getSapPayrollPeriodLocks();
+    const isLocked = locks.some(l => l.period === period && l.locked);
+    if (!isLocked) {
+      throw new Error(`Payroll period ${period} must be locked before exporting to SAP.`);
+    }
+
+    const mockJob = await mockDb.createSapSyncJob({
+      connectionId,
+      module: "OVERTIME",
+      syncType: "FULL",
+      status: "PROCESSING"
+    });
+
+    const stages = await mockDb.getSapPayrollStages();
+    const periodStages = stages.filter(s => s.payrollPeriod === period && s.isApproved && !s.isExported);
+
+    const exported: SapPayrollStage[] = [];
+
+    for (const stage of periodStages) {
+      const idempotencyKey = `PAYROLL_EXPORT_${stage.id}`;
+      const queueItem = await mockDb.createSapExportQueueItem({
+        module: "OVERTIME",
+        recordId: stage.id,
+        payload: JSON.stringify({
+          employeeId: stage.employeeId,
+          payrollPeriod: stage.payrollPeriod,
+          wageType: stage.wageType,
+          calculatedHours: stage.calculatedHours,
+          calculatedPay: stage.calculatedPay
+        }),
+        status: "PENDING",
+        idempotencyKey
+      });
+
+      await mockDb.updateSapExportQueueItem(queueItem.id, { status: "PROCESSING" });
+
+      const sapAckId = `SAP-ACK-PAY-${Math.floor(100000 + Math.random() * 900000)}`;
+      await mockDb.updateSapExportQueueItem(queueItem.id, {
+        status: "SENT",
+        sapAckId,
+        sapAckStatus: "ACKNOWLEDGED",
+        sapAckTimestamp: new Date().toISOString()
+      });
+
+      if (isDbConnected()) {
+        const updated = await prismaClient.sapPayrollStage.update({
+          where: { id: stage.id },
+          data: { isExported: true, exportedJobId: mockJob.id }
+        });
+        exported.push({
+          ...updated,
+          createdAt: updated.createdAt.toISOString(),
+          updatedAt: updated.updatedAt.toISOString()
+        });
+      } else {
+        const db = readDb();
+        const idx = db.sapPayrollStages.findIndex(s => s.id === stage.id);
+        if (idx !== -1) {
+          db.sapPayrollStages[idx].isExported = true;
+          db.sapPayrollStages[idx].exportedJobId = mockJob.id;
+          db.sapPayrollStages[idx].updatedAt = new Date().toISOString();
+          writeDb(db);
+          exported.push(db.sapPayrollStages[idx]);
+        }
+      }
+
+      await mockDb.createSapSyncLog({
+        jobId: mockJob.id,
+        severity: "INFO",
+        message: `Exported staged payroll item ${stage.id} for employee ${stage.employeeId}. SAP Ack ID: ${sapAckId}`,
+        entityName: "SapPayrollStage",
+        entityId: stage.id
+      });
+    }
+
+    await mockDb.updateSapSyncJob(mockJob.id, {
+      status: "COMPLETED",
+      recordsProcessed: periodStages.length,
+      recordsSucceeded: exported.length,
+      recordsFailed: 0,
+      completedAt: new Date().toISOString()
+    });
+
+    return exported;
   }
 };
 

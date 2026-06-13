@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { SapConnection, SapSyncJob, SapSyncLog, SapFieldMapping, SapRetryQueue, SapExportQueue, SapReconciliationLog } from "@ahh-wfm/types";
+import { SapConnection, SapSyncJob, SapSyncLog, SapFieldMapping, SapRetryQueue, SapExportQueue, SapReconciliationLog, SapPayrollStage, SapPayrollPeriodLock } from "@ahh-wfm/types";
 import { Card, Badge, Button, Modal } from "@ahh-wfm/ui/src";
 
 export default function SapIntegrationHub() {
@@ -12,15 +12,19 @@ export default function SapIntegrationHub() {
   const [retryQueue, setRetryQueue] = useState<SapRetryQueue[]>([]);
   const [exportQueue, setExportQueue] = useState<SapExportQueue[]>([]);
   const [reconciliationLogs, setReconciliationLogs] = useState<SapReconciliationLog[]>([]);
+  const [payrollStages, setPayrollStages] = useState<SapPayrollStage[]>([]);
+  const [periodLocks, setPeriodLocks] = useState<SapPayrollPeriodLock[]>([]);
 
-  const [activeTab, setActiveTab] = useState<"dashboard" | "mappings" | "retry" | "export" | "reconciliation">("dashboard");
+  const [activeTab, setActiveTab] = useState<"dashboard" | "mappings" | "retry" | "export" | "reconciliation" | "payroll">("dashboard");
   const [syncing, setSyncing] = useState(false);
   const [retrying, setRetrying] = useState(false);
   const [reconciling, setReconciling] = useState(false);
+  const [staging, setStaging] = useState(false);
   
   // Reconciliation settings
   const [reconPeriod, setReconPeriod] = useState("2026-06");
   const [reconModule, setReconModule] = useState("ATTENDANCE");
+  const [payrollPeriod, setPayrollPeriod] = useState("2026-06");
 
   // Form states for Connection creation
   const [showConnModal, setShowConnModal] = useState(false);
@@ -77,6 +81,13 @@ export default function SapIntegrationHub() {
 
       const reconRes = await fetch("/api/v1/sap/reconciliation");
       if (reconRes.ok) setReconciliationLogs(await reconRes.json());
+
+      const payrollRes = await fetch("/api/v1/sap/payroll");
+      if (payrollRes.ok) {
+        const json = await payrollRes.json();
+        setPayrollStages(json.stages);
+        setPeriodLocks(json.locks);
+      }
     } catch (e) {
       console.error("Failed to load SAP integration hub data", e);
     }
@@ -248,6 +259,87 @@ export default function SapIntegrationHub() {
     }
   };
 
+  const handleCalculatePayroll = async () => {
+    setStaging(true);
+    try {
+      const res = await fetch("/api/v1/sap/payroll", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "stage",
+          period: payrollPeriod
+        })
+      });
+      if (res.ok) {
+        fetchData();
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setStaging(false);
+    }
+  };
+
+  const handleToggleLockPayroll = async (period: string, currentLocked: boolean) => {
+    try {
+      const res = await fetch("/api/v1/sap/payroll", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "lock",
+          period,
+          locked: !currentLocked
+        })
+      });
+      if (res.ok) {
+        fetchData();
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleApprovePayrollStage = async (id: string, isApproved: boolean) => {
+    try {
+      const res = await fetch("/api/v1/sap/payroll", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id,
+          isApproved
+        })
+      });
+      if (res.ok) {
+        fetchData();
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const handleExportPayroll = async () => {
+    if (!selectedConn) return;
+    setStaging(true);
+    try {
+      const res = await fetch("/api/v1/sap/payroll", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "export",
+          period: payrollPeriod,
+          connectionId: selectedConn
+        })
+      });
+      if (res.ok) {
+        fetchData();
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setStaging(false);
+    }
+  };
+
 
   return (
     <div className="space-y-6">
@@ -265,6 +357,14 @@ export default function SapIntegrationHub() {
             }`}
           >
             Dashboard
+          </button>
+          <button
+            onClick={() => setActiveTab("payroll")}
+            className={`py-1.5 px-3 rounded-md transition-colors ${
+              activeTab === "payroll" ? "bg-primary text-white" : "hover:bg-surface-container-high text-on-surface-variant"
+            }`}
+          >
+            Payroll Staging
           </button>
           <button
             onClick={() => setActiveTab("export")}
@@ -431,6 +531,8 @@ export default function SapIntegrationHub() {
                       <option value="EMPLOYEE">Organization & Employee Sync (Inbound)</option>
                       <option value="LEAVE">Leave Outbound Sync (EmployeeTime)</option>
                       <option value="ATTENDANCE">Attendance Outbound Sync (TimeSheetEntry)</option>
+                      <option value="OVERTIME">Overtime Outbound Sync (EmpCompensation)</option>
+                      <option value="ROSTER">Shift Roster Outbound Sync (ShiftAssignment)</option>
                     </select>
                   </div>
                   <div>
@@ -456,7 +558,7 @@ export default function SapIntegrationHub() {
                     <span>
                       {syncing
                         ? "Processing Integration data..."
-                        : (selectedModule === "LEAVE" || selectedModule === "ATTENDANCE")
+                        : (selectedModule === "LEAVE" || selectedModule === "ATTENDANCE" || selectedModule === "OVERTIME" || selectedModule === "ROSTER")
                           ? "Trigger Outbound Export"
                           : "Trigger Inbound Sync"
                       }
@@ -679,6 +781,149 @@ export default function SapIntegrationHub() {
             </table>
           </div>
         </Card>
+      )}
+
+      {activeTab === "payroll" && (
+        <div className="space-y-6">
+          <Card>
+            <h3 className="text-sm font-bold text-primary flex items-center gap-2 mb-4">
+              <span className="material-symbols-outlined text-secondary">payments</span> Payroll Staging & Period Locks Console
+            </h3>
+            <div className="flex flex-wrap items-end gap-4 text-xs">
+              <div className="w-48">
+                <label className="block font-semibold text-on-surface-variant mb-1">Target Payroll Period</label>
+                <select
+                  value={payrollPeriod}
+                  onChange={(e) => setPayrollPeriod(e.target.value)}
+                  className="w-full p-2 border border-outline-variant rounded-md bg-white text-xs"
+                >
+                  <option value="2026-06">June 2026 (2026-06)</option>
+                  <option value="2026-07">July 2026 (2026-07)</option>
+                </select>
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <Button
+                  onClick={handleCalculatePayroll}
+                  disabled={staging || periodLocks.some(l => l.period === payrollPeriod && l.locked)}
+                  className="text-xs font-bold flex items-center gap-1.5"
+                >
+                  <span className={`material-symbols-outlined text-sm ${staging ? "animate-spin" : ""}`}>
+                    calculate
+                  </span>
+                  <span>Stage Period Overtime</span>
+                </Button>
+
+                <Button
+                  variant="secondary"
+                  onClick={() => handleToggleLockPayroll(payrollPeriod, periodLocks.some(l => l.period === payrollPeriod && l.locked))}
+                  className={`text-xs font-bold flex items-center gap-1.5 ${
+                    periodLocks.some(l => l.period === payrollPeriod && l.locked)
+                      ? "text-red-600 border-red-200 bg-red-50 hover:bg-red-100"
+                      : "text-green-600 border-green-200 bg-green-50 hover:bg-green-100"
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-sm">
+                    {periodLocks.some(l => l.period === payrollPeriod && l.locked) ? "lock" : "lock_open"}
+                  </span>
+                  <span>
+                    {periodLocks.some(l => l.period === payrollPeriod && l.locked) ? "Unlock Period" : "Lock & Freeze Period"}
+                  </span>
+                </Button>
+
+                <Button
+                  onClick={handleExportPayroll}
+                  disabled={staging || !periodLocks.some(l => l.period === payrollPeriod && l.locked) || payrollStages.filter(s => s.payrollPeriod === payrollPeriod && s.isApproved && !s.isExported).length === 0}
+                  className="text-xs font-bold flex items-center gap-1.5 bg-blue-700 hover:bg-blue-800 text-white"
+                >
+                  <span className="material-symbols-outlined text-sm">
+                    send
+                  </span>
+                  <span>Export Locked Package to SAP</span>
+                </Button>
+              </div>
+
+              <div className="ml-auto flex items-center gap-2">
+                <span className="text-[11px] font-semibold text-outline-variant">Period Status:</span>
+                {periodLocks.some(l => l.period === payrollPeriod && l.locked) ? (
+                  <Badge variant="error">LOCKED & FROZEN</Badge>
+                ) : (
+                  <Badge variant="success">OPEN FOR EDITS</Badge>
+                )}
+              </div>
+            </div>
+          </Card>
+
+          <Card className="p-0 overflow-hidden">
+            <div className="p-4 border-b border-border-subtle bg-surface-container-low flex justify-between items-center">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-primary">analytics</span>
+                <h3 className="text-xs font-bold uppercase text-primary">Staged Compensation Wage Component Line-Items</h3>
+              </div>
+              <div className="text-xs text-on-surface-variant font-mono">
+                Total Staged Hours: <span className="font-bold text-primary">{payrollStages.filter(s => s.payrollPeriod === payrollPeriod).reduce((acc, s) => acc + s.calculatedHours, 0).toFixed(2)}h</span>
+                {" | "}
+                Estimated Pay: <span className="font-bold text-primary">{payrollStages.filter(s => s.payrollPeriod === payrollPeriod).reduce((acc, s) => acc + s.calculatedPay, 0).toLocaleString()} QAR</span>
+              </div>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead className="bg-surface-container text-[10px] font-bold uppercase tracking-wider text-on-surface-variant border-b border-border-subtle">
+                  <tr>
+                    <th className="p-4">Staged ID</th>
+                    <th className="p-4">Employee ID</th>
+                    <th className="p-4">Wage Type Code</th>
+                    <th className="p-4 text-center">Hours</th>
+                    <th className="p-4 text-center">Estimated Pay</th>
+                    <th className="p-4 text-center">Approved</th>
+                    <th className="p-4 text-center">Sync Status</th>
+                    <th className="p-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border-subtle text-xs">
+                  {payrollStages.filter(s => s.payrollPeriod === payrollPeriod).length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="p-6 text-center text-on-surface-variant">
+                        No staged lines for this period. Click "Stage Period Overtime" to parse approved timesheets.
+                      </td>
+                    </tr>
+                  ) : (
+                    payrollStages.filter(s => s.payrollPeriod === payrollPeriod).map((stage) => (
+                      <tr key={stage.id} className="hover:bg-surface-container-low transition-colors">
+                        <td className="p-4 font-mono font-bold text-[10px] text-primary">{stage.id}</td>
+                        <td className="p-4 font-bold text-on-surface-variant">{stage.employeeId}</td>
+                        <td className="p-4 font-mono text-[11px] font-bold text-secondary">{stage.wageType}</td>
+                        <td className="p-4 text-center font-mono font-semibold">{stage.calculatedHours.toFixed(2)}h</td>
+                        <td className="p-4 text-center font-mono font-semibold text-green-600">{stage.calculatedPay.toLocaleString()} QAR</td>
+                        <td className="p-4 text-center">
+                          <Badge variant={stage.isApproved ? "success" : "warning"}>
+                            {stage.isApproved ? "Approved" : "Pending Approval"}
+                          </Badge>
+                        </td>
+                        <td className="p-4 text-center">
+                          <Badge variant={stage.isExported ? "success" : "neutral"}>
+                            {stage.isExported ? "Exported" : "Staged"}
+                          </Badge>
+                        </td>
+                        <td className="p-4 text-right space-x-1">
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            disabled={periodLocks.some(l => l.period === payrollPeriod && l.locked) || stage.isExported}
+                            className="text-[10px] py-1 px-2.5 font-bold"
+                            onClick={() => handleApprovePayrollStage(stage.id, !stage.isApproved)}
+                          >
+                            {stage.isApproved ? "Reject" : "Approve"}
+                          </Button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        </div>
       )}
 
       {activeTab === "export" && (

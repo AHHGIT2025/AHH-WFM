@@ -30,8 +30,7 @@ AHH WFM is a full-stack, enterprise-grade workforce management application built
 | **Phase 4B** | Completed | `v0.9-scheduling-roster-overtime-complete` | Overtime auto-calculation, rates, coverage heatmap, drag-and-drop, and shift swaps. |
 | **Phase 5A** | Completed | `v0.10-sap-integration-foundation` | SAP SuccessFactors integration database models, mock sync engine, and Web Admin dashboard. |
 | **Phase 5B.1**| Completed | `v0.11-sap-operational-sync-leave-attendance` | SAP SuccessFactors outbound integration for Leave (EmployeeTime) and Attendance (TimeSheetEntry), idempotency, and reconciliation. |
-
-
+| **Phase 5B.2**| Completed | `v0.12-sap-operational-sync-payroll-roster` | SAP SuccessFactors outbound integration for Overtime (EmpCompensation) and Roster (ShiftAssignment), staging, locking, and reconciliation. |
 
 ---
 
@@ -93,6 +92,15 @@ AHH WFM is a full-stack, enterprise-grade workforce management application built
 - **Idempotency Controls:** Enforces uniqueness using `LEAVE_EXPORT_[ID]` and `ATT_EXPORT_[ID]` keys to block duplicate syncing.
 - **Acknowledgement Tracking:** Records SuccessFactors API tracking IDs, statuses, and timestamps.
 - **Reconciliation Engine:** Compares local WFM database hours with SAP timesheet hours to detect and flag gaps.
+
+### Phase 5B.2: SAP Overtime, Payroll & Roster Sync
+- **Payroll Staging Engine:** Aggregates approved overtime hours into `SapPayrollStage` entries, dynamically translating to Compensation values in base currency QAR.
+- **Wage Type Mapping:** Translates weekday, weekend, night, and holiday overtime rules to respective wage codes (`WT_OT_STD`, `WT_OT_WKD`, `WT_OT_HOL`, `WT_OT_NGT`).
+- **Period Locks Control**: Lock and freeze payroll stages preventing further edits or adjustments on locked months via `SapPayrollPeriodLock`.
+- **CompCompensation Exports**: Outbound compilation transfer of locked and approved staging elements.
+- **Roster Schedules Export**: Exports workforce rosters (`ShiftAssignment` records) into SuccessFactors calendar.
+- **Overtime Reconciliation discrepancies**: Extends audit tool comparisons to overtime logs.
+
 
 
 

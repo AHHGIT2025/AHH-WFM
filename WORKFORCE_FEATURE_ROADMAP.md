@@ -221,4 +221,23 @@ This document outlines the evolutionary development roadmap for the **AHH WFM** 
     *   Web: SAP SuccessFactors Hub (`/sap`) - Reconciliation Board and Timesheet logs.
 *   **Estimated Implementation Effort**: Completed
 
+### 5.4 Overtime & Compensation Sync (Completed - Phase 5B.2)
+*   **Business Purpose**: Sync approved overtime calculations, staged rates, and compensation adjustments.
+*   **Database Impact**: Staged rows logged to `SapPayrollStage` and locked periods tracked in `SapPayrollPeriodLock`.
+*   **API Endpoints Required**:
+    *   `GET/POST/PUT /api/v1/sap/payroll` (Calculates, locks, approves, and exports)
+*   **UI Screens Affected**:
+    *   Web: SAP SuccessFactors Hub (`/sap`) - Payroll Staging Console.
+*   **Estimated Implementation Effort**: Completed
+
+### 5.5 Shift & Roster Sync (Completed - Phase 5B.2)
+*   **Business Purpose**: Synchronize schedule roster mappings outbound.
+*   **Database Impact**: Staged in `SapExportQueue` using idempotency key `ROSTER_EXPORT_[ID]`.
+*   **API Endpoints Required**:
+    *   `POST /api/v1/sap/export` (Triggers batch roster export)
+*   **UI Screens Affected**:
+    *   Web: SAP SuccessFactors Hub (`/sap`) - Outbound export queue.
+*   **Estimated Implementation Effort**: Completed
+
+
 
