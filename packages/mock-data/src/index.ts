@@ -52,6 +52,27 @@ function parseDateRange(dateRange: string): { start: Date; end: Date } {
   return { start: now, end: now };
 }
 
+export function isEmployeeActive(employee: Employee): boolean {
+  if (!employee) return false;
+  if (employee.employmentStatus) {
+    return employee.employmentStatus === "ACTIVE";
+  }
+  return employee.isActive !== false;
+}
+
+export function getEmploymentStatusLabel(employee: Employee): "Active" | "Deactivated" {
+  return isEmployeeActive(employee) ? "Active" : "Deactivated";
+}
+
+export function getDutyStatusLabel(employee: Employee): string {
+  if (!employee) return "OFF_DUTY";
+  return employee.dutyStatus || "OFF_DUTY";
+}
+
+export function canAssignShift(employee: Employee): boolean {
+  return isEmployeeActive(employee);
+}
+
 // In-memory fallback dataset (also used to seed MySQL)
 let memoryDb: {
   employees: Employee[];
@@ -786,11 +807,78 @@ const mapAnnouncement = (ann: any): Announcement => ({
 export const mockDb = {
   // Employees
   getEmployees: async (): Promise<Employee[]> => {
+    let emps: Employee[] = [];
     if (isDbConnected()) {
       await seedMySQL();
-      return await prismaClient.employee.findMany();
+      emps = await prismaClient.employee.findMany();
+      let modified = false;
+      for (const emp of emps) {
+        let changed = false;
+        
+        if (!emp.employmentStatus) {
+          emp.employmentStatus = emp.isActive !== false ? "ACTIVE" : "INACTIVE";
+          changed = true;
+        }
+        
+        if (emp.employmentStatus === "ACTIVE" && emp.isActive === false) {
+          emp.isActive = true;
+          changed = true;
+        } else if ((emp.employmentStatus === "INACTIVE" || emp.employmentStatus === "DEACTIVATED") && emp.isActive !== false) {
+          emp.isActive = false;
+          changed = true;
+        }
+
+        if (!emp.dutyStatus) {
+          emp.dutyStatus = "OFF_DUTY";
+          changed = true;
+        }
+
+        if (changed) {
+          await prismaClient.employee.update({
+            where: { id: emp.id },
+            data: {
+              isActive: emp.isActive,
+              employmentStatus: emp.employmentStatus,
+              dutyStatus: emp.dutyStatus
+            }
+          });
+          modified = true;
+        }
+      }
+      if (modified) {
+        emps = await prismaClient.employee.findMany();
+      }
+      return emps;
+    } else {
+      const db = readDb();
+      emps = db.employees;
+      let modified = false;
+      for (const emp of emps) {
+        let changed = false;
+        if (!emp.employmentStatus) {
+          emp.employmentStatus = emp.isActive !== false ? "ACTIVE" : "INACTIVE";
+          changed = true;
+        }
+        if (emp.employmentStatus === "ACTIVE" && emp.isActive === false) {
+          emp.isActive = true;
+          changed = true;
+        } else if ((emp.employmentStatus === "INACTIVE" || emp.employmentStatus === "DEACTIVATED") && emp.isActive !== false) {
+          emp.isActive = false;
+          changed = true;
+        }
+        if (!emp.dutyStatus) {
+          emp.dutyStatus = "OFF_DUTY";
+          changed = true;
+        }
+        if (changed) {
+          modified = true;
+        }
+      }
+      if (modified) {
+        writeDb(db);
+      }
+      return emps;
     }
-    return readDb().employees;
   },
   updateEmployeeStatus: async (id: string, status: Employee["status"]): Promise<Employee | null> => {
     if (isDbConnected()) {
@@ -3122,7 +3210,7 @@ export const mockDb = {
       conflicts.push("Employee not found");
       return conflicts;
     }
-    if (emp.isActive === false) {
+    if (!isEmployeeActive(emp)) {
       conflicts.push(`Employee ${emp.name} (${employeeId}) is inactive`);
     }
 
@@ -3518,7 +3606,7 @@ export const mockDb = {
     if (!reqEmp || !tgtEmp) {
       throw new Error("One or both employees not found");
     }
-    if (reqEmp.isActive === false || tgtEmp.isActive === false) {
+    if (!isEmployeeActive(reqEmp) || !isEmployeeActive(tgtEmp)) {
       throw new Error("Cannot request shift swaps involving inactive employees");
     }
 

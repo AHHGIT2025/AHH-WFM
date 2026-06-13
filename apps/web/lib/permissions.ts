@@ -78,3 +78,24 @@ export function filterNavigationByPermissions(user: { role?: string } | null | u
     return true;
   });
 }
+
+export function isEmployeeActive(employee: any): boolean {
+  if (!employee) return false;
+  if (employee.employmentStatus) {
+    return employee.employmentStatus === "ACTIVE";
+  }
+  return employee.isActive !== false;
+}
+
+export function getEmploymentStatusLabel(employee: any): "Active" | "Deactivated" {
+  return isEmployeeActive(employee) ? "Active" : "Deactivated";
+}
+
+export function getDutyStatusLabel(employee: any): string {
+  if (!employee) return "OFF_DUTY";
+  return employee.dutyStatus || "OFF_DUTY";
+}
+
+export function canAssignShift(employee: any): boolean {
+  return isEmployeeActive(employee);
+}

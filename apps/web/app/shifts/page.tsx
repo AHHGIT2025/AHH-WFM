@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { Employee, ShiftTemplate, RotationTemplate, ShiftAssignment, LeaveRequest, ShiftSwapRequest, OvertimeRate, AttendanceRecord } from "@ahh-wfm/types";
 import { Card, Badge, Button, Input, Modal } from "@ahh-wfm/ui/src";
+import { isEmployeeActive } from "@/lib/permissions";
 
 export default function ShiftsPage() {
   const [activeTab, setActiveTab] = useState<"grid" | "swaps" | "overtime" | "rates">("grid");
@@ -93,7 +94,8 @@ export default function ShiftsPage() {
       if (empRes.ok) {
         const emps = await empRes.json();
         setEmployees(emps);
-        if (emps.length > 0 && !singleEmpId) setSingleEmpId(emps[0].id);
+        const activeEmps = emps.filter(isEmployeeActive);
+        if (activeEmps.length > 0 && !singleEmpId) setSingleEmpId(activeEmps[0].id);
       }
       if (tempRes.ok) {
         const temps = await tempRes.json();
@@ -405,6 +407,11 @@ export default function ShiftsPage() {
 
   const handleDrop = async (e: React.DragEvent, targetEmpId: string, targetDate: string) => {
     e.preventDefault();
+    const targetEmp = employees.find(emp => emp.id === targetEmpId);
+    if (targetEmp && !isEmployeeActive(targetEmp)) {
+      alert(`Error: Cannot assign shifts to inactive employee ${targetEmp.name}.`);
+      return;
+    }
     const saId = e.dataTransfer.getData("text/plain");
     const draggedAsg = shiftAssignments.find(a => a.id === saId);
     if (!draggedAsg) return;
@@ -592,7 +599,7 @@ export default function ShiftsPage() {
                             <span>{emp.name}</span>
                             <span className="text-[10px] font-mono font-normal text-on-surface-variant flex items-center gap-1">
                               {emp.id}
-                              {emp.isActive === false && (
+                              {!isEmployeeActive(emp) && (
                                 <Badge variant="error" className="text-[7px] py-0 px-1">INACTIVE</Badge>
                               )}
                             </span>
@@ -677,7 +684,7 @@ export default function ShiftsPage() {
                     onChange={(e) => setSingleEmpId(e.target.value)}
                     className="w-full bg-surface border border-outline-variant rounded-lg p-2 text-xs font-bold outline-none"
                   >
-                    {employees.map(emp => (
+                    {employees.filter(isEmployeeActive).map(emp => (
                       <option key={emp.id} value={emp.id}>{emp.name} ({emp.id})</option>
                     ))}
                   </select>
@@ -714,7 +721,7 @@ export default function ShiftsPage() {
                 <div className="space-y-1.5">
                   <label className="block text-[10px] font-bold text-on-surface-variant uppercase">Target Employees</label>
                   <div className="max-h-[120px] overflow-y-auto border border-outline-variant/50 p-2 rounded-lg bg-surface space-y-1.5">
-                    {employees.map(emp => (
+                    {employees.filter(isEmployeeActive).map(emp => (
                       <label key={emp.id} className="flex items-center gap-2 cursor-pointer text-[11px] font-semibold">
                         <input
                           type="checkbox"
@@ -767,7 +774,7 @@ export default function ShiftsPage() {
                 <div className="space-y-1.5">
                   <label className="block text-[10px] font-bold text-on-surface-variant uppercase">Target Employees</label>
                   <div className="max-h-[120px] overflow-y-auto border border-outline-variant/50 p-2 rounded-lg bg-surface space-y-1.5">
-                    {employees.map(emp => (
+                    {employees.filter(isEmployeeActive).map(emp => (
                       <label key={emp.id} className="flex items-center gap-2 cursor-pointer text-[11px] font-semibold">
                         <input
                           type="checkbox"
