@@ -94,6 +94,16 @@ export default function SapIntegrationHub() {
   };
 
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const tab = params.get("tab");
+      if (tab === "mappings" || tab === "retry" || tab === "export" || tab === "reconciliation" || tab === "payroll") {
+        setActiveTab(tab as any);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
     fetchData();
     const interval = setInterval(fetchData, 5000);
     return () => clearInterval(interval);

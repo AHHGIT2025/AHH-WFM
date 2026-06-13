@@ -7,7 +7,7 @@ export default function SapMappingPageRedirect() {
   const router = useRouter();
 
   useEffect(() => {
-    router.replace("/sap");
+    router.replace("/sap?tab=mappings");
   }, [router]);
 
   return (
