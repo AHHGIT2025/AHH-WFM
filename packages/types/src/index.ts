@@ -24,6 +24,12 @@ export interface Employee {
   positionCategoryId?: string;
   defaultProjectId?: string;
   defaultSiteId?: string;
+  designationId?: string;
+  tradeClassificationId?: string;
+  costCenterId?: string;
+  defaultLocationId?: string;
+  isRelieverEligible?: boolean;
+  isStandbyEligible?: boolean;
 }
 
 export interface Worksite {
@@ -111,6 +117,8 @@ export interface LeaveRequest {
   approvedAt?: string;
   approvalDurationHours?: number;
   escalationCount?: number;
+  relieverRequired?: boolean;
+  relieverAssignmentId?: string;
 }
 
 export interface LeaveApprovalWorkflow {
@@ -270,6 +278,13 @@ export interface ShiftAssignment {
   date: string;
   createdAt?: string;
   updatedAt?: string;
+  projectId?: string;
+  siteId?: string;
+  isSplitShift?: boolean;
+  parentAssignmentId?: string;
+  relieverRequired?: boolean;
+  relieverAssignmentId?: string;
+  assignmentStatus?: string; // "ACTIVE" | "INACTIVE" | "CANCELLED"
 }
 
 export interface ShiftSwapRequest {
@@ -583,6 +598,7 @@ export interface Project {
   status: "ACTIVE" | "ON_HOLD" | "COMPLETED" | "CANCELLED" | string;
   createdAt?: string;
   updatedAt?: string;
+  locationId?: string;
 }
 
 export interface ProjectSite {
@@ -598,6 +614,7 @@ export interface ProjectSite {
   status: "ACTIVE" | "INACTIVE" | string;
   createdAt?: string;
   updatedAt?: string;
+  locationId?: string;
 }
 
 export interface EmployeeDeployment {
@@ -618,6 +635,90 @@ export interface EmployeeDeployment {
   createdAt?: string;
   updatedAt?: string;
 }
+
+export interface Designation {
+  id: string;
+  code: string;
+  name: string;
+  description?: string;
+  workerCategory: "WHITE_COLLAR" | "BLUE_COLLAR" | "BOTH" | string;
+  isSupervisorPosition: boolean;
+  isRelieverEligible: boolean;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface TradeClassification {
+  id: string;
+  code: string;
+  name: string;
+  description?: string;
+  linkedDesignationId?: string;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface LocationMaster {
+  id: string;
+  locationCode: string;
+  locationName: string;
+  address?: string;
+  latitude?: number;
+  longitude?: number;
+  defaultGeofenceRadiusMeters: number;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface CostCenter {
+  id: string;
+  costCenterCode: string;
+  costCenterName: string;
+  description?: string;
+  sapCostCenterCode?: string;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ShiftRelieverAssignment {
+  id: string;
+  originalEmployeeId: string;
+  relieverEmployeeId: string;
+  shiftAssignmentId?: string;
+  deploymentId?: string;
+  leaveRequestId?: string;
+  date: string; // YYYY-MM-DD
+  startTime: string; // HH:MM
+  endTime: string; // HH:MM
+  projectId?: string;
+  siteId?: string;
+  reason?: string;
+  status: "PLANNED" | "ACTIVE" | "COMPLETED" | "CANCELLED" | string;
+  createdById: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface RelieverStandbyRule {
+  id: string;
+  ruleName: string;
+  designationId?: string;
+  tradeClassificationId?: string;
+  projectId?: string;
+  siteId?: string;
+  standbyRequired: boolean;
+  relieverRequiredForLeave: boolean;
+  relieverRequiredForOff: boolean;
+  relieverRequiredForVacation: boolean;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 
 
 

@@ -13,6 +13,7 @@ export default function MobileHomePage() {
 
   const [worksites, setWorksites] = useState<Worksite[]>([]);
   const [todayDeployment, setTodayDeployment] = useState<any>(null);
+  const [todayRelieverAssignment, setTodayRelieverAssignment] = useState<any>(null);
   const [projects, setProjects] = useState<any[]>([]);
   const [allSites, setAllSites] = useState<any[]>([]);
   const [time, setTime] = useState("");
@@ -47,13 +48,14 @@ export default function MobileHomePage() {
   const fetchDb = async () => {
     try {
       const todayStr = new Date().toISOString().split("T")[0];
-      const [empRes, attRes, lvRes, wsRes, projRes, depRes] = await Promise.all([
+      const [empRes, attRes, lvRes, wsRes, projRes, depRes, relRes] = await Promise.all([
         fetch("/api/v1/employees"),
         fetch("/api/v1/attendance"),
         fetch("/api/v1/leaves"),
         fetch("/api/v1/worksites"),
         fetch("/api/v1/projects"),
-        fetch(`/api/v1/deployments?employeeId=${employeeId}&date=${todayStr}`)
+        fetch(`/api/v1/deployments?employeeId=${employeeId}&date=${todayStr}`),
+        fetch("/api/v1/scheduler/relievers")
       ]);
       if (empRes.ok && attRes.ok && lvRes.ok && wsRes.ok) {
         setData({
@@ -73,6 +75,11 @@ export default function MobileHomePage() {
         } else {
           setTodayDeployment(null);
         }
+      }
+      if (relRes.ok) {
+        const rels = await relRes.json();
+        const activeRel = rels.find((a: any) => a.relieverEmployeeId === employeeId && a.date === todayStr);
+        setTodayRelieverAssignment(activeRel || null);
       }
     } catch (e) {
       console.error(e);
@@ -223,6 +230,44 @@ export default function MobileHomePage() {
         </div>
       </section>
  
+      {/* Today's Reliever Assignment Card */}
+      {todayRelieverAssignment && (
+        <section className="space-y-1.5">
+          <label className="block text-[10px] font-bold text-status-warning uppercase tracking-wider px-1">Today's Reliever Cover Duty</label>
+          <Card className="bg-status-warning/5 border border-status-warning/20 p-4 rounded-xl">
+            <div className="flex justify-between items-start">
+              <div>
+                <h4 className="text-xs font-bold text-primary flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-sm text-status-warning">autorenew</span>
+                  <span>Covering for: {data.employees.find(e => e.id === todayRelieverAssignment.originalEmployeeId)?.name || todayRelieverAssignment.originalEmployeeId}</span>
+                </h4>
+                {todayRelieverAssignment.projectId && (
+                  <p className="text-[10px] text-on-surface-variant leading-tight mt-1">
+                    🏢 Project: {projects.find(p => p.id === todayRelieverAssignment.projectId)?.projectName || todayRelieverAssignment.projectId}
+                  </p>
+                )}
+                {todayRelieverAssignment.siteId && (
+                  <p className="text-[10px] text-on-surface-variant leading-tight mt-0.5">
+                    📍 Site: {allSites.find(s => s.id === todayRelieverAssignment.siteId)?.siteName || todayRelieverAssignment.siteId}
+                  </p>
+                )}
+                <p className="text-[9px] font-mono text-outline-variant mt-1">
+                  Cover Hours: {todayRelieverAssignment.startTime} - {todayRelieverAssignment.endTime}
+                </p>
+                {todayRelieverAssignment.reason && (
+                  <p className="text-[9px] text-on-surface-variant italic mt-1 font-normal">
+                    Reason: "{todayRelieverAssignment.reason}"
+                  </p>
+                )}
+              </div>
+              <Badge variant="warning" className="text-[9px] py-0.5 px-2 font-black uppercase font-bold">
+                RELIEVER
+              </Badge>
+            </div>
+          </Card>
+        </section>
+      )}
+
       {/* Today's Project Deployment Card */}
       {todayDeployment && (
         <section className="space-y-1.5">

@@ -24,6 +24,7 @@ const navItems: NavItem[] = [
   { label: "SAP Integration Hub", path: "/sap", icon: "hub" },
   { label: "SAP Field Mapping", path: "/sap/mapping", icon: "account_tree" },
   { label: "Shift Master", path: "/shifts", icon: "schedule" },
+  { label: "Master Data Hub", path: "/admin/masters", icon: "database" },
   { label: "Backup & Restore", path: "/admin/backup", icon: "settings_backup_restore" },
   { label: "Settings", path: "/settings", icon: "settings" }
 ];

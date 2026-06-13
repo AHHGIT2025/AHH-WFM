@@ -53,6 +53,35 @@ export default function ShiftsPage() {
   const [isRotationModalOpen, setIsRotationModalOpen] = useState(false);
   const [isRateModalOpen, setIsRateModalOpen] = useState(false);
 
+  // Cell action modal state
+  const [activeCell, setActiveCell] = useState<{ employeeId: string; date: string; assignment?: any; leave?: any } | null>(null);
+  const [cellActionType, setCellActionType] = useState<string>(""); // ASSIGN_SHIFT, MARK_LEAVE, SPLIT_SHIFT, ASSIGN_PROJECT_SITE, LINK_RELIEVER, etc.
+  
+  // Form states for cell actions
+  const [cellShiftId, setCellShiftId] = useState("");
+  const [cellLeaveType, setCellLeaveType] = useState("Sick Leave");
+  const [cellLeaveReason, setCellLeaveReason] = useState("");
+  const [cellLeaveRelieverRequired, setCellLeaveRelieverRequired] = useState(false);
+  const [cellProjectId, setCellProjectId] = useState("");
+  const [cellSiteId, setCellSiteId] = useState("");
+  const [cellStartTime, setCellStartTime] = useState("08:00");
+  const [cellEndTime, setCellEndTime] = useState("17:00");
+  const [cellPositionCategoryId, setCellPositionCategoryId] = useState("");
+  
+  // Reliever suggestion states
+  const [relieversList, setRelieversList] = useState<any[]>([]);
+  const [fetchingRelievers, setFetchingRelievers] = useState(false);
+  const [selectedRelieverId, setSelectedRelieverId] = useState("");
+
+  // Drag-and-drop confirmation modal state
+  const [dropConfirmation, setDropConfirmation] = useState<{
+    saId: string;
+    targetEmpId: string;
+    targetDate: string;
+    targetEmpName: string;
+    warningMessage?: string;
+  } | null>(null);
+
   // Heatmap toggle
   const [showHeatmap, setShowHeatmap] = useState(false);
 
@@ -162,6 +191,12 @@ export default function ShiftsPage() {
   useEffect(() => {
     fetchDb();
   }, []);
+
+  useEffect(() => {
+    if (activeCell && cellActionType === "LINK_RELIEVER") {
+      fetchAvailableRelieversForCell(activeCell.date, activeCell.employeeId);
+    }
+  }, [activeCell, cellActionType]);
 
   useEffect(() => {
     if (projects.length > 0) {
@@ -528,6 +563,79 @@ export default function ShiftsPage() {
     }
   };
 
+  const fetchAvailableRelieversForCell = async (date: string, empId: string) => {
+    setFetchingRelievers(true);
+    try {
+      const emp = employees.find(e => e.id === empId);
+      const designationId = emp?.designationId || "";
+      const tradeClassificationId = emp?.tradeClassificationId || "";
+      
+      const res = await fetch(`/api/v1/scheduler/available-relievers?date=${date}&designationId=${designationId}&tradeClassificationId=${tradeClassificationId}`);
+      if (res.ok) {
+        setRelieversList(await res.json());
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setFetchingRelievers(false);
+    }
+  };
+
+  const handleCellActionSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeCell) return;
+
+    let payload: any = {
+      employeeId: activeCell.employeeId,
+      date: activeCell.date,
+      action: cellActionType
+    };
+
+    if (cellActionType === "ASSIGN_SHIFT" || cellActionType === "SPLIT_SHIFT") {
+      payload.shiftTemplateId = cellShiftId;
+    } else if (["MARK_LEAVE", "MARK_VACATION", "MARK_OFF"].includes(cellActionType)) {
+      payload.leaveType = cellLeaveType;
+      payload.reason = cellLeaveReason;
+    } else if (cellActionType === "ASSIGN_PROJECT_SITE") {
+      payload.projectId = cellProjectId;
+      payload.siteId = cellSiteId;
+      payload.startTime = cellStartTime;
+      payload.endTime = cellEndTime;
+      payload.positionCategoryId = cellPositionCategoryId;
+    } else if (cellActionType === "LINK_RELIEVER") {
+      payload.relieverEmployeeId = selectedRelieverId;
+      payload.startTime = cellStartTime;
+      payload.endTime = cellEndTime;
+      payload.projectId = cellProjectId || undefined;
+      payload.siteId = cellSiteId || undefined;
+      payload.reason = cellLeaveReason || "Reliever linked via cell-action";
+    }
+
+    try {
+      const res = await fetch("/api/v1/scheduler/cell-action", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      if (res.ok) {
+        if (["MARK_LEAVE", "MARK_VACATION", "MARK_OFF"].includes(cellActionType) && cellLeaveRelieverRequired) {
+          setCellActionType("LINK_RELIEVER");
+          await fetchAvailableRelieversForCell(activeCell.date, activeCell.employeeId);
+        } else {
+          setActiveCell(null);
+          setCellActionType("");
+          fetchDb();
+        }
+      } else {
+        const err = await res.json();
+        alert(err.error || "Failed to perform cell action");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Network error occurred.");
+    }
+  };
+
   // Drag and drop HTML5 handlers
   const handleDragStart = (e: React.DragEvent, saId: string) => {
     e.dataTransfer.setData("text/plain", saId);
@@ -551,7 +659,27 @@ export default function ShiftsPage() {
 
     if (draggedAsg.employeeId === targetEmpId && draggedAsg.date === targetDate) return;
 
-    // Run reassignment
+    const targetLeave = getLeaveForCell(targetEmpId, targetDate);
+    let warning = "";
+    if (targetLeave) {
+      warning = `Warning: ${targetEmp?.name} is ON LEAVE (${targetLeave.type}) on ${targetDate}. Assigning this shift may cause scheduling conflict.`;
+    }
+
+    setDropConfirmation({
+      saId,
+      targetEmpId,
+      targetDate,
+      targetEmpName: targetEmp?.name || targetEmpId,
+      warningMessage: warning
+    });
+  };
+
+  const executeDropReassignment = async () => {
+    if (!dropConfirmation) return;
+    const { saId, targetEmpId, targetDate } = dropConfirmation;
+    const draggedAsg = shiftAssignments.find(a => a.id === saId);
+    if (!draggedAsg) return;
+
     setConflictLogs([]);
     try {
       const res = await fetch("/api/v1/shifts/assignments", {
@@ -567,6 +695,7 @@ export default function ShiftsPage() {
         // Remove old assignment
         await fetch(`/api/v1/shifts/assignments?id=${saId}`, { method: "DELETE" });
         alert("Shift reassigned successfully!");
+        setDropConfirmation(null);
         fetchDb();
       } else {
         const err = await res.json();
@@ -575,9 +704,11 @@ export default function ShiftsPage() {
         } else {
           alert(`Conflict Error: ${err.error}`);
         }
+        setDropConfirmation(null);
       }
     } catch (err) {
       console.error(err);
+      setDropConfirmation(null);
     }
   };
 
@@ -763,9 +894,25 @@ export default function ShiftsPage() {
                           return (
                             <td
                               key={idx}
-                              className={`p-2 border-r border-border-subtle text-center align-middle relative min-h-[55px] ${heatmapClass}`}
+                              className={`p-2 border-r border-border-subtle text-center align-middle relative min-h-[55px] cursor-pointer hover:bg-primary/5 transition-colors ${heatmapClass}`}
                               onDragOver={handleDragOver}
                               onDrop={(e) => handleDrop(e, emp.id, dateStr)}
+                              onClick={() => {
+                                const assignment = getAssignmentForCell(emp.id, dateStr);
+                                const leave = getLeaveForCell(emp.id, dateStr);
+                                setActiveCell({ employeeId: emp.id, date: dateStr, assignment, leave });
+                                setCellActionType(assignment ? "MARK_LEAVE" : "ASSIGN_SHIFT");
+                                setCellShiftId(assignment?.shiftTemplateId || (shiftTemplates[0]?.id || ""));
+                                setCellLeaveType("Sick Leave");
+                                setCellLeaveReason("");
+                                setCellLeaveRelieverRequired(false);
+                                setCellProjectId((emp as any).defaultProjectId || "");
+                                setCellSiteId((emp as any).defaultSiteId || "");
+                                setCellStartTime("08:00");
+                                setCellEndTime("17:00");
+                                setCellPositionCategoryId((emp as any).positionCategoryId || "");
+                                setSelectedRelieverId("");
+                              }}
                             >
                               {leave ? (
                                 <div className="bg-status-warning/10 border border-status-warning/30 text-status-warning rounded p-1.5 text-[9px] font-bold">
@@ -1610,6 +1757,264 @@ export default function ShiftsPage() {
             </Button>
           </div>
         </form>
+      </Modal>
+
+      {/* Drag and Drop Confirmation Modal */}
+      <Modal isOpen={!!dropConfirmation} onClose={() => setDropConfirmation(null)} title="Confirm Shift Reassignment">
+        {dropConfirmation && (
+          <div className="space-y-4 text-xs font-semibold">
+            {dropConfirmation.warningMessage && (
+              <div className="p-3 bg-status-error/10 border border-status-error/20 text-status-error rounded-lg flex gap-2">
+                <span className="material-symbols-outlined text-sm font-bold">warning</span>
+                <span>{dropConfirmation.warningMessage}</span>
+              </div>
+            )}
+            <p className="text-on-surface">
+              Are you sure you want to move this shift assignment to <strong className="text-primary">{dropConfirmation.targetEmpName}</strong> on <strong>{dropConfirmation.targetDate}</strong>?
+            </p>
+            <div className="flex justify-end gap-2 border-t border-border-subtle pt-4 mt-6">
+              <Button variant="secondary" onClick={() => setDropConfirmation(null)}>Cancel</Button>
+              <Button onClick={executeDropReassignment}>Confirm Reassignment</Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Cell Action Modal */}
+      <Modal isOpen={!!activeCell} onClose={() => { setActiveCell(null); setCellActionType(""); }} title={`Scheduler Actions - ${employees.find(e => e.id === activeCell?.employeeId)?.name || ""} on ${activeCell?.date || ""}`}>
+        {activeCell && (
+          <form onSubmit={handleCellActionSubmit} className="space-y-4 text-xs font-semibold">
+            <div className="space-y-1">
+              <label className="block text-[10px] font-bold text-on-surface-variant uppercase">Select Action Type</label>
+              <select
+                value={cellActionType}
+                onChange={(e) => {
+                  setCellActionType(e.target.value);
+                  setSelectedRelieverId("");
+                  setRelieversList([]);
+                }}
+                className="w-full bg-surface border border-outline-variant rounded-lg p-2 text-xs font-bold outline-none"
+              >
+                {!activeCell.assignment && <option value="ASSIGN_SHIFT">Assign Shift</option>}
+                {!activeCell.assignment && <option value="SPLIT_SHIFT">Assign Split Shift</option>}
+                <option value="MARK_LEAVE">Mark Sick/Casual Leave</option>
+                <option value="MARK_VACATION">Mark Annual Vacation</option>
+                <option value="MARK_OFF">Mark Day Off</option>
+                <option value="ASSIGN_PROJECT_SITE">Assign Project / Site Deployment</option>
+                <option value="LINK_RELIEVER">Link Reliever / Cover</option>
+              </select>
+            </div>
+
+            {/* ASSIGN_SHIFT or SPLIT_SHIFT fields */}
+            {(cellActionType === "ASSIGN_SHIFT" || cellActionType === "SPLIT_SHIFT") && (
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase">Select Shift Template</label>
+                  <select
+                    value={cellShiftId}
+                    onChange={(e) => setCellShiftId(e.target.value)}
+                    className="w-full bg-surface border border-outline-variant rounded-lg p-2 text-xs font-bold outline-none"
+                  >
+                    <option value="">Select Template</option>
+                    {shiftTemplates.map(t => (
+                      <option key={t.id} value={t.id}>{t.name} ({t.startTime} - {t.endTime})</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            )}
+
+            {/* MARK_LEAVE, MARK_VACATION, MARK_OFF fields */}
+            {["MARK_LEAVE", "MARK_VACATION", "MARK_OFF"].includes(cellActionType) && (
+              <div className="space-y-3">
+                <Input
+                  label="Leave/Off Type"
+                  value={cellLeaveType}
+                  onChange={(e) => setCellLeaveType(e.target.value)}
+                  placeholder="e.g. Sick Leave, Casual Leave, Off-duty"
+                  required
+                />
+                <Input
+                  label="Reason / Notes"
+                  value={cellLeaveReason}
+                  onChange={(e) => setCellLeaveReason(e.target.value)}
+                  placeholder="e.g. Family medical emergency"
+                />
+                <div className="flex items-center gap-2 pt-2">
+                  <input
+                    type="checkbox"
+                    id="cellLeaveRelieverRequired"
+                    checked={cellLeaveRelieverRequired}
+                    onChange={(e) => setCellLeaveRelieverRequired(e.target.checked)}
+                    className="w-4 h-4 rounded text-primary border-outline-variant focus:ring-0"
+                  />
+                  <label htmlFor="cellLeaveRelieverRequired" className="cursor-pointer font-bold text-on-surface flex items-center gap-1">
+                    Reliever Required? <span className="text-[10px] font-normal text-on-surface-variant">(Select cover employee next)</span>
+                  </label>
+                </div>
+              </div>
+            )}
+
+            {/* ASSIGN_PROJECT_SITE fields */}
+            {cellActionType === "ASSIGN_PROJECT_SITE" && (
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="block text-[10px] font-bold text-on-surface-variant uppercase">Project</label>
+                    <select
+                      value={cellProjectId}
+                      onChange={(e) => setCellProjectId(e.target.value)}
+                      className="w-full bg-surface border border-outline-variant rounded-lg p-2 text-xs font-bold outline-none"
+                      required
+                    >
+                      <option value="">Select Project</option>
+                      {projects.map(p => (
+                        <option key={p.id} value={p.id}>{p.projectName}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="block text-[10px] font-bold text-on-surface-variant uppercase">Site</label>
+                    <select
+                      value={cellSiteId}
+                      onChange={(e) => setCellSiteId(e.target.value)}
+                      className="w-full bg-surface border border-outline-variant rounded-lg p-2 text-xs font-bold outline-none"
+                      required
+                      disabled={!cellProjectId}
+                    >
+                      <option value="">Select Site</option>
+                      {projectSites.filter(s => s.projectId === cellProjectId).map(s => (
+                        <option key={s.id} value={s.id}>{s.siteName}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <Input
+                    label="Start Time"
+                    value={cellStartTime}
+                    onChange={(e) => setCellStartTime(e.target.value)}
+                    placeholder="e.g. 08:00"
+                    required
+                  />
+                  <Input
+                    label="End Time"
+                    value={cellEndTime}
+                    onChange={(e) => setCellEndTime(e.target.value)}
+                    placeholder="e.g. 17:00"
+                    required
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase">Deployment Role / Trade</label>
+                  <select
+                    value={cellPositionCategoryId}
+                    onChange={(e) => setCellPositionCategoryId(e.target.value)}
+                    className="w-full bg-surface border border-outline-variant rounded-lg p-2 text-xs font-bold outline-none"
+                    required
+                  >
+                    <option value="">Select Trade Category</option>
+                    {positionCategories.map(c => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            )}
+
+            {/* LINK_RELIEVER fields */}
+            {cellActionType === "LINK_RELIEVER" && (
+              <div className="space-y-3">
+                <p className="text-[10px] font-bold text-secondary uppercase tracking-wider">Recommended Covers (Standby Pool / Compatible Trades)</p>
+                {fetchingRelievers ? (
+                  <p className="text-xs text-on-surface-variant italic">Finding available matching relievers...</p>
+                ) : relieversList.length === 0 ? (
+                  <div className="p-3 bg-status-error/10 border border-status-error/20 text-status-error rounded-lg">
+                    No matching standby or off-duty relievers found for this date.
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-[180px] overflow-y-auto pr-1 border border-outline-variant/30 rounded-lg p-2 bg-surface-container-low">
+                    {relieversList.map((rel: any) => (
+                      <label key={rel.employeeId} className={`flex items-start gap-3 p-2 rounded border cursor-pointer hover:bg-surface transition-colors ${selectedRelieverId === rel.employeeId ? 'border-primary bg-primary/5' : 'border-outline-variant/30'}`}>
+                        <input
+                          type="radio"
+                          name="selectedReliever"
+                          checked={selectedRelieverId === rel.employeeId}
+                          onChange={() => setSelectedRelieverId(rel.employeeId)}
+                          className="mt-1"
+                        />
+                        <div className="flex-1">
+                          <div className="flex justify-between items-center font-bold">
+                            <span className="text-primary">{rel.name} ({rel.employeeId})</span>
+                            <Badge variant={rel.isStandbyPool ? "success" : "info"}>
+                              {rel.isStandbyPool ? `Standby (Score: ${rel.matchScore})` : `Off-Duty (Score: ${rel.matchScore})`}
+                            </Badge>
+                          </div>
+                          <p className="text-[9px] text-on-surface-variant opacity-85 mt-0.5 leading-normal">
+                            Reason: {rel.matchReasons?.join(", ") || "Compatible trade match"}
+                          </p>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="block text-[10px] font-bold text-on-surface-variant uppercase">Optional Project</label>
+                    <select
+                      value={cellProjectId}
+                      onChange={(e) => setCellProjectId(e.target.value)}
+                      className="w-full bg-surface border border-outline-variant rounded-lg p-2 text-xs font-bold outline-none"
+                    >
+                      <option value="">Select Project (Optional)</option>
+                      {projects.map(p => (
+                        <option key={p.id} value={p.id}>{p.projectName}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="block text-[10px] font-bold text-on-surface-variant uppercase">Optional Site</label>
+                    <select
+                      value={cellSiteId}
+                      onChange={(e) => setCellSiteId(e.target.value)}
+                      className="w-full bg-surface border border-outline-variant rounded-lg p-2 text-xs font-bold outline-none"
+                      disabled={!cellProjectId}
+                    >
+                      <option value="">Select Site (Optional)</option>
+                      {projectSites.filter(s => s.projectId === cellProjectId).map(s => (
+                        <option key={s.id} value={s.id}>{s.siteName}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <Input
+                    label="Cover Start Time"
+                    value={cellStartTime}
+                    onChange={(e) => setCellStartTime(e.target.value)}
+                    placeholder="e.g. 08:00"
+                    required
+                  />
+                  <Input
+                    label="Cover End Time"
+                    value={cellEndTime}
+                    onChange={(e) => setCellEndTime(e.target.value)}
+                    placeholder="e.g. 17:00"
+                    required
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 border-t border-border-subtle pt-4 mt-6">
+              <Button variant="secondary" type="button" onClick={() => { setActiveCell(null); setCellActionType(""); }}>Cancel</Button>
+              <Button type="submit" disabled={cellActionType === "LINK_RELIEVER" && !selectedRelieverId}>
+                Apply Action
+              </Button>
+            </div>
+          </form>
+        )}
       </Modal>
     </div>
   );

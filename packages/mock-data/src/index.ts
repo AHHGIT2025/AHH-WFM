@@ -1,4 +1,4 @@
-import { Employee, AttendanceRecord, Shift, LeaveRequest, SapMapping, SyncLog, Announcement, Department, Worksite, AttendanceCorrection, LeaveType, LeaveBalance, LeaveBalanceLedger, Holiday, LeaveApprovalWorkflow, LeaveApprovalStep, LeaveApprovalHistory, LeaveApprovalDelegation, ShiftTemplate, RotationTemplate, ShiftAssignment, ShiftSwapRequest, OvertimeRate, SapConnection, SapSyncJob, SapSyncLog, SapFieldMapping, SapRetryQueue, SapExportQueue, SapPayrollStage, SapReconciliationLog, SapPayrollPeriodLock, SavedReport, ReportExportLog, UserActivityLog, ProductionCheckLog, BackupJob, BackupAuditLog, EmployeeBulkUploadJob, SystemRole, SystemPermission, RolePermission, UserRoleAssignment, BlueCollarPositionCategory, Project, ProjectSite, EmployeeDeployment } from "@ahh-wfm/types";
+import { Employee, AttendanceRecord, Shift, LeaveRequest, SapMapping, SyncLog, Announcement, Department, Worksite, AttendanceCorrection, LeaveType, LeaveBalance, LeaveBalanceLedger, Holiday, LeaveApprovalWorkflow, LeaveApprovalStep, LeaveApprovalHistory, LeaveApprovalDelegation, ShiftTemplate, RotationTemplate, ShiftAssignment, ShiftSwapRequest, OvertimeRate, SapConnection, SapSyncJob, SapSyncLog, SapFieldMapping, SapRetryQueue, SapExportQueue, SapPayrollStage, SapReconciliationLog, SapPayrollPeriodLock, SavedReport, ReportExportLog, UserActivityLog, ProductionCheckLog, BackupJob, BackupAuditLog, EmployeeBulkUploadJob, SystemRole, SystemPermission, RolePermission, UserRoleAssignment, BlueCollarPositionCategory, Project, ProjectSite, EmployeeDeployment, Designation, TradeClassification, LocationMaster, CostCenter, ShiftRelieverAssignment, RelieverStandbyRule } from "@ahh-wfm/types";
 import * as fs from "fs";
 import * as path from "path";
 import * as bcrypt from "bcryptjs";
@@ -122,6 +122,12 @@ let memoryDb: {
   projects: Project[];
   projectSites: ProjectSite[];
   deployments: EmployeeDeployment[];
+  designations: Designation[];
+  tradeClassifications: TradeClassification[];
+  locations: LocationMaster[];
+  costCenters: CostCenter[];
+  shiftRelieverAssignments: ShiftRelieverAssignment[];
+  relieverStandbyRules: RelieverStandbyRule[];
 } = {
   departments: [
     { id: "DEPT-001", name: "Operations", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
@@ -288,7 +294,30 @@ let memoryDb: {
   ],
   projects: [],
   projectSites: [],
-  deployments: []
+  deployments: [],
+  designations: [
+    { id: "DES-001", code: "WKR", name: "General Worker", description: "Blue collar manual worker", workerCategory: "BLUE_COLLAR", isSupervisorPosition: false, isRelieverEligible: true, isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+    { id: "DES-002", code: "SUP", name: "Operations Supervisor", description: "Supervisor of site operations", workerCategory: "BOTH", isSupervisorPosition: true, isRelieverEligible: true, isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+    { id: "DES-003", code: "MGR", name: "Operations Manager", description: "Manager of operations", workerCategory: "WHITE_COLLAR", isSupervisorPosition: true, isRelieverEligible: false, isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
+  ],
+  tradeClassifications: [
+    { id: "TRD-001", code: "MASON", name: "Masonry Work", description: "Masonry and bricklaying", linkedDesignationId: "DES-001", isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+    { id: "TRD-002", code: "CARP", name: "Carpentry", description: "Carpentry and woodwork", linkedDesignationId: "DES-001", isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+    { id: "TRD-003", code: "ELEC", name: "Electrical Work", description: "Electrical installations and repair", linkedDesignationId: "DES-001", isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
+  ],
+  locations: [
+    { id: "LOC-001", locationCode: "DOHA-HQ", locationName: "Doha Headquarters", address: "West Bay, Doha, Qatar", latitude: 25.3186, longitude: 51.5284, defaultGeofenceRadiusMeters: 150.0, isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+    { id: "LOC-002", locationCode: "IND-DEPOT", locationName: "Industrial Area Depot", address: "Street 24, Industrial Area, Doha", latitude: 25.2012, longitude: 51.4567, defaultGeofenceRadiusMeters: 200.0, isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
+  ],
+  costCenters: [
+    { id: "CC-001", costCenterCode: "CC-OPS", costCenterName: "Operations Cost Center", description: "Cost center for Operations department", sapCostCenterCode: "SAP-CC-OPS", isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+    { id: "CC-002", costCenterCode: "CC-ENG", costCenterName: "Engineering Cost Center", description: "Cost center for Engineering department", sapCostCenterCode: "SAP-CC-ENG", isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
+  ],
+  shiftRelieverAssignments: [],
+  relieverStandbyRules: [
+    { id: "RULE-001", ruleName: "General Worker Standby Rule", designationId: "DES-001", standbyRequired: true, relieverRequiredForLeave: true, relieverRequiredForOff: false, relieverRequiredForVacation: true, isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+    { id: "RULE-002", ruleName: "Mason Standby Rule", tradeClassificationId: "TRD-001", standbyRequired: true, relieverRequiredForLeave: true, relieverRequiredForOff: true, relieverRequiredForVacation: true, isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
+  ]
 };
 
 // Seeding helper to pre-fill MySQL with mock data if it is empty
@@ -298,6 +327,125 @@ const seedMySQL = async () => {
   if (!isDbConnected()) return;
   
   try {
+    const desCount = await prismaClient.designation.count();
+    if (desCount === 0) {
+      console.log("Seeding Designations...");
+      for (const des of memoryDb.designations) {
+        await prismaClient.designation.create({
+          data: {
+            id: des.id,
+            code: des.code,
+            name: des.name,
+            description: des.description,
+            workerCategory: des.workerCategory,
+            isSupervisorPosition: des.isSupervisorPosition,
+            isRelieverEligible: des.isRelieverEligible,
+            isActive: des.isActive
+          }
+        });
+      }
+    }
+
+    const tradeCount = await prismaClient.tradeClassification.count();
+    if (tradeCount === 0) {
+      console.log("Seeding Trade Classifications...");
+      for (const trade of memoryDb.tradeClassifications) {
+        await prismaClient.tradeClassification.create({
+          data: {
+            id: trade.id,
+            code: trade.code,
+            name: trade.name,
+            description: trade.description,
+            linkedDesignationId: trade.linkedDesignationId,
+            isActive: trade.isActive
+          }
+        });
+      }
+    }
+
+    const locCount = await prismaClient.locationMaster.count();
+    if (locCount === 0) {
+      console.log("Seeding Location Masters...");
+      for (const loc of memoryDb.locations) {
+        await prismaClient.locationMaster.create({
+          data: {
+            id: loc.id,
+            locationCode: loc.locationCode,
+            locationName: loc.locationName,
+            address: loc.address,
+            latitude: loc.latitude,
+            longitude: loc.longitude,
+            defaultGeofenceRadiusMeters: loc.defaultGeofenceRadiusMeters,
+            isActive: loc.isActive
+          }
+        });
+      }
+    }
+
+    const ccCount = await prismaClient.costCenter.count();
+    if (ccCount === 0) {
+      console.log("Seeding Cost Centers...");
+      for (const cc of memoryDb.costCenters) {
+        await prismaClient.costCenter.create({
+          data: {
+            id: cc.id,
+            costCenterCode: cc.costCenterCode,
+            costCenterName: cc.costCenterName,
+            description: cc.description,
+            sapCostCenterCode: cc.sapCostCenterCode,
+            isActive: cc.isActive
+          }
+        });
+      }
+    }
+
+    const ruleCount = await prismaClient.relieverStandbyRule.count();
+    if (ruleCount === 0) {
+      console.log("Seeding Reliever Standby Rules...");
+      for (const rule of memoryDb.relieverStandbyRules) {
+        await prismaClient.relieverStandbyRule.create({
+          data: {
+            id: rule.id,
+            ruleName: rule.ruleName,
+            designationId: rule.designationId,
+            tradeClassificationId: rule.tradeClassificationId,
+            projectId: rule.projectId,
+            siteId: rule.siteId,
+            standbyRequired: rule.standbyRequired,
+            relieverRequiredForLeave: rule.relieverRequiredForLeave,
+            relieverRequiredForOff: rule.relieverRequiredForOff,
+            relieverRequiredForVacation: rule.relieverRequiredForVacation,
+            isActive: rule.isActive
+          }
+        });
+      }
+    }
+
+    const relieverAssignmentCount = await prismaClient.shiftShiftRelieverAssignment || await prismaClient.shiftRelieverAssignment ? await prismaClient.shiftRelieverAssignment.count() : 0;
+    if (relieverAssignmentCount === 0 && prismaClient.shiftRelieverAssignment) {
+      console.log("Seeding Shift Reliever Assignments...");
+      for (const ra of memoryDb.shiftRelieverAssignments) {
+        await prismaClient.shiftRelieverAssignment.create({
+          data: {
+            id: ra.id,
+            originalEmployeeId: ra.originalEmployeeId,
+            relieverEmployeeId: ra.relieverEmployeeId,
+            shiftAssignmentId: ra.shiftAssignmentId,
+            deploymentId: ra.deploymentId,
+            leaveRequestId: ra.leaveRequestId,
+            date: ra.date,
+            startTime: ra.startTime,
+            endTime: ra.endTime,
+            projectId: ra.projectId,
+            siteId: ra.siteId,
+            reason: ra.reason,
+            status: ra.status,
+            createdById: ra.createdById
+          }
+        });
+      }
+    }
+
     const catCount = await prismaClient.blueCollarPositionCategory.count();
     if (catCount === 0) {
       console.log("Seeding Blue Collar Position Categories...");
@@ -729,6 +877,24 @@ const readDb = (): typeof memoryDb & { worksites: Worksite[]; attendanceCorrecti
     }
     if (!parsed.deployments) {
       parsed.deployments = [];
+    }
+    if (!parsed.designations) {
+      parsed.designations = memoryDb.designations;
+    }
+    if (!parsed.tradeClassifications) {
+      parsed.tradeClassifications = memoryDb.tradeClassifications;
+    }
+    if (!parsed.locations) {
+      parsed.locations = memoryDb.locations;
+    }
+    if (!parsed.costCenters) {
+      parsed.costCenters = memoryDb.costCenters;
+    }
+    if (!parsed.shiftRelieverAssignments) {
+      parsed.shiftRelieverAssignments = memoryDb.shiftRelieverAssignments;
+    }
+    if (!parsed.relieverStandbyRules) {
+      parsed.relieverStandbyRules = memoryDb.relieverStandbyRules;
     }
     return parsed;
   } catch (e) {
@@ -6000,7 +6166,8 @@ export const mockDb = {
           sapCostCenterCode: newProj.sapCostCenterCode || null,
           startDate: newProj.startDate ? new Date(newProj.startDate) : null,
           endDate: newProj.endDate ? new Date(newProj.endDate) : null,
-          status: newProj.status
+          status: newProj.status,
+          locationId: newProj.locationId || null
         }
       });
       return {
@@ -6034,7 +6201,8 @@ export const mockDb = {
           sapCostCenterCode: data.sapCostCenterCode || null,
           startDate: data.startDate ? new Date(data.startDate) : null,
           endDate: data.endDate ? new Date(data.endDate) : null,
-          status: data.status
+          status: data.status,
+          locationId: data.locationId || null
         }
       });
       return {
@@ -6123,7 +6291,8 @@ export const mockDb = {
           longitude: newSite.longitude,
           geofenceRadiusMeters: newSite.geofenceRadiusMeters,
           sapSiteCode: newSite.sapSiteCode || null,
-          status: newSite.status
+          status: newSite.status,
+          locationId: newSite.locationId || null
         }
       });
       return {
@@ -6152,7 +6321,8 @@ export const mockDb = {
           longitude: data.longitude !== undefined ? parseFloat(data.longitude) : null,
           geofenceRadiusMeters: data.geofenceRadiusMeters !== undefined ? parseFloat(data.geofenceRadiusMeters) : 150.0,
           sapSiteCode: data.sapSiteCode || null,
-          status: data.status
+          status: data.status,
+          locationId: data.locationId || null
         }
       });
       return {
@@ -6478,6 +6648,520 @@ export const mockDb = {
         details
       };
     });
+  },
+
+  getDesignations: async (): Promise<Designation[]> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      return await prismaClient.designation.findMany();
+    }
+    return readDb().designations;
+  },
+  createDesignation: async (data: any): Promise<Designation> => {
+    const id = data.id || `DES-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
+    const newDes: Designation = {
+      ...data,
+      id,
+      isActive: data.isActive !== false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    if (isDbConnected()) {
+      await seedMySQL();
+      const created = await prismaClient.designation.create({ data: newDes });
+      return created;
+    }
+    const db = readDb();
+    db.designations.push(newDes);
+    writeDb(db);
+    return newDes;
+  },
+  updateDesignation: async (id: string, data: any): Promise<Designation | null> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      try {
+        const updated = await prismaClient.designation.update({
+          where: { id },
+          data: {
+            ...data,
+            updatedAt: new Date()
+          }
+        });
+        return updated;
+      } catch (e) {
+        return null;
+      }
+    }
+    const db = readDb();
+    const idx = db.designations.findIndex(d => d.id === id);
+    if (idx === -1) return null;
+    db.designations[idx] = {
+      ...db.designations[idx],
+      ...data,
+      updatedAt: new Date().toISOString()
+    };
+    writeDb(db);
+    return db.designations[idx];
+  },
+  deleteDesignation: async (id: string): Promise<boolean> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      try {
+        await prismaClient.designation.delete({ where: { id } });
+        return true;
+      } catch (e) {
+        return false;
+      }
+    }
+    const db = readDb();
+    db.designations = db.designations.filter(d => d.id !== id);
+    writeDb(db);
+    return true;
+  },
+
+  getTradeClassifications: async (): Promise<TradeClassification[]> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      return await prismaClient.tradeClassification.findMany();
+    }
+    return readDb().tradeClassifications;
+  },
+  createTradeClassification: async (data: any): Promise<TradeClassification> => {
+    const id = data.id || `TRD-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
+    const newTrade: TradeClassification = {
+      ...data,
+      id,
+      isActive: data.isActive !== false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    if (isDbConnected()) {
+      await seedMySQL();
+      const created = await prismaClient.tradeClassification.create({ data: newTrade });
+      return created;
+    }
+    const db = readDb();
+    db.tradeClassifications.push(newTrade);
+    writeDb(db);
+    return newTrade;
+  },
+  updateTradeClassification: async (id: string, data: any): Promise<TradeClassification | null> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      try {
+        const updated = await prismaClient.tradeClassification.update({
+          where: { id },
+          data: {
+            ...data,
+            updatedAt: new Date()
+          }
+        });
+        return updated;
+      } catch (e) {
+        return null;
+      }
+    }
+    const db = readDb();
+    const idx = db.tradeClassifications.findIndex(t => t.id === id);
+    if (idx === -1) return null;
+    db.tradeClassifications[idx] = {
+      ...db.tradeClassifications[idx],
+      ...data,
+      updatedAt: new Date().toISOString()
+    };
+    writeDb(db);
+    return db.tradeClassifications[idx];
+  },
+  deleteTradeClassification: async (id: string): Promise<boolean> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      try {
+        await prismaClient.tradeClassification.delete({ where: { id } });
+        return true;
+      } catch (e) {
+        return false;
+      }
+    }
+    const db = readDb();
+    db.tradeClassifications = db.tradeClassifications.filter(t => t.id !== id);
+    writeDb(db);
+    return true;
+  },
+
+  getLocations: async (): Promise<LocationMaster[]> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      return await prismaClient.locationMaster.findMany();
+    }
+    return readDb().locations;
+  },
+  createLocation: async (data: any): Promise<LocationMaster> => {
+    const id = data.id || `LOC-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
+    const newLoc: LocationMaster = {
+      ...data,
+      id,
+      isActive: data.isActive !== false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    if (isDbConnected()) {
+      await seedMySQL();
+      const created = await prismaClient.locationMaster.create({ data: newLoc });
+      return created;
+    }
+    const db = readDb();
+    db.locations.push(newLoc);
+    writeDb(db);
+    return newLoc;
+  },
+  updateLocation: async (id: string, data: any): Promise<LocationMaster | null> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      try {
+        const updated = await prismaClient.locationMaster.update({
+          where: { id },
+          data: {
+            ...data,
+            updatedAt: new Date()
+          }
+        });
+        return updated;
+      } catch (e) {
+        return null;
+      }
+    }
+    const db = readDb();
+    const idx = db.locations.findIndex(l => l.id === id);
+    if (idx === -1) return null;
+    db.locations[idx] = {
+      ...db.locations[idx],
+      ...data,
+      updatedAt: new Date().toISOString()
+    };
+    writeDb(db);
+    return db.locations[idx];
+  },
+  deleteLocation: async (id: string): Promise<boolean> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      try {
+        await prismaClient.locationMaster.delete({ where: { id } });
+        return true;
+      } catch (e) {
+        return false;
+      }
+    }
+    const db = readDb();
+    db.locations = db.locations.filter(l => l.id !== id);
+    writeDb(db);
+    return true;
+  },
+
+  getCostCenters: async (): Promise<CostCenter[]> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      return await prismaClient.costCenter.findMany();
+    }
+    return readDb().costCenters;
+  },
+  createCostCenter: async (data: any): Promise<CostCenter> => {
+    const id = data.id || `CC-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
+    const newCc: CostCenter = {
+      ...data,
+      id,
+      isActive: data.isActive !== false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    if (isDbConnected()) {
+      await seedMySQL();
+      const created = await prismaClient.costCenter.create({ data: newCc });
+      return created;
+    }
+    const db = readDb();
+    db.costCenters.push(newCc);
+    writeDb(db);
+    return newCc;
+  },
+  updateCostCenter: async (id: string, data: any): Promise<CostCenter | null> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      try {
+        const updated = await prismaClient.costCenter.update({
+          where: { id },
+          data: {
+            ...data,
+            updatedAt: new Date()
+          }
+        });
+        return updated;
+      } catch (e) {
+        return null;
+      }
+    }
+    const db = readDb();
+    const idx = db.costCenters.findIndex(c => c.id === id);
+    if (idx === -1) return null;
+    db.costCenters[idx] = {
+      ...db.costCenters[idx],
+      ...data,
+      updatedAt: new Date().toISOString()
+    };
+    writeDb(db);
+    return db.costCenters[idx];
+  },
+  deleteCostCenter: async (id: string): Promise<boolean> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      try {
+        await prismaClient.costCenter.delete({ where: { id } });
+        return true;
+      } catch (e) {
+        return false;
+      }
+    }
+    const db = readDb();
+    db.costCenters = db.costCenters.filter(c => c.id !== id);
+    writeDb(db);
+    return true;
+  },
+
+  getShiftRelieverAssignments: async (): Promise<ShiftRelieverAssignment[]> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      return await prismaClient.shiftRelieverAssignment.findMany();
+    }
+    return readDb().shiftRelieverAssignments;
+  },
+  createShiftRelieverAssignment: async (data: any): Promise<ShiftRelieverAssignment> => {
+    const id = data.id || `SRA-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
+    const newSra: ShiftRelieverAssignment = {
+      ...data,
+      id,
+      status: data.status || "PLANNED",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    if (isDbConnected()) {
+      await seedMySQL();
+      const created = await prismaClient.shiftRelieverAssignment.create({ data: newSra });
+      return created;
+    }
+    const db = readDb();
+    db.shiftRelieverAssignments.push(newSra);
+    writeDb(db);
+    return newSra;
+  },
+  updateShiftRelieverAssignment: async (id: string, data: any): Promise<ShiftRelieverAssignment | null> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      try {
+        const updated = await prismaClient.shiftRelieverAssignment.update({
+          where: { id },
+          data: {
+            ...data,
+            updatedAt: new Date()
+          }
+        });
+        return updated;
+      } catch (e) {
+        return null;
+      }
+    }
+    const db = readDb();
+    const idx = db.shiftRelieverAssignments.findIndex(s => s.id === id);
+    if (idx === -1) return null;
+    db.shiftRelieverAssignments[idx] = {
+      ...db.shiftRelieverAssignments[idx],
+      ...data,
+      updatedAt: new Date().toISOString()
+    };
+    writeDb(db);
+    return db.shiftRelieverAssignments[idx];
+  },
+  deleteShiftRelieverAssignment: async (id: string): Promise<boolean> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      try {
+        await prismaClient.shiftRelieverAssignment.delete({ where: { id } });
+        return true;
+      } catch (e) {
+        return false;
+      }
+    }
+    const db = readDb();
+    db.shiftRelieverAssignments = db.shiftRelieverAssignments.filter(s => s.id !== id);
+    writeDb(db);
+    return true;
+  },
+
+  getRelieverStandbyRules: async (): Promise<RelieverStandbyRule[]> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      return await prismaClient.relieverStandbyRule.findMany();
+    }
+    return readDb().relieverStandbyRules;
+  },
+  createRelieverStandbyRule: async (data: any): Promise<RelieverStandbyRule> => {
+    const id = data.id || `RULE-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
+    const newRule: RelieverStandbyRule = {
+      ...data,
+      id,
+      standbyRequired: data.standbyRequired === true,
+      relieverRequiredForLeave: data.relieverRequiredForLeave === true,
+      relieverRequiredForOff: data.relieverRequiredForOff === true,
+      relieverRequiredForVacation: data.relieverRequiredForVacation === true,
+      isActive: data.isActive !== false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    if (isDbConnected()) {
+      await seedMySQL();
+      const created = await prismaClient.relieverStandbyRule.create({ data: newRule });
+      return created;
+    }
+    const db = readDb();
+    db.relieverStandbyRules.push(newRule);
+    writeDb(db);
+    return newRule;
+  },
+  updateRelieverStandbyRule: async (id: string, data: any): Promise<RelieverStandbyRule | null> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      try {
+        const updated = await prismaClient.relieverStandbyRule.update({
+          where: { id },
+          data: {
+            ...data,
+            updatedAt: new Date()
+          }
+        });
+        return updated;
+      } catch (e) {
+        return null;
+      }
+    }
+    const db = readDb();
+    const idx = db.relieverStandbyRules.findIndex(r => r.id === id);
+    if (idx === -1) return null;
+    db.relieverStandbyRules[idx] = {
+      ...db.relieverStandbyRules[idx],
+      ...data,
+      updatedAt: new Date().toISOString()
+    };
+    writeDb(db);
+    return db.relieverStandbyRules[idx];
+  },
+  deleteRelieverStandbyRule: async (id: string): Promise<boolean> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      try {
+        await prismaClient.relieverStandbyRule.delete({ where: { id } });
+        return true;
+      } catch (e) {
+        return false;
+      }
+    }
+    const db = readDb();
+    db.relieverStandbyRules = db.relieverStandbyRules.filter(r => r.id !== id);
+    writeDb(db);
+    return true;
+  },
+
+  getAvailableRelievers: async (filters: {
+    date?: string;
+    designationId?: string;
+    tradeClassificationId?: string;
+    projectId?: string;
+    siteId?: string;
+  }): Promise<Employee[]> => {
+    const employees = await mockDb.getEmployees();
+    const targetDateStr = filters.date || new Date().toISOString().split("T")[0];
+    const targetDate = new Date(targetDateStr);
+    const targetTime = targetDate.getTime();
+
+    const allLeaves = isDbConnected()
+      ? await prismaClient.leaveRequest.findMany({ where: { status: { in: ["Approved", "APPROVED"] } } })
+      : readDb().leaves.filter(l => l.status === "Approved" || l.status === "APPROVED");
+
+    const leaveEmployeeIds = new Set<string>();
+    for (const leave of allLeaves) {
+      const start = leave.startDate ? new Date(leave.startDate) : null;
+      const end = leave.endDate ? new Date(leave.endDate) : null;
+      if (start && end) {
+        const sTime = new Date(start.getFullYear(), start.getMonth(), start.getDate()).getTime();
+        const eTime = new Date(end.getFullYear(), end.getMonth(), end.getDate()).getTime();
+        if (targetTime >= sTime && targetTime <= eTime) {
+          leaveEmployeeIds.add(leave.employeeId);
+        }
+      } else if (leave.dateRange) {
+        const parsed = parseDateRange(leave.dateRange);
+        const sTime = new Date(parsed.start.getFullYear(), parsed.start.getMonth(), parsed.start.getDate()).getTime();
+        const eTime = new Date(parsed.end.getFullYear(), parsed.end.getMonth(), parsed.end.getDate()).getTime();
+        if (targetTime >= sTime && targetTime <= eTime) {
+          leaveEmployeeIds.add(leave.employeeId);
+        }
+      }
+    }
+
+    const deployments = isDbConnected()
+      ? await prismaClient.employeeDeployment.findMany({
+          where: {
+            deploymentDate: {
+              gte: new Date(targetDateStr + "T00:00:00Z"),
+              lte: new Date(targetDateStr + "T23:59:59Z")
+            }
+          }
+        })
+      : readDb().deployments.filter(d => d.deploymentDate.split("T")[0] === targetDateStr);
+
+    const deployedEmployeeIds = new Set<string>(deployments.map((d: any) => d.employeeId));
+
+    const sras = isDbConnected()
+      ? await prismaClient.shiftRelieverAssignment.findMany({
+          where: { date: targetDateStr, status: { not: "CANCELLED" } }
+        })
+      : readDb().shiftRelieverAssignments.filter(s => s.date === targetDateStr && s.status !== "CANCELLED");
+
+    const assignedRelieverIds = new Set<string>(sras.map((s: any) => s.relieverEmployeeId));
+
+    const rules = await mockDb.getRelieverStandbyRules();
+    const standbyDesignationIds = new Set<string>();
+    const standbyTradeIds = new Set<string>();
+    for (const rule of rules) {
+      if (rule.isActive && rule.standbyRequired) {
+        if (rule.designationId) standbyDesignationIds.add(rule.designationId);
+        if (rule.tradeClassificationId) standbyTradeIds.add(rule.tradeClassificationId);
+      }
+    }
+
+    const available = employees.filter(emp => {
+      const active = isEmployeeActive(emp);
+      if (!active) return false;
+      if (leaveEmployeeIds.has(emp.id)) return false;
+      if (deployedEmployeeIds.has(emp.id)) return false;
+      if (assignedRelieverIds.has(emp.id)) return false;
+
+      if (filters.designationId && emp.designationId !== filters.designationId) {
+        return false;
+      }
+      if (filters.tradeClassificationId && emp.tradeClassificationId !== filters.tradeClassificationId) {
+        return false;
+      }
+      return true;
+    });
+
+    available.sort((a, b) => {
+      const aIsStandby = (a.designationId && standbyDesignationIds.has(a.designationId)) ||
+                          (a.tradeClassificationId && standbyTradeIds.has(a.tradeClassificationId));
+      const bIsStandby = (b.designationId && standbyDesignationIds.has(b.designationId)) ||
+                          (b.tradeClassificationId && standbyTradeIds.has(b.tradeClassificationId));
+      if (aIsStandby && !bIsStandby) return -1;
+      if (!aIsStandby && bIsStandby) return 1;
+      return 0;
+    });
+
+    return available;
   }
 };
 

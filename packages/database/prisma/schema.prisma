@@ -35,6 +35,16 @@ model Employee {
   defaultSiteId      String?
   defaultSite        ProjectSite?                @relation("DefaultSite", fields: [defaultSiteId], references: [id])
   deployments        EmployeeDeployment[]
+  designationId      String?
+  designation        Designation?                @relation(fields: [designationId], references: [id])
+  tradeClassificationId String?
+  tradeClassification   TradeClassification?      @relation(fields: [tradeClassificationId], references: [id])
+  costCenterId       String?
+  costCenterRef      CostCenter?                 @relation(fields: [costCenterId], references: [id])
+  defaultLocationId  String?
+  defaultLocation    LocationMaster?             @relation(fields: [defaultLocationId], references: [id])
+  isRelieverEligible Boolean                     @default(false)
+  isStandbyEligible  Boolean                     @default(false)
 }
 
 model Department {
@@ -187,6 +197,8 @@ model LeaveRequest {
   approvedAt            DateTime?
   approvalDurationHours Float?
   escalationCount       Int                    @default(0)
+  relieverRequired      Boolean                @default(false)
+  relieverAssignmentId  String?
   approvalHistory       LeaveApprovalHistory[]
 }
 
@@ -309,8 +321,15 @@ model ShiftAssignment {
   date            DateTime
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
+  projectId       String?
+  siteId          String?
+  isSplitShift    Boolean       @default(false)
+  parentAssignmentId String?
+  relieverRequired   Boolean    @default(false)
+  relieverAssignmentId String?
+  assignmentStatus   String     @default("ACTIVE") // "ACTIVE", "INACTIVE", "CANCELLED"
 
-  @@unique([employeeId, date])
+  @@index([employeeId])
 }
 
 model ShiftSwapRequest {
@@ -630,6 +649,8 @@ model Project {
   sites              ProjectSite[]
   deployments        EmployeeDeployment[]
   employees          Employee[]           @relation("DefaultProject")
+  locationId         String?
+  location           LocationMaster?      @relation(fields: [locationId], references: [id])
 }
 
 model ProjectSite {
@@ -648,6 +669,8 @@ model ProjectSite {
   updatedAt            DateTime             @updatedAt
   deployments          EmployeeDeployment[]
   employees            Employee[]           @relation("DefaultSite")
+  locationId           String?
+  location             LocationMaster?      @relation(fields: [locationId], references: [id])
 }
 
 model EmployeeDeployment {
@@ -672,6 +695,96 @@ model EmployeeDeployment {
   createdAt          DateTime                   @default(now())
   updatedAt          DateTime                   @updatedAt
 }
+
+model Designation {
+  id                   String     @id @default(uuid())
+  code                 String     @unique
+  name                 String
+  description          String?    @db.Text
+  workerCategory       String     @default("BOTH") // WHITE_COLLAR, BLUE_COLLAR, BOTH
+  isSupervisorPosition Boolean    @default(false)
+  isRelieverEligible   Boolean    @default(false)
+  isActive             Boolean    @default(true)
+  createdAt            DateTime   @default(now())
+  updatedAt            DateTime   @updatedAt
+  employees            Employee[]
+}
+
+model TradeClassification {
+  id                  String     @id @default(uuid())
+  code                String     @unique
+  name                String
+  description         String?    @db.Text
+  linkedDesignationId String?
+  isActive            Boolean    @default(true)
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @updatedAt
+  employees           Employee[]
+}
+
+model LocationMaster {
+  id                         String        @id @default(uuid())
+  locationCode               String        @unique
+  locationName               String
+  address                    String?       @db.Text
+  latitude                   Float?
+  longitude                  Float?
+  defaultGeofenceRadiusMeters Float         @default(150.0)
+  isActive                   Boolean       @default(true)
+  createdAt                  DateTime      @default(now())
+  updatedAt                  DateTime      @updatedAt
+  projects                   Project[]
+  projectSites               ProjectSite[]
+  employees                  Employee[]
+}
+
+model CostCenter {
+  id                String     @id @default(uuid())
+  costCenterCode    String     @unique
+  costCenterName    String
+  description       String?    @db.Text
+  sapCostCenterCode String?
+  isActive          Boolean    @default(true)
+  createdAt         DateTime   @default(now())
+  updatedAt         DateTime   @updatedAt
+  employees         Employee[]
+}
+
+model ShiftRelieverAssignment {
+  id                 String           @id @default(uuid())
+  originalEmployeeId String
+  relieverEmployeeId String
+  shiftAssignmentId  String?
+  deploymentId       String?
+  leaveRequestId     String?
+  date               String           // Format: "YYYY-MM-DD"
+  startTime          String           // Format: "HH:MM"
+  endTime            String           // Format: "HH:MM"
+  projectId          String?
+  siteId             String?
+  reason             String?          @db.Text
+  status             String           @default("PLANNED") // "PLANNED", "ACTIVE", "COMPLETED", "CANCELLED"
+  createdById        String
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+}
+
+model RelieverStandbyRule {
+  id                           String   @id @default(uuid())
+  ruleName                     String
+  designationId                String?
+  tradeClassificationId        String?
+  projectId                    String?
+  siteId                       String?
+  standbyRequired              Boolean  @default(false)
+  relieverRequiredForLeave     Boolean  @default(false)
+  relieverRequiredForOff       Boolean  @default(false)
+  relieverRequiredForVacation  Boolean  @default(false)
+  isActive                     Boolean  @default(true)
+  createdAt                    DateTime @default(now())
+  updatedAt                    DateTime @updatedAt
+}
+
 
 
 

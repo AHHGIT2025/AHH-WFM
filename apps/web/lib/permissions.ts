@@ -6,7 +6,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "overtime.view", "overtime.approve", "reports.view", "reports.export",
     "sap.view", "sap.sync", "sap.mapping",
     "backup.view", "backup.create", "backup.download", "backup.delete",
-    "settings.view", "settings.roles.manage"
+    "settings.view", "settings.roles.manage", "masters.view", "masters.manage"
   ],
   ADMIN: [
     "dashboard.view", "employees.view", "employees.create", "employees.edit", "employees.bulkUpload",
@@ -15,13 +15,13 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "overtime.view", "overtime.approve", "reports.view", "reports.export",
     "sap.view", "sap.sync", "sap.mapping",
     "backup.view", "backup.create", "backup.download",
-    "settings.view"
+    "settings.view", "masters.view", "masters.manage"
   ],
   HR_MANAGER: [
     "dashboard.view", "employees.view", "employees.create", "employees.edit", "employees.bulkUpload",
     "attendance.view", "attendance.edit", "attendance.approveCorrection",
     "leaves.view", "leaves.approve", "shifts.view", "shifts.edit",
-    "reports.view", "reports.export"
+    "reports.view", "reports.export", "masters.view"
   ],
   FINANCE_MANAGER: [
     "dashboard.view", "employees.view", "attendance.view", "overtime.view", "overtime.approve",
@@ -73,6 +73,7 @@ export function filterNavigationByPermissions(user: { role?: string } | null | u
     if (item.path.startsWith("/sap")) return hasPermission(user, "sap.view");
     if (item.path.startsWith("/shifts")) return hasPermission(user, "shifts.view");
     if (item.path.startsWith("/admin/backup")) return hasPermission(user, "backup.view");
+    if (item.path.startsWith("/admin/masters")) return hasPermission(user, "masters.view");
     if (item.path.startsWith("/settings")) return hasPermission(user, "settings.view");
     if (item.path.startsWith("/reports")) return hasPermission(user, "reports.view");
     return true;
