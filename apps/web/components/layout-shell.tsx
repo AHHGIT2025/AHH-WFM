@@ -29,7 +29,7 @@ const navItems: NavItem[] = [
 export const LayoutShell: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const pathname = usePathname();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const userRole = (session?.user as any)?.role;
   const activeNavItems = [...navItems];
   if (userRole === "ADMIN") {
@@ -42,6 +42,27 @@ export const LayoutShell: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     return pathname.startsWith(path);
   };
+
+  const isAuthPage = pathname === "/login" || pathname.startsWith("/login");
+
+  if (isAuthPage) {
+    return <div className="min-h-screen bg-surface flex flex-col font-sans">{children}</div>;
+  }
+
+  if (status === "loading") {
+    return (
+      <div className="min-h-screen bg-surface flex items-center justify-center font-sans">
+        <div className="text-center">
+          <span className="material-symbols-outlined animate-spin text-4xl text-primary">sync</span>
+          <p className="mt-2 text-xs font-bold text-on-surface-variant">Loading workspace...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!session) {
+    return <div className="min-h-screen bg-surface flex flex-col font-sans">{children}</div>;
+  }
 
   return (
     <div className="min-h-screen bg-surface flex flex-col font-sans">

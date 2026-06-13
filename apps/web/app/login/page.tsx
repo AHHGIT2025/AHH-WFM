@@ -1,13 +1,20 @@
 "use client";
 
-import React, { useState, Suspense } from "react";
-import { signIn } from "next-auth/react";
+import React, { useState, Suspense, useEffect } from "react";
+import { signIn, useSession } from "next-auth/react";
 import { useSearchParams, useRouter } from "next/navigation";
 
 function LoginForm() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const error = searchParams.get("error");
+  const { status } = useSession();
+
+  useEffect(() => {
+    if (status === "authenticated") {
+      router.push("/");
+    }
+  }, [status, router]);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
