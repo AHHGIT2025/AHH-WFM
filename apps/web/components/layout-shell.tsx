@@ -19,6 +19,7 @@ const navItems: NavItem[] = [
   { label: "Workforce Directory", path: "/workforce", icon: "group" },
   { label: "Attendance Monitor", path: "/attendance", icon: "fact_check" },
   { label: "Leave Management", path: "/leave", icon: "event_busy" },
+  { label: "Reports Hub", path: "/reports", icon: "analytics" },
   { label: "SAP Integration Hub", path: "/sap", icon: "hub" },
   { label: "SAP Field Mapping", path: "/sap/mapping", icon: "account_tree" },
   { label: "Shift Master", path: "/shifts", icon: "schedule" },
@@ -75,6 +76,12 @@ export const LayoutShell: React.FC<{ children: React.ReactNode }> = ({ children 
               className={pathname.startsWith("/shifts") ? "text-primary border-b-2 border-primary pb-1 font-bold" : "text-on-surface-variant hover:text-primary transition-colors pb-1"}
             >
               Rotations
+            </Link>
+            <Link
+              href="/reports"
+              className={pathname.startsWith("/reports") ? "text-primary border-b-2 border-primary pb-1 font-bold" : "text-on-surface-variant hover:text-primary transition-colors pb-1"}
+            >
+              Reports
             </Link>
           </nav>
         </div>
