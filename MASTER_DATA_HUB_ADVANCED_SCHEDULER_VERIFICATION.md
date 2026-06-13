@@ -1,5 +1,6 @@
 # Master Data Hub & Advanced Scheduler Verification
 
+> **Release Checkpoint**: `v0.15-master-data-scheduler-mobile-integration`
 ## 1. Master Data Hub Verification
 The Master Data Hub provides centralized management for all foundational AHH structural data.
 

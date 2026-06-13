@@ -33,6 +33,7 @@ AHH WFM is a full-stack, enterprise-grade workforce management application built
 | **Phase 5B.2**| Completed | `v0.12-sap-operational-sync-payroll-roster` | SAP SuccessFactors outbound integration for Overtime (EmpCompensation) and Roster (ShiftAssignment), staging, locking, and reconciliation. |
 | **Phase 6.1**| Completed | `v0.13-reporting-backup-foundation` | Executive & domain-specific reports API, CSV/JSON exports, user audits, and admin backups. |
 | **Phase 7** | Completed | `v0.14-mobile-app-foundation` | Next.js Mobile PWA client with dedicated BFF API, Geofence priority routing, and supervisor dashboards. |
+| **Phase 8** | Completed | `v0.15-master-data-scheduler-mobile-integration` | Master Data Hub CRUD UI, Advanced Scheduler Grid Cell Actions, Mobile Integration & Priority Cascade. |
 
 ---
 
@@ -115,3 +116,8 @@ AHH WFM is a full-stack, enterprise-grade workforce management application built
 - **Geofence Priority Engine**: Enforces check-in rule cascade (Active Deployment > On-Call Assignment > Shift Assignment > Allowed Location > Office Default > Policy Fallback).
 - **Employee Portal Screens**: Implemented specialized mobile screens for Dashboard, Punch Capture, Schedule, History, Leave Management, and Notice Board.
 - **Supervisor Mobile Dashboard**: Added real-time roll-call counters (Present, Absent, Late, Out of Zone) and team rosters tailored for mobile supervisors.
+
+### Phase 8: Master Data Hub & Advanced Scheduler Integration
+- **Master Data Hub UI**: Centralized dynamic dashboard (`/admin/masters`) using a unified `MasterDataEntityTab` component for Companies, Departments, Designations, Trades, Locations, Projects, and Standby Rules.
+- **Advanced Scheduler Grid**: Enabled deep cell-actions (`/shifts`) for assigning deployments, splits, on-call duties, and reliever linkage.
+- **Mobile PWA Integration**: Verified seamless flow of data where web-created projects, sites, custom allowed punch locations, and deployments dynamically feed into the Mobile BFF and correctly enforce geofence priorities.

@@ -287,6 +287,29 @@ This document outlines the evolutionary development roadmap for the **AHH WFM** 
     *   Mobile: `/supervisor`
 *   **Estimated Implementation Effort**: Completed
 
+---
+
+## Phase 8: Master Data Hub & Advanced Scheduler (Completed)
+
+### 8.1 Unified Master Data UI
+*   **Business Purpose**: A single centralized view to manage all multi-tenant entity records (Companies, Departments, Designations, Trades, Projects, Cost Centers, Locations).
+*   **Database Impact**: Touches nearly all reference schema tables.
+*   **API Endpoints Required**: 
+    *   `/api/v1/masters/[entity]` dynamic REST
+*   **UI Screens Affected**:
+    *   Web: `/admin/masters`
+*   **Estimated Implementation Effort**: Completed
+
+### 8.2 Advanced Scheduler Cell Actions
+*   **Business Purpose**: Turn the passive grid into an interactive deployment tool mapping out on-call, standbys, and dynamic splits.
+*   **UI Screens Affected**:
+    *   Web: `/shifts` cell modal overlays
+*   **Estimated Implementation Effort**: Completed
+
+### 8.3 Web-to-Mobile Integration Checks
+*   **Business Purpose**: Ensure the core engine accurately routes the correct dynamic deployment boundaries down to the mobile clients.
+*   **Estimated Implementation Effort**: Completed
+
 
 
 

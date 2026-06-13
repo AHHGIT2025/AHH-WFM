@@ -1,5 +1,6 @@
 # MOBILE APP INTEGRATION VERIFICATION
 
+> **Release Checkpoint**: `v0.15-master-data-scheduler-mobile-integration`
 ## 1. Mobile Screens Implemented
 - **Login (`/login`)**: Standalone authentication bypassing the web admin interface.
 - **Employee Dashboard (`/`)**: Upcoming shifts, real-time presence indicators, and quick actions.
