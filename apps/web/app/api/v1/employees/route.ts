@@ -20,7 +20,7 @@ export async function POST(request: Request) {
 
   try {
     const payload = await request.json();
-    const { id, name, email, role, departmentId, phone, shiftId, password, employmentStatus, dutyStatus, workerCategory } = payload;
+    const { id, name, email, role, departmentId, phone, shiftId, password, employmentStatus, dutyStatus, workerCategory, positionCategoryId, defaultProjectId, defaultSiteId } = payload;
 
     // 1. Validation
     if (!id || id.trim() === "") {
@@ -64,7 +64,10 @@ export async function POST(request: Request) {
       employmentStatus: employmentStatus || "ACTIVE",
       dutyStatus: dutyStatus || "OFF_DUTY",
       workerCategory: workerCategory || "WHITE_COLLAR",
-      isActive: employmentStatus ? (employmentStatus === "ACTIVE") : true
+      isActive: employmentStatus ? (employmentStatus === "ACTIVE") : true,
+      positionCategoryId: positionCategoryId || undefined,
+      defaultProjectId: defaultProjectId || undefined,
+      defaultSiteId: defaultSiteId || undefined
     });
 
     return NextResponse.json(newEmp);

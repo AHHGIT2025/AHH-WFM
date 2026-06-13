@@ -1,4 +1,4 @@
-import { Employee, AttendanceRecord, Shift, LeaveRequest, SapMapping, SyncLog, Announcement, Department, Worksite, AttendanceCorrection, LeaveType, LeaveBalance, LeaveBalanceLedger, Holiday, LeaveApprovalWorkflow, LeaveApprovalStep, LeaveApprovalHistory, LeaveApprovalDelegation, ShiftTemplate, RotationTemplate, ShiftAssignment, ShiftSwapRequest, OvertimeRate, SapConnection, SapSyncJob, SapSyncLog, SapFieldMapping, SapRetryQueue, SapExportQueue, SapPayrollStage, SapReconciliationLog, SapPayrollPeriodLock, SavedReport, ReportExportLog, UserActivityLog, ProductionCheckLog, BackupJob, BackupAuditLog, EmployeeBulkUploadJob, SystemRole, SystemPermission, RolePermission, UserRoleAssignment } from "@ahh-wfm/types";
+import { Employee, AttendanceRecord, Shift, LeaveRequest, SapMapping, SyncLog, Announcement, Department, Worksite, AttendanceCorrection, LeaveType, LeaveBalance, LeaveBalanceLedger, Holiday, LeaveApprovalWorkflow, LeaveApprovalStep, LeaveApprovalHistory, LeaveApprovalDelegation, ShiftTemplate, RotationTemplate, ShiftAssignment, ShiftSwapRequest, OvertimeRate, SapConnection, SapSyncJob, SapSyncLog, SapFieldMapping, SapRetryQueue, SapExportQueue, SapPayrollStage, SapReconciliationLog, SapPayrollPeriodLock, SavedReport, ReportExportLog, UserActivityLog, ProductionCheckLog, BackupJob, BackupAuditLog, EmployeeBulkUploadJob, SystemRole, SystemPermission, RolePermission, UserRoleAssignment, BlueCollarPositionCategory, Project, ProjectSite, EmployeeDeployment } from "@ahh-wfm/types";
 import * as fs from "fs";
 import * as path from "path";
 import * as bcrypt from "bcryptjs";
@@ -118,6 +118,10 @@ let memoryDb: {
   systemPermissions: SystemPermission[];
   rolePermissions: RolePermission[];
   userRoleAssignments: UserRoleAssignment[];
+  blueCollarPositionCategories: BlueCollarPositionCategory[];
+  projects: Project[];
+  projectSites: ProjectSite[];
+  deployments: EmployeeDeployment[];
 } = {
   departments: [
     { id: "DEPT-001", name: "Operations", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
@@ -265,7 +269,26 @@ let memoryDb: {
   systemRoles: [],
   systemPermissions: [],
   rolePermissions: [],
-  userRoleAssignments: []
+  userRoleAssignments: [],
+  blueCollarPositionCategories: [
+    { id: "cat-1", code: "security_guard", name: "Security Guard", isActive: true },
+    { id: "cat-2", code: "cleaning_staff", name: "Cleaning Staff", isActive: true },
+    { id: "cat-3", code: "security_supervisor", name: "Security Supervisor", isActive: true },
+    { id: "cat-4", code: "construction_labor", name: "Construction Labor", isActive: true },
+    { id: "cat-5", code: "carpenter", name: "Carpenter", isActive: true },
+    { id: "cat-6", code: "mason", name: "Mason", isActive: true },
+    { id: "cat-7", code: "plumber", name: "Plumber", isActive: true },
+    { id: "cat-8", code: "electrician", name: "Electrician", isActive: true },
+    { id: "cat-9", code: "painter", name: "Painter", isActive: true },
+    { id: "cat-10", code: "driver", name: "Driver", isActive: true },
+    { id: "cat-11", code: "helper", name: "Helper", isActive: true },
+    { id: "cat-12", code: "foreman", name: "Foreman", isActive: true },
+    { id: "cat-13", code: "site_supervisor", name: "Site Supervisor", isActive: true },
+    { id: "cat-14", code: "other", name: "Other", isActive: true }
+  ],
+  projects: [],
+  projectSites: [],
+  deployments: []
 };
 
 // Seeding helper to pre-fill MySQL with mock data if it is empty
@@ -275,6 +298,21 @@ const seedMySQL = async () => {
   if (!isDbConnected()) return;
   
   try {
+    const catCount = await prismaClient.blueCollarPositionCategory.count();
+    if (catCount === 0) {
+      console.log("Seeding Blue Collar Position Categories...");
+      for (const cat of memoryDb.blueCollarPositionCategories) {
+        await prismaClient.blueCollarPositionCategory.create({
+          data: {
+            id: cat.id,
+            code: cat.code,
+            name: cat.name,
+            isActive: cat.isActive
+          }
+        });
+      }
+    }
+
     const empCount = await prismaClient.employee.count();
     if (empCount === 0) {
       console.log("MySQL database is empty. Seeding mock data...");
@@ -680,6 +718,18 @@ const readDb = (): typeof memoryDb & { worksites: Worksite[]; attendanceCorrecti
     if (!parsed.overtimeRates) {
       parsed.overtimeRates = memoryDb.overtimeRates || [];
     }
+    if (!parsed.blueCollarPositionCategories) {
+      parsed.blueCollarPositionCategories = memoryDb.blueCollarPositionCategories;
+    }
+    if (!parsed.projects) {
+      parsed.projects = [];
+    }
+    if (!parsed.projectSites) {
+      parsed.projectSites = [];
+    }
+    if (!parsed.deployments) {
+      parsed.deployments = [];
+    }
     return parsed;
   } catch (e) {
     console.error("Failed to read JSON DB, using memory fallback", e);
@@ -936,24 +986,98 @@ export const mockDb = {
         throw new Error("Employee already has an active check-in session");
       }
 
-      // Check geofencing
-      const worksites = await prismaClient.worksite.findMany();
+      // Detect active deployment for today and current time
+      const now = new Date();
+      const currentMinutes = now.getHours() * 60 + now.getMinutes();
+      const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+      
+      const todayDeps = await prismaClient.employeeDeployment.findMany({
+        where: {
+          employeeId,
+          deploymentDate: {
+            gte: startOfDay,
+            lte: endOfDay
+          }
+        }
+      });
+
+      let activeDeployment = null;
+      for (const d of todayDeps) {
+        const [sh, sm] = d.startTime.split(":").map(Number);
+        const [eh, em] = d.endTime.split(":").map(Number);
+        const startMin = sh * 60 + sm;
+        const endMin = eh * 60 + em;
+        if (currentMinutes >= startMin && currentMinutes <= endMin) {
+          activeDeployment = d;
+          break;
+        }
+      }
+
+      let projectId = null;
+      let siteId = null;
+      let deploymentId = null;
+      let projectStatusFlag = null;
       let matchedWorksite = null;
       let isOutOfZone = true;
-      for (const site of worksites) {
-        if (site.isActive) {
-          const dist = calculateDistance(lat, lng, site.lat, site.lng);
-          if (dist <= site.radiusMeters) {
-            matchedWorksite = site;
+      let status = "ON_TIME";
+
+      if (employee.workerCategory === "BLUE_COLLAR") {
+        if (activeDeployment) {
+          projectId = activeDeployment.projectId;
+          siteId = activeDeployment.siteId;
+          deploymentId = activeDeployment.id;
+          
+          const site = await prismaClient.projectSite.findUnique({ where: { id: siteId } });
+          if (site && site.latitude && site.longitude) {
+            const dist = calculateDistance(lat, lng, site.latitude, site.longitude);
+            if (dist <= site.geofenceRadiusMeters) {
+              isOutOfZone = false;
+              projectStatusFlag = "MATCHED";
+            } else {
+              isOutOfZone = true;
+              projectStatusFlag = "OUT_OF_ZONE";
+            }
+          } else {
             isOutOfZone = false;
-            break;
+            projectStatusFlag = "MATCHED";
+          }
+        } else {
+          projectStatusFlag = "UNASSIGNED_PROJECT";
+          // Check standard worksite fallback
+          const worksites = await prismaClient.worksite.findMany();
+          for (const site of worksites) {
+            if (site.isActive) {
+              const dist = calculateDistance(lat, lng, site.lat, site.lng);
+              if (dist <= site.radiusMeters) {
+                matchedWorksite = site;
+                isOutOfZone = false;
+                break;
+              }
+            }
+          }
+        }
+      } else {
+        // White Collar standard worksite geofence check
+        const worksites = await prismaClient.worksite.findMany();
+        for (const site of worksites) {
+          if (site.isActive) {
+            const dist = calculateDistance(lat, lng, site.lat, site.lng);
+            if (dist <= site.radiusMeters) {
+              matchedWorksite = site;
+              isOutOfZone = false;
+              break;
+            }
           }
         }
       }
 
+      if (isOutOfZone) {
+        status = "OUT_OF_ZONE";
+      }
+
       // Calculate shift times & late minutes
       let lateMinutes = 0;
-      let status = "ON_TIME";
       let shiftStartSnapshot = null;
       let shiftEndSnapshot = null;
 
@@ -966,19 +1090,16 @@ export const mockDb = {
 
           const expectedStart = getShiftStartTimeToday(shift.timeRange);
           if (expectedStart) {
-            const now = new Date();
             const diffMs = now.getTime() - expectedStart.getTime();
             const diffMins = Math.floor(diffMs / 60000);
             if (diffMins > 5) { // 5 mins grace
               lateMinutes = diffMins;
-              status = "LATE";
+              if (status !== "OUT_OF_ZONE") {
+                status = "LATE";
+              }
             }
           }
         }
-      }
-
-      if (isOutOfZone) {
-        status = "OUT_OF_ZONE";
       }
 
       // Update employee status to On Duty
@@ -1003,7 +1124,11 @@ export const mockDb = {
           shiftId: employee.shiftId || null,
           shiftStartSnapshot,
           shiftEndSnapshot,
-          lateMinutes
+          lateMinutes,
+          projectId,
+          siteId,
+          deploymentId,
+          projectStatusFlag
         }
       });
 
@@ -1032,25 +1157,91 @@ export const mockDb = {
       throw new Error("Employee already has an active check-in session");
     }
 
-    // Geofencing fallback
+    // Detect active deployment for JSON mode
+    const now = new Date();
+    const todayStr = now.toISOString().split("T")[0];
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+    
+    const todayDeps = (db.deployments || []).filter(d => {
+      return d.employeeId === employeeId && d.deploymentDate.split("T")[0] === todayStr;
+    });
+
+    let activeDeployment = null;
+    for (const d of todayDeps) {
+      const [sh, sm] = d.startTime.split(":").map(Number);
+      const [eh, em] = d.endTime.split(":").map(Number);
+      const startMin = sh * 60 + sm;
+      const endMin = eh * 60 + em;
+      if (currentMinutes >= startMin && currentMinutes <= endMin) {
+        activeDeployment = d;
+        break;
+      }
+    }
+
+    let projectId: string | undefined = undefined;
+    let siteId: string | undefined = undefined;
+    let deploymentId: string | undefined = undefined;
+    let projectStatusFlag: string | undefined = undefined;
     let matchedWorksiteId: string | undefined = undefined;
     let isOutOfZone = true;
-    for (const site of db.worksites) {
-      if (site.isActive) {
-        const dist = calculateDistance(lat, lng, site.lat, site.lng);
-        if (dist <= site.radiusMeters) {
-          matchedWorksiteId = site.id;
+    let status = "ON_TIME";
+
+    if (employee.workerCategory === "BLUE_COLLAR") {
+      if (activeDeployment) {
+        projectId = activeDeployment.projectId;
+        siteId = activeDeployment.siteId;
+        deploymentId = activeDeployment.id;
+        
+        const site = db.projectSites.find(s => s.id === siteId);
+        if (site && site.latitude && site.longitude) {
+          const dist = calculateDistance(lat, lng, site.latitude, site.longitude);
+          if (dist <= site.geofenceRadiusMeters) {
+            isOutOfZone = false;
+            projectStatusFlag = "MATCHED";
+          } else {
+            isOutOfZone = true;
+            projectStatusFlag = "OUT_OF_ZONE";
+          }
+        } else {
           isOutOfZone = false;
-          break;
+          projectStatusFlag = "MATCHED";
+        }
+      } else {
+        projectStatusFlag = "UNASSIGNED_PROJECT";
+        // Check standard worksite fallback
+        for (const site of db.worksites) {
+          if (site.isActive) {
+            const dist = calculateDistance(lat, lng, site.lat, site.lng);
+            if (dist <= site.radiusMeters) {
+              matchedWorksiteId = site.id;
+              isOutOfZone = false;
+              break;
+            }
+          }
+        }
+      }
+    } else {
+      // White Collar standard worksite geofence check
+      for (const site of db.worksites) {
+        if (site.isActive) {
+          const dist = calculateDistance(lat, lng, site.lat, site.lng);
+          if (dist <= site.radiusMeters) {
+            matchedWorksiteId = site.id;
+            isOutOfZone = false;
+            break;
+          }
         }
       }
     }
 
+    if (isOutOfZone) {
+      status = "OUT_OF_ZONE";
+    }
+
     // Late logic fallback
     let lateMinutes = 0;
-    let status = "ON_TIME";
-    let shiftStartSnapshot: string | undefined = undefined;
-    let shiftEndSnapshot: string | undefined = undefined;
+    let shiftStartSnapshot = undefined;
+    let shiftEndSnapshot = undefined;
 
     if (employee.shiftId) {
       const shift = db.shifts.find(s => s.id === employee.shiftId);
@@ -1061,19 +1252,16 @@ export const mockDb = {
 
         const expectedStart = getShiftStartTimeToday(shift.timeRange);
         if (expectedStart) {
-          const now = new Date();
           const diffMs = now.getTime() - expectedStart.getTime();
           const diffMins = Math.floor(diffMs / 60000);
           if (diffMins > 5) {
             lateMinutes = diffMins;
-            status = "LATE";
+            if (status !== "OUT_OF_ZONE") {
+              status = "LATE";
+            }
           }
         }
       }
-    }
-
-    if (isOutOfZone) {
-      status = "OUT_OF_ZONE";
     }
 
     employee.status = "On Duty";
@@ -1093,7 +1281,11 @@ export const mockDb = {
       shiftId: employee.shiftId || undefined,
       shiftStartSnapshot,
       shiftEndSnapshot,
-      lateMinutes
+      lateMinutes,
+      projectId,
+      siteId,
+      deploymentId,
+      projectStatusFlag
     };
 
     db.attendance.unshift(record);
@@ -5706,6 +5898,586 @@ export const mockDb = {
     };
     writeDb(db);
     return db.employeeBulkUploadJobs[idx];
+  },
+
+  // Blue Collar Position Categories
+  getBlueCollarPositionCategories: async (): Promise<BlueCollarPositionCategory[]> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      return await prismaClient.blueCollarPositionCategory.findMany();
+    }
+    const db = readDb();
+    return db.blueCollarPositionCategories || [];
+  },
+
+  createBlueCollarPositionCategory: async (data: any): Promise<BlueCollarPositionCategory> => {
+    const id = data.id || `BC-CAT-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
+    const newCat = {
+      ...data,
+      id,
+      isActive: data.isActive !== undefined ? data.isActive : true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    if (isDbConnected()) {
+      await seedMySQL();
+      return await prismaClient.blueCollarPositionCategory.create({ data: newCat });
+    }
+    const db = readDb();
+    db.blueCollarPositionCategories = db.blueCollarPositionCategories || [];
+    db.blueCollarPositionCategories.push(newCat);
+    writeDb(db);
+    return newCat;
+  },
+
+  updateBlueCollarPositionCategory: async (id: string, data: any): Promise<BlueCollarPositionCategory | null> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      return await prismaClient.blueCollarPositionCategory.update({
+        where: { id },
+        data: {
+          name: data.name,
+          code: data.code,
+          description: data.description || null,
+          isActive: data.isActive
+        }
+      });
+    }
+    const db = readDb();
+    const idx = db.blueCollarPositionCategories.findIndex(c => c.id === id);
+    if (idx === -1) return null;
+    db.blueCollarPositionCategories[idx] = {
+      ...db.blueCollarPositionCategories[idx],
+      ...data,
+      updatedAt: new Date().toISOString()
+    };
+    writeDb(db);
+    return db.blueCollarPositionCategories[idx];
+  },
+
+  // Projects
+  getProjects: async (): Promise<Project[]> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      return await prismaClient.project.findMany();
+    }
+    const db = readDb();
+    return db.projects || [];
+  },
+
+  getProjectById: async (id: string): Promise<Project | null> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      return await prismaClient.project.findUnique({ where: { id } });
+    }
+    const db = readDb();
+    return db.projects.find(p => p.id === id) || null;
+  },
+
+  createProject: async (data: any): Promise<Project> => {
+    const id = data.id || `PROJ-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
+    const newProj = {
+      ...data,
+      id,
+      status: data.status || "ACTIVE",
+      startDate: data.startDate ? new Date(data.startDate).toISOString() : null,
+      endDate: data.endDate ? new Date(data.endDate).toISOString() : null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    if (isDbConnected()) {
+      await seedMySQL();
+      const created = await prismaClient.project.create({
+        data: {
+          id: newProj.id,
+          projectCode: newProj.projectCode,
+          projectName: newProj.projectName,
+          clientName: newProj.clientName || null,
+          clientCode: newProj.clientCode || null,
+          contractNumber: newProj.contractNumber || null,
+          costCenter: newProj.costCenter,
+          sapProjectCode: newProj.sapProjectCode || null,
+          sapCostCenterCode: newProj.sapCostCenterCode || null,
+          startDate: newProj.startDate ? new Date(newProj.startDate) : null,
+          endDate: newProj.endDate ? new Date(newProj.endDate) : null,
+          status: newProj.status
+        }
+      });
+      return {
+        ...created,
+        startDate: created.startDate ? created.startDate.toISOString() : undefined,
+        endDate: created.endDate ? created.endDate.toISOString() : undefined,
+        createdAt: created.createdAt.toISOString(),
+        updatedAt: created.updatedAt.toISOString()
+      };
+    }
+    const db = readDb();
+    db.projects = db.projects || [];
+    db.projects.push(newProj);
+    writeDb(db);
+    return newProj;
+  },
+
+  updateProject: async (id: string, data: any): Promise<Project | null> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      const updated = await prismaClient.project.update({
+        where: { id },
+        data: {
+          projectCode: data.projectCode,
+          projectName: data.projectName,
+          clientName: data.clientName || null,
+          clientCode: data.clientCode || null,
+          contractNumber: data.contractNumber || null,
+          costCenter: data.costCenter,
+          sapProjectCode: data.sapProjectCode || null,
+          sapCostCenterCode: data.sapCostCenterCode || null,
+          startDate: data.startDate ? new Date(data.startDate) : null,
+          endDate: data.endDate ? new Date(data.endDate) : null,
+          status: data.status
+        }
+      });
+      return {
+        ...updated,
+        startDate: updated.startDate ? updated.startDate.toISOString() : undefined,
+        endDate: updated.endDate ? updated.endDate.toISOString() : undefined,
+        createdAt: updated.createdAt.toISOString(),
+        updatedAt: updated.updatedAt.toISOString()
+      };
+    }
+    const db = readDb();
+    const idx = db.projects.findIndex(p => p.id === id);
+    if (idx === -1) return null;
+    db.projects[idx] = {
+      ...db.projects[idx],
+      ...data,
+      updatedAt: new Date().toISOString()
+    };
+    writeDb(db);
+    return db.projects[idx];
+  },
+
+  deleteProject: async (id: string): Promise<boolean> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      await prismaClient.project.delete({ where: { id } });
+      return true;
+    }
+    const db = readDb();
+    db.projects = db.projects.filter(p => p.id !== id);
+    db.projectSites = db.projectSites.filter(s => s.projectId !== id);
+    db.deployments = db.deployments.filter(d => d.projectId !== id);
+    writeDb(db);
+    return true;
+  },
+
+  // Project Sites
+  getProjectSites: async (projectId?: string): Promise<ProjectSite[]> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      if (projectId) {
+        return await prismaClient.projectSite.findMany({ where: { projectId } });
+      }
+      return await prismaClient.projectSite.findMany();
+    }
+    const db = readDb();
+    const sites = db.projectSites || [];
+    if (projectId) {
+      return sites.filter(s => s.projectId === projectId);
+    }
+    return sites;
+  },
+
+  getProjectSiteById: async (id: string): Promise<ProjectSite | null> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      return await prismaClient.projectSite.findUnique({ where: { id } });
+    }
+    const db = readDb();
+    return db.projectSites.find(s => s.id === id) || null;
+  },
+
+  createProjectSite: async (projectId: string, data: any): Promise<ProjectSite> => {
+    const id = data.id || `SITE-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
+    const newSite = {
+      ...data,
+      id,
+      projectId,
+      latitude: data.latitude !== undefined ? parseFloat(data.latitude) : null,
+      longitude: data.longitude !== undefined ? parseFloat(data.longitude) : null,
+      geofenceRadiusMeters: data.geofenceRadiusMeters !== undefined ? parseFloat(data.geofenceRadiusMeters) : 150.0,
+      status: data.status || "ACTIVE",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    if (isDbConnected()) {
+      await seedMySQL();
+      const created = await prismaClient.projectSite.create({
+        data: {
+          id: newSite.id,
+          projectId: newSite.projectId,
+          siteCode: newSite.siteCode,
+          siteName: newSite.siteName,
+          address: newSite.address || null,
+          latitude: newSite.latitude,
+          longitude: newSite.longitude,
+          geofenceRadiusMeters: newSite.geofenceRadiusMeters,
+          sapSiteCode: newSite.sapSiteCode || null,
+          status: newSite.status
+        }
+      });
+      return {
+        ...created,
+        createdAt: created.createdAt.toISOString(),
+        updatedAt: created.updatedAt.toISOString()
+      };
+    }
+    const db = readDb();
+    db.projectSites = db.projectSites || [];
+    db.projectSites.push(newSite);
+    writeDb(db);
+    return newSite;
+  },
+
+  updateProjectSite: async (id: string, data: any): Promise<ProjectSite | null> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      const updated = await prismaClient.projectSite.update({
+        where: { id },
+        data: {
+          siteCode: data.siteCode,
+          siteName: data.siteName,
+          address: data.address || null,
+          latitude: data.latitude !== undefined ? parseFloat(data.latitude) : null,
+          longitude: data.longitude !== undefined ? parseFloat(data.longitude) : null,
+          geofenceRadiusMeters: data.geofenceRadiusMeters !== undefined ? parseFloat(data.geofenceRadiusMeters) : 150.0,
+          sapSiteCode: data.sapSiteCode || null,
+          status: data.status
+        }
+      });
+      return {
+        ...updated,
+        createdAt: updated.createdAt.toISOString(),
+        updatedAt: updated.updatedAt.toISOString()
+      };
+    }
+    const db = readDb();
+    const idx = db.projectSites.findIndex(s => s.id === id);
+    if (idx === -1) return null;
+    db.projectSites[idx] = {
+      ...db.projectSites[idx],
+      ...data,
+      latitude: data.latitude !== undefined ? parseFloat(data.latitude) : db.projectSites[idx].latitude,
+      longitude: data.longitude !== undefined ? parseFloat(data.longitude) : db.projectSites[idx].longitude,
+      geofenceRadiusMeters: data.geofenceRadiusMeters !== undefined ? parseFloat(data.geofenceRadiusMeters) : db.projectSites[idx].geofenceRadiusMeters,
+      updatedAt: new Date().toISOString()
+    };
+    writeDb(db);
+    return db.projectSites[idx];
+  },
+
+  deleteProjectSite: async (id: string): Promise<boolean> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      await prismaClient.projectSite.delete({ where: { id } });
+      return true;
+    }
+    const db = readDb();
+    db.projectSites = db.projectSites.filter(s => s.id !== id);
+    db.deployments = db.deployments.filter(d => d.siteId !== id);
+    writeDb(db);
+    return true;
+  },
+
+  // Deployments
+  getDeployments: async (filters?: { employeeId?: string; projectId?: string; siteId?: string; date?: string }): Promise<EmployeeDeployment[]> => {
+    let list: EmployeeDeployment[] = [];
+    if (isDbConnected()) {
+      await seedMySQL();
+      const whereClause: any = {};
+      if (filters?.employeeId) whereClause.employeeId = filters.employeeId;
+      if (filters?.projectId) whereClause.projectId = filters.projectId;
+      if (filters?.siteId) whereClause.siteId = filters.siteId;
+      if (filters?.date) {
+        const dateObj = new Date(filters.date);
+        const startOfDay = new Date(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate());
+        const endOfDay = new Date(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate(), 23, 59, 59, 999);
+        whereClause.deploymentDate = {
+          gte: startOfDay,
+          lte: endOfDay
+        };
+      }
+      const raw = await prismaClient.employeeDeployment.findMany({ where: whereClause });
+      list = raw.map((d: any) => ({
+        ...d,
+        deploymentDate: d.deploymentDate.toISOString().split("T")[0],
+        createdAt: d.createdAt.toISOString(),
+        updatedAt: d.updatedAt.toISOString()
+      }));
+    } else {
+      const db = readDb();
+      list = db.deployments || [];
+      if (filters?.employeeId) {
+        list = list.filter(d => d.employeeId === filters.employeeId);
+      }
+      if (filters?.projectId) {
+        list = list.filter(d => d.projectId === filters.projectId);
+      }
+      if (filters?.siteId) {
+        list = list.filter(d => d.siteId === filters.siteId);
+      }
+      if (filters?.date) {
+        const dateStr = filters.date.split("T")[0];
+        list = list.filter(d => d.deploymentDate.split("T")[0] === dateStr);
+      }
+    }
+    return list;
+  },
+
+  validateDeploymentConflicts: async (deployment: any): Promise<{ warning: string | null }> => {
+    // 1. Get employee
+    const emps = await mockDb.getEmployees();
+    const employee = emps.find(e => e.id === deployment.employeeId);
+    if (!employee) throw new Error("Employee not found");
+
+    // 5. Prevent deployment of inactive/deactivated employees.
+    const isAct = employee.isActive !== false && employee.employmentStatus === "ACTIVE";
+    if (!isAct) {
+      throw new Error("Cannot deploy inactive/deactivated employee");
+    }
+
+    // 9. Validate Blue Collar employees have position category.
+    if (employee.workerCategory === "BLUE_COLLAR" && !employee.positionCategoryId && !deployment.positionCategoryId) {
+      throw new Error("Blue Collar employees must have a position category");
+    }
+
+    // 3. Prevent deployment to inactive project.
+    const projects = await mockDb.getProjects();
+    const project = projects.find(p => p.id === deployment.projectId);
+    if (!project) throw new Error("Project not found");
+    if (project.status !== "ACTIVE") {
+      throw new Error("Cannot deploy to inactive project");
+    }
+
+    // 4. Prevent deployment to inactive site.
+    const sites = await mockDb.getProjectSites();
+    const site = sites.find(s => s.id === deployment.siteId);
+    if (!site) throw new Error("Project Site not found");
+    if (site.status !== "ACTIVE") {
+      throw new Error("Cannot deploy to inactive site");
+    }
+
+    // 8. Validate that selected site belongs to selected project.
+    if (site.projectId !== deployment.projectId) {
+      throw new Error("Selected site does not belong to the selected project");
+    }
+
+    // 6. Prevent deployment during approved leave.
+    const leaves = await mockDb.getLeaves();
+    const depDateStr = deployment.deploymentDate.split("T")[0];
+    const depDateTime = new Date(depDateStr).getTime();
+    
+    const conflictingLeave = leaves.find(l => {
+      if (l.employeeId !== deployment.employeeId) return false;
+      if (l.status !== "Approved") return false;
+      const { start, end } = parseDateRange(l.dateRange);
+      const sTime = new Date(start.getFullYear(), start.getMonth(), start.getDate()).getTime();
+      const eTime = new Date(end.getFullYear(), end.getMonth(), end.getDate()).getTime();
+      return depDateTime >= sTime && depDateTime <= eTime;
+    });
+    if (conflictingLeave) {
+      throw new Error(`Employee is on approved leave (${conflictingLeave.type}) on this date`);
+    }
+
+    // 1 & 2. Time Overlap prevention
+    const allDeployments = await mockDb.getDeployments();
+    const employeeSameDayDeps = allDeployments.filter(d => {
+      if (d.employeeId !== deployment.employeeId) return false;
+      if (d.id === deployment.id) return false; // skip self
+      return d.deploymentDate.split("T")[0] === depDateStr;
+    });
+
+    const parseTime = (t: string) => {
+      const [h, m] = t.split(":").map(Number);
+      return h * 60 + m;
+    };
+
+    const newStart = parseTime(deployment.startTime);
+    const newEnd = parseTime(deployment.endTime);
+
+    for (const existing of employeeSameDayDeps) {
+      const existingStart = parseTime(existing.startTime);
+      const existingEnd = parseTime(existing.endTime);
+      if (newStart < existingEnd && existingStart < newEnd) {
+        throw new Error("Time range overlaps with an existing deployment on the same day");
+      }
+    }
+
+    // 7. Warn if deployment conflicts with existing shift assignment.
+    const shiftAssignments = await mockDb.getShiftAssignments();
+    const sameDayShift = shiftAssignments.find(sa => {
+      if (sa.employeeId !== deployment.employeeId) return false;
+      const saDateStr = typeof sa.date === "string" ? sa.date.split("T")[0] : new Date(sa.date).toISOString().split("T")[0];
+      return saDateStr === depDateStr;
+    });
+
+    let warning = null;
+    if (sameDayShift) {
+      warning = `Warning: Deployment conflicts with standard shift assignment (${sameDayShift.shiftTemplateId})`;
+    }
+
+    return { warning };
+  },
+
+  createDeployment: async (data: any): Promise<{ deployment: EmployeeDeployment; warning: string | null }> => {
+    const checkResult = await mockDb.validateDeploymentConflicts(data);
+    const id = data.id || `DEP-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
+    const plannedHours = data.plannedHours !== undefined ? parseFloat(data.plannedHours) : 8.0;
+    const newDep: EmployeeDeployment = {
+      ...data,
+      id,
+      plannedHours,
+      status: data.status || "PLANNED",
+      deploymentDate: data.deploymentDate.split("T")[0],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    if (isDbConnected()) {
+      await seedMySQL();
+      const created = await prismaClient.employeeDeployment.create({
+        data: {
+          id: newDep.id,
+          employeeId: newDep.employeeId,
+          projectId: newDep.projectId,
+          siteId: newDep.siteId,
+          positionCategoryId: newDep.positionCategoryId,
+          deploymentDate: new Date(newDep.deploymentDate),
+          startTime: newDep.startTime,
+          endTime: newDep.endTime,
+          plannedHours: newDep.plannedHours,
+          actualHours: newDep.actualHours || null,
+          status: newDep.status,
+          createdById: newDep.createdById
+        }
+      });
+      return {
+        deployment: {
+          ...created,
+          deploymentDate: created.deploymentDate.toISOString().split("T")[0],
+          createdAt: created.createdAt.toISOString(),
+          updatedAt: created.updatedAt.toISOString()
+        },
+        warning: checkResult.warning
+      };
+    }
+
+    const db = readDb();
+    db.deployments = db.deployments || [];
+    db.deployments.push(newDep);
+    writeDb(db);
+    return { deployment: newDep, warning: checkResult.warning };
+  },
+
+  updateDeployment: async (id: string, data: any): Promise<{ deployment: EmployeeDeployment | null; warning: string | null }> => {
+    const checkResult = await mockDb.validateDeploymentConflicts({ ...data, id });
+    if (isDbConnected()) {
+      await seedMySQL();
+      const updated = await prismaClient.employeeDeployment.update({
+        where: { id },
+        data: {
+          projectId: data.projectId,
+          siteId: data.siteId,
+          positionCategoryId: data.positionCategoryId,
+          deploymentDate: data.deploymentDate ? new Date(data.deploymentDate) : undefined,
+          startTime: data.startTime,
+          endTime: data.endTime,
+          plannedHours: data.plannedHours !== undefined ? parseFloat(data.plannedHours) : undefined,
+          actualHours: data.actualHours !== undefined ? parseFloat(data.actualHours) : undefined,
+          status: data.status,
+          attendanceRecordId: data.attendanceRecordId || null
+        }
+      });
+      return {
+        deployment: {
+          ...updated,
+          deploymentDate: updated.deploymentDate.toISOString().split("T")[0],
+          createdAt: updated.createdAt.toISOString(),
+          updatedAt: updated.updatedAt.toISOString()
+        },
+        warning: checkResult.warning
+      };
+    }
+    const db = readDb();
+    const idx = db.deployments.findIndex(d => d.id === id);
+    if (idx === -1) return { deployment: null, warning: null };
+    db.deployments[idx] = {
+      ...db.deployments[idx],
+      ...data,
+      updatedAt: new Date().toISOString()
+    };
+    writeDb(db);
+    return { deployment: db.deployments[idx], warning: checkResult.warning };
+  },
+
+  deleteDeployment: async (id: string): Promise<boolean> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      await prismaClient.employeeDeployment.delete({ where: { id } });
+      return true;
+    }
+    const db = readDb();
+    db.deployments = db.deployments.filter(d => d.id !== id);
+    writeDb(db);
+    return true;
+  },
+
+  bulkCreateDeployments: async (employeeIds: string[], baseDeployment: any): Promise<{ count: number; warnings: string[] }> => {
+    let count = 0;
+    const warnings: string[] = [];
+    for (const empId of employeeIds) {
+      try {
+        const result = await mockDb.createDeployment({
+          ...baseDeployment,
+          employeeId: empId
+        });
+        count++;
+        if (result.warning) {
+          warnings.push(`Employee ${empId}: ${result.warning}`);
+        }
+      } catch (e: any) {
+        warnings.push(`Employee ${empId} failed: ${e.message}`);
+      }
+    }
+    return { count, warnings };
+  },
+
+  getDeploymentsCoverage: async (dateStr: string): Promise<{ siteId: string; siteName: string; headcount: number; details: any[] }[]> => {
+    const sites = await mockDb.getProjectSites();
+    const deployments = await mockDb.getDeployments({ date: dateStr });
+    const employees = await mockDb.getEmployees();
+    const categories = await mockDb.getBlueCollarPositionCategories();
+
+    return sites.map(site => {
+      const siteDeps = deployments.filter(d => d.siteId === site.id);
+      const details = siteDeps.map(d => {
+        const emp = employees.find(e => e.id === d.employeeId);
+        const cat = categories.find(c => c.id === d.positionCategoryId);
+        return {
+          employeeId: d.employeeId,
+          employeeName: emp ? emp.name : "Unknown",
+          positionCategory: cat ? cat.name : "Other",
+          timeBlock: `${d.startTime}–${d.endTime}`,
+          status: d.status
+        };
+      });
+      return {
+        siteId: site.id,
+        siteName: site.siteName,
+        headcount: siteDeps.length,
+        details
+      };
+    });
   }
 };
 

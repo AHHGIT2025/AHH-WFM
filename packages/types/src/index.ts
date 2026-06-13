@@ -21,6 +21,9 @@ export interface Employee {
   employmentStatus?: string;
   dutyStatus?: string;
   workerCategory?: string;
+  positionCategoryId?: string;
+  defaultProjectId?: string;
+  defaultSiteId?: string;
 }
 
 export interface Worksite {
@@ -73,6 +76,10 @@ export interface AttendanceRecord {
   otApprovedMinutes?: number;
   overtimePayAmount?: number;
   otStatus?: "PENDING" | "APPROVED" | "REJECTED" | string;
+  projectId?: string;
+  siteId?: string;
+  deploymentId?: string;
+  projectStatusFlag?: string;
 }
 
 export interface Shift {
@@ -549,6 +556,67 @@ export interface UserRoleAssignment {
   assignedById: string;
   assignedAt?: string;
   isActive: boolean;
+}
+
+export interface BlueCollarPositionCategory {
+  id: string;
+  code: string;
+  name: string;
+  description?: string;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface Project {
+  id: string;
+  projectCode: string;
+  projectName: string;
+  clientName?: string;
+  clientCode?: string;
+  contractNumber?: string;
+  costCenter: string;
+  sapProjectCode?: string;
+  sapCostCenterCode?: string;
+  startDate?: string;
+  endDate?: string;
+  status: "ACTIVE" | "ON_HOLD" | "COMPLETED" | "CANCELLED" | string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ProjectSite {
+  id: string;
+  projectId: string;
+  siteCode: string;
+  siteName: string;
+  address?: string;
+  latitude?: number;
+  longitude?: number;
+  geofenceRadiusMeters: number;
+  sapSiteCode?: string;
+  status: "ACTIVE" | "INACTIVE" | string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface EmployeeDeployment {
+  id: string;
+  employeeId: string;
+  projectId: string;
+  siteId: string;
+  positionCategoryId: string;
+  deploymentDate: string; // ISO date string or YYYY-MM-DD
+  startTime: string; // "HH:MM"
+  endTime: string; // "HH:MM"
+  plannedHours: number;
+  actualHours?: number;
+  shiftAssignmentId?: string;
+  attendanceRecordId?: string;
+  status: "PLANNED" | "ACTIVE" | "COMPLETED" | "CANCELLED" | string;
+  createdById: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 

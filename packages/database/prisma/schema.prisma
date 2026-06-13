@@ -28,6 +28,13 @@ model Employee {
   leaveBalances LeaveBalance[]
   ledgers       LeaveBalanceLedger[]
   shiftAssignments ShiftAssignment[]
+  positionCategoryId String?
+  positionCategory   BlueCollarPositionCategory? @relation(fields: [positionCategoryId], references: [id])
+  defaultProjectId   String?
+  defaultProject     Project?                    @relation("DefaultProject", fields: [defaultProjectId], references: [id])
+  defaultSiteId      String?
+  defaultSite        ProjectSite?                @relation("DefaultSite", fields: [defaultSiteId], references: [id])
+  deployments        EmployeeDeployment[]
 }
 
 model Department {
@@ -67,6 +74,10 @@ model AttendanceRecord {
   otStatus           String                 @default("PENDING") // "PENDING" | "APPROVED" | "REJECTED"
   employee           Employee               @relation(fields: [employeeId], references: [id], onDelete: Cascade)
   corrections        AttendanceCorrection[]
+  projectId          String?
+  siteId             String?
+  deploymentId       String?
+  projectStatusFlag  String?
 }
 
 model Worksite {
@@ -587,6 +598,79 @@ model UserRoleAssignment {
   assignedById String
   assignedAt   DateTime @default(now())
   isActive     Boolean  @default(true)
+}
+
+model BlueCollarPositionCategory {
+  id          String   @id @default(uuid())
+  code        String   @unique
+  name        String
+  description String?  @db.Text
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  employees   Employee[]
+  deployments EmployeeDeployment[]
+}
+
+model Project {
+  id                 String               @id @default(uuid())
+  projectCode        String               @unique
+  projectName        String
+  clientName         String?
+  clientCode         String?
+  contractNumber     String?
+  costCenter         String
+  sapProjectCode     String?
+  sapCostCenterCode  String?
+  startDate          DateTime?
+  endDate            DateTime?
+  status             String               @default("ACTIVE") // "ACTIVE", "ON_HOLD", "COMPLETED", "CANCELLED"
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  sites              ProjectSite[]
+  deployments        EmployeeDeployment[]
+  employees          Employee[]           @relation("DefaultProject")
+}
+
+model ProjectSite {
+  id                   String               @id @default(uuid())
+  projectId            String
+  project              Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  siteCode             String               @unique
+  siteName             String
+  address              String?              @db.Text
+  latitude             Float?
+  longitude            Float?
+  geofenceRadiusMeters Float                @default(150.0)
+  sapSiteCode          String?
+  status               String               @default("ACTIVE") // "ACTIVE", "INACTIVE"
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+  deployments          EmployeeDeployment[]
+  employees            Employee[]           @relation("DefaultSite")
+}
+
+model EmployeeDeployment {
+  id                 String                     @id @default(uuid())
+  employeeId         String
+  employee           Employee                   @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  projectId          String
+  project            Project                    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  siteId             String
+  site               ProjectSite                @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  positionCategoryId String
+  positionCategory   BlueCollarPositionCategory @relation(fields: [positionCategoryId], references: [id])
+  deploymentDate     DateTime
+  startTime          String                     // Format: "HH:MM"
+  endTime            String                     // Format: "HH:MM"
+  plannedHours       Float
+  actualHours        Float?
+  shiftAssignmentId  String?
+  attendanceRecordId String?
+  status             String                     @default("PLANNED") // "PLANNED", "ACTIVE", "COMPLETED", "CANCELLED"
+  createdById        String
+  createdAt          DateTime                   @default(now())
+  updatedAt          DateTime                   @updatedAt
 }
 
 

@@ -38,6 +38,22 @@ export default function WorkforcePage() {
   const [empDutyStatus, setEmpDutyStatus] = useState("OFF_DUTY");
   const [empWorkerCategory, setEmpWorkerCategory] = useState("WHITE_COLLAR");
 
+  // Blue Collar & Project states
+  const [empPositionCategoryId, setEmpPositionCategoryId] = useState("");
+  const [empDefaultProjectId, setEmpDefaultProjectId] = useState("");
+  const [empDefaultSiteId, setEmpDefaultSiteId] = useState("");
+  const [projects, setProjects] = useState<any[]>([]);
+  const [positionCategories, setPositionCategories] = useState<any[]>([]);
+  const [allSites, setAllSites] = useState<any[]>([]);
+  const [formSites, setFormSites] = useState<any[]>([]);
+  const [deployments, setDeployments] = useState<any[]>([]);
+
+  // Main dashboard filter states
+  const [projectFilter, setProjectFilter] = useState("all");
+  const [siteFilter, setSiteFilter] = useState("all");
+  const [positionCategoryFilter, setPositionCategoryFilter] = useState("all");
+  const [filterSites, setFilterSites] = useState<any[]>([]);
+
   // Bulk Upload states
   const [bulkFile, setBulkFile] = useState<File | null>(null);
   const [bulkPreviewData, setBulkPreviewData] = useState<any>(null);
@@ -48,16 +64,37 @@ export default function WorkforcePage() {
   // Validation errors state
   const [validationError, setValidationError] = useState<string | null>(null);
 
+  const fetchDeployments = async () => {
+    try {
+      const todayStr = new Date().toISOString().split("T")[0];
+      const res = await fetch(`/api/v1/deployments?date=${todayStr}`);
+      if (res.ok) {
+        setDeployments(await res.json());
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   const fetchDb = async () => {
     try {
-      const [empRes, deptRes] = await Promise.all([
+      const [empRes, deptRes, projRes, catRes] = await Promise.all([
         fetch("/api/v1/employees"),
-        fetch("/api/v1/departments")
+        fetch("/api/v1/departments"),
+        fetch("/api/v1/projects"),
+        fetch("/api/v1/blue-collar/position-categories")
       ]);
       if (empRes.ok && deptRes.ok) {
         setEmployees(await empRes.json());
         setDepartments(await deptRes.json());
       }
+      if (projRes.ok) {
+        setProjects(await projRes.json());
+      }
+      if (catRes.ok) {
+        setPositionCategories(await catRes.json());
+      }
+      await fetchDeployments();
     } catch (e) {
       console.error(e);
     }
@@ -66,6 +103,44 @@ export default function WorkforcePage() {
   useEffect(() => {
     fetchDb();
   }, []);
+
+  useEffect(() => {
+    if (empDefaultProjectId) {
+      fetch(`/api/v1/projects/${empDefaultProjectId}/sites`)
+        .then(res => res.ok ? res.json() : [])
+        .then(data => setFormSites(data))
+        .catch(() => setFormSites([]));
+    } else {
+      setFormSites([]);
+    }
+  }, [empDefaultProjectId]);
+
+  useEffect(() => {
+    if (projectFilter !== "all") {
+      fetch(`/api/v1/projects/${projectFilter}/sites`)
+        .then(res => res.ok ? res.json() : [])
+        .then(data => setFilterSites(data))
+        .catch(() => setFilterSites([]));
+    } else {
+      setFilterSites([]);
+      setSiteFilter("all");
+    }
+  }, [projectFilter]);
+
+  useEffect(() => {
+    if (projects.length > 0) {
+      Promise.all(
+        projects.map(p =>
+          fetch(`/api/v1/projects/${p.id}/sites`)
+            .then(res => res.ok ? res.json() : [])
+            .catch(() => [])
+        )
+      ).then(results => {
+        const merged = results.flat();
+        setAllSites(merged);
+      });
+    }
+  }, [projects]);
 
   // Employee form validation helper
   const validateEmployeeForm = (email: string, name: string, role: string, id: string, isEdit = false): boolean => {
@@ -113,7 +188,10 @@ export default function WorkforcePage() {
           password: empPassword || undefined,
           employmentStatus: empEmploymentStatus,
           dutyStatus: empDutyStatus,
-          workerCategory: empWorkerCategory
+          workerCategory: empWorkerCategory,
+          positionCategoryId: empWorkerCategory === "BLUE_COLLAR" ? (empPositionCategoryId || undefined) : undefined,
+          defaultProjectId: empWorkerCategory === "BLUE_COLLAR" ? (empDefaultProjectId || undefined) : undefined,
+          defaultSiteId: empWorkerCategory === "BLUE_COLLAR" ? (empDefaultSiteId || undefined) : undefined
         })
       });
 
@@ -131,6 +209,9 @@ export default function WorkforcePage() {
         setEmpEmploymentStatus("ACTIVE");
         setEmpDutyStatus("OFF_DUTY");
         setEmpWorkerCategory("WHITE_COLLAR");
+        setEmpPositionCategoryId("");
+        setEmpDefaultProjectId("");
+        setEmpDefaultSiteId("");
         fetchDb();
       } else {
         const err = await res.json();
@@ -159,13 +240,19 @@ export default function WorkforcePage() {
           shiftId: empShiftId || null,
           employmentStatus: empEmploymentStatus,
           dutyStatus: empDutyStatus,
-          workerCategory: empWorkerCategory
+          workerCategory: empWorkerCategory,
+          positionCategoryId: empWorkerCategory === "BLUE_COLLAR" ? (empPositionCategoryId || null) : null,
+          defaultProjectId: empWorkerCategory === "BLUE_COLLAR" ? (empDefaultProjectId || null) : null,
+          defaultSiteId: empWorkerCategory === "BLUE_COLLAR" ? (empDefaultSiteId || null) : null
         })
       });
 
       if (res.ok) {
         setIsEditEmpOpen(false);
         setSelectedEmp(null);
+        setEmpPositionCategoryId("");
+        setEmpDefaultProjectId("");
+        setEmpDefaultSiteId("");
         fetchDb();
       } else {
         const err = await res.json();
@@ -274,6 +361,9 @@ export default function WorkforcePage() {
     setEmpEmploymentStatus(emp.employmentStatus || (emp.isActive !== false ? "ACTIVE" : "INACTIVE"));
     setEmpDutyStatus(emp.dutyStatus || "OFF_DUTY");
     setEmpWorkerCategory(emp.workerCategory || "WHITE_COLLAR");
+    setEmpPositionCategoryId((emp as any).positionCategoryId || "");
+    setEmpDefaultProjectId((emp as any).defaultProjectId || "");
+    setEmpDefaultSiteId((emp as any).defaultSiteId || "");
     setValidationError(null);
     setIsEditEmpOpen(true);
   };
@@ -363,6 +453,20 @@ export default function WorkforcePage() {
     // Filter by Worker Category
     const matchesCategory = categoryFilter === "all" || emp.workerCategory === categoryFilter;
 
+    // Filter by Trade Position Category
+    const matchesPositionCategory = positionCategoryFilter === "all" || (emp as any).positionCategoryId === positionCategoryFilter;
+
+    // Filter by Project
+    const empDeployments = deployments.filter(d => d.employeeId === emp.id);
+    const matchesProject = projectFilter === "all" ||
+      (emp as any).defaultProjectId === projectFilter ||
+      empDeployments.some(d => d.projectId === projectFilter);
+
+    // Filter by Site
+    const matchesSite = siteFilter === "all" ||
+      (emp as any).defaultSiteId === siteFilter ||
+      empDeployments.some(d => d.siteId === siteFilter);
+
     let matchesStatus = true;
     const isEmpActive = emp.employmentStatus ? (emp.employmentStatus === "ACTIVE") : (emp.isActive !== false);
 
@@ -374,7 +478,7 @@ export default function WorkforcePage() {
       matchesStatus = isEmpActive && (emp.status === statusFilter || emp.dutyStatus === statusFilter);
     }
 
-    return matchesSearch && matchesDept && matchesCategory && matchesStatus;
+    return matchesSearch && matchesDept && matchesCategory && matchesPositionCategory && matchesProject && matchesSite && matchesStatus;
   });
 
   return (
@@ -447,7 +551,7 @@ export default function WorkforcePage() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
+        <div className="flex flex-wrap gap-2 w-full md:w-auto">
           <select
             className="bg-surface border border-outline-variant text-sm rounded-lg py-2 px-4 focus:ring-2 focus:ring-primary/20 focus:border-primary w-full sm:w-48 outline-none"
             value={deptFilter}
@@ -482,6 +586,41 @@ export default function WorkforcePage() {
             <option value="WHITE_COLLAR">White Collar</option>
             <option value="BLUE_COLLAR">Blue Collar</option>
           </select>
+          {categoryFilter === "BLUE_COLLAR" && (
+            <>
+              <select
+                className="bg-surface border border-outline-variant text-sm rounded-lg py-2 px-4 focus:ring-2 focus:ring-primary/20 focus:border-primary w-full sm:w-48 outline-none"
+                value={positionCategoryFilter}
+                onChange={(e) => setPositionCategoryFilter(e.target.value)}
+              >
+                <option value="all">All Trades</option>
+                {positionCategories.map((cat) => (
+                  <option key={cat.id} value={cat.id}>{cat.name}</option>
+                ))}
+              </select>
+              <select
+                className="bg-surface border border-outline-variant text-sm rounded-lg py-2 px-4 focus:ring-2 focus:ring-primary/20 focus:border-primary w-full sm:w-48 outline-none"
+                value={projectFilter}
+                onChange={(e) => setProjectFilter(e.target.value)}
+              >
+                <option value="all">All Projects</option>
+                {projects.map((proj) => (
+                  <option key={proj.id} value={proj.id}>{proj.projectName}</option>
+                ))}
+              </select>
+              <select
+                className="bg-surface border border-outline-variant text-sm rounded-lg py-2 px-4 focus:ring-2 focus:ring-primary/20 focus:border-primary w-full sm:w-48 outline-none"
+                value={siteFilter}
+                onChange={(e) => setSiteFilter(e.target.value)}
+                disabled={projectFilter === "all"}
+              >
+                <option value="all">All Sites</option>
+                {filterSites.map((site) => (
+                  <option key={site.id} value={site.id}>{site.siteName}</option>
+                ))}
+              </select>
+            </>
+          )}
         </div>
       </Card>
 
@@ -489,6 +628,12 @@ export default function WorkforcePage() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filtered.map((emp) => {
           const isEmpActive = emp.employmentStatus ? (emp.employmentStatus === "ACTIVE") : (emp.isActive !== false);
+          const empDept = departments.find(d => d.id === emp.departmentId)?.name || emp.department || "N/A";
+          const defaultProject = projects.find(p => p.id === (emp as any).defaultProjectId);
+          const defaultSite = allSites.find(s => s.id === (emp as any).defaultSiteId);
+          const tradeCategory = positionCategories.find(c => c.id === (emp as any).positionCategoryId);
+          const empDeployments = deployments.filter(d => d.employeeId === emp.id);
+
           return (
             <Card key={emp.id} className={`flex flex-col justify-between ${!isEmpActive ? "opacity-60 bg-surface-container-low" : ""}`}>
               <div className="flex justify-between items-start gap-4">
@@ -535,8 +680,39 @@ export default function WorkforcePage() {
                 </div>
                 <div>
                   <p className="opacity-60 font-semibold uppercase">Department</p>
-                  <p className="font-bold text-primary mt-0.5">{emp.department}</p>
+                  <p className="font-bold text-primary mt-0.5">{empDept}</p>
                 </div>
+                {emp.workerCategory === "BLUE_COLLAR" && (
+                  <>
+                    <div>
+                      <p className="opacity-60 font-semibold uppercase">Trade/Position</p>
+                      <p className="font-bold text-primary mt-0.5">{tradeCategory?.name || "N/A"}</p>
+                    </div>
+                    <div>
+                      <p className="opacity-60 font-semibold uppercase">Default Site</p>
+                      <p className="font-bold text-primary mt-0.5 text-ellipsis overflow-hidden whitespace-nowrap" title={defaultSite ? `${defaultProject?.projectName || ""} - ${defaultSite?.siteName || ""}` : ""}>
+                        {defaultSite ? `${defaultProject?.projectCode || ""}: ${defaultSite.siteName}` : "N/A"}
+                      </p>
+                    </div>
+                    {empDeployments.length > 0 && (
+                      <div className="col-span-2 bg-secondary/5 border border-secondary/15 rounded-lg p-2.5 mt-1">
+                        <p className="text-[9px] opacity-70 font-bold uppercase tracking-wider text-secondary flex items-center gap-1">
+                          <span className="material-symbols-outlined text-[12px]">assignment_ind</span>
+                          <span>Today's Deployments</span>
+                        </p>
+                        {empDeployments.map((d, idx) => {
+                          const proj = projects.find(p => p.id === d.projectId);
+                          const site = allSites.find(s => s.id === d.siteId);
+                          return (
+                            <p key={idx} className="font-bold text-primary text-[10px] mt-1">
+                              • {proj?.projectName || "Proj"}: {site?.siteName || "Site"} ({d.startTime} - {d.endTime})
+                            </p>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </>
+                )}
                 <div className="col-span-2">
                   <p className="opacity-60 font-semibold uppercase">Email</p>
                   <p className="font-medium text-primary mt-0.5 break-all">{emp.email}</p>
@@ -769,6 +945,54 @@ export default function WorkforcePage() {
               </select>
             </div>
           </div>
+          {empWorkerCategory === "BLUE_COLLAR" && (
+            <div className="p-4 bg-secondary/5 border border-secondary/10 rounded-xl space-y-3">
+              <p className="text-[10px] font-bold text-secondary uppercase tracking-wider">Blue Collar Core Settings</p>
+              <div className="grid grid-cols-3 gap-4">
+                <div className="space-y-1">
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Trade / Position</label>
+                  <select
+                    className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-2.5 py-2 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                    value={empPositionCategoryId}
+                    onChange={(e) => setEmpPositionCategoryId(e.target.value)}
+                    required
+                  >
+                    <option value="">Select Trade</option>
+                    {positionCategories.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Default Project</label>
+                  <select
+                    className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-2.5 py-2 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                    value={empDefaultProjectId}
+                    onChange={(e) => setEmpDefaultProjectId(e.target.value)}
+                  >
+                    <option value="">Select Project</option>
+                    {projects.map((p) => (
+                      <option key={p.id} value={p.id}>{p.projectName}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Default Site</label>
+                  <select
+                    className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-2.5 py-2 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                    value={empDefaultSiteId}
+                    onChange={(e) => setEmpDefaultSiteId(e.target.value)}
+                    disabled={!empDefaultProjectId}
+                  >
+                    <option value="">Select Site</option>
+                    {formSites.map((s) => (
+                      <option key={s.id} value={s.id}>{s.siteName}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-4">
             <Input
               label="Default Password"
@@ -898,6 +1122,54 @@ export default function WorkforcePage() {
                 </select>
               </div>
             </div>
+            {empWorkerCategory === "BLUE_COLLAR" && (
+              <div className="p-4 bg-secondary/5 border border-secondary/10 rounded-xl space-y-3">
+                <p className="text-[10px] font-bold text-secondary uppercase tracking-wider">Blue Collar Core Settings</p>
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="space-y-1">
+                    <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Trade / Position</label>
+                    <select
+                      className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-2.5 py-2 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                      value={empPositionCategoryId}
+                      onChange={(e) => setEmpPositionCategoryId(e.target.value)}
+                      required
+                    >
+                      <option value="">Select Trade</option>
+                      {positionCategories.map((c) => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Default Project</label>
+                    <select
+                      className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-2.5 py-2 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                      value={empDefaultProjectId}
+                      onChange={(e) => setEmpDefaultProjectId(e.target.value)}
+                    >
+                      <option value="">Select Project</option>
+                      {projects.map((p) => (
+                        <option key={p.id} value={p.id}>{p.projectName}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Default Site</label>
+                    <select
+                      className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-2.5 py-2 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                      value={empDefaultSiteId}
+                      onChange={(e) => setEmpDefaultSiteId(e.target.value)}
+                      disabled={!empDefaultProjectId}
+                    >
+                      <option value="">Select Site</option>
+                      {formSites.map((s) => (
+                        <option key={s.id} value={s.id}>{s.siteName}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+            )}
             <div className="flex justify-between items-center border-t border-border-subtle pt-4 mt-6">
               {selectedEmp.isActive !== false ? (
                 <Button

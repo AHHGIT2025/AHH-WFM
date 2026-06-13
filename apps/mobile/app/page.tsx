@@ -12,6 +12,9 @@ export default function MobileHomePage() {
   }>({ employees: [], attendance: [], leaves: [] });
 
   const [worksites, setWorksites] = useState<Worksite[]>([]);
+  const [todayDeployment, setTodayDeployment] = useState<any>(null);
+  const [projects, setProjects] = useState<any[]>([]);
+  const [allSites, setAllSites] = useState<any[]>([]);
   const [time, setTime] = useState("");
   const [date, setDate] = useState("");
   const [checking, setChecking] = useState(false);
@@ -43,11 +46,14 @@ export default function MobileHomePage() {
 
   const fetchDb = async () => {
     try {
-      const [empRes, attRes, lvRes, wsRes] = await Promise.all([
+      const todayStr = new Date().toISOString().split("T")[0];
+      const [empRes, attRes, lvRes, wsRes, projRes, depRes] = await Promise.all([
         fetch("/api/v1/employees"),
         fetch("/api/v1/attendance"),
         fetch("/api/v1/leaves"),
-        fetch("/api/v1/worksites")
+        fetch("/api/v1/worksites"),
+        fetch("/api/v1/projects"),
+        fetch(`/api/v1/deployments?employeeId=${employeeId}&date=${todayStr}`)
       ]);
       if (empRes.ok && attRes.ok && lvRes.ok && wsRes.ok) {
         setData({
@@ -56,6 +62,17 @@ export default function MobileHomePage() {
           leaves: await lvRes.json()
         });
         setWorksites(await wsRes.json());
+      }
+      if (projRes.ok) {
+        setProjects(await projRes.json());
+      }
+      if (depRes.ok) {
+        const deps = await depRes.json();
+        if (deps.length > 0) {
+          setTodayDeployment(deps[0]);
+        } else {
+          setTodayDeployment(null);
+        }
       }
     } catch (e) {
       console.error(e);
@@ -73,6 +90,21 @@ export default function MobileHomePage() {
     const clockInterval = setInterval(updateTime, 1000);
     return () => clearInterval(clockInterval);
   }, []);
+
+  useEffect(() => {
+    if (projects.length > 0) {
+      Promise.all(
+        projects.map(p =>
+          fetch(`/api/v1/projects/${p.id}/sites`)
+            .then(res => res.ok ? res.json() : [])
+            .catch(() => [])
+        )
+      ).then(results => {
+        const merged = results.flat();
+        setAllSites(merged);
+      });
+    }
+  }, [projects]);
 
   const employee = data.employees.find(e => e.id === employeeId);
   const activeRecord = data.attendance.find(a => a.employeeId === employeeId && !a.checkOut);
@@ -190,6 +222,32 @@ export default function MobileHomePage() {
           </div>
         </div>
       </section>
+ 
+      {/* Today's Project Deployment Card */}
+      {todayDeployment && (
+        <section className="space-y-1.5">
+          <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider px-1">Today's Assigned Project Site</label>
+          <Card className="bg-secondary/5 border border-secondary/20 p-4 rounded-xl">
+            <div className="flex justify-between items-start">
+              <div>
+                <h4 className="text-xs font-bold text-primary flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-sm text-secondary">business_center</span>
+                  <span>{projects.find(p => p.id === todayDeployment.projectId)?.projectName || "Lusail Expressway Contract"}</span>
+                </h4>
+                <p className="text-[10px] text-on-surface-variant leading-tight mt-1">
+                  📍 Site: {allSites.find(s => s.id === todayDeployment.siteId)?.siteName || "Intersection 4"}
+                </p>
+                <p className="text-[9px] font-mono text-outline-variant mt-0.5">
+                  Hours: {todayDeployment.startTime} - {todayDeployment.endTime}
+                </p>
+              </div>
+              <Badge variant={activeRecord ? (activeRecord.projectStatusFlag === "MATCHED" ? "success" : activeRecord.projectStatusFlag === "OUT_OF_ZONE" ? "warning" : "error") : "neutral"} className="text-[9px] py-0.5 px-2 font-black uppercase font-bold">
+                {activeRecord ? (activeRecord.projectStatusFlag || "MATCHED") : "NOT STARTED"}
+              </Badge>
+            </div>
+          </Card>
+        </section>
+      )}
 
       {/* GPS Location Simulation */}
       {!activeRecord && (

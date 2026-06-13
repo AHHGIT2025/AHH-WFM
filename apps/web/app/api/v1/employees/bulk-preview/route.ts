@@ -51,6 +51,9 @@ export async function POST(request: Request) {
     const { rows } = parseCSV(csvText);
     const existingEmployees = await mockDb.getEmployees();
     const depts = await mockDb.getDepartments();
+    const projects = await mockDb.getProjects();
+    const sites = await mockDb.getProjectSites();
+    const categories = await mockDb.getBlueCollarPositionCategories();
     const roles = ["ADMIN", "SUPERVISOR", "EMPLOYEE", "SUPER_ADMIN", "HR_MANAGER", "FINANCE_MANAGER", "SAP_ADMIN", "REPORT_VIEWER"];
 
     const previewRows = [];
@@ -112,6 +115,28 @@ export async function POST(request: Request) {
       // 5. Validate Role
       if (row.role && !roles.includes(row.role.toUpperCase())) {
         errors.push(`Invalid role '${row.role}'. Supported roles: ${roles.join(", ")}`);
+      }
+
+      // 6. Validate positionCategory, defaultProjectCode, defaultSiteCode
+      if (row.workerCategory === "BLUE_COLLAR" || row.positionCategory || row.defaultProjectCode || row.defaultSiteCode) {
+        if (row.positionCategory) {
+          const matchCat = categories.find(c => c.code.toLowerCase() === row.positionCategory.toLowerCase() || c.name.toLowerCase() === row.positionCategory.toLowerCase());
+          if (!matchCat) {
+            errors.push(`Position Category '${row.positionCategory}' not found. Configure it in Settings first.`);
+          }
+        }
+        if (row.defaultProjectCode) {
+          const matchProj = projects.find(p => p.projectCode.toLowerCase() === row.defaultProjectCode.toLowerCase() || p.id.toLowerCase() === row.defaultProjectCode.toLowerCase());
+          if (!matchProj) {
+            errors.push(`Project Code/ID '${row.defaultProjectCode}' not found.`);
+          }
+        }
+        if (row.defaultSiteCode) {
+          const matchSite = sites.find(s => s.siteCode.toLowerCase() === row.defaultSiteCode.toLowerCase() || s.id.toLowerCase() === row.defaultSiteCode.toLowerCase());
+          if (!matchSite) {
+            errors.push(`Project Site Code/ID '${row.defaultSiteCode}' not found.`);
+          }
+        }
       }
 
       const isValid = errors.length === 0;

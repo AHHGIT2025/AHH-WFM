@@ -18,6 +18,9 @@ export async function POST(request: Request) {
 
     const depts = await mockDb.getDepartments();
     const existingEmployees = await mockDb.getEmployees();
+    const projects = await mockDb.getProjects();
+    const sites = await mockDb.getProjectSites();
+    const categories = await mockDb.getBlueCollarPositionCategories();
 
     let importedCount = 0;
     let failedCount = 0;
@@ -63,6 +66,27 @@ export async function POST(request: Request) {
           deptId = newDept.id;
         }
 
+        // Resolve default project
+        let defaultProjectId = undefined;
+        if (row.defaultProjectCode) {
+          const matchProj = projects.find(p => p.projectCode.toLowerCase() === row.defaultProjectCode.toLowerCase() || p.id.toLowerCase() === row.defaultProjectCode.toLowerCase());
+          if (matchProj) defaultProjectId = matchProj.id;
+        }
+
+        // Resolve default site
+        let defaultSiteId = undefined;
+        if (row.defaultSiteCode) {
+          const matchSite = sites.find(s => s.siteCode.toLowerCase() === row.defaultSiteCode.toLowerCase() || s.id.toLowerCase() === row.defaultSiteCode.toLowerCase());
+          if (matchSite) defaultSiteId = matchSite.id;
+        }
+
+        // Resolve position category
+        let positionCategoryId = undefined;
+        if (row.positionCategory) {
+          const matchCat = categories.find(c => c.code.toLowerCase() === row.positionCategory.toLowerCase() || c.name.toLowerCase() === row.positionCategory.toLowerCase());
+          if (matchCat) positionCategoryId = matchCat.id;
+        }
+
         // Check if employee exists
         const matchedEmp = existingEmployees.find(e => e.id === row.employeeId);
         
@@ -79,7 +103,10 @@ export async function POST(request: Request) {
               employmentStatus: row.employmentStatus || matchedEmp.employmentStatus,
               dutyStatus: row.dutyStatus || matchedEmp.dutyStatus,
               workerCategory: row.workerCategory || matchedEmp.workerCategory,
-              isActive: row.employmentStatus ? (row.employmentStatus === "ACTIVE") : matchedEmp.isActive
+              isActive: row.employmentStatus ? (row.employmentStatus === "ACTIVE") : matchedEmp.isActive,
+              positionCategoryId: positionCategoryId || matchedEmp.positionCategoryId,
+              defaultProjectId: defaultProjectId || matchedEmp.defaultProjectId,
+              defaultSiteId: defaultSiteId || matchedEmp.defaultSiteId
             });
             importedCount++;
           } else {
@@ -100,7 +127,10 @@ export async function POST(request: Request) {
             isActive: row.employmentStatus ? (row.employmentStatus === "ACTIVE") : true,
             employmentStatus: row.employmentStatus || "ACTIVE",
             dutyStatus: row.dutyStatus || "OFF_DUTY",
-            workerCategory: row.workerCategory || "WHITE_COLLAR"
+            workerCategory: row.workerCategory || "WHITE_COLLAR",
+            positionCategoryId: positionCategoryId || undefined,
+            defaultProjectId: defaultProjectId || undefined,
+            defaultSiteId: defaultSiteId || undefined
           });
           importedCount++;
         }

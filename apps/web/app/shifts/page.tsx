@@ -6,7 +6,7 @@ import { Card, Badge, Button, Input, Modal } from "@ahh-wfm/ui/src";
 import { isEmployeeActive } from "@/lib/permissions";
 
 export default function ShiftsPage() {
-  const [activeTab, setActiveTab] = useState<"grid" | "swaps" | "overtime" | "rates">("grid");
+  const [activeTab, setActiveTab] = useState<"grid" | "deployments" | "coverage" | "swaps" | "overtime" | "rates">("grid");
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [shiftTemplates, setShiftTemplates] = useState<ShiftTemplate[]>([]);
   const [rotationTemplates, setRotationTemplates] = useState<RotationTemplate[]>([]);
@@ -16,6 +16,37 @@ export default function ShiftsPage() {
   const [overtimeRecords, setOvertimeRecords] = useState<AttendanceRecord[]>([]);
   const [overtimeRates, setOvertimeRates] = useState<OvertimeRate[]>([]);
   const [coverageData, setCoverageData] = useState<any[]>([]);
+
+  // Project, site and category states
+  const [projects, setProjects] = useState<any[]>([]);
+  const [projectSites, setProjectSites] = useState<any[]>([]);
+  const [positionCategories, setPositionCategories] = useState<any[]>([]);
+  const [deployments, setDeployments] = useState<any[]>([]);
+  const [deploymentsCoverage, setDeploymentsCoverage] = useState<any[]>([]);
+
+  // Forms: Blue Collar Deployment
+  const [deployEmpId, setDeployEmpId] = useState("");
+  const [deployProjId, setDeployProjId] = useState("");
+  const [deploySiteId, setDeploySiteId] = useState("");
+  const [deployCatId, setDeployCatId] = useState("");
+  const [deployDate, setDeployDate] = useState("");
+  const [deployStart, setDeployStart] = useState("08:00");
+  const [deployEnd, setDeployEnd] = useState("17:00");
+  const [deploying, setDeploying] = useState(false);
+  const [deploySitesList, setDeploySitesList] = useState<any[]>([]);
+  const [deployError, setDeployError] = useState("");
+
+  const fetchDeploymentsCoverage = async (dateStr?: string) => {
+    try {
+      const d = dateStr || new Date().toISOString().split("T")[0];
+      const res = await fetch(`/api/v1/deployments/coverage?date=${d}`);
+      if (res.ok) {
+        setDeploymentsCoverage(await res.json());
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
 
   // Modals
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
@@ -79,7 +110,7 @@ export default function ShiftsPage() {
 
   const fetchDb = async () => {
     try {
-      const [empRes, tempRes, rotRes, assignRes, leavesRes, swapsRes, otRes, ratesRes, covRes] = await Promise.all([
+      const [empRes, tempRes, rotRes, assignRes, leavesRes, swapsRes, otRes, ratesRes, covRes, projRes, catRes, deployRes] = await Promise.all([
         fetch("/api/v1/employees"),
         fetch("/api/v1/shifts/templates"),
         fetch("/api/v1/shifts/rotations"),
@@ -88,7 +119,10 @@ export default function ShiftsPage() {
         fetch("/api/v1/shifts/swaps"),
         fetch("/api/v1/shifts/overtime"),
         fetch("/api/v1/overtime-rates"),
-        fetch("/api/v1/shifts/coverage")
+        fetch("/api/v1/shifts/coverage"),
+        fetch("/api/v1/projects"),
+        fetch("/api/v1/blue-collar/position-categories"),
+        fetch("/api/v1/deployments")
       ]);
 
       if (empRes.ok) {
@@ -116,6 +150,10 @@ export default function ShiftsPage() {
       if (otRes.ok) setOvertimeRecords(await otRes.json());
       if (ratesRes.ok) setOvertimeRates(await ratesRes.json());
       if (covRes.ok) setCoverageData(await covRes.json());
+      if (projRes.ok) setProjects(await projRes.json());
+      if (catRes.ok) setPositionCategories(await catRes.json());
+      if (deployRes.ok) setDeployments(await deployRes.json());
+      await fetchDeploymentsCoverage();
     } catch (e) {
       console.error(e);
     }
@@ -124,6 +162,101 @@ export default function ShiftsPage() {
   useEffect(() => {
     fetchDb();
   }, []);
+
+  useEffect(() => {
+    if (projects.length > 0) {
+      Promise.all(
+        projects.map(p =>
+          fetch(`/api/v1/projects/${p.id}/sites`)
+            .then(res => res.ok ? res.json() : [])
+            .catch(() => [])
+        )
+      ).then(results => {
+        const merged = results.flat();
+        setProjectSites(merged);
+      });
+    }
+  }, [projects]);
+
+  useEffect(() => {
+    if (deployProjId) {
+      fetch(`/api/v1/projects/${deployProjId}/sites`)
+        .then(res => res.ok ? res.json() : [])
+        .then(data => setDeploySitesList(data))
+        .catch(() => setDeploySitesList([]));
+    } else {
+      setDeploySitesList([]);
+    }
+  }, [deployProjId]);
+
+  useEffect(() => {
+    if (deployEmpId) {
+      const emp = employees.find(e => e.id === deployEmpId);
+      if (emp && (emp as any).positionCategoryId) {
+        setDeployCatId((emp as any).positionCategoryId);
+      }
+    }
+  }, [deployEmpId, employees]);
+
+  const handleDeploySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!deployEmpId || !deployProjId || !deploySiteId || !deployCatId || !deployDate || !deployStart || !deployEnd) {
+      setDeployError("Please fill out all fields.");
+      return;
+    }
+    setDeploying(true);
+    setDeployError("");
+    try {
+      const res = await fetch("/api/v1/deployments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          employeeId: deployEmpId,
+          projectId: deployProjId,
+          siteId: deploySiteId,
+          positionCategoryId: deployCatId,
+          deploymentDate: deployDate,
+          startTime: deployStart,
+          endTime: deployEnd
+        })
+      });
+      if (res.ok) {
+        setDeployEmpId("");
+        setDeployProjId("");
+        setDeploySiteId("");
+        setDeployCatId("");
+        setDeployDate("");
+        setDeployStart("08:00");
+        setDeployEnd("17:00");
+        fetchDb();
+        fetchDeploymentsCoverage();
+        alert("Employee deployed successfully!");
+      } else {
+        const err = await res.json();
+        setDeployError(err.error || "Failed to deploy worker.");
+      }
+    } catch (err) {
+      setDeployError("Network connection failure.");
+    } finally {
+      setDeploying(false);
+    }
+  };
+
+  const handleDeleteDeployment = async (id: string) => {
+    if (!confirm("Are you sure you want to cancel this deployment?")) return;
+    try {
+      const res = await fetch(`/api/v1/deployments/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        fetchDb();
+        fetchDeploymentsCoverage();
+      } else {
+        const err = await res.json();
+        alert(err.error || "Failed to cancel deployment");
+      }
+    } catch (e) {
+      alert("Network error.");
+    }
+  };
 
   const handleCreateTemplate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -522,16 +655,28 @@ export default function ShiftsPage() {
       </div>
 
       {/* Tabs Menu */}
-      <div className="flex border-b border-border-subtle gap-6 text-sm font-bold text-on-surface-variant">
+      <div className="flex border-b border-border-subtle gap-6 text-sm font-bold text-on-surface-variant overflow-x-auto">
         <button
           onClick={() => setActiveTab("grid")}
-          className={`pb-2.5 outline-none transition-colors border-b-2 ${activeTab === "grid" ? "border-primary text-primary" : "border-transparent hover:text-primary"}`}
+          className={`pb-2.5 outline-none transition-colors border-b-2 whitespace-nowrap ${activeTab === "grid" ? "border-primary text-primary" : "border-transparent hover:text-primary"}`}
         >
           Roster Planner Grid
         </button>
         <button
+          onClick={() => setActiveTab("deployments")}
+          className={`pb-2.5 outline-none transition-colors border-b-2 whitespace-nowrap ${activeTab === "deployments" ? "border-primary text-primary" : "border-transparent hover:text-primary"}`}
+        >
+          Project Deployment View
+        </button>
+        <button
+          onClick={() => setActiveTab("coverage")}
+          className={`pb-2.5 outline-none transition-colors border-b-2 whitespace-nowrap ${activeTab === "coverage" ? "border-primary text-primary" : "border-transparent hover:text-primary"}`}
+        >
+          Site Coverage View
+        </button>
+        <button
           onClick={() => setActiveTab("swaps")}
-          className={`pb-2.5 outline-none transition-colors border-b-2 ${activeTab === "swaps" ? "border-primary text-primary" : "border-transparent hover:text-primary"}`}
+          className={`pb-2.5 outline-none transition-colors border-b-2 whitespace-nowrap ${activeTab === "swaps" ? "border-primary text-primary" : "border-transparent hover:text-primary"}`}
         >
           Shift Swaps
           {swaps.filter(s => s.status === "PENDING").length > 0 && (
@@ -542,7 +687,7 @@ export default function ShiftsPage() {
         </button>
         <button
           onClick={() => setActiveTab("overtime")}
-          className={`pb-2.5 outline-none transition-colors border-b-2 ${activeTab === "overtime" ? "border-primary text-primary" : "border-transparent hover:text-primary"}`}
+          className={`pb-2.5 outline-none transition-colors border-b-2 whitespace-nowrap ${activeTab === "overtime" ? "border-primary text-primary" : "border-transparent hover:text-primary"}`}
         >
           Overtime Approvals
           {overtimeRecords.filter(r => r.otStatus === "PENDING").length > 0 && (
@@ -553,7 +698,7 @@ export default function ShiftsPage() {
         </button>
         <button
           onClick={() => setActiveTab("rates")}
-          className={`pb-2.5 outline-none transition-colors border-b-2 ${activeTab === "rates" ? "border-primary text-primary" : "border-transparent hover:text-primary"}`}
+          className={`pb-2.5 outline-none transition-colors border-b-2 whitespace-nowrap ${activeTab === "rates" ? "border-primary text-primary" : "border-transparent hover:text-primary"}`}
         >
           Overtime Rates
         </button>
@@ -823,6 +968,279 @@ export default function ShiftsPage() {
             </Card>
           </div>
         </div>
+      )}
+
+      {activeTab === "deployments" && (
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          {/* List of Deployments */}
+          <div className="lg:col-span-3 space-y-6">
+            <Card className="p-0 overflow-hidden">
+              <div className="p-4 border-b border-border-subtle bg-surface-container flex justify-between items-center">
+                <div>
+                  <h2 className="text-sm font-bold text-primary">Blue Collar Project Deployments</h2>
+                  <p className="text-[11px] text-on-surface-variant">View and manage daily project/site assignments for Blue Collar staff.</p>
+                </div>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead className="bg-surface-container-low text-[10px] font-bold uppercase tracking-wider text-on-surface-variant border-b border-border-subtle">
+                    <tr>
+                      <th className="p-3">Employee</th>
+                      <th className="p-3">Trade</th>
+                      <th className="p-3">Project / Cost Center</th>
+                      <th className="p-3">Site Location</th>
+                      <th className="p-3">Date</th>
+                      <th className="p-3">Hours</th>
+                      <th className="p-3 text-center">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border-subtle font-medium text-primary">
+                    {deployments.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} className="p-8 text-center italic text-on-surface-variant">
+                          No active deployments found. Use the quick deployment form on the right to assign staff.
+                        </td>
+                      </tr>
+                    ) : (
+                      deployments.map((d) => {
+                        const emp = employees.find(e => e.id === d.employeeId);
+                        const proj = projects.find(p => p.id === d.projectId);
+                        const site = projectSites.find(s => s.id === d.siteId);
+                        const cat = positionCategories.find(c => c.id === d.positionCategoryId);
+                        return (
+                          <tr key={d.id} className="hover:bg-surface-container-low/45 transition-colors">
+                            <td className="p-3">
+                              <div className="flex flex-col">
+                                <span className="font-bold text-primary">{emp?.name || "Unknown"}</span>
+                                <span className="text-[9px] font-mono text-on-surface-variant">{d.employeeId}</span>
+                              </div>
+                            </td>
+                            <td className="p-3">
+                              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-secondary/10 text-secondary uppercase">
+                                {cat?.name || "Laborer"}
+                              </span>
+                            </td>
+                            <td className="p-3">
+                              <div className="flex flex-col">
+                                <span className="font-semibold">{proj?.projectName || "N/A"}</span>
+                                <span className="text-[9px] text-on-surface-variant">CC: {proj?.costCenter || "N/A"}</span>
+                              </div>
+                            </td>
+                            <td className="p-3">
+                              <span className="font-semibold">{site?.siteName || "N/A"}</span>
+                            </td>
+                            <td className="p-3">
+                              <span className="font-mono">{d.deploymentDate}</span>
+                            </td>
+                            <td className="p-3">
+                              <span className="font-mono bg-surface-container border border-outline-variant/30 px-1.5 py-0.5 rounded text-xs">
+                                {d.startTime} - {d.endTime}
+                              </span>
+                            </td>
+                            <td className="p-3 text-center">
+                              <button
+                                onClick={() => handleDeleteDeployment(d.id)}
+                                className="text-status-error hover:bg-status-error/10 font-bold px-2 py-1 rounded text-[11px] transition-colors border border-status-error/20"
+                              >
+                                Cancel
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </Card>
+          </div>
+
+          {/* Quick Deployment Form */}
+          <div className="space-y-6">
+            <Card className="p-4 space-y-4">
+              <div>
+                <h3 className="text-xs font-bold text-primary uppercase tracking-wider">Quick Deploy Staff</h3>
+                <p className="text-[10px] text-on-surface-variant mt-0.5">Assign Blue Collar staff to daily site locations.</p>
+              </div>
+
+              {deployError && (
+                <div className="p-3 bg-status-error/10 border border-status-error/20 text-status-error text-xs font-semibold rounded-lg">
+                  {deployError}
+                </div>
+              )}
+
+              <form onSubmit={handleDeploySubmit} className="space-y-3.5 text-xs font-semibold">
+                <div className="space-y-1">
+                  <label className="block text-[10px] font-black text-on-surface-variant uppercase">Select Employee</label>
+                  <select
+                    value={deployEmpId}
+                    onChange={(e) => setDeployEmpId(e.target.value)}
+                    className="w-full bg-surface-container-low border border-outline-variant rounded-lg p-2 text-xs font-bold outline-none focus:ring-2 focus:ring-primary/20"
+                    required
+                  >
+                    <option value="">Choose worker...</option>
+                    {employees
+                      .filter(e => e.workerCategory === "BLUE_COLLAR" && (e.employmentStatus ? e.employmentStatus === "ACTIVE" : e.isActive !== false))
+                      .map(emp => (
+                        <option key={emp.id} value={emp.id}>{emp.name} ({emp.id})</option>
+                      ))
+                    }
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block text-[10px] font-black text-on-surface-variant uppercase">Trade Classification</label>
+                  <select
+                    value={deployCatId}
+                    onChange={(e) => setDeployCatId(e.target.value)}
+                    className="w-full bg-surface-container-low border border-outline-variant rounded-lg p-2 text-xs font-bold outline-none focus:ring-2 focus:ring-primary/20"
+                    required
+                  >
+                    <option value="">Choose trade...</option>
+                    {positionCategories.map(c => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block text-[10px] font-black text-on-surface-variant uppercase">Project Master</label>
+                  <select
+                    value={deployProjId}
+                    onChange={(e) => setDeployProjId(e.target.value)}
+                    className="w-full bg-surface-container-low border border-outline-variant rounded-lg p-2 text-xs font-bold outline-none focus:ring-2 focus:ring-primary/20"
+                    required
+                  >
+                    <option value="">Select project...</option>
+                    {projects.filter(p => p.status === "ACTIVE").map(p => (
+                      <option key={p.id} value={p.id}>{p.projectName}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block text-[10px] font-black text-on-surface-variant uppercase">Site Location</label>
+                  <select
+                    value={deploySiteId}
+                    onChange={(e) => setDeploySiteId(e.target.value)}
+                    className="w-full bg-surface-container-low border border-outline-variant rounded-lg p-2 text-xs font-bold outline-none focus:ring-2 focus:ring-primary/20"
+                    disabled={!deployProjId}
+                    required
+                  >
+                    <option value="">Select site...</option>
+                    {deploySitesList.map(s => (
+                      <option key={s.id} value={s.id}>{s.siteName}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block text-[10px] font-black text-on-surface-variant uppercase">Deployment Date</label>
+                  <Input
+                    type="date"
+                    value={deployDate}
+                    onChange={(e) => setDeployDate(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <label className="block text-[10px] font-black text-on-surface-variant uppercase">Start Time</label>
+                    <Input
+                      type="text"
+                      placeholder="e.g. 08:00"
+                      value={deployStart}
+                      onChange={(e) => setDeployStart(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="block text-[10px] font-black text-on-surface-variant uppercase">End Time</label>
+                    <Input
+                      type="text"
+                      placeholder="e.g. 17:00"
+                      value={deployEnd}
+                      onChange={(e) => setDeployEnd(e.target.value)}
+                      required
+                    />
+                  </div>
+                </div>
+
+                <Button type="submit" disabled={deploying} className="w-full py-2 font-bold text-xs">
+                  {deploying ? "Deploying..." : "Commit Deployment"}
+                </Button>
+              </form>
+            </Card>
+          </div>
+        </div>
+      )}
+
+      {activeTab === "coverage" && (
+        <Card className="p-0 overflow-hidden">
+          <div className="p-4 border-b border-border-subtle bg-surface-container flex justify-between items-center">
+            <div>
+              <h2 className="text-sm font-bold text-primary">Project Site Coverage Overview</h2>
+              <p className="text-[11px] text-on-surface-variant">Live headcount distribution and daily coverage across project site nodes.</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-on-surface-variant">Date:</span>
+              <input
+                type="date"
+                defaultValue={new Date().toISOString().substring(0, 10)}
+                onChange={(e) => fetchDeploymentsCoverage(e.target.value)}
+                className="bg-surface border border-outline-variant rounded px-2.5 py-1 text-xs outline-none focus:ring-1 focus:ring-primary font-bold text-primary"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-6">
+            {deploymentsCoverage.length === 0 ? (
+              <div className="col-span-full text-center py-8 italic text-on-surface-variant text-xs">
+                No active project sites configured or coverage records available.
+              </div>
+            ) : (
+              deploymentsCoverage.map((c) => (
+                <Card key={c.siteId} className="bg-surface-container-low border border-outline-variant/30 flex flex-col justify-between">
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-start gap-4">
+                      <div>
+                        <h4 className="font-bold text-primary text-sm">{c.siteName}</h4>
+                        <span className="text-[9px] font-mono text-outline-variant uppercase">Site ID: {c.siteId.substring(0, 8)}...</span>
+                      </div>
+                      <Badge variant={c.headcount > 0 ? "success" : "neutral"} className="text-xs px-2.5 py-1 shrink-0 font-black">
+                        {c.headcount} Assigned
+                      </Badge>
+                    </div>
+
+                    <div className="space-y-2.5">
+                      <p className="text-[9px] opacity-75 font-bold uppercase tracking-wider text-primary border-b border-border-subtle pb-1">
+                        Active Headcount Details
+                      </p>
+                      {c.details.length === 0 ? (
+                        <p className="text-[10px] italic text-on-surface-variant opacity-60">No personnel deployed today.</p>
+                      ) : (
+                        <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1">
+                          {c.details.map((d: any, idx: number) => (
+                            <div key={idx} className="flex justify-between items-center bg-surface border border-outline-variant/20 rounded p-2 text-[10px] font-bold">
+                              <div>
+                                <p className="text-primary">{d.employeeName}</p>
+                                <p className="text-[8px] font-mono text-on-surface-variant mt-0.5">{d.employeeId} • {d.positionCategory}</p>
+                              </div>
+                              <span className="font-mono bg-secondary-container/10 border border-secondary-container/20 text-secondary px-1.5 py-0.5 rounded text-[9px] whitespace-nowrap">
+                                {d.timeBlock}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </Card>
+              ))
+            )}
+          </div>
+        </Card>
       )}
 
       {activeTab === "swaps" && (

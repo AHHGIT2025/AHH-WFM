@@ -30,7 +30,7 @@ export async function PATCH(request: Request, { params }: RouteParams) {
 
   try {
     const payload = await request.json();
-    const { name, email, role, departmentId, status, phone, shiftId, employmentStatus, dutyStatus, workerCategory } = payload;
+    const { name, email, role, departmentId, status, phone, shiftId, employmentStatus, dutyStatus, workerCategory, positionCategoryId, defaultProjectId, defaultSiteId } = payload;
 
     // Validation checks
     if (name !== undefined && name.trim() === "") {
@@ -64,7 +64,10 @@ export async function PATCH(request: Request, { params }: RouteParams) {
       ...(shiftId !== undefined ? { shiftId: shiftId || null } : {}),
       ...(employmentStatus !== undefined ? { employmentStatus, isActive: employmentStatus === "ACTIVE" } : {}),
       ...(dutyStatus !== undefined ? { dutyStatus, status: dutyStatus } : {}),
-      ...(workerCategory !== undefined ? { workerCategory } : {})
+      ...(workerCategory !== undefined ? { workerCategory } : {}),
+      ...(positionCategoryId !== undefined ? { positionCategoryId: positionCategoryId || null } : {}),
+      ...(defaultProjectId !== undefined ? { defaultProjectId: defaultProjectId || null } : {}),
+      ...(defaultSiteId !== undefined ? { defaultSiteId: defaultSiteId || null } : {})
     } as any);
 
     if (!updated) {
