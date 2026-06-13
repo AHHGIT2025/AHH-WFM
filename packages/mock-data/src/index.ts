@@ -1,4 +1,4 @@
-import { Employee, AttendanceRecord, Shift, LeaveRequest, SapMapping, SyncLog, Announcement, Department, Worksite, AttendanceCorrection, LeaveType, LeaveBalance, LeaveBalanceLedger, Holiday, LeaveApprovalWorkflow, LeaveApprovalStep, LeaveApprovalHistory, LeaveApprovalDelegation, ShiftTemplate, RotationTemplate, ShiftAssignment, ShiftSwapRequest, OvertimeRate, SapConnection, SapSyncJob, SapSyncLog, SapFieldMapping, SapRetryQueue, SapExportQueue, SapPayrollStage, SapReconciliationLog, SapPayrollPeriodLock, SavedReport, ReportExportLog, UserActivityLog, ProductionCheckLog, BackupJob, BackupAuditLog } from "@ahh-wfm/types";
+import { Employee, AttendanceRecord, Shift, LeaveRequest, SapMapping, SyncLog, Announcement, Department, Worksite, AttendanceCorrection, LeaveType, LeaveBalance, LeaveBalanceLedger, Holiday, LeaveApprovalWorkflow, LeaveApprovalStep, LeaveApprovalHistory, LeaveApprovalDelegation, ShiftTemplate, RotationTemplate, ShiftAssignment, ShiftSwapRequest, OvertimeRate, SapConnection, SapSyncJob, SapSyncLog, SapFieldMapping, SapRetryQueue, SapExportQueue, SapPayrollStage, SapReconciliationLog, SapPayrollPeriodLock, SavedReport, ReportExportLog, UserActivityLog, ProductionCheckLog, BackupJob, BackupAuditLog, EmployeeBulkUploadJob, SystemRole, SystemPermission, RolePermission, UserRoleAssignment } from "@ahh-wfm/types";
 import * as fs from "fs";
 import * as path from "path";
 import * as bcrypt from "bcryptjs";
@@ -92,6 +92,11 @@ let memoryDb: {
   productionCheckLogs: ProductionCheckLog[];
   backupJobs: BackupJob[];
   backupAuditLogs: BackupAuditLog[];
+  employeeBulkUploadJobs: EmployeeBulkUploadJob[];
+  systemRoles: SystemRole[];
+  systemPermissions: SystemPermission[];
+  rolePermissions: RolePermission[];
+  userRoleAssignments: UserRoleAssignment[];
 } = {
   departments: [
     { id: "DEPT-001", name: "Operations", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
@@ -234,7 +239,12 @@ let memoryDb: {
   userActivityLogs: [],
   productionCheckLogs: [],
   backupJobs: [],
-  backupAuditLogs: []
+  backupAuditLogs: [],
+  employeeBulkUploadJobs: [],
+  systemRoles: [],
+  systemPermissions: [],
+  rolePermissions: [],
+  userRoleAssignments: []
 };
 
 // Seeding helper to pre-fill MySQL with mock data if it is empty
@@ -826,7 +836,7 @@ export const mockDb = {
       
       const employee = await prismaClient.employee.findUnique({ where: { id: employeeId } });
       if (!employee) throw new Error("Employee not found");
-      if (employee.isActive === false) {
+      if (employee.isActive === false || employee.employmentStatus === "INACTIVE") {
         throw new Error("Deactivated employees are not allowed to check in");
       }
 
@@ -925,7 +935,7 @@ export const mockDb = {
     const db = readDb();
     const employee = db.employees.find(e => e.id === employeeId);
     if (!employee) throw new Error("Employee not found");
-    if (employee.isActive === false) {
+    if (employee.isActive === false || employee.employmentStatus === "INACTIVE") {
       throw new Error("Deactivated employees are not allowed to check in");
     }
 
@@ -1280,6 +1290,10 @@ export const mockDb = {
     if (isDbConnected()) {
       await seedMySQL();
       const employee = await prismaClient.employee.findUnique({ where: { id: employeeId } });
+      if (!employee) throw new Error("Employee not found");
+      if (employee.isActive === false || employee.employmentStatus === "INACTIVE") {
+        throw new Error("Deactivated employees are not allowed to apply for leave");
+      }
       const employeeName = employee ? employee.name : "Unknown Employee";
       
       const leaveType = await prismaClient.leaveType.findFirst({
@@ -1420,6 +1434,10 @@ export const mockDb = {
 
     const db = readDb();
     const employee = db.employees.find(e => e.id === employeeId);
+    if (!employee) throw new Error("Employee not found");
+    if (employee.isActive === false || employee.employmentStatus === "INACTIVE") {
+      throw new Error("Deactivated employees are not allowed to apply for leave");
+    }
     const employeeName = employee ? employee.name : "Unknown Employee";
     
     const leaveType = db.leaveTypes.find(t => t.name === type);
@@ -2609,7 +2627,10 @@ export const mockDb = {
       ...empData,
       department: departmentName,
       passwordHash,
-      isActive: true
+      isActive: empData.isActive !== undefined ? empData.isActive : true,
+      employmentStatus: empData.employmentStatus || "ACTIVE",
+      dutyStatus: empData.dutyStatus || "OFF_DUTY",
+      workerCategory: empData.workerCategory || "WHITE_COLLAR"
     };
 
     if (isDbConnected()) {
@@ -2666,7 +2687,7 @@ export const mockDb = {
       try {
         const emp = await prismaClient.employee.update({
           where: { id },
-          data: { isActive: false }
+          data: { isActive: false, employmentStatus: "INACTIVE" }
         });
         return emp;
       } catch (e) {
@@ -2678,6 +2699,7 @@ export const mockDb = {
     const employee = db.employees.find(e => e.id === id);
     if (!employee) return null;
     employee.isActive = false;
+    employee.employmentStatus = "INACTIVE";
     writeDb(db);
     return employee;
   },
@@ -4436,6 +4458,16 @@ export const mockDb = {
       const approvedLeaves = leaves.filter(l => l.status === "Approved");
 
       for (const leave of approvedLeaves) {
+        const employees = await mockDb.getEmployees();
+        const emp = employees.find(e => e.id === leave.employeeId);
+        if (emp && (emp.isActive === false || emp.employmentStatus === "INACTIVE")) {
+          await mockDb.createSapSyncLog({
+            jobId: mockJob.id,
+            severity: "WARNING",
+            message: `Skipping leave export for employee ${leave.employeeId} - Employee is deactivated/inactive.`
+          });
+          continue;
+        }
         const idempotencyKey = `LEAVE_EXPORT_${leave.id}`;
         
         // 1. Duplicate Prevention check
@@ -4510,6 +4542,17 @@ export const mockDb = {
       for (const rec of attendance) {
         if (!rec.checkOut) continue; // Outbound is only for completed check-out records
 
+        const employees = await mockDb.getEmployees();
+        const emp = employees.find(e => e.id === rec.employeeId);
+        if (emp && (emp.isActive === false || emp.employmentStatus === "INACTIVE")) {
+          await mockDb.createSapSyncLog({
+            jobId: mockJob.id,
+            severity: "WARNING",
+            message: `Skipping attendance export for employee ${rec.employeeId} - Employee is deactivated/inactive.`
+          });
+          continue;
+        }
+
         const idempotencyKey = `ATT_EXPORT_${rec.id}`;
         
         // 1. Duplicate check
@@ -4570,6 +4613,16 @@ export const mockDb = {
     } else if (module === "ROSTER") {
       const assignments = await mockDb.getShiftAssignments();
       for (const assign of assignments) {
+        const employees = await mockDb.getEmployees();
+        const emp = employees.find(e => e.id === assign.employeeId);
+        if (emp && (emp.isActive === false || emp.employmentStatus === "INACTIVE")) {
+          await mockDb.createSapSyncLog({
+            jobId: mockJob.id,
+            severity: "WARNING",
+            message: `Skipping roster export for employee ${assign.employeeId} - Employee is deactivated/inactive.`
+          });
+          continue;
+        }
         const idempotencyKey = `ROSTER_EXPORT_${assign.id}`;
         
         const queueItem = await mockDb.createSapExportQueueItem({
@@ -5301,6 +5354,270 @@ export const mockDb = {
     db.backupAuditLogs.push(log);
     writeDb(db);
     return log;
+  },
+
+  // System Roles CRUD
+  getSystemRoles: async (): Promise<SystemRole[]> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      return await prismaClient.systemRole.findMany();
+    }
+    const db = readDb();
+    return db.systemRoles || [];
+  },
+  createSystemRole: async (data: Omit<SystemRole, "id" | "createdAt" | "updatedAt">): Promise<SystemRole> => {
+    const id = `ROLE-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
+    const role: SystemRole = {
+      id,
+      ...data,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    if (isDbConnected()) {
+      await seedMySQL();
+      const created = await prismaClient.systemRole.create({ data });
+      return {
+        ...created,
+        createdAt: created.createdAt.toISOString(),
+        updatedAt: created.updatedAt.toISOString()
+      };
+    }
+    const db = readDb();
+    db.systemRoles = db.systemRoles || [];
+    db.systemRoles.push(role);
+    writeDb(db);
+    return role;
+  },
+  updateSystemRole: async (id: string, data: Partial<Omit<SystemRole, "id" | "createdAt" | "updatedAt">>): Promise<SystemRole | null> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      const updated = await prismaClient.systemRole.update({
+        where: { id },
+        data
+      });
+      return {
+        ...updated,
+        createdAt: updated.createdAt.toISOString(),
+        updatedAt: updated.updatedAt.toISOString()
+      };
+    }
+    const db = readDb();
+    const idx = db.systemRoles.findIndex(r => r.id === id);
+    if (idx === -1) return null;
+    db.systemRoles[idx] = {
+      ...db.systemRoles[idx],
+      ...data,
+      updatedAt: new Date().toISOString()
+    };
+    writeDb(db);
+    return db.systemRoles[idx];
+  },
+
+  // System Permissions
+  getSystemPermissions: async (): Promise<SystemPermission[]> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      return await prismaClient.systemPermission.findMany();
+    }
+    const db = readDb();
+    return db.systemPermissions || [];
+  },
+  createSystemPermission: async (data: Omit<SystemPermission, "id" | "createdAt">): Promise<SystemPermission> => {
+    const id = `PERM-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
+    const perm: SystemPermission = {
+      id,
+      ...data,
+      createdAt: new Date().toISOString()
+    };
+    if (isDbConnected()) {
+      await seedMySQL();
+      const created = await prismaClient.systemPermission.create({ data });
+      return {
+        ...created,
+        createdAt: created.createdAt.toISOString()
+      };
+    }
+    const db = readDb();
+    db.systemPermissions = db.systemPermissions || [];
+    db.systemPermissions.push(perm);
+    writeDb(db);
+    return perm;
+  },
+
+  // Role Permissions Mapping Matrix
+  getRolePermissions: async (): Promise<RolePermission[]> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      return await prismaClient.rolePermission.findMany();
+    }
+    const db = readDb();
+    return db.rolePermissions || [];
+  },
+  saveRolePermissions: async (roleId: string, permissions: Omit<RolePermission, "id" | "roleId" | "createdAt" | "updatedAt">[]): Promise<RolePermission[]> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      // Delete existing
+      await prismaClient.rolePermission.deleteMany({ where: { roleId } });
+      const createdList = [];
+      for (const p of permissions) {
+        const c = await prismaClient.rolePermission.create({
+          data: {
+            roleId,
+            permissionId: p.permissionId,
+            canView: p.canView,
+            canCreate: p.canCreate,
+            canEdit: p.canEdit,
+            canDelete: p.canDelete,
+            canApprove: p.canApprove,
+            canExport: p.canExport
+          }
+        });
+        createdList.push({
+          ...c,
+          createdAt: c.createdAt.toISOString(),
+          updatedAt: c.updatedAt.toISOString()
+        });
+      }
+      return createdList;
+    }
+    const db = readDb();
+    db.rolePermissions = db.rolePermissions || [];
+    // Filter out existing
+    db.rolePermissions = db.rolePermissions.filter(rp => rp.roleId !== roleId);
+    const saved: RolePermission[] = [];
+    for (const p of permissions) {
+      const rp: RolePermission = {
+        id: `RP-${Math.random().toString(36).substring(2, 9).toUpperCase()}`,
+        roleId,
+        permissionId: p.permissionId,
+        canView: p.canView,
+        canCreate: p.canCreate,
+        canEdit: p.canEdit,
+        canDelete: p.canDelete,
+        canApprove: p.canApprove,
+        canExport: p.canExport,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      db.rolePermissions.push(rp);
+      saved.push(rp);
+    }
+    writeDb(db);
+    return saved;
+  },
+
+  // User Role Assignments
+  getUserRoleAssignments: async (): Promise<UserRoleAssignment[]> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      return await prismaClient.userRoleAssignment.findMany();
+    }
+    const db = readDb();
+    return db.userRoleAssignments || [];
+  },
+  createUserRoleAssignment: async (data: Omit<UserRoleAssignment, "id" | "assignedAt">): Promise<UserRoleAssignment> => {
+    const id = `URA-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
+    const assign: UserRoleAssignment = {
+      id,
+      ...data,
+      assignedAt: new Date().toISOString()
+    };
+    if (isDbConnected()) {
+      await seedMySQL();
+      // Remove any active roles first (1 role per user in this implementation model)
+      await prismaClient.userRoleAssignment.deleteMany({ where: { employeeId: data.employeeId } });
+      const created = await prismaClient.userRoleAssignment.create({ data });
+      return {
+        ...created,
+        assignedAt: created.assignedAt.toISOString()
+      };
+    }
+    const db = readDb();
+    db.userRoleAssignments = db.userRoleAssignments || [];
+    db.userRoleAssignments = db.userRoleAssignments.filter(a => a.employeeId !== data.employeeId);
+    db.userRoleAssignments.push(assign);
+    writeDb(db);
+    return assign;
+  },
+
+  // Bulk Upload Jobs
+  getEmployeeBulkUploadJobs: async (): Promise<EmployeeBulkUploadJob[]> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      return await prismaClient.employeeBulkUploadJob.findMany({ orderBy: { createdAt: "desc" } });
+    }
+    const db = readDb();
+    return db.employeeBulkUploadJobs || [];
+  },
+  createEmployeeBulkUploadJob: async (data: Omit<EmployeeBulkUploadJob, "id" | "createdAt" | "completedAt">): Promise<EmployeeBulkUploadJob> => {
+    const id = `BULK-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
+    const job: EmployeeBulkUploadJob = {
+      id,
+      ...data,
+      createdAt: new Date().toISOString()
+    };
+    if (isDbConnected()) {
+      await seedMySQL();
+      const created = await prismaClient.employeeBulkUploadJob.create({
+        data: {
+          fileName: data.fileName,
+          status: data.status,
+          totalRows: data.totalRows,
+          validRows: data.validRows,
+          invalidRows: data.invalidRows,
+          importedRows: data.importedRows,
+          failedRows: data.failedRows,
+          uploadedById: data.uploadedById,
+          errorReportPath: data.errorReportPath || null
+        }
+      });
+      return {
+        ...created,
+        errorReportPath: created.errorReportPath || undefined,
+        createdAt: created.createdAt.toISOString(),
+        completedAt: created.completedAt ? created.completedAt.toISOString() : undefined
+      };
+    }
+    const db = readDb();
+    db.employeeBulkUploadJobs = db.employeeBulkUploadJobs || [];
+    db.employeeBulkUploadJobs.push(job);
+    writeDb(db);
+    return job;
+  },
+  updateEmployeeBulkUploadJob: async (id: string, data: Partial<Omit<EmployeeBulkUploadJob, "id" | "createdAt">>): Promise<EmployeeBulkUploadJob | null> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      const updated = await prismaClient.employeeBulkUploadJob.update({
+        where: { id },
+        data: {
+          status: data.status,
+          validRows: data.validRows,
+          invalidRows: data.invalidRows,
+          importedRows: data.importedRows,
+          failedRows: data.failedRows,
+          completedAt: data.completedAt ? new Date(data.completedAt) : undefined,
+          errorMessage: data.errorMessage || null,
+          errorReportPath: data.errorReportPath || null
+        }
+      });
+      return {
+        ...updated,
+        errorReportPath: updated.errorReportPath || undefined,
+        createdAt: updated.createdAt.toISOString(),
+        completedAt: updated.completedAt ? updated.completedAt.toISOString() : undefined,
+        errorMessage: updated.errorMessage || undefined
+      };
+    }
+    const db = readDb();
+    const idx = db.employeeBulkUploadJobs.findIndex(j => j.id === id);
+    if (idx === -1) return null;
+    db.employeeBulkUploadJobs[idx] = {
+      ...db.employeeBulkUploadJobs[idx],
+      ...data,
+      completedAt: data.completedAt || new Date().toISOString()
+    };
+    writeDb(db);
+    return db.employeeBulkUploadJobs[idx];
   }
 };
 

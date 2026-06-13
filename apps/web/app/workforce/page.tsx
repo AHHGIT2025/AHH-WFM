@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { Employee, Department } from "@ahh-wfm/types";
 import { Card, Badge, Input, Button, Modal } from "@ahh-wfm/ui/src";
+import Link from "next/link";
 
 export default function WorkforcePage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -10,11 +11,13 @@ export default function WorkforcePage() {
   const [search, setSearch] = useState("");
   const [deptFilter, setDeptFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [categoryFilter, setCategoryFilter] = useState("all");
 
   // Modals state
   const [isAddEmpOpen, setIsAddEmpOpen] = useState(false);
   const [isEditEmpOpen, setIsEditEmpOpen] = useState(false);
   const [isDeptModalOpen, setIsDeptModalOpen] = useState(false);
+  const [isBulkUploadOpen, setIsBulkUploadOpen] = useState(false);
 
   // Forms state
   const [selectedEmp, setSelectedEmp] = useState<Employee | null>(null);
@@ -31,7 +34,16 @@ export default function WorkforcePage() {
   const [empDeptId, setEmpDeptId] = useState("");
   const [empShiftId, setEmpShiftId] = useState("GEN-001");
   const [empPassword, setEmpPassword] = useState("");
-  const [empStatus, setEmpStatus] = useState("Offline");
+  const [empEmploymentStatus, setEmpEmploymentStatus] = useState("ACTIVE");
+  const [empDutyStatus, setEmpDutyStatus] = useState("OFF_DUTY");
+  const [empWorkerCategory, setEmpWorkerCategory] = useState("WHITE_COLLAR");
+
+  // Bulk Upload states
+  const [bulkFile, setBulkFile] = useState<File | null>(null);
+  const [bulkPreviewData, setBulkPreviewData] = useState<any>(null);
+  const [bulkUploadError, setBulkUploadError] = useState("");
+  const [updateExisting, setUpdateExisting] = useState(false);
+  const [importing, setImporting] = useState(false);
 
   // Validation errors state
   const [validationError, setValidationError] = useState<string | null>(null);
@@ -98,7 +110,10 @@ export default function WorkforcePage() {
           role: empRole,
           departmentId: empDeptId || undefined,
           shiftId: empShiftId || undefined,
-          password: empPassword || undefined
+          password: empPassword || undefined,
+          employmentStatus: empEmploymentStatus,
+          dutyStatus: empDutyStatus,
+          workerCategory: empWorkerCategory
         })
       });
 
@@ -113,6 +128,9 @@ export default function WorkforcePage() {
         setEmpDeptId("");
         setEmpShiftId("GEN-001");
         setEmpPassword("");
+        setEmpEmploymentStatus("ACTIVE");
+        setEmpDutyStatus("OFF_DUTY");
+        setEmpWorkerCategory("WHITE_COLLAR");
         fetchDb();
       } else {
         const err = await res.json();
@@ -139,7 +157,9 @@ export default function WorkforcePage() {
           role: empRole,
           departmentId: empDeptId || null,
           shiftId: empShiftId || null,
-          status: empStatus
+          employmentStatus: empEmploymentStatus,
+          dutyStatus: empDutyStatus,
+          workerCategory: empWorkerCategory
         })
       });
 
@@ -157,7 +177,7 @@ export default function WorkforcePage() {
   };
 
   const handleDeactivate = async (id: string) => {
-    if (!confirm("Are you sure you want to deactivate this employee? They will no longer be able to log in.")) return;
+    if (!confirm("Are you sure you want to deactivate this employee? This will restrict scheduling, integrations exports, and clock-ins.")) return;
 
     try {
       const res = await fetch(`/api/v1/employees/${id}`, {
@@ -181,7 +201,7 @@ export default function WorkforcePage() {
       const res = await fetch(`/api/v1/employees/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ isActive: true })
+        body: JSON.stringify({ employmentStatus: "ACTIVE" })
       });
       if (res.ok) {
         setIsEditEmpOpen(false);
@@ -251,9 +271,84 @@ export default function WorkforcePage() {
     setEmpRole(emp.role);
     setEmpDeptId(emp.departmentId || "");
     setEmpShiftId(emp.shiftId || "GEN-001");
-    setEmpStatus(emp.status);
+    setEmpEmploymentStatus(emp.employmentStatus || (emp.isActive !== false ? "ACTIVE" : "INACTIVE"));
+    setEmpDutyStatus(emp.dutyStatus || "OFF_DUTY");
+    setEmpWorkerCategory(emp.workerCategory || "WHITE_COLLAR");
     setValidationError(null);
     setIsEditEmpOpen(true);
+  };
+
+  // CSV parsing & upload preview
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setBulkFile(file);
+    setBulkUploadError("");
+
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      const text = evt.target?.result as string;
+      try {
+        const res = await fetch("/api/v1/employees/bulk-preview", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            csvText: text,
+            fileName: file.name,
+            updateExisting
+          })
+        });
+        if (res.ok) {
+          setBulkPreviewData(await res.json());
+        } else {
+          const err = await res.json();
+          setBulkUploadError(err.error || "Failed to generate CSV upload preview.");
+        }
+      } catch (err) {
+        setBulkUploadError("Connection failed generating CSV preview.");
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const handleImportBulk = async () => {
+    if (!bulkPreviewData || !bulkPreviewData.previewRows) return;
+    setImporting(true);
+    setBulkUploadError("");
+
+    const validRows = bulkPreviewData.previewRows.filter((r: any) => r.isValid).map((r: any) => r.data);
+
+    if (validRows.length === 0) {
+      setBulkUploadError("No valid rows found to import.");
+      setImporting(false);
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/v1/employees/bulk-import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          rows: validRows,
+          fileName: bulkPreviewData.fileName,
+          updateExisting
+        })
+      });
+
+      if (res.ok) {
+        setIsBulkUploadOpen(false);
+        setBulkPreviewData(null);
+        setBulkFile(null);
+        fetchDb();
+      } else {
+        const err = await res.json();
+        setBulkUploadError(err.error || "Failed to import rows.");
+      }
+    } catch (e) {
+      setBulkUploadError("Network connection error during import.");
+    } finally {
+      setImporting(false);
+    }
   };
 
   // Filter logic
@@ -265,16 +360,21 @@ export default function WorkforcePage() {
 
     const matchesDept = deptFilter === "all" || emp.departmentId === deptFilter;
 
+    // Filter by Worker Category
+    const matchesCategory = categoryFilter === "all" || emp.workerCategory === categoryFilter;
+
     let matchesStatus = true;
+    const isEmpActive = emp.employmentStatus ? (emp.employmentStatus === "ACTIVE") : (emp.isActive !== false);
+
     if (statusFilter === "active") {
-      matchesStatus = emp.isActive !== false;
+      matchesStatus = isEmpActive;
     } else if (statusFilter === "inactive") {
-      matchesStatus = emp.isActive === false;
+      matchesStatus = !isEmpActive;
     } else if (statusFilter !== "all") {
-      matchesStatus = emp.isActive !== false && emp.status === statusFilter;
+      matchesStatus = isEmpActive && (emp.status === statusFilter || emp.dutyStatus === statusFilter);
     }
 
-    return matchesSearch && matchesDept && matchesStatus;
+    return matchesSearch && matchesDept && matchesCategory && matchesStatus;
   });
 
   return (
@@ -285,6 +385,19 @@ export default function WorkforcePage() {
           <p className="text-sm text-on-surface-variant">List of all registered field engineers, inspectors, and logistics staff</p>
         </div>
         <div className="flex gap-2 self-start sm:self-auto">
+          <Button
+            variant="secondary"
+            onClick={() => {
+              setIsBulkUploadOpen(true);
+              setBulkFile(null);
+              setBulkPreviewData(null);
+              setBulkUploadError("");
+            }}
+            className="font-bold flex items-center gap-1.5 text-xs bg-surface border border-outline-variant"
+          >
+            <span className="material-symbols-outlined text-[18px] w-4 h-4 text-primary">upload_file</span>
+            <span>Bulk Upload</span>
+          </Button>
           <Button
             variant="primary"
             onClick={() => {
@@ -309,6 +422,9 @@ export default function WorkforcePage() {
               setEmpDeptId("");
               setEmpShiftId("GEN-001");
               setEmpPassword("");
+              setEmpEmploymentStatus("ACTIVE");
+              setEmpDutyStatus("OFF_DUTY");
+              setEmpWorkerCategory("WHITE_COLLAR");
               setIsAddEmpOpen(true);
             }}
             className="font-bold flex items-center gap-1.5 text-xs"
@@ -357,94 +473,206 @@ export default function WorkforcePage() {
             <option value="Offline">Offline</option>
             <option value="On Leave">On Leave</option>
           </select>
+          <select
+            className="bg-surface border border-outline-variant text-sm rounded-lg py-2 px-4 focus:ring-2 focus:ring-primary/20 focus:border-primary w-full sm:w-48 outline-none"
+            value={categoryFilter}
+            onChange={(e) => setCategoryFilter(e.target.value)}
+          >
+            <option value="all">All Categories</option>
+            <option value="WHITE_COLLAR">White Collar</option>
+            <option value="BLUE_COLLAR">Blue Collar</option>
+          </select>
         </div>
       </Card>
 
       {/* Employee Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filtered.map((emp) => (
-          <Card key={emp.id} className={`flex flex-col justify-between ${emp.isActive === false ? "opacity-60 bg-surface-container-low" : ""}`}>
-            <div className="flex justify-between items-start gap-4">
-              <div className="flex gap-3">
-                <div className="w-10 h-10 rounded-full bg-secondary-container/10 flex items-center justify-center font-bold text-primary border border-secondary-container/20 shrink-0">
-                  {emp.name.split(" ").map((n) => n[0]).join("")}
+        {filtered.map((emp) => {
+          const isEmpActive = emp.employmentStatus ? (emp.employmentStatus === "ACTIVE") : (emp.isActive !== false);
+          return (
+            <Card key={emp.id} className={`flex flex-col justify-between ${!isEmpActive ? "opacity-60 bg-surface-container-low" : ""}`}>
+              <div className="flex justify-between items-start gap-4">
+                <div className="flex gap-3">
+                  <div className="w-10 h-10 rounded-full bg-secondary-container/10 flex items-center justify-center font-bold text-primary border border-secondary-container/20 shrink-0">
+                    {emp.name.split(" ").map((n) => n[0]).join("")}
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-primary text-sm">{emp.name}</h3>
+                    <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">{emp.role}</p>
+                    <div className="mt-1">
+                      <span className="px-1.5 py-0.5 rounded text-[8px] font-black bg-secondary/10 text-secondary uppercase">
+                        {emp.workerCategory === "BLUE_COLLAR" ? "Blue Collar" : "White Collar"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex flex-col items-end gap-1.5 shrink-0">
+                  <Badge variant={isEmpActive ? "success" : "neutral"}>
+                    {isEmpActive ? "Active" : "Deactivated"}
+                  </Badge>
+                  {isEmpActive && (
+                    <Badge
+                      variant={
+                        emp.status === "On Duty" || emp.dutyStatus === "ON_DUTY"
+                          ? "success"
+                          : emp.status === "On Break"
+                          ? "warning"
+                          : emp.status === "On Leave"
+                          ? "pending"
+                          : "neutral"
+                      }
+                    >
+                      {emp.status || "Offline"}
+                    </Badge>
+                  )}
+                </div>
+              </div>
+
+              <div className="mt-4 pt-4 border-t border-border-subtle grid grid-cols-2 gap-y-2 gap-x-4 text-[11px] text-on-surface-variant">
+                <div>
+                  <p className="opacity-60 font-semibold uppercase">ID</p>
+                  <p className="font-mono text-xs mt-0.5 text-primary font-bold">{emp.id}</p>
                 </div>
                 <div>
-                  <h3 className="font-bold text-primary text-sm">{emp.name}</h3>
-                  <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">{emp.role}</p>
+                  <p className="opacity-60 font-semibold uppercase">Department</p>
+                  <p className="font-bold text-primary mt-0.5">{emp.department}</p>
                 </div>
-              </div>
-              <div className="flex flex-col items-end gap-1.5 shrink-0">
-                {emp.isActive === false ? (
-                  <Badge variant="neutral">Deactivated</Badge>
-                ) : (
-                  <Badge
-                    variant={
-                      emp.status === "On Duty"
-                        ? "success"
-                        : emp.status === "On Break"
-                        ? "warning"
-                        : emp.status === "On Leave"
-                        ? "pending"
-                        : "neutral"
-                    }
-                  >
-                    {emp.status}
-                  </Badge>
+                <div className="col-span-2">
+                  <p className="opacity-60 font-semibold uppercase">Email</p>
+                  <p className="font-medium text-primary mt-0.5 break-all">{emp.email}</p>
+                </div>
+                {emp.phone && (
+                  <div className="col-span-2">
+                    <p className="opacity-60 font-semibold uppercase">Phone</p>
+                    <p className="font-medium text-primary mt-0.5">{emp.phone}</p>
+                  </div>
                 )}
               </div>
-            </div>
 
-            <div className="mt-4 pt-4 border-t border-border-subtle grid grid-cols-2 gap-y-2 gap-x-4 text-[11px] text-on-surface-variant">
-              <div>
-                <p className="opacity-60 font-semibold uppercase">ID</p>
-                <p className="font-mono text-xs mt-0.5 text-primary font-bold">{emp.id}</p>
+              <div className="mt-6 flex gap-2">
+                <Button
+                  variant="secondary"
+                  className="flex-1 font-bold text-xs py-1.5"
+                  onClick={() => openEditModal(emp)}
+                >
+                  Edit Profile
+                </Button>
+                {!isEmpActive ? (
+                  <Button
+                    variant="success"
+                    className="font-bold text-xs py-1.5 px-3"
+                    onClick={() => handleActivate(emp.id)}
+                  >
+                    Activate
+                  </Button>
+                ) : (
+                  <Button
+                    variant="ghost"
+                    className="text-status-error hover:bg-red-50 font-bold text-xs py-1.5 px-3 border border-outline-variant"
+                    onClick={() => handleDeactivate(emp.id)}
+                  >
+                    Deactivate
+                  </Button>
+                )}
               </div>
-              <div>
-                <p className="opacity-60 font-semibold uppercase">Department</p>
-                <p className="font-bold text-primary mt-0.5">{emp.department}</p>
+            </Card>
+          );
+        })}
+      </div>
+
+      {/* Bulk Upload Modal */}
+      <Modal isOpen={isBulkUploadOpen} onClose={() => setIsBulkUploadOpen(false)} title="Bulk Upload Employees Gateway">
+        <div className="space-y-4 text-xs font-medium">
+          <div className="p-4 bg-surface-container-low border border-border-subtle rounded-xl flex justify-between items-center">
+            <div>
+              <p className="font-bold text-primary">Download Template</p>
+              <p className="text-[10px] text-outline-variant">Standard schema fields layout rules template file.</p>
+            </div>
+            <Link
+              href="/api/v1/employees/bulk-template"
+              className="bg-primary text-white hover:bg-primary/95 text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1"
+            >
+              <span className="material-symbols-outlined text-[16px]">download</span> Download CSV
+            </Link>
+          </div>
+
+          <div className="space-y-2">
+            <label className="block text-[10px] font-bold uppercase tracking-wider text-outline-variant">Upload CSV Data File</label>
+            <input
+              type="file"
+              accept=".csv"
+              onChange={handleFileChange}
+              className="w-full bg-surface-container-low border border-border-subtle rounded-xl px-3 py-2 text-xs font-semibold focus:outline-none"
+            />
+          </div>
+
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="updateExisting"
+              checked={updateExisting}
+              onChange={(e) => setUpdateExisting(e.target.checked)}
+              className="w-4 h-4 rounded text-primary focus:ring-0"
+            />
+            <label htmlFor="updateExisting" className="text-xs text-primary font-bold cursor-pointer select-none">
+              Update existing employee records if IDs match
+            </label>
+          </div>
+
+          {bulkUploadError && (
+            <div className="p-3 bg-status-error/15 text-status-error font-bold rounded-lg border border-status-error/35">
+              {bulkUploadError}
+            </div>
+          )}
+
+          {bulkPreviewData && (
+            <div className="space-y-3">
+              <div className="flex gap-4 border-y border-border-subtle py-2 text-[10px] font-bold text-outline-variant justify-around text-center">
+                <div>
+                  <p>Total Rows</p>
+                  <p className="text-lg font-black text-primary">{bulkPreviewData.totalRows}</p>
+                </div>
+                <div>
+                  <p className="text-status-success">Valid rows</p>
+                  <p className="text-lg font-black text-status-success">{bulkPreviewData.validRows}</p>
+                </div>
+                <div>
+                  <p className="text-status-error">Invalid rows</p>
+                  <p className="text-lg font-black text-status-error">{bulkPreviewData.invalidRows}</p>
+                </div>
               </div>
-              <div className="col-span-2">
-                <p className="opacity-60 font-semibold uppercase">Email</p>
-                <p className="font-medium text-primary mt-0.5 break-all">{emp.email}</p>
-              </div>
-              {emp.phone && (
-                <div className="col-span-2">
-                  <p className="opacity-60 font-semibold uppercase">Phone</p>
-                  <p className="font-medium text-primary mt-0.5">{emp.phone}</p>
+
+              {bulkPreviewData.previewRows && (
+                <div className="max-h-[30vh] overflow-y-auto space-y-2 pr-1 border border-border-subtle/50 rounded-xl p-3 bg-surface-container-lowest">
+                  <p className="text-[10px] font-bold text-outline-variant uppercase">Row Preview Statuses:</p>
+                  {bulkPreviewData.previewRows.map((row: any) => (
+                    <div key={row.rowNum} className={`p-2.5 rounded-lg border text-[11px] ${row.isValid ? 'bg-status-success/5 border-status-success/15' : 'bg-status-error/5 border-status-error/15'}`}>
+                      <div className="flex justify-between items-center font-bold">
+                        <span className="text-primary">Row {row.rowNum}: {row.data.fullName || "N/A"} ({row.data.employeeId || "NO ID"})</span>
+                        <Badge variant={row.isValid ? "success" : "error"}>{row.isValid ? "Valid" : "Invalid"}</Badge>
+                      </div>
+                      {row.errors.length > 0 && (
+                        <div className="mt-1 text-[10px] text-status-error font-bold list-disc list-inside">
+                          {row.errors.map((err: string, i: number) => (
+                            <p key={i}>• {err}</p>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
                 </div>
               )}
-            </div>
 
-            <div className="mt-6 flex gap-2">
-              <Button
-                variant="secondary"
-                className="flex-1 font-bold text-xs py-1.5"
-                onClick={() => openEditModal(emp)}
-              >
-                Edit Profile
-              </Button>
-              {emp.isActive === false ? (
-                <Button
-                  variant="success"
-                  className="font-bold text-xs py-1.5 px-3"
-                  onClick={() => handleActivate(emp.id)}
-                >
-                  Activate
+              <div className="flex justify-end gap-2 border-t border-border-subtle pt-4">
+                <Button variant="secondary" onClick={() => setBulkPreviewData(null)}>Clear</Button>
+                <Button onClick={handleImportBulk} disabled={importing || bulkPreviewData.validRows === 0}>
+                  {importing ? "Importing..." : `Import ${bulkPreviewData.validRows} Valid Rows`}
                 </Button>
-              ) : (
-                <Button
-                  variant="ghost"
-                  className="text-status-error hover:bg-red-50 font-bold text-xs py-1.5 px-3 border border-outline-variant"
-                  onClick={() => handleDeactivate(emp.id)}
-                >
-                  Deactivate
-                </Button>
-              )}
+              </div>
             </div>
-          </Card>
-        ))}
-      </div>
+          )}
+        </div>
+      </Modal>
 
       {/* Add Employee Modal */}
       <Modal isOpen={isAddEmpOpen} onClose={() => setIsAddEmpOpen(false)} title="Register New Employee">
@@ -516,13 +744,17 @@ export default function WorkforcePage() {
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
-            <Input
-              label="Default Password"
-              type="password"
-              placeholder="Optional (Default: Password123!)"
-              value={empPassword}
-              onChange={(e) => setEmpPassword(e.target.value)}
-            />
+            <div className="space-y-1">
+              <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Worker Category</label>
+              <select
+                className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                value={empWorkerCategory}
+                onChange={(e) => setEmpWorkerCategory(e.target.value)}
+              >
+                <option value="WHITE_COLLAR">White Collar (Staff)</option>
+                <option value="BLUE_COLLAR">Blue Collar (Laborer)</option>
+              </select>
+            </div>
             <div className="space-y-1">
               <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Default Shift</label>
               <select
@@ -534,6 +766,26 @@ export default function WorkforcePage() {
                 <option value="MOR-102">Morning Shift (6 AM - 2 PM)</option>
                 <option value="AFT-103">Afternoon Shift (2 PM - 10 PM)</option>
                 <option value="NGT-201">Night Shift (10 PM - 6 AM)</option>
+              </select>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <Input
+              label="Default Password"
+              type="password"
+              placeholder="Optional (Default: Password123!)"
+              value={empPassword}
+              onChange={(e) => setEmpPassword(e.target.value)}
+            />
+            <div className="space-y-1">
+              <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Employment Status</label>
+              <select
+                className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                value={empEmploymentStatus}
+                onChange={(e) => setEmpEmploymentStatus(e.target.value)}
+              >
+                <option value="ACTIVE">ACTIVE</option>
+                <option value="INACTIVE">DEACTIVATED</option>
               </select>
             </div>
           </div>
@@ -580,16 +832,16 @@ export default function WorkforcePage() {
                 onChange={(e) => setEmpPhone(e.target.value)}
               />
               <div className="space-y-1">
-                <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Status</label>
+                <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Duty Status</label>
                 <select
                   className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                  value={empStatus}
-                  onChange={(e) => setEmpStatus(e.target.value)}
+                  value={empDutyStatus}
+                  onChange={(e) => setEmpDutyStatus(e.target.value)}
                 >
-                  <option value="Offline">Offline</option>
-                  <option value="On Duty">On Duty</option>
-                  <option value="On Break">On Break</option>
-                  <option value="On Leave">On Leave</option>
+                  <option value="OFF_DUTY">Offline</option>
+                  <option value="ON_DUTY">On Duty</option>
+                  <option value="ON_BREAK">On Break</option>
+                  <option value="ON_LEAVE">On Leave</option>
                 </select>
               </div>
             </div>
@@ -619,6 +871,30 @@ export default function WorkforcePage() {
                   <option value="EMPLOYEE">EMPLOYEE</option>
                   <option value="SUPERVISOR">SUPERVISOR</option>
                   <option value="ADMIN">ADMIN</option>
+                </select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Worker Category</label>
+                <select
+                  className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                  value={empWorkerCategory}
+                  onChange={(e) => setEmpWorkerCategory(e.target.value)}
+                >
+                  <option value="WHITE_COLLAR">White Collar (Staff)</option>
+                  <option value="BLUE_COLLAR">Blue Collar (Laborer)</option>
+                </select>
+              </div>
+              <div className="space-y-1">
+                <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Employment Status</label>
+                <select
+                  className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                  value={empEmploymentStatus}
+                  onChange={(e) => setEmpEmploymentStatus(e.target.value)}
+                >
+                  <option value="ACTIVE">ACTIVE</option>
+                  <option value="INACTIVE">DEACTIVATED</option>
                 </select>
               </div>
             </div>

@@ -20,7 +20,7 @@ export async function POST(request: Request) {
 
   try {
     const payload = await request.json();
-    const { id, name, email, role, departmentId, phone, shiftId, password } = payload;
+    const { id, name, email, role, departmentId, phone, shiftId, password, employmentStatus, dutyStatus, workerCategory } = payload;
 
     // 1. Validation
     if (!id || id.trim() === "") {
@@ -57,10 +57,14 @@ export async function POST(request: Request) {
       role: role.trim(),
       departmentId: departmentId || undefined,
       department: "", // Will be auto-resolved by broker based on departmentId
-      status: "Offline",
+      status: dutyStatus || "Offline",
       phone: phone ? phone.trim() : undefined,
       shiftId: shiftId || undefined,
-      password: password || undefined
+      password: password || undefined,
+      employmentStatus: employmentStatus || "ACTIVE",
+      dutyStatus: dutyStatus || "OFF_DUTY",
+      workerCategory: workerCategory || "WHITE_COLLAR",
+      isActive: employmentStatus ? (employmentStatus === "ACTIVE") : true
     });
 
     return NextResponse.json(newEmp);

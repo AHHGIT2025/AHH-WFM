@@ -18,6 +18,9 @@ export interface Employee {
   shiftId?: string;
   passwordHash?: string;
   isActive?: boolean;
+  employmentStatus?: string;
+  dutyStatus?: string;
+  workerCategory?: string;
 }
 
 export interface Worksite {
@@ -487,6 +490,65 @@ export interface BackupAuditLog {
   userAgent?: string;
   details: string;
   createdAt?: string;
+}
+
+export interface EmployeeBulkUploadJob {
+  id: string;
+  fileName: string;
+  status: "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED" | string;
+  totalRows: number;
+  validRows: number;
+  invalidRows: number;
+  importedRows: number;
+  failedRows: number;
+  uploadedById: string;
+  errorReportPath?: string;
+  createdAt?: string;
+  completedAt?: string;
+  errorMessage?: string;
+}
+
+export interface SystemRole {
+  id: string;
+  name: string;
+  description?: string;
+  isSystemDefault: boolean;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface SystemPermission {
+  id: string;
+  key: string;
+  label: string;
+  module: string;
+  pagePath?: string;
+  action?: string;
+  createdAt?: string;
+}
+
+export interface RolePermission {
+  id: string;
+  roleId: string;
+  permissionId: string;
+  canView: boolean;
+  canCreate: boolean;
+  canEdit: boolean;
+  canDelete: boolean;
+  canApprove: boolean;
+  canExport: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface UserRoleAssignment {
+  id: string;
+  employeeId: string;
+  roleId: string;
+  assignedById: string;
+  assignedAt?: string;
+  isActive: boolean;
 }
 
 

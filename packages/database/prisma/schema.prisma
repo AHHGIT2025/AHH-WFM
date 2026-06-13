@@ -20,6 +20,9 @@ model Employee {
   shiftId       String?
   passwordHash  String?
   isActive      Boolean              @default(true)
+  employmentStatus String            @default("ACTIVE")
+  dutyStatus    String               @default("OFF_DUTY")
+  workerCategory String              @default("WHITE_COLLAR")
   attendance    AttendanceRecord[]
   leaves        LeaveRequest[]
   leaveBalances LeaveBalance[]
@@ -525,6 +528,65 @@ model BackupAuditLog {
   userAgent    String?
   details      String   @db.Text
   createdAt    DateTime @default(now())
+}
+
+model EmployeeBulkUploadJob {
+  id              String    @id @default(uuid())
+  fileName        String
+  status          String    // PENDING, PROCESSING, COMPLETED, FAILED
+  totalRows       Int
+  validRows       Int
+  invalidRows     Int
+  importedRows    Int
+  failedRows      Int
+  uploadedById    String
+  errorReportPath String?
+  createdAt       DateTime  @default(now())
+  completedAt     DateTime?
+  errorMessage    String?   @db.Text
+}
+
+model SystemRole {
+  id              String    @id @default(uuid())
+  name            String    @unique
+  description     String?
+  isSystemDefault Boolean   @default(false)
+  isActive        Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model SystemPermission {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  label     String
+  module    String
+  pagePath  String?
+  action    String?
+  createdAt DateTime @default(now())
+}
+
+model RolePermission {
+  id           String   @id @default(uuid())
+  roleId       String
+  permissionId String
+  canView      Boolean  @default(false)
+  canCreate    Boolean  @default(false)
+  canEdit      Boolean  @default(false)
+  canDelete    Boolean  @default(false)
+  canApprove   Boolean  @default(false)
+  canExport    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model UserRoleAssignment {
+  id           String   @id @default(uuid())
+  employeeId   String
+  roleId       String
+  assignedById String
+  assignedAt   DateTime @default(now())
+  isActive     Boolean  @default(true)
 }
 
 

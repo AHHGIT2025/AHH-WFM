@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
+import { filterNavigationByPermissions } from "@/lib/permissions";
 
 // Class merging helper
 const cn = (...classes: (string | undefined | boolean)[]) => classes.filter(Boolean).join(" ");
@@ -23,6 +24,7 @@ const navItems: NavItem[] = [
   { label: "SAP Integration Hub", path: "/sap", icon: "hub" },
   { label: "SAP Field Mapping", path: "/sap/mapping", icon: "account_tree" },
   { label: "Shift Master", path: "/shifts", icon: "schedule" },
+  { label: "Backup & Restore", path: "/admin/backup", icon: "settings_backup_restore" },
   { label: "Settings", path: "/settings", icon: "settings" }
 ];
 
@@ -30,11 +32,7 @@ export const LayoutShell: React.FC<{ children: React.ReactNode }> = ({ children 
   const pathname = usePathname();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const { data: session, status } = useSession();
-  const userRole = (session?.user as any)?.role;
-  const activeNavItems = [...navItems];
-  if (userRole === "ADMIN") {
-    activeNavItems.push({ label: "Backup & Restore", path: "/admin/backup", icon: "settings_backup_restore" });
-  }
+  const activeNavItems = filterNavigationByPermissions(session?.user as any, navItems);
 
   const isActive = (path: string) => {
     if (path === "/") {
