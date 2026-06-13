@@ -609,6 +609,12 @@ export default function ShiftsPage() {
       payload.projectId = cellProjectId || undefined;
       payload.siteId = cellSiteId || undefined;
       payload.reason = cellLeaveReason || "Reliever linked via cell-action";
+    } else if (cellActionType === "ASSIGN_ON_CALL") {
+      payload.projectId = cellProjectId || undefined;
+      payload.siteId = cellSiteId || undefined;
+      payload.startTime = cellStartTime;
+      payload.endTime = cellEndTime;
+      payload.status = "ASSIGNED";
     }
 
     try {
@@ -1801,6 +1807,7 @@ export default function ShiftsPage() {
                 <option value="MARK_VACATION">Mark Annual Vacation</option>
                 <option value="MARK_OFF">Mark Day Off</option>
                 <option value="ASSIGN_PROJECT_SITE">Assign Project / Site Deployment</option>
+                <option value="ASSIGN_ON_CALL">Assign On-Call Duty</option>
                 <option value="LINK_RELIEVER">Link Reliever / Cover</option>
               </select>
             </div>
@@ -1918,6 +1925,41 @@ export default function ShiftsPage() {
                       <option key={c.id} value={c.id}>{c.name}</option>
                     ))}
                   </select>
+                </div>
+              </div>
+            )}
+
+            {/* ASSIGN_ON_CALL fields */}
+            {cellActionType === "ASSIGN_ON_CALL" && (
+              <div className="space-y-3">
+                <div className="space-y-1">
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase">Target Project (Optional)</label>
+                  <select
+                    value={cellProjectId}
+                    onChange={(e) => setCellProjectId(e.target.value)}
+                    className="w-full bg-surface border border-outline-variant rounded-lg p-2 text-xs font-bold outline-none"
+                  >
+                    <option value="">None / Standby Pool</option>
+                    {projects.map(p => (
+                      <option key={p.id} value={p.id}>{p.projectName}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <Input
+                    label="Start Time"
+                    value={cellStartTime}
+                    onChange={(e) => setCellStartTime(e.target.value)}
+                    placeholder="e.g. 08:00"
+                    required
+                  />
+                  <Input
+                    label="End Time"
+                    value={cellEndTime}
+                    onChange={(e) => setCellEndTime(e.target.value)}
+                    placeholder="e.g. 17:00"
+                    required
+                  />
                 </div>
               </div>
             )}

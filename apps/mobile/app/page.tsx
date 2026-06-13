@@ -1,501 +1,112 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { Employee, AttendanceRecord, LeaveRequest, Worksite } from "@ahh-wfm/types";
-import { Card, Badge, Input, Button, Modal } from "@ahh-wfm/ui/src";
+import React, { useEffect, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 
-export default function MobileHomePage() {
-  const [data, setData] = useState<{
-    employees: Employee[];
-    attendance: AttendanceRecord[];
-    leaves: LeaveRequest[];
-  }>({ employees: [], attendance: [], leaves: [] });
-
-  const [worksites, setWorksites] = useState<Worksite[]>([]);
-  const [todayDeployment, setTodayDeployment] = useState<any>(null);
-  const [todayRelieverAssignment, setTodayRelieverAssignment] = useState<any>(null);
-  const [projects, setProjects] = useState<any[]>([]);
-  const [allSites, setAllSites] = useState<any[]>([]);
-  const [time, setTime] = useState("");
-  const [date, setDate] = useState("");
-  const [checking, setChecking] = useState(false);
-  const [errorMessage, setErrorMessage] = useState("");
-
-  // Simulated GPS Locations selector for manual testing
-  const [gpsSim, setGpsSim] = useState("doha_hq");
-  const getSimulatedCoords = () => {
-    switch (gpsSim) {
-      case "doha_hq":
-        return { lat: 25.3186, lng: 51.5284, name: "Doha Headquarters" };
-      case "lusail":
-        return { lat: 25.4208, lng: 51.4904, name: "Lusail Construction Site" };
-      case "out_of_zone":
-      default:
-        return { lat: 25.0, lng: 51.0, name: "Remote Desert Field" };
-    }
-  };
-
-  // Correction Request state
-  const [isCorrOpen, setIsCorrOpen] = useState(false);
-  const [selectedRecord, setSelectedRecord] = useState<AttendanceRecord | null>(null);
-  const [corrCheckIn, setCorrCheckIn] = useState("");
-  const [corrCheckOut, setCorrCheckOut] = useState("");
-  const [corrReason, setCorrReason] = useState("");
-  const [submittingCorr, setSubmittingCorr] = useState(false);
-
-  const employeeId = "AA-1001"; // Mock authenticated employee (Ahmed Ali)
-
-  const fetchDb = async () => {
-    try {
-      const todayStr = new Date().toISOString().split("T")[0];
-      const [empRes, attRes, lvRes, wsRes, projRes, depRes, relRes] = await Promise.all([
-        fetch("/api/v1/employees"),
-        fetch("/api/v1/attendance"),
-        fetch("/api/v1/leaves"),
-        fetch("/api/v1/worksites"),
-        fetch("/api/v1/projects"),
-        fetch(`/api/v1/deployments?employeeId=${employeeId}&date=${todayStr}`),
-        fetch("/api/v1/scheduler/relievers")
-      ]);
-      if (empRes.ok && attRes.ok && lvRes.ok && wsRes.ok) {
-        setData({
-          employees: await empRes.json(),
-          attendance: await attRes.json(),
-          leaves: await lvRes.json()
-        });
-        setWorksites(await wsRes.json());
-      }
-      if (projRes.ok) {
-        setProjects(await projRes.json());
-      }
-      if (depRes.ok) {
-        const deps = await depRes.json();
-        if (deps.length > 0) {
-          setTodayDeployment(deps[0]);
-        } else {
-          setTodayDeployment(null);
-        }
-      }
-      if (relRes.ok) {
-        const rels = await relRes.json();
-        const activeRel = rels.find((a: any) => a.relieverEmployeeId === employeeId && a.date === todayStr);
-        setTodayRelieverAssignment(activeRel || null);
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  };
+export default function MobileDashboard() {
+  const { data: session } = useSession();
+  const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchDb();
-    const updateTime = () => {
-      const now = new Date();
-      setTime(now.toLocaleTimeString("en-US", { hour12: false }));
-      setDate(now.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" }));
-    };
-    updateTime();
-    const clockInterval = setInterval(updateTime, 1000);
-    return () => clearInterval(clockInterval);
+    fetch("/api/v1/dashboard")
+      .then(res => res.json())
+      .then(d => {
+        setData(d);
+        setLoading(false);
+      });
   }, []);
 
-  useEffect(() => {
-    if (projects.length > 0) {
-      Promise.all(
-        projects.map(p =>
-          fetch(`/api/v1/projects/${p.id}/sites`)
-            .then(res => res.ok ? res.json() : [])
-            .catch(() => [])
-        )
-      ).then(results => {
-        const merged = results.flat();
-        setAllSites(merged);
-      });
-    }
-  }, [projects]);
-
-  const employee = data.employees.find(e => e.id === employeeId);
-  const activeRecord = data.attendance.find(a => a.employeeId === employeeId && !a.checkOut);
-  const employeeRecords = data.attendance.filter(a => a.employeeId === employeeId);
-
-  const handleAttendanceToggle = async () => {
-    setChecking(true);
-    setErrorMessage("");
-    try {
-      if (activeRecord) {
-        const res = await fetch("/api/v1/attendance/check-out", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ employeeId })
-        });
-        if (!res.ok) {
-          const err = await res.json();
-          setErrorMessage(err.error || "Failed to check out");
-        }
-      } else {
-        const sim = getSimulatedCoords();
-        const res = await fetch("/api/v1/attendance/check-in", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            employeeId,
-            lat: sim.lat,
-            lng: sim.lng,
-            device: "iPhone 15 Pro Max · GPS Active",
-            locationName: sim.name
-          })
-        });
-        if (!res.ok) {
-          const err = await res.json();
-          setErrorMessage(err.error || "Failed to check in");
-        }
-      }
-      fetchDb();
-    } catch (e) {
-      setErrorMessage("Connection failure");
-    } finally {
-      setChecking(false);
-    }
-  };
-
-  const handleOpenCorrection = (rec: AttendanceRecord) => {
-    setSelectedRecord(rec);
-    setCorrCheckIn(rec.checkIn ? new Date(rec.checkIn).toISOString().slice(0, 16) : "");
-    setCorrCheckOut(rec.checkOut ? new Date(rec.checkOut).toISOString().slice(0, 16) : "");
-    setCorrReason("");
-    setIsCorrOpen(true);
-  };
-
-  const handleSendCorrection = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedRecord) return;
-    setSubmittingCorr(true);
-    try {
-      const res = await fetch("/api/v1/attendance/corrections", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          attendanceRecordId: selectedRecord.id,
-          requestedCheckIn: corrCheckIn ? new Date(corrCheckIn).toISOString() : undefined,
-          requestedCheckOut: corrCheckOut ? new Date(corrCheckOut).toISOString() : undefined,
-          reason: corrReason
-        })
-      });
-      if (res.ok) {
-        setIsCorrOpen(false);
-        fetchDb();
-      } else {
-        const err = await res.json();
-        alert(err.error || "Failed to submit correction");
-      }
-    } catch (err) {
-      alert("Network error");
-    } finally {
-      setSubmittingCorr(false);
-    }
-  };
-
-  const approvedLeaves = data.leaves.filter(l => l.employeeId === employeeId && l.status === "Approved").length;
+  if (loading) {
+    return <div className="flex justify-center py-20"><div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin"></div></div>;
+  }
 
   return (
-    <div className="space-y-6">
-      {/* Time display */}
-      <section className="relative overflow-hidden rounded-2xl bg-primary p-5 text-on-primary shadow-xl">
-        <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -mr-16 -mt-16 blur-2xl"></div>
-        
-        <div className="relative z-10 flex flex-col items-center">
-          <p className="text-[10px] font-bold opacity-80 uppercase tracking-widest mb-1">{date || "Loading..."}</p>
-          <div className="text-4xl font-extrabold text-glow tracking-tight leading-none mb-6 font-mono">{time || "00:00:00"}</div>
+    <div className="space-y-4">
+      {/* Welcome Card */}
+      <div className="bg-primary text-white p-5 rounded-2xl shadow-sm relative overflow-hidden">
+        <div className="absolute -right-4 -top-4 w-24 h-24 bg-white/10 rounded-full blur-xl"></div>
+        <div className="relative z-10">
+          <p className="text-[10px] uppercase tracking-wider text-white/70 font-bold mb-1">{data?.designation || "Employee"}</p>
+          <h2 className="text-xl font-bold mb-4">{data?.employeeName || session?.user?.name}</h2>
           
-          {errorMessage && (
-            <div className="w-full mb-3 p-2 bg-status-error/20 border border-status-error/30 text-white rounded text-center text-xs font-bold">
-              {errorMessage}
-            </div>
-          )}
-
-          <div className="w-full bg-white/10 backdrop-blur-md rounded-xl p-3 flex justify-between items-center border border-white/10">
-            <div className="flex flex-col">
-              <span className="text-[10px] opacity-75 font-semibold uppercase">Current Status</span>
-              <span className="text-sm font-bold mt-0.5">
-                {activeRecord ? "Clocked In" : "Checked Out"}
-              </span>
-            </div>
-            <Button
-              disabled={checking}
-              onClick={handleAttendanceToggle}
-              className="bg-white text-primary font-bold text-xs py-2 px-5 rounded-lg shadow-md hover:bg-white/95 active:scale-95 transition-transform"
-            >
-              {checking ? "Processing..." : activeRecord ? "Check Out" : "Check In"}
-            </Button>
-          </div>
-        </div>
-      </section>
- 
-      {/* Today's Reliever Assignment Card */}
-      {todayRelieverAssignment && (
-        <section className="space-y-1.5">
-          <label className="block text-[10px] font-bold text-status-warning uppercase tracking-wider px-1">Today's Reliever Cover Duty</label>
-          <Card className="bg-status-warning/5 border border-status-warning/20 p-4 rounded-xl">
-            <div className="flex justify-between items-start">
-              <div>
-                <h4 className="text-xs font-bold text-primary flex items-center gap-1.5">
-                  <span className="material-symbols-outlined text-sm text-status-warning">autorenew</span>
-                  <span>Covering for: {data.employees.find(e => e.id === todayRelieverAssignment.originalEmployeeId)?.name || todayRelieverAssignment.originalEmployeeId}</span>
-                </h4>
-                {todayRelieverAssignment.projectId && (
-                  <p className="text-[10px] text-on-surface-variant leading-tight mt-1">
-                    🏢 Project: {projects.find(p => p.id === todayRelieverAssignment.projectId)?.projectName || todayRelieverAssignment.projectId}
-                  </p>
-                )}
-                {todayRelieverAssignment.siteId && (
-                  <p className="text-[10px] text-on-surface-variant leading-tight mt-0.5">
-                    📍 Site: {allSites.find(s => s.id === todayRelieverAssignment.siteId)?.siteName || todayRelieverAssignment.siteId}
-                  </p>
-                )}
-                <p className="text-[9px] font-mono text-outline-variant mt-1">
-                  Cover Hours: {todayRelieverAssignment.startTime} - {todayRelieverAssignment.endTime}
-                </p>
-                {todayRelieverAssignment.reason && (
-                  <p className="text-[9px] text-on-surface-variant italic mt-1 font-normal">
-                    Reason: "{todayRelieverAssignment.reason}"
-                  </p>
-                )}
-              </div>
-              <Badge variant="warning" className="text-[9px] py-0.5 px-2 font-black uppercase font-bold">
-                RELIEVER
-              </Badge>
-            </div>
-          </Card>
-        </section>
-      )}
-
-      {/* Today's Project Deployment Card */}
-      {todayDeployment && (
-        <section className="space-y-1.5">
-          <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider px-1">Today's Assigned Project Site</label>
-          <Card className="bg-secondary/5 border border-secondary/20 p-4 rounded-xl">
-            <div className="flex justify-between items-start">
-              <div>
-                <h4 className="text-xs font-bold text-primary flex items-center gap-1.5">
-                  <span className="material-symbols-outlined text-sm text-secondary">business_center</span>
-                  <span>{projects.find(p => p.id === todayDeployment.projectId)?.projectName || "Lusail Expressway Contract"}</span>
-                </h4>
-                <p className="text-[10px] text-on-surface-variant leading-tight mt-1">
-                  📍 Site: {allSites.find(s => s.id === todayDeployment.siteId)?.siteName || "Intersection 4"}
-                </p>
-                <p className="text-[9px] font-mono text-outline-variant mt-0.5">
-                  Hours: {todayDeployment.startTime} - {todayDeployment.endTime}
-                </p>
-              </div>
-              <Badge variant={activeRecord ? (activeRecord.projectStatusFlag === "MATCHED" ? "success" : activeRecord.projectStatusFlag === "OUT_OF_ZONE" ? "warning" : "error") : "neutral"} className="text-[9px] py-0.5 px-2 font-black uppercase font-bold">
-                {activeRecord ? (activeRecord.projectStatusFlag || "MATCHED") : "NOT STARTED"}
-              </Badge>
-            </div>
-          </Card>
-        </section>
-      )}
-
-      {/* GPS Location Simulation */}
-      {!activeRecord && (
-        <section className="space-y-1.5">
-          <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider px-1">Simulate Current GPS Location</label>
-          <select
-            className="w-full bg-surface border border-outline-variant text-xs font-bold rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-primary/20"
-            value={gpsSim}
-            onChange={(e) => setGpsSim(e.target.value)}
-          >
-            <option value="doha_hq">📍 Doha Headquarters (Within Geofence Zone)</option>
-            <option value="lusail">🏗️ Lusail Construction Site (Within Geofence Zone)</option>
-            <option value="out_of_zone">🏜️ Remote Desert Field (Out of Zone)</option>
-          </select>
-        </section>
-      )}
-
-      {/* Active Record Feedback */}
-      {activeRecord && (
-        <section className="space-y-3">
-          <Card className={`p-4 border ${activeRecord.status === "OUT_OF_ZONE" ? "border-status-warning bg-status-warning/5" : "border-status-success bg-status-success/5"} flex items-center gap-3.5`}>
-            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${activeRecord.status === "OUT_OF_ZONE" ? "bg-status-warning/10 text-status-warning" : "bg-status-success/10 text-status-success"}`}>
-              <span className="material-symbols-outlined text-xl">
-                {activeRecord.status === "OUT_OF_ZONE" ? "warning" : "location_on"}
-              </span>
-            </div>
-            <div className="flex-1">
-              <h3 className="text-xs font-bold text-primary">Geofence Status</h3>
-              <p className={`text-[11px] font-bold mt-0.5 ${activeRecord.status === "OUT_OF_ZONE" ? "text-status-warning" : "text-status-success"}`}>
-                {activeRecord.status === "OUT_OF_ZONE" ? "Out of Zone Flagged" : "In Zone (Doha HQ)"}
-              </p>
-              <p className="text-[10px] text-on-surface-variant mt-0.5">{activeRecord.locationName}</p>
-            </div>
-          </Card>
-
-          {activeRecord.lateMinutes > 0 && (
-            <Card className="p-4 border border-status-error bg-status-error/5 flex items-center gap-3.5">
-              <div className="w-10 h-10 rounded-full bg-status-error/10 text-status-error flex items-center justify-center">
-                <span className="material-symbols-outlined text-xl">schedule</span>
-              </div>
-              <div className="flex-1">
-                <h3 className="text-xs font-bold text-primary">Late Arrival Flagged</h3>
-                <p className="text-[11px] text-status-error font-bold mt-0.5">
-                  Checked in {activeRecord.lateMinutes} minutes late
-                </p>
-              </div>
-            </Card>
-          )}
-        </section>
-      )}
-
-      {/* Shifts Quick Action Card */}
-      <Card 
-        onClick={() => window.location.href = "/shifts"}
-        className="bg-secondary/5 border border-secondary/20 p-4 rounded-xl flex items-center justify-between cursor-pointer hover:bg-secondary/10 transition-colors"
-      >
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-full bg-secondary/10 text-secondary flex items-center justify-center">
-            <span className="material-symbols-outlined text-base">calendar_today</span>
-          </div>
-          <div>
-            <h4 className="text-xs font-bold text-primary">Work Schedule Roster</h4>
-            <p className="text-[10px] text-on-surface-variant leading-tight mt-0.5">View active templates & rotational shifts</p>
-          </div>
-        </div>
-        <span className="material-symbols-outlined text-sm text-secondary">chevron_right</span>
-      </Card>
-
-      {/* Bento Grid */}
-      <section className="space-y-3">
-        <h2 className="text-xs font-bold text-primary uppercase tracking-wider px-1">This Month</h2>
-        <div className="grid grid-cols-2 gap-3">
-          <Card className="col-span-2 p-4 border-l-4 border-l-primary flex flex-col justify-between">
+          <div className="bg-white/10 rounded-xl p-3 backdrop-blur-sm border border-white/10">
             <div className="flex justify-between items-center mb-1">
-              <span className="text-[10px] font-bold text-on-surface-variant uppercase">Attendance Rate</span>
-              <span className="material-symbols-outlined text-primary/40 text-lg">analytics</span>
+              <span className="text-[10px] text-white/70">Current Duty</span>
+              <span className="text-[10px] font-bold bg-white/20 px-2 py-0.5 rounded-full">{data?.assignmentType?.replace("_", " ")}</span>
             </div>
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-2xl font-bold text-primary">91%</span>
-              <span className="text-[10px] text-on-surface-variant font-medium">(20 / 22 Days)</span>
-            </div>
-            <div className="w-full bg-surface-container h-1.5 rounded-full mt-3 overflow-hidden">
-              <div className="bg-primary h-full rounded-full" style={{ width: "91%" }}></div>
-            </div>
-          </Card>
-
-          <Card className="p-4 border border-outline-variant flex flex-col gap-2">
-            <div className="w-8 h-8 rounded-full bg-status-error/10 flex items-center justify-center text-status-error">
-              <span className="material-symbols-outlined text-base">schedule</span>
-            </div>
-            <div>
-              <p className="text-[10px] text-on-surface-variant font-medium">Late Arrivals</p>
-              <p className="text-lg font-bold text-primary mt-0.5">
-                {employeeRecords.filter(r => r.status === "LATE").length} <span className="text-[10px] font-normal text-on-surface-variant">Days</span>
-              </p>
-            </div>
-          </Card>
-
-          <Card className="p-4 border border-outline-variant flex flex-col gap-2">
-            <div className="w-8 h-8 rounded-full bg-status-pending/10 flex items-center justify-center text-status-pending">
-              <span className="material-symbols-outlined text-base">event_busy</span>
-            </div>
-            <div>
-              <p className="text-[10px] text-on-surface-variant font-medium">Leave Approved</p>
-              <p className="text-lg font-bold text-primary mt-0.5">{approvedLeaves} <span className="text-[10px] font-normal text-on-surface-variant">Days</span></p>
-            </div>
-          </Card>
+            <p className="text-sm font-bold truncate">{data?.currentAssignment?.name || "Not Assigned"}</p>
+            <p className="text-[10px] text-white/80 truncate mt-0.5">{data?.currentAssignment?.site}</p>
+          </div>
         </div>
-      </section>
+      </div>
 
-      {/* Recent Activity Logs & Correction Trigger */}
-      <section className="space-y-3">
-        <h2 className="text-xs font-bold text-primary uppercase tracking-wider px-1">Recent Activity</h2>
-        <div className="space-y-2.5">
-          {employeeRecords.length === 0 ? (
-            <p className="text-xs text-on-surface-variant italic p-4 text-center">No clock-ins recorded yet.</p>
-          ) : (
-            employeeRecords.slice(0, 5).map((rec) => (
-              <div key={rec.id} className="bg-surface-container-low p-3.5 rounded-xl border border-outline-variant/30 flex items-center gap-3.5 hover:bg-surface-container-high transition-colors">
-                <div className={`w-2 h-2 rounded-full shrink-0 ${
-                  rec.status === "ON_TIME" ? "bg-status-success" : 
-                  rec.status === "LATE" ? "bg-status-error" : 
-                  rec.status === "OUT_OF_ZONE" ? "bg-status-warning" : 
-                  "bg-slate-400"
-                }`}></div>
-                <div className="flex-grow">
-                  <p className="text-xs font-bold text-primary flex items-center gap-1.5">
-                    <span>{rec.checkOut ? "Checked Out" : "Checked In"}</span>
-                    <Badge variant={
-                      rec.status === "ON_TIME" ? "success" :
-                      rec.status === "LATE" ? "error" :
-                      rec.status === "OUT_OF_ZONE" ? "warning" : "neutral"
-                    } className="text-[9px] py-0 px-1.5 uppercase font-extrabold">
-                      {rec.status}
-                    </Badge>
-                  </p>
-                  <p className="text-[10px] text-on-surface-variant font-semibold mt-0.5">
-                    {rec.locationName}
-                  </p>
-                  {rec.checkOut && rec.status !== "PENDING_CORRECTION" && (
-                    <button
-                      onClick={() => handleOpenCorrection(rec)}
-                      className="text-[9px] font-bold text-primary underline mt-1 block hover:text-primary-container"
-                    >
-                      Request Time Correction
-                    </button>
-                  )}
-                  {rec.status === "PENDING_CORRECTION" && (
-                    <span className="text-[9px] font-bold text-status-warning block mt-1">
-                      Correction Review Pending
-                    </span>
-                  )}
-                </div>
-                <span className="text-[10px] text-on-surface-variant font-mono font-medium">
-                  {new Date(rec.checkOut || rec.checkIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </span>
-              </div>
-            ))
-          )}
+      {/* Action Buttons */}
+      <div className="grid grid-cols-2 gap-3">
+        <Link href="/punch" className="bg-surface border border-outline-variant/30 p-4 rounded-2xl flex flex-col items-center justify-center gap-2 shadow-sm active:scale-95 transition-transform">
+          <div className={`w-12 h-12 rounded-full flex items-center justify-center ${data?.attendanceStatus === "CHECKED_IN" ? "bg-status-success/10 text-status-success" : "bg-primary/10 text-primary"}`}>
+            <span className="material-symbols-outlined text-[24px]">
+              {data?.attendanceStatus === "CHECKED_IN" ? "how_to_reg" : "location_on"}
+            </span>
+          </div>
+          <span className="text-[11px] font-bold text-on-surface text-center">
+            {data?.attendanceStatus === "CHECKED_IN" ? "Check Out" : "Check In"}
+          </span>
+        </Link>
+
+        <Link href="/leave" className="bg-surface border border-outline-variant/30 p-4 rounded-2xl flex flex-col items-center justify-center gap-2 shadow-sm active:scale-95 transition-transform">
+          <div className="w-12 h-12 rounded-full bg-secondary-container/50 text-secondary flex items-center justify-center">
+            <span className="material-symbols-outlined text-[24px]">flight_takeoff</span>
+          </div>
+          <span className="text-[11px] font-bold text-on-surface text-center">Request Leave</span>
+        </Link>
+      </div>
+
+      {/* Quick Stats */}
+      <div className="bg-surface border border-outline-variant/30 rounded-2xl p-4 shadow-sm">
+        <h3 className="text-xs font-bold text-on-surface mb-3 flex items-center gap-1.5">
+          <span className="material-symbols-outlined text-[16px] text-primary">schedule</span>
+          Today's Schedule
+        </h3>
+        <div className="flex items-center justify-between py-2 border-b border-outline-variant/20">
+          <span className="text-[11px] text-on-surface-variant">Shift Type</span>
+          <span className="text-[11px] font-bold text-on-surface">{data?.todayShift || "Standard"}</span>
         </div>
-      </section>
-
-      {/* Time Correction Modal */}
-      <Modal isOpen={isCorrOpen} onClose={() => setIsCorrOpen(false)} title="Submit Correction Request">
-        {selectedRecord && (
-          <form onSubmit={handleSendCorrection} className="space-y-4">
-            <p className="text-[11px] font-semibold text-on-surface-variant bg-surface-container p-2.5 rounded">
-              Original: {new Date(selectedRecord.originalCheckIn).toLocaleString()} 
-              {selectedRecord.originalCheckOut ? ` — ${new Date(selectedRecord.originalCheckOut).toLocaleString()}` : ""}
-            </p>
-            <Input
-              label="Requested Check-In"
-              type="datetime-local"
-              value={corrCheckIn}
-              onChange={(e) => setCorrCheckIn(e.target.value)}
-              required
-            />
-            <Input
-              label="Requested Check-Out"
-              type="datetime-local"
-              value={corrCheckOut}
-              onChange={(e) => setCorrCheckOut(e.target.value)}
-            />
-            <div className="space-y-1">
-              <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Reason for correction</label>
-              <textarea
-                className="w-full bg-surface-container-low border border-outline-variant rounded-lg p-2 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20"
-                rows={3}
-                placeholder="Explain why the adjustment is needed..."
-                value={corrReason}
-                onChange={(e) => setCorrReason(e.target.value)}
-                required
-              />
-            </div>
-            <div className="flex justify-end gap-2 border-t pt-4">
-              <Button variant="secondary" type="button" onClick={() => setIsCorrOpen(false)}>Cancel</Button>
-              <Button type="submit" disabled={submittingCorr}>
-                {submittingCorr ? "Submitting..." : "Submit Request"}
-              </Button>
-            </div>
-          </form>
+        <div className="flex items-center justify-between py-2 border-b border-outline-variant/20">
+          <span className="text-[11px] text-on-surface-variant">Status</span>
+          <span className="text-[11px] font-bold text-status-success">
+            {data?.attendanceStatus === "CHECKED_IN" ? "Checked In" : 
+             data?.attendanceStatus === "COMPLETED" ? "Shift Completed" : "Not Started"}
+          </span>
+        </div>
+        {data?.todaysAttendance?.checkIn && (
+          <div className="flex items-center justify-between py-2 border-b border-outline-variant/20">
+            <span className="text-[11px] text-on-surface-variant">In Time</span>
+            <span className="text-[11px] font-bold text-on-surface">
+              {new Date(data.todaysAttendance.checkIn).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+            </span>
+          </div>
         )}
-      </Modal>
+      </div>
+
+      {/* Supervisor Link if Admin/Supervisor */}
+      {(session?.user as any)?.role === "SUPERVISOR" || (session?.user as any)?.role === "ADMIN" ? (
+        <Link href="/supervisor" className="bg-[#b89d7e] text-white p-4 rounded-2xl flex items-center justify-between shadow-sm active:scale-95 transition-transform">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
+              <span className="material-symbols-outlined text-[20px]">groups</span>
+            </div>
+            <div>
+              <p className="text-sm font-bold">Team Dashboard</p>
+              <p className="text-[10px] text-white/80">View today's attendance roster</p>
+            </div>
+          </div>
+          <span className="material-symbols-outlined">chevron_right</span>
+        </Link>
+      ) : null}
+
     </div>
   );
 }

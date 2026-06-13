@@ -8,19 +8,21 @@ export async function POST(request: Request) {
 
   try {
     const payload = await request.json();
-    const { employeeId, date, action } = payload;
+    const { action } = payload;
 
-    if (!employeeId || !date || !action) {
-      return NextResponse.json({ error: "employeeId, date, and action are required" }, { status: 400 });
+    if (!action) {
+      return NextResponse.json({ error: "Missing action type" }, { status: 400 });
     }
 
     let result: any = null;
     const actionKey = action.toUpperCase();
 
+    const { employeeId, date } = payload;
+
     if (actionKey === "ASSIGN_SHIFT" || actionKey === "ASSIGN SHIFT") {
       const { shiftTemplateId } = payload;
-      if (!shiftTemplateId) {
-        return NextResponse.json({ error: "shiftTemplateId is required for assign shift" }, { status: 400 });
+      if (!shiftTemplateId || !employeeId || !date) {
+        return NextResponse.json({ error: "employeeId, date, and shiftTemplateId are required for assign shift" }, { status: 400 });
       }
       result = await mockDb.createShiftAssignment(employeeId, shiftTemplateId, date);
     } else if (
@@ -88,6 +90,23 @@ export async function POST(request: Request) {
         reason: reason || "Reliever linked via cell-action",
         status: "PLANNED",
         createdById: (auth.session?.user as any)?.id || "system"
+      });
+    } else if (actionKey === "ASSIGN_ON_CALL" || actionKey === "ASSIGN ON CALL") {
+      const { startTime, endTime, projectId, siteId } = payload;
+      
+      const { prisma } = require("@ahh-wfm/database");
+      result = await prisma.onCallAssignment.create({
+        data: {
+          employeeId,
+          companyId: "AHH-WFM", // Default for now
+          assignmentDate: new Date(date),
+          startTime: startTime || "08:00",
+          endTime: endTime || "17:00",
+          projectId,
+          siteId,
+          status: "ASSIGNED",
+          createdById: (auth.session?.user as any)?.id || "system"
+        }
       });
     } else {
       return NextResponse.json({ error: `Unknown action: ${action}` }, { status: 400 });

@@ -1,7 +1,7 @@
 import { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import AzureADProvider from "next-auth/providers/azure-ad";
-import { mockDb } from "@ahh-wfm/mock-data";
+import { prisma } from "@ahh-wfm/database";
 import * as bcrypt from "bcryptjs";
 
 export const authOptions: NextAuthOptions = {
@@ -28,10 +28,9 @@ export const authOptions: NextAuthOptions = {
         }
 
         try {
-          const employees = await mockDb.getEmployees();
-          const employee = employees.find(
-            (e) => e.email.toLowerCase() === credentials.email.toLowerCase()
-          );
+          const employee = await prisma.employee.findUnique({
+            where: { email: credentials.email.toLowerCase() }
+          });
 
           if (employee && employee.passwordHash) {
             const isPasswordValid = bcrypt.compareSync(credentials.password, employee.passwordHash);
@@ -58,10 +57,9 @@ export const authOptions: NextAuthOptions = {
         token.id = user.id;
       } else if (token.email && !token.role) {
         try {
-          const employees = await mockDb.getEmployees();
-          const employee = employees.find(
-            (e) => e.email.toLowerCase() === token.email!.toLowerCase()
-          );
+          const employee = await prisma.employee.findUnique({
+            where: { email: token.email.toLowerCase() }
+          });
           if (employee) {
             token.role = employee.role;
             token.id = employee.id;

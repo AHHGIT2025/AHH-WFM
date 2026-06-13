@@ -263,6 +263,30 @@ This document outlines the evolutionary development roadmap for the **AHH WFM** 
     *   Web: Admin Backup Manager (`/admin/backup`)
 *   **Estimated Implementation Effort**: Completed
 
+---
+
+## Phase 7: Mobile PWA Application (Foundation Completed)
+
+### 7.1 Mobile Employee App Client
+*   **Business Purpose**: Empower employees to clock-in on location, view rosters, submit leave requests, and track lateness from their own smartphones.
+*   **Database Impact**: Relies on existing WFM schema models but creates isolated sessions.
+*   **API Endpoints Required**:
+    *   `/api/v1/attendance/*`, `/api/v1/dashboard`, `/api/v1/leaves/*` (Mobile BFF)
+*   **UI Screens Affected**:
+    *   Mobile: `/login`, `/`, `/punch`, `/schedule`, `/leave`, `/history`, `/news`, `/profile`
+*   **Estimated Implementation Effort**: Completed
+
+### 7.2 Geofence Priority Routing
+*   **Business Purpose**: Ensure the exact target worksite coordinates are applied per punch action by evaluating current shifts, on-call statuses, deployments, and allowed locations.
+*   **Database Impact**: Compares location properties from `EmployeeDeployment`, `OnCallAssignment`, `ShiftAssignment`, and `AllowedPunchLocation`.
+*   **Estimated Implementation Effort**: Completed
+
+### 7.3 Mobile Supervisor Board
+*   **Business Purpose**: Let field supervisors monitor daily attendance, absences, and zone violations without needing a desktop laptop.
+*   **UI Screens Affected**:
+    *   Mobile: `/supervisor`
+*   **Estimated Implementation Effort**: Completed
+
 
 
 

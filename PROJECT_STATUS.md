@@ -32,6 +32,7 @@ AHH WFM is a full-stack, enterprise-grade workforce management application built
 | **Phase 5B.1**| Completed | `v0.11-sap-operational-sync-leave-attendance` | SAP SuccessFactors outbound integration for Leave (EmployeeTime) and Attendance (TimeSheetEntry), idempotency, and reconciliation. |
 | **Phase 5B.2**| Completed | `v0.12-sap-operational-sync-payroll-roster` | SAP SuccessFactors outbound integration for Overtime (EmpCompensation) and Roster (ShiftAssignment), staging, locking, and reconciliation. |
 | **Phase 6.1**| Completed | `v0.13-reporting-backup-foundation` | Executive & domain-specific reports API, CSV/JSON exports, user audits, and admin backups. |
+| **Phase 7** | Completed | `v0.14-mobile-app-foundation` | Next.js Mobile PWA client with dedicated BFF API, Geofence priority routing, and supervisor dashboards. |
 
 ---
 
@@ -108,9 +109,9 @@ AHH WFM is a full-stack, enterprise-grade workforce management application built
 - **CSV/JSON Exports**: Implemented a export framework saving exports under `storage/exports/` and auditing downloads with path-traversal guards.
 - **Admin Backup System**: Created database-agnostic JSON export algorithms (excluding raw credentials and pass-hashes), checksum generation, job history tracking, and download audits under `/admin/backup`.
 
-
-
-
-
-
-
+### Phase 7: Mobile App Foundation
+- **Standalone Mobile Shell**: Built Next.js mobile wrapper inside `apps/mobile` following the 'Corporate Integrity' design logic (Maroon & Gold).
+- **Mobile BFF APIs**: Isolated APIs under `apps/mobile/app/api/v1/` to protect Web Admin payloads and optimize mobile responses.
+- **Geofence Priority Engine**: Enforces check-in rule cascade (Active Deployment > On-Call Assignment > Shift Assignment > Allowed Location > Office Default > Policy Fallback).
+- **Employee Portal Screens**: Implemented specialized mobile screens for Dashboard, Punch Capture, Schedule, History, Leave Management, and Notice Board.
+- **Supervisor Mobile Dashboard**: Added real-time roll-call counters (Present, Absent, Late, Out of Zone) and team rosters tailored for mobile supervisors.

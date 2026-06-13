@@ -1,58 +1,52 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { Announcement } from "@ahh-wfm/types";
-import { Card, Badge } from "@ahh-wfm/ui/src";
+import React, { useEffect, useState } from "react";
 
-export default function MobileNewsPage() {
-  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
-
-  const fetchNews = async () => {
-    try {
-      const res = await fetch("/api/db");
-      if (res.ok) {
-        const json = await res.json();
-        setAnnouncements(json.announcements);
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  };
+export default function NewsPage() {
+  const [announcements, setAnnouncements] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchNews();
+    fetch("/api/v1/announcements")
+      .then(res => res.json())
+      .then(d => {
+        setAnnouncements(d.announcements || []);
+        setLoading(false);
+      });
   }, []);
 
+  if (loading) {
+    return <div className="flex justify-center py-20"><div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin"></div></div>;
+  }
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div>
-        <h2 className="text-lg font-bold text-primary">Company Announcements</h2>
-        <p className="text-xs text-on-surface-variant">Stay updated with the latest news, notices, and updates from HR and IT</p>
+        <h2 className="text-xl font-bold text-primary">Notice Board</h2>
+        <p className="text-[11px] text-on-surface-variant">Company and Project announcements</p>
       </div>
 
-      <div className="space-y-4">
-        {announcements.map((news) => (
-          <Card key={news.id} className="p-4 border border-outline-variant relative overflow-hidden flex flex-col gap-2">
-            {/* Visual category border */}
-            <div className={`absolute left-0 top-0 bottom-0 w-1 ${
-              news.category === "Urgent" ? "bg-status-error" :
-              news.category === "System Update" ? "bg-status-pending" : "bg-primary"
-            }`} />
-            
-            <div className="flex justify-between items-start">
-              <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">
-                {news.author} · {new Date(news.timestamp).toLocaleDateString()}
+      <div className="space-y-3">
+        {announcements.map(a => (
+          <div key={a.id} className={`bg-surface border rounded-xl p-4 shadow-sm relative overflow-hidden ${a.urgent ? 'border-status-error/30' : 'border-outline-variant/30'}`}>
+            {a.urgent && (
+              <div className="absolute top-0 right-0 bg-status-error text-white text-[8px] font-bold px-2 py-0.5 rounded-bl-lg">
+                URGENT
+              </div>
+            )}
+            <div className="flex items-center gap-2 mb-2">
+              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${
+                a.category === 'Holiday' ? 'bg-[#b89d7e]/20 text-[#715a40]' : 
+                a.category === 'Policy' ? 'bg-primary/10 text-primary' : 
+                'bg-slate-100 text-slate-600'
+              }`}>
+                {a.category}
               </span>
-              <Badge variant={news.category === "Urgent" ? "error" : news.category === "System Update" ? "pending" : "neutral"}>
-                {news.category}
-              </Badge>
+              <span className="text-[10px] text-on-surface-variant">{a.date}</span>
             </div>
-            
-            <h3 className="text-xs font-bold text-primary">{news.title}</h3>
-            <p className="text-xs text-on-surface-variant leading-relaxed font-medium">
-              {news.content}
-            </p>
-          </Card>
+            <h3 className={`text-sm font-bold ${a.urgent ? 'text-status-error' : 'text-on-surface'}`}>{a.title}</h3>
+            <p className="text-[11px] text-on-surface-variant mt-1">Please read the full memo on the desktop portal for details.</p>
+          </div>
         ))}
       </div>
     </div>
