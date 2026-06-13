@@ -239,5 +239,30 @@ This document outlines the evolutionary development roadmap for the **AHH WFM** 
     *   Web: SAP SuccessFactors Hub (`/sap`) - Outbound export queue.
 *   **Estimated Implementation Effort**: Completed
 
+---
+
+## Phase 6: Reporting, Analytics & Backup (Phase 6.1 Completed)
+
+### 6.1 Reporting & Backup Foundation (Completed - Phase 6.1)
+*   **Business Purpose**: Create database-agnostic domain reporting engines, export frameworks, auditing trails, and local backup generators to establish system compliance.
+*   **Database Impact**: Added `SavedReport`, `ReportExportLog`, `UserActivityLog`, `ProductionCheckLog`, `BackupJob`, and `BackupAuditLog`.
+*   **API Endpoints Required**:
+    *   `GET /api/v1/reports/executive`
+    *   `GET /api/v1/reports/attendance`
+    *   `GET /api/v1/reports/leaves`
+    *   `GET /api/v1/reports/overtime`
+    *   `GET /api/v1/reports/shifts`
+    *   `GET /api/v1/reports/sap`
+    *   `POST /api/v1/reports/export`
+    *   `GET /api/v1/reports/download`
+    *   `GET /api/v1/audit/logs`
+    *   `GET/POST /api/v1/admin/backups`
+    *   `GET /api/v1/admin/backups/:id/download`
+    *   `DELETE /api/v1/admin/backups/:id`
+*   **UI Screens Affected**:
+    *   Web: Admin Backup Manager (`/admin/backup`)
+*   **Estimated Implementation Effort**: Completed
+
+
 
 

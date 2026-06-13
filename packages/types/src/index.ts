@@ -414,5 +414,81 @@ export interface SapPayrollPeriodLock {
   updatedAt?: string;
 }
 
+export interface SavedReport {
+  id: string;
+  name: string;
+  reportType: string;
+  filtersJson: string;
+  createdById: string;
+  isShared: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ReportExportLog {
+  id: string;
+  reportType: string;
+  exportFormat: string;
+  filtersJson: string;
+  fileName: string;
+  filePath: string;
+  fileSize: number;
+  exportedById: string;
+  createdAt?: string;
+}
+
+export interface UserActivityLog {
+  id: string;
+  userId: string;
+  action: string;
+  entityType: string;
+  entityId: string;
+  beforeJson?: string;
+  afterJson?: string;
+  ipAddress?: string;
+  userAgent?: string;
+  createdAt?: string;
+}
+
+export interface ProductionCheckLog {
+  id: string;
+  checkName: string;
+  category: string;
+  status: string;
+  resultJson: string;
+  checkedById?: string;
+  checkedAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface BackupJob {
+  id: string;
+  backupType: string;
+  status: "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED" | string;
+  fileName: string;
+  filePath: string;
+  fileSize: number;
+  checksum: string;
+  createdById: string;
+  startedAt?: string;
+  completedAt?: string;
+  errorMessage?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface BackupAuditLog {
+  id: string;
+  backupJobId: string;
+  action: "BACKUP_CREATED" | "BACKUP_DOWNLOADED" | "BACKUP_FAILED" | "BACKUP_DELETED" | "RESTORE_REQUESTED" | string;
+  performedById: string;
+  ipAddress?: string;
+  userAgent?: string;
+  details: string;
+  createdAt?: string;
+}
+
+
 
 

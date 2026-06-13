@@ -1,4 +1,4 @@
-import { Employee, AttendanceRecord, Shift, LeaveRequest, SapMapping, SyncLog, Announcement, Department, Worksite, AttendanceCorrection, LeaveType, LeaveBalance, LeaveBalanceLedger, Holiday, LeaveApprovalWorkflow, LeaveApprovalStep, LeaveApprovalHistory, LeaveApprovalDelegation, ShiftTemplate, RotationTemplate, ShiftAssignment, ShiftSwapRequest, OvertimeRate, SapConnection, SapSyncJob, SapSyncLog, SapFieldMapping, SapRetryQueue, SapExportQueue, SapPayrollStage, SapReconciliationLog, SapPayrollPeriodLock } from "@ahh-wfm/types";
+import { Employee, AttendanceRecord, Shift, LeaveRequest, SapMapping, SyncLog, Announcement, Department, Worksite, AttendanceCorrection, LeaveType, LeaveBalance, LeaveBalanceLedger, Holiday, LeaveApprovalWorkflow, LeaveApprovalStep, LeaveApprovalHistory, LeaveApprovalDelegation, ShiftTemplate, RotationTemplate, ShiftAssignment, ShiftSwapRequest, OvertimeRate, SapConnection, SapSyncJob, SapSyncLog, SapFieldMapping, SapRetryQueue, SapExportQueue, SapPayrollStage, SapReconciliationLog, SapPayrollPeriodLock, SavedReport, ReportExportLog, UserActivityLog, ProductionCheckLog, BackupJob, BackupAuditLog } from "@ahh-wfm/types";
 import * as fs from "fs";
 import * as path from "path";
 import * as bcrypt from "bcryptjs";
@@ -86,6 +86,12 @@ let memoryDb: {
   sapPayrollStages: SapPayrollStage[];
   sapReconciliationLogs: SapReconciliationLog[];
   sapPayrollPeriodLocks: SapPayrollPeriodLock[];
+  savedReports: SavedReport[];
+  reportExportLogs: ReportExportLog[];
+  userActivityLogs: UserActivityLog[];
+  productionCheckLogs: ProductionCheckLog[];
+  backupJobs: BackupJob[];
+  backupAuditLogs: BackupAuditLog[];
 } = {
   departments: [
     { id: "DEPT-001", name: "Operations", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
@@ -222,7 +228,13 @@ let memoryDb: {
   sapExportQueue: [],
   sapPayrollStages: [],
   sapReconciliationLogs: [],
-  sapPayrollPeriodLocks: []
+  sapPayrollPeriodLocks: [],
+  savedReports: [],
+  reportExportLogs: [],
+  userActivityLogs: [],
+  productionCheckLogs: [],
+  backupJobs: [],
+  backupAuditLogs: []
 };
 
 // Seeding helper to pre-fill MySQL with mock data if it is empty
@@ -4943,6 +4955,352 @@ export const mockDb = {
     });
 
     return exported;
+  },
+
+  getSavedReports: async (): Promise<SavedReport[]> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      return await prismaClient.savedReport.findMany();
+    }
+    const db = readDb();
+    return db.savedReports || [];
+  },
+  createSavedReport: async (data: Omit<SavedReport, "id" | "createdAt" | "updatedAt">): Promise<SavedReport> => {
+    const id = `REP-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
+    const report: SavedReport = {
+      id,
+      ...data,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    if (isDbConnected()) {
+      await seedMySQL();
+      const created = await prismaClient.savedReport.create({
+        data: {
+          name: data.name,
+          reportType: data.reportType,
+          filtersJson: data.filtersJson,
+          createdById: data.createdById,
+          isShared: data.isShared
+        }
+      });
+      return {
+        ...created,
+        createdAt: created.createdAt.toISOString(),
+        updatedAt: created.updatedAt.toISOString()
+      };
+    }
+    const db = readDb();
+    db.savedReports = db.savedReports || [];
+    db.savedReports.push(report);
+    writeDb(db);
+    return report;
+  },
+  deleteSavedReport: async (id: string): Promise<boolean> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      await prismaClient.savedReport.delete({ where: { id } });
+      return true;
+    }
+    const db = readDb();
+    const idx = db.savedReports.findIndex(r => r.id === id);
+    if (idx === -1) return false;
+    db.savedReports.splice(idx, 1);
+    writeDb(db);
+    return true;
+  },
+
+  getReportExportLogs: async (): Promise<ReportExportLog[]> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      return await prismaClient.reportExportLog.findMany({ orderBy: { createdAt: "desc" } });
+    }
+    const db = readDb();
+    return db.reportExportLogs || [];
+  },
+  createReportExportLog: async (data: Omit<ReportExportLog, "id" | "createdAt">): Promise<ReportExportLog> => {
+    const id = `EXP-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
+    const log: ReportExportLog = {
+      id,
+      ...data,
+      createdAt: new Date().toISOString()
+    };
+    if (isDbConnected()) {
+      await seedMySQL();
+      const created = await prismaClient.reportExportLog.create({
+        data: {
+          reportType: data.reportType,
+          exportFormat: data.exportFormat,
+          filtersJson: data.filtersJson,
+          fileName: data.fileName,
+          filePath: data.filePath,
+          fileSize: data.fileSize,
+          exportedById: data.exportedById
+        }
+      });
+      return {
+        ...created,
+        createdAt: created.createdAt.toISOString()
+      };
+    }
+    const db = readDb();
+    db.reportExportLogs = db.reportExportLogs || [];
+    db.reportExportLogs.push(log);
+    writeDb(db);
+    return log;
+  },
+
+  getUserActivityLogs: async (): Promise<UserActivityLog[]> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      return await prismaClient.userActivityLog.findMany({ orderBy: { createdAt: "desc" } });
+    }
+    const db = readDb();
+    return db.userActivityLogs || [];
+  },
+  createUserActivityLog: async (data: Omit<UserActivityLog, "id" | "createdAt">): Promise<UserActivityLog> => {
+    const id = `ACT-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
+    const log: UserActivityLog = {
+      id,
+      ...data,
+      createdAt: new Date().toISOString()
+    };
+    if (isDbConnected()) {
+      await seedMySQL();
+      const created = await prismaClient.userActivityLog.create({
+        data: {
+          userId: data.userId,
+          action: data.action,
+          entityType: data.entityType,
+          entityId: data.entityId,
+          beforeJson: data.beforeJson || null,
+          afterJson: data.afterJson || null,
+          ipAddress: data.ipAddress || null,
+          userAgent: data.userAgent || null
+        }
+      });
+      return {
+        ...created,
+        beforeJson: created.beforeJson || undefined,
+        afterJson: created.afterJson || undefined,
+        ipAddress: created.ipAddress || undefined,
+        userAgent: created.userAgent || undefined,
+        createdAt: created.createdAt.toISOString()
+      };
+    }
+    const db = readDb();
+    db.userActivityLogs = db.userActivityLogs || [];
+    db.userActivityLogs.push(log);
+    writeDb(db);
+    return log;
+  },
+
+  getProductionCheckLogs: async (): Promise<ProductionCheckLog[]> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      return await prismaClient.productionCheckLog.findMany();
+    }
+    const db = readDb();
+    return db.productionCheckLogs || [];
+  },
+  createProductionCheckLog: async (data: Omit<ProductionCheckLog, "id" | "checkedAt" | "createdAt" | "updatedAt">): Promise<ProductionCheckLog> => {
+    const id = `PCH-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
+    const check: ProductionCheckLog = {
+      id,
+      ...data,
+      checkedAt: new Date().toISOString(),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    if (isDbConnected()) {
+      await seedMySQL();
+      const created = await prismaClient.productionCheckLog.create({
+        data: {
+          checkName: data.checkName,
+          category: data.category,
+          status: data.status,
+          resultJson: data.resultJson,
+          checkedById: data.checkedById || null
+        }
+      });
+      return {
+        ...created,
+        checkedById: created.checkedById || undefined,
+        checkedAt: created.checkedAt.toISOString(),
+        createdAt: created.createdAt.toISOString(),
+        updatedAt: created.updatedAt.toISOString()
+      };
+    }
+    const db = readDb();
+    db.productionCheckLogs = db.productionCheckLogs || [];
+    db.productionCheckLogs.push(check);
+    writeDb(db);
+    return check;
+  },
+  updateProductionCheckLog: async (id: string, data: Partial<Omit<ProductionCheckLog, "id" | "createdAt" | "updatedAt">>): Promise<ProductionCheckLog | null> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      const updated = await prismaClient.productionCheckLog.update({
+        where: { id },
+        data: {
+          status: data.status,
+          resultJson: data.resultJson,
+          checkedById: data.checkedById || null,
+          checkedAt: data.checkedAt ? new Date(data.checkedAt) : undefined
+        }
+      });
+      return {
+        ...updated,
+        checkedById: updated.checkedById || undefined,
+        checkedAt: updated.checkedAt.toISOString(),
+        createdAt: updated.createdAt.toISOString(),
+        updatedAt: updated.updatedAt.toISOString()
+      };
+    }
+    const db = readDb();
+    const idx = db.productionCheckLogs.findIndex(c => c.id === id);
+    if (idx === -1) return null;
+    db.productionCheckLogs[idx] = {
+      ...db.productionCheckLogs[idx],
+      ...data,
+      updatedAt: new Date().toISOString()
+    };
+    writeDb(db);
+    return db.productionCheckLogs[idx];
+  },
+
+  getBackupJobs: async (): Promise<BackupJob[]> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      return await prismaClient.backupJob.findMany({ orderBy: { createdAt: "desc" } });
+    }
+    const db = readDb();
+    return db.backupJobs || [];
+  },
+  createBackupJob: async (data: Omit<BackupJob, "id" | "startedAt" | "completedAt" | "createdAt" | "updatedAt">): Promise<BackupJob> => {
+    const id = `BAK-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
+    const job: BackupJob = {
+      id,
+      ...data,
+      startedAt: new Date().toISOString(),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    if (isDbConnected()) {
+      await seedMySQL();
+      const created = await prismaClient.backupJob.create({
+        data: {
+          backupType: data.backupType,
+          status: data.status,
+          fileName: data.fileName,
+          filePath: data.filePath,
+          fileSize: data.fileSize,
+          checksum: data.checksum,
+          createdById: data.createdById,
+          errorMessage: data.errorMessage || null
+        }
+      });
+      return {
+        ...created,
+        errorMessage: created.errorMessage || undefined,
+        startedAt: created.startedAt.toISOString(),
+        completedAt: created.completedAt ? created.completedAt.toISOString() : undefined,
+        createdAt: created.createdAt.toISOString(),
+        updatedAt: created.updatedAt.toISOString()
+      };
+    }
+    const db = readDb();
+    db.backupJobs = db.backupJobs || [];
+    db.backupJobs.push(job);
+    writeDb(db);
+    return job;
+  },
+  updateBackupJob: async (id: string, data: Partial<Omit<BackupJob, "id" | "createdAt" | "updatedAt">>): Promise<BackupJob | null> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      const updated = await prismaClient.backupJob.update({
+        where: { id },
+        data: {
+          status: data.status,
+          fileSize: data.fileSize,
+          checksum: data.checksum,
+          completedAt: data.completedAt ? new Date(data.completedAt) : undefined,
+          errorMessage: data.errorMessage || null
+        }
+      });
+      return {
+        ...updated,
+        errorMessage: updated.errorMessage || undefined,
+        startedAt: updated.startedAt.toISOString(),
+        completedAt: updated.completedAt ? updated.completedAt.toISOString() : undefined,
+        createdAt: updated.createdAt.toISOString(),
+        updatedAt: updated.updatedAt.toISOString()
+      };
+    }
+    const db = readDb();
+    const idx = db.backupJobs.findIndex(j => j.id === id);
+    if (idx === -1) return null;
+    db.backupJobs[idx] = {
+      ...db.backupJobs[idx],
+      ...data,
+      updatedAt: new Date().toISOString()
+    };
+    writeDb(db);
+    return db.backupJobs[idx];
+  },
+  deleteBackupJob: async (id: string): Promise<boolean> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      await prismaClient.backupJob.delete({ where: { id } });
+      return true;
+    }
+    const db = readDb();
+    const idx = db.backupJobs.findIndex(j => j.id === id);
+    if (idx === -1) return false;
+    db.backupJobs.splice(idx, 1);
+    writeDb(db);
+    return true;
+  },
+
+  getBackupAuditLogs: async (): Promise<BackupAuditLog[]> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      return await prismaClient.backupAuditLog.findMany({ orderBy: { createdAt: "desc" } });
+    }
+    const db = readDb();
+    return db.backupAuditLogs || [];
+  },
+  createBackupAuditLog: async (data: Omit<BackupAuditLog, "id" | "createdAt">): Promise<BackupAuditLog> => {
+    const id = `BAUD-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
+    const log: BackupAuditLog = {
+      id,
+      ...data,
+      createdAt: new Date().toISOString()
+    };
+    if (isDbConnected()) {
+      await seedMySQL();
+      const created = await prismaClient.backupAuditLog.create({
+        data: {
+          backupJobId: data.backupJobId,
+          action: data.action,
+          performedById: data.performedById,
+          ipAddress: data.ipAddress || null,
+          userAgent: data.userAgent || null,
+          details: data.details
+        }
+      });
+      return {
+        ...created,
+        ipAddress: created.ipAddress || undefined,
+        userAgent: created.userAgent || undefined,
+        createdAt: created.createdAt.toISOString()
+      };
+    }
+    const db = readDb();
+    db.backupAuditLogs = db.backupAuditLogs || [];
+    db.backupAuditLogs.push(log);
+    writeDb(db);
+    return log;
   }
 };
 

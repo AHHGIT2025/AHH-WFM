@@ -31,6 +31,7 @@ AHH WFM is a full-stack, enterprise-grade workforce management application built
 | **Phase 5A** | Completed | `v0.10-sap-integration-foundation` | SAP SuccessFactors integration database models, mock sync engine, and Web Admin dashboard. |
 | **Phase 5B.1**| Completed | `v0.11-sap-operational-sync-leave-attendance` | SAP SuccessFactors outbound integration for Leave (EmployeeTime) and Attendance (TimeSheetEntry), idempotency, and reconciliation. |
 | **Phase 5B.2**| Completed | `v0.12-sap-operational-sync-payroll-roster` | SAP SuccessFactors outbound integration for Overtime (EmpCompensation) and Roster (ShiftAssignment), staging, locking, and reconciliation. |
+| **Phase 6.1**| Completed | `v0.13-reporting-backup-foundation` | Executive & domain-specific reports API, CSV/JSON exports, user audits, and admin backups. |
 
 ---
 
@@ -100,6 +101,13 @@ AHH WFM is a full-stack, enterprise-grade workforce management application built
 - **CompCompensation Exports**: Outbound compilation transfer of locked and approved staging elements.
 - **Roster Schedules Export**: Exports workforce rosters (`ShiftAssignment` records) into SuccessFactors calendar.
 - **Overtime Reconciliation discrepancies**: Extends audit tool comparisons to overtime logs.
+
+### Phase 6.1: Reporting & Backup Foundation
+- **Database Model Registries**: Added schemas for `SavedReport`, `ReportExportLog`, `UserActivityLog`, `ProductionCheckLog`, `BackupJob`, and `BackupAuditLog`.
+- **Reporting APIs**: Engineered endpoints for executive summaries (headcounts, compliance rate, leaves, OT costs, sync health), attendance records, leave tracking, overtime, schedules, and SAP integrations.
+- **CSV/JSON Exports**: Implemented a export framework saving exports under `storage/exports/` and auditing downloads with path-traversal guards.
+- **Admin Backup System**: Created database-agnostic JSON export algorithms (excluding raw credentials and pass-hashes), checksum generation, job history tracking, and download audits under `/admin/backup`.
+
 
 
 

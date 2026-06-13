@@ -452,5 +452,81 @@ model SapPayrollPeriodLock {
   updatedAt     DateTime    @updatedAt
 }
 
+model SavedReport {
+  id          String   @id @default(uuid())
+  name        String
+  reportType  String
+  filtersJson String   @db.Text
+  createdById String
+  isShared    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model ReportExportLog {
+  id           String   @id @default(uuid())
+  reportType   String
+  exportFormat String
+  filtersJson  String   @db.Text
+  fileName     String
+  filePath     String
+  fileSize     Int
+  exportedById String
+  createdAt    DateTime @default(now())
+}
+
+model UserActivityLog {
+  id         String   @id @default(uuid())
+  userId     String
+  action     String
+  entityType String
+  entityId   String
+  beforeJson String?  @db.Text
+  afterJson  String?  @db.Text
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+}
+
+model ProductionCheckLog {
+  id           String   @id @default(uuid())
+  checkName    String
+  category     String
+  status       String
+  resultJson   String   @db.Text
+  checkedById  String?
+  checkedAt    DateTime @default(now())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model BackupJob {
+  id           String    @id @default(uuid())
+  backupType   String
+  status       String    // PENDING, PROCESSING, COMPLETED, FAILED
+  fileName     String
+  filePath     String
+  fileSize     Int
+  checksum     String
+  createdById  String
+  startedAt    DateTime  @default(now())
+  completedAt  DateTime?
+  errorMessage String?   @db.Text
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model BackupAuditLog {
+  id           String   @id @default(uuid())
+  backupJobId  String
+  action       String   // BACKUP_CREATED, BACKUP_DOWNLOADED, BACKUP_FAILED, BACKUP_DELETED, RESTORE_REQUESTED
+  performedById String
+  ipAddress    String?
+  userAgent    String?
+  details      String   @db.Text
+  createdAt    DateTime @default(now())
+}
+
+
 
 

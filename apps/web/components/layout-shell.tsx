@@ -29,6 +29,11 @@ export const LayoutShell: React.FC<{ children: React.ReactNode }> = ({ children 
   const pathname = usePathname();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const { data: session } = useSession();
+  const userRole = (session?.user as any)?.role;
+  const activeNavItems = [...navItems];
+  if (userRole === "ADMIN") {
+    activeNavItems.push({ label: "Backup & Restore", path: "/admin/backup", icon: "settings_backup_restore" });
+  }
 
   const isActive = (path: string) => {
     if (path === "/") {
@@ -112,7 +117,7 @@ export const LayoutShell: React.FC<{ children: React.ReactNode }> = ({ children 
             <p className="text-[10px] text-outline-variant opacity-70">SuccessFactors Sync Hub</p>
           </div>
           <nav className="flex-1 px-3 space-y-1">
-            {navItems.map((item) => {
+            {activeNavItems.map((item) => {
               const active = isActive(item.path);
               return (
                 <Link
@@ -167,7 +172,7 @@ export const LayoutShell: React.FC<{ children: React.ReactNode }> = ({ children 
                 </button>
               </div>
               <nav className="flex-grow px-3 space-y-1">
-                {navItems.map((item) => {
+                {activeNavItems.map((item) => {
                   const active = isActive(item.path);
                   return (
                     <Link
