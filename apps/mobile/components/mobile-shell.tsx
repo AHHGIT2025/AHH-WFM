@@ -4,6 +4,7 @@ import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
+import { ProfileProvider, useProfile } from "../context/ProfileContext";
 
 export interface MobileNavItem {
   label: string;
@@ -19,9 +20,10 @@ const navItems: MobileNavItem[] = [
   { label: "Profile", path: "/profile", icon: "person" }
 ];
 
-export const MobileShell: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+const MobileShellInner: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const pathname = usePathname();
   const { data: session } = useSession();
+  const { profile, computedProfilePhotoSrc } = useProfile();
 
   const isActive = (path: string) => {
     if (path === "/") return pathname === "/";
@@ -41,15 +43,21 @@ export const MobileShell: React.FC<{ children: React.ReactNode }> = ({ children 
         <header className="flex justify-between items-center px-4 sm:pt-10 pt-4 pb-3 w-full sticky top-0 z-50 bg-surface border-b border-outline-variant/30 shadow-sm">
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 rounded-full bg-primary-fixed flex items-center justify-center overflow-hidden border border-primary/10">
-              <img
-                alt="Profile"
-                className="w-full h-full object-cover"
-                src="https://lh3.googleusercontent.com/aida-public/AB6AXuBI8AYNQCuyz0kweSJSi7Y8gdzGADFnb0MEDP2qMp-OrNoV1hiCPa_QWDrDVFGtuI2RtnZsyx_cEOjbGdHP6Alde0Prd16qZLmfzZVmUK0ZodsQRiV_PbbPoIpP-npUgqEv_fdc0si7mYvAed0MgEhkY1-v0-k2hd18qvFspNuJDP9p1DQEtUes9llqyGSQo-zZeC2QHndBpvirj-HBM7hZu7k5ahS_yTFSZw-KhSIcDM8d2g6O9M7WhfMMoiNY-IaJX34D3KZ14AI"
-              />
+              {computedProfilePhotoSrc ? (
+                <img
+                  alt="Profile"
+                  className="w-full h-full object-cover"
+                  src={computedProfilePhotoSrc}
+                />
+              ) : (
+                <span className="text-primary text-sm font-bold">
+                  {(profile?.name || session?.user?.name || "A").charAt(0)}
+                </span>
+              )}
             </div>
             <div>
               <p className="text-[10px] text-on-surface-variant leading-tight">Welcome back,</p>
-              <h1 className="text-xs font-bold text-primary">{session?.user?.name || "Ahmed Ali"}</h1>
+              <h1 className="text-xs font-bold text-primary">{profile?.name || session?.user?.name || "Employee"}</h1>
             </div>
           </div>
           <div className="flex items-center gap-1">
@@ -100,5 +108,13 @@ export const MobileShell: React.FC<{ children: React.ReactNode }> = ({ children 
         </nav>
       </div>
     </div>
+  );
+};
+
+export const MobileShell: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  return (
+    <ProfileProvider>
+      <MobileShellInner>{children}</MobileShellInner>
+    </ProfileProvider>
   );
 };

@@ -1,28 +1,16 @@
 "use client";
 
-import React, { useEffect, useState, useRef } from "react";
+import React, { useRef, useState } from "react";
 import { useSession, signOut } from "next-auth/react";
+import { useProfile } from "../../context/ProfileContext";
 
 export default function ProfilePage() {
   const { data: session } = useSession();
-  const [data, setData] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  const { profile: data, loading, refreshProfile, computedProfilePhotoSrc } = useProfile();
+  
   const [uploading, setUploading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const fetchProfile = () => {
-    fetch("/api/v1/me")
-      .then(res => res.json())
-      .then(d => {
-        setData(d);
-        setLoading(false);
-      });
-  };
-
-  useEffect(() => {
-    fetchProfile();
-  }, []);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -50,8 +38,8 @@ export default function ProfilePage() {
         throw new Error(result.error || "Upload failed");
       }
 
-      // Success, refresh profile
-      fetchProfile();
+      // Success, refresh profile globally
+      await refreshProfile();
     } catch (err: any) {
       setErrorMsg(err.message);
     } finally {
@@ -66,8 +54,8 @@ export default function ProfilePage() {
     return <div className="flex justify-center py-20"><div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin"></div></div>;
   }
 
-  // Primary title logic: designation.name || positionCategory.name || role || workerCategory
-  const primaryTitle = data?.designation?.name || data?.role || "Employee";
+  // Primary title logic: designation.name || positionCategory.name || role || "Employee"
+  const primaryTitle = data?.designation?.name || data?.positionCategory?.name || data?.role || "Employee";
 
   return (
     <div className="space-y-4 pb-8">
@@ -75,10 +63,10 @@ export default function ProfilePage() {
         {/* Abstract background shape for premium feel */}
         <div className="absolute top-0 left-0 w-full h-1/2 bg-gradient-to-b from-primary/10 to-transparent"></div>
         
-        <div className="relative z-10">
-          <div className="w-24 h-24 rounded-full bg-surface-container-high border-4 border-surface shadow-md overflow-hidden flex items-center justify-center relative group">
-            {data?.profilePhotoUrl ? (
-              <img src={data.profilePhotoUrl} alt={data?.name} className="w-full h-full object-cover" />
+        <div className="relative z-10 flex flex-col items-center">
+          <div className="w-24 h-24 rounded-full bg-surface-container-high border-4 border-surface shadow-md overflow-hidden flex items-center justify-center relative group mb-3">
+            {computedProfilePhotoSrc ? (
+              <img src={computedProfilePhotoSrc} alt={data?.name} className="w-full h-full object-cover" />
             ) : (
               <span className="text-primary text-3xl font-bold">{data?.name?.charAt(0)}</span>
             )}
@@ -88,13 +76,15 @@ export default function ProfilePage() {
               </div>
             )}
           </div>
+          
           <button 
             onClick={() => fileInputRef.current?.click()}
             disabled={uploading}
-            className="absolute -bottom-2 -right-2 w-8 h-8 bg-primary text-on-primary rounded-full flex items-center justify-center shadow-lg active:scale-95 transition-transform"
+            className="text-[11px] font-bold text-primary bg-primary/10 px-3 py-1.5 rounded-full hover:bg-primary/20 active:scale-95 transition-all"
           >
-            <span className="material-symbols-outlined text-[14px]">edit</span>
+            Change Photo
           </button>
+          
           <input 
             type="file" 
             ref={fileInputRef} 
@@ -112,14 +102,23 @@ export default function ProfilePage() {
 
         <div className="text-center z-10 w-full">
           <h2 className="text-xl font-bold text-on-surface leading-tight">{data?.name}</h2>
-          <p className="text-[12px] font-bold text-primary mt-1">{primaryTitle}</p>
-          <p className="text-[11px] text-on-surface-variant font-medium mt-0.5">{data?.email}</p>
+          
+          {/* Primary Chip is now Designation / Role */}
+          <span className="inline-block mt-2 bg-primary text-on-primary text-[10px] font-bold px-3 py-1.5 rounded-full uppercase tracking-wide shadow-sm">
+            {primaryTitle}
+          </span>
+          
+          <p className="text-[11px] text-on-surface-variant font-medium mt-3">{data?.email}</p>
           {data?.phone && (
             <p className="text-[11px] text-on-surface-variant font-medium">{data?.phone}</p>
           )}
-          <span className="inline-block mt-3 bg-secondary-container/30 text-secondary text-[9px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wide">
-            {data?.workerCategory ? `${data.workerCategory.replace('_', ' ')} WORKER` : "STANDARD WORKER"}
-          </span>
+          
+          {/* Worker Category is demoted to a secondary row display if needed, but not as the primary chip. */}
+          {data?.workerCategory && (
+            <p className="text-[10px] text-on-surface-variant/70 mt-1">
+              Worker Type: {data.workerCategory.replace('_', ' ')}
+            </p>
+          )}
         </div>
       </div>
 
@@ -150,33 +149,22 @@ export default function ProfilePage() {
             </span>
             <span className="text-[11px] font-bold text-on-surface text-right">{data?.designation?.name || "Not set"}</span>
           </div>
-          {data?.tradeClassification && (
-            <div className="px-4 py-3.5 flex justify-between items-center">
-              <span className="text-[11px] text-on-surface-variant flex items-center gap-1.5">
-                <span className="material-symbols-outlined text-[12px] opacity-70">construction</span>
-                Trade
-              </span>
-              <span className="text-[11px] font-bold text-on-surface text-right">{data?.tradeClassification.name}</span>
-            </div>
-          )}
+          <div className="px-4 py-3.5 flex justify-between items-center">
+            <span className="text-[11px] text-on-surface-variant flex items-center gap-1.5">
+              <span className="material-symbols-outlined text-[12px] opacity-70">supervisor_account</span>
+              Supervisor
+            </span>
+            <span className="text-[11px] font-bold text-on-surface text-right">{data?.immediateSupervisor?.name || "Not set"}</span>
+          </div>
           <div className="px-4 py-3.5 flex justify-between items-center">
             <span className="text-[11px] text-on-surface-variant flex items-center gap-1.5">
               <span className="material-symbols-outlined text-[12px] opacity-70">location_on</span>
               Location
             </span>
             <span className="text-[11px] font-bold text-on-surface text-right">
-              {data?.defaultLocation?.name || data?.officeLocation?.name || data?.defaultSite?.name || "Not set"}
+              {data?.defaultLocation?.name || data?.defaultSite?.name || "Not set"}
             </span>
           </div>
-          {data?.immediateSupervisor && (
-            <div className="px-4 py-3.5 flex justify-between items-center">
-              <span className="text-[11px] text-on-surface-variant flex items-center gap-1.5">
-                <span className="material-symbols-outlined text-[12px] opacity-70">supervisor_account</span>
-                Supervisor
-              </span>
-              <span className="text-[11px] font-bold text-primary text-right">{data?.immediateSupervisor.name}</span>
-            </div>
-          )}
         </div>
       </div>
 

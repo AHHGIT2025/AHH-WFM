@@ -53,7 +53,7 @@ export async function POST(req: Request) {
     const publicUrl = `/uploads/profile-photos/${filename}`;
 
     // Update DB
-    await prisma.employee.update({
+    const updatedEmployee = await prisma.employee.update({
       where: { id: userId },
       data: {
         profilePhotoUrl: publicUrl,
@@ -61,7 +61,11 @@ export async function POST(req: Request) {
       }
     });
 
-    return NextResponse.json({ success: true, profilePhotoUrl: publicUrl });
+    return NextResponse.json({ 
+      success: true, 
+      profilePhotoUrl: publicUrl,
+      profilePhotoUpdatedAt: updatedEmployee.profilePhotoUpdatedAt
+    });
 
   } catch (error) {
     console.error("POST /me/profile-photo Error:", error);

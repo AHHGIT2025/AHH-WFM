@@ -37,6 +37,7 @@ export async function GET() {
       phone: employee.phone,
       role: employee.role,
       profilePhotoUrl: employee.profilePhotoUrl,
+      profilePhotoUpdatedAt: employee.profilePhotoUpdatedAt,
       companyId: employee.companyId,
       company: employee.company ? {
         id: employee.company.id,
