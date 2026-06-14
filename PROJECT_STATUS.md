@@ -122,3 +122,7 @@ AHH WFM is a full-stack, enterprise-grade workforce management application built
 - **Advanced Scheduler Grid**: Enabled deep cell-actions (`/shifts`) for assigning deployments, splits, on-call duties, and reliever linkage.
 - **Mobile PWA Integration**: Verified seamless flow of data where web-created projects, sites, custom allowed punch locations, and deployments dynamically feed into the Mobile BFF and correctly enforce geofence priorities.
 - **Flexible Employee Punch Policies**: Added granular overrides per employee (Default Punch Location, Multiple Allowances, Office/Site/On-Call Flags, Radius Overrides, and Out-of-Zone permissions) managed from the Workforce UI.
+
+- **Current Focus:** Regression Bugfix (Employee Profile Master Data Form Persistence)
+- **Latest Checkpoint:** `v0.16-flexible-employee-punch-location-policies` + `employee-persistence-hotfix`
+- **Next Phase:** Final Integration Validation & Release Stabilization

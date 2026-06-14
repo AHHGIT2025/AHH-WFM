@@ -320,6 +320,6 @@ This document outlines the evolutionary development roadmap for the **AHH WFM** 
     *   Web: `/workforce` (Edit Profile Modal)
 *   **Estimated Implementation Effort**: Completed
 
-
-
-
+### 8.5 Master Data Profile Persistence (Hotfix)
+*   **Business Purpose**: Ensure location assignments, cost center linkage, and advanced scheduling flags consistently persist across the `/admin/workforce` modal and the unified `/api/v1/employees` endpoint.
+*   **Estimated Implementation Effort**: Completed
