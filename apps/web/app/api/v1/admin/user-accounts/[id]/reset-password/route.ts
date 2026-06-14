@@ -9,24 +9,24 @@ export async function POST(request: Request, { params }: { params: { id: string 
 
   try {
     const payload = await request.json();
-    const { newPassword } = payload;
+    const { tempPassword, forceChange } = payload;
 
-    if (!newPassword || newPassword.trim().length < 8) {
+    if (!tempPassword || tempPassword.trim().length < 8) {
       return NextResponse.json({ error: "Password must be at least 8 characters long" }, { status: 400 });
     }
 
-    const passwordHash = bcrypt.hashSync(newPassword, 10);
+    const passwordHash = bcrypt.hashSync(tempPassword, 10);
 
     const updated = await mockDb.updateEmployee(params.id, { 
       passwordHash: passwordHash,
-      mustChangePassword: true, // Force the user to change this temporary password on next login
+      mustChangePassword: forceChange !== undefined ? forceChange : true,
       passwordUpdatedAt: new Date()
     } as any);
 
     if (!updated) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
     const { passwordHash: _, ...rest } = updated;
-    return NextResponse.json({ message: "Password reset successfully", user: rest });
+    return NextResponse.json({ message: "Password reset successfully", user: rest, tempPassword });
   } catch (e) {
     return NextResponse.json({ error: "Failed to reset password" }, { status: 500 });
   }
