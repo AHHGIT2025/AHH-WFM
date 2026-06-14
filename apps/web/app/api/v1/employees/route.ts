@@ -20,7 +20,12 @@ export async function POST(request: Request) {
 
   try {
     const payload = await request.json();
-    const { id, name, email, role, departmentId, phone, shiftId, password, employmentStatus, dutyStatus, workerCategory, positionCategoryId, defaultProjectId, defaultSiteId } = payload;
+    const { 
+      id, name, email, role, departmentId, phone, shiftId, password, 
+      employmentStatus, dutyStatus, workerCategory, positionCategoryId, 
+      defaultProjectId, defaultSiteId, designationId, tradeClassificationId, 
+      costCenterId, defaultLocationId, isRelieverEligible, isStandbyEligible 
+    } = payload;
 
     // 1. Validation
     if (!id || id.trim() === "") {
@@ -67,8 +72,14 @@ export async function POST(request: Request) {
       isActive: employmentStatus ? (employmentStatus === "ACTIVE") : true,
       positionCategoryId: positionCategoryId || undefined,
       defaultProjectId: defaultProjectId || undefined,
-      defaultSiteId: defaultSiteId || undefined
-    });
+      defaultSiteId: defaultSiteId || undefined,
+      designationId: designationId || undefined,
+      tradeClassificationId: tradeClassificationId || undefined,
+      costCenterId: costCenterId || undefined,
+      defaultLocationId: defaultLocationId || undefined,
+      isRelieverEligible: isRelieverEligible || false,
+      isStandbyEligible: isStandbyEligible || false
+    } as any);
 
     return NextResponse.json(newEmp);
   } catch (e) {

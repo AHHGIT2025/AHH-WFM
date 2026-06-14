@@ -30,7 +30,13 @@ export async function PATCH(request: Request, { params }: RouteParams) {
 
   try {
     const payload = await request.json();
-    const { name, email, role, departmentId, status, phone, shiftId, employmentStatus, dutyStatus, workerCategory, positionCategoryId, defaultProjectId, defaultSiteId } = payload;
+    const { 
+      name, email, role, departmentId, status, phone, shiftId, 
+      employmentStatus, dutyStatus, workerCategory, 
+      positionCategoryId, defaultProjectId, defaultSiteId,
+      designationId, tradeClassificationId, costCenterId, defaultLocationId,
+      isRelieverEligible, isStandbyEligible
+    } = payload;
 
     // Validation checks
     if (name !== undefined && name.trim() === "") {
@@ -67,7 +73,13 @@ export async function PATCH(request: Request, { params }: RouteParams) {
       ...(workerCategory !== undefined ? { workerCategory } : {}),
       ...(positionCategoryId !== undefined ? { positionCategoryId: positionCategoryId || null } : {}),
       ...(defaultProjectId !== undefined ? { defaultProjectId: defaultProjectId || null } : {}),
-      ...(defaultSiteId !== undefined ? { defaultSiteId: defaultSiteId || null } : {})
+      ...(defaultSiteId !== undefined ? { defaultSiteId: defaultSiteId || null } : {}),
+      ...(designationId !== undefined ? { designationId: designationId || null } : {}),
+      ...(tradeClassificationId !== undefined ? { tradeClassificationId: tradeClassificationId || null } : {}),
+      ...(costCenterId !== undefined ? { costCenterId: costCenterId || null } : {}),
+      ...(defaultLocationId !== undefined ? { defaultLocationId: defaultLocationId || null } : {}),
+      ...(isRelieverEligible !== undefined ? { isRelieverEligible } : {}),
+      ...(isStandbyEligible !== undefined ? { isStandbyEligible } : {})
     } as any);
 
     if (!updated) {
