@@ -4,11 +4,12 @@
 To verify that granular punch policies (multiple allowed punch locations, default locations, policy overrides) are correctly integrated into the core `Employee` model, editable in the `Workforce` module UI, and actively enforced in the Mobile App's Check-in flow.
 
 ## 2. Requirements Addressed
-* **Schema Extension**: Extended `Employee` with boolean flags (`allowMultiplePunchLocations`, `allowOfficePunch`, etc.) and `defaultPunchLocationId`.
-* **Central Geofence Source**: `AllowedPunchLocation` is the source of truth for all location-based mobile check-ins.
-* **Separation of Concerns**: Kept `defaultLocationId` strictly for office/cost-center tracking while adding `defaultPunchLocationId` for mobile rules.
-* **UI**: Fixed the dropdown error yielding blank names "()" and added a comprehensive "Mobile Punch Location Settings" pane.
-* **Mobile BFF Cascade Enforcement**: Mobile check-in now traverses locations sequentially: Deployment -> On-call -> Default -> Allowed -> Office -> Fallback.
+* **Employee Punch Policy Fields**: Fully mapped boolean toggles (`allowMultiplePunchLocations`, etc.) and radius overrides.
+* **defaultPunchLocationId Behavior**: Separated `defaultLocationId` (HR/Cost Center) from `defaultPunchLocationId` (Mobile Geofence rule).
+* **EmployeeAllowedPunchLocation Behavior**: Created the relational joining table explicitly to let a single employee punch in from multiple overlapping authorized sites securely.
+* **UI Changes in Workforce Edit Modal**: Fixed the dropdown error yielding blank names "()" and added a comprehensive "Mobile Punch Location Settings" pane.
+* **Mobile BFF Check-in Cascade**: Mobile check-in now traverses locations sequentially: Deployment -> On-call -> Default -> Allowed -> Office -> Fallback.
+* **Out-of-zone Review Behavior**: Check-ins falling outside bounds where `allowOutOfZonePunch` and `requireOutOfZoneReview` are true now flag as `OUT_OF_ZONE_REVIEW_REQUIRED`.
 
 ## 3. Test Cases Performed
 
