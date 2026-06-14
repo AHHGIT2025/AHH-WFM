@@ -6,12 +6,21 @@
     "dev": "next dev -p 3101",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "cap:init": "cap init",
+    "cap:add:android": "cap add android",
+    "cap:sync": "cap sync android",
+    "cap:open": "cap open android",
+    "android:build": "cd android && gradlew assembleDebug"
   },
   "dependencies": {
     "@ahh-wfm/mock-data": "*",
     "@ahh-wfm/types": "*",
     "@ahh-wfm/ui": "*",
+    "@capacitor/android": "^8.4.0",
+    "@capacitor/core": "^8.4.0",
+    "@capacitor/geolocation": "^8.2.0",
+    "@capacitor/preferences": "^8.0.1",
     "bcryptjs": "^3.0.3",
     "next": "^14.2.3",
     "next-auth": "^4.24.14",
@@ -19,6 +28,7 @@
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.4.0",
     "@types/node": "^20.12.12",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
