@@ -30,3 +30,4 @@ The Advanced Scheduler (`/shifts/page.tsx`) incorporates deep cell-action capabi
 All Web-created data properly propagates to the mobile BFF:
 - Projects, Sites, and Custom Allowances immediately modify the payload returned by `GET /api/v1/allowed-punch-locations`.
 - Deployment and On-Call assignments dynamically override static rules in real-time.
+- Employee specific Flexible Punch Policies (`allowMultiplePunchLocations`, `allowOutOfZonePunch`, etc.) dictate specific geofence evaluations directly from the Master Data UI.

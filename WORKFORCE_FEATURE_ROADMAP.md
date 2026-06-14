@@ -310,6 +310,16 @@ This document outlines the evolutionary development roadmap for the **AHH WFM** 
 *   **Business Purpose**: Ensure the core engine accurately routes the correct dynamic deployment boundaries down to the mobile clients.
 *   **Estimated Implementation Effort**: Completed
 
+### 8.4 Flexible Employee Punch Policies
+*   **Business Purpose**: Allow granular control over individual mobile punch permissions, allowing specific workers to punch multiple sites, off-site zones, or override default boundaries.
+*   **Database Impact**: Injected `allowMultiplePunchLocations`, `requireOutOfZoneReview`, and `defaultPunchLocationId` directly into the `Employee` model.
+*   **API Endpoints Required**: 
+    *   `/api/v1/employees/[id]/punch-policy`
+    *   `/api/v1/employees/[id]/allowed-locations`
+*   **UI Screens Affected**:
+    *   Web: `/workforce` (Edit Profile Modal)
+*   **Estimated Implementation Effort**: Completed
+
 
 
 

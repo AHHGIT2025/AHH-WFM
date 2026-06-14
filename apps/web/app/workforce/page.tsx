@@ -48,6 +48,16 @@ export default function WorkforcePage() {
   const [designations, setDesignations] = useState<any[]>([]);
   const [trades, setTrades] = useState<any[]>([]);
   const [locations, setLocations] = useState<any[]>([]);
+  const [allowedPunchLocations, setAllowedPunchLocations] = useState<any[]>([]);
+  const [empDefaultPunchLocationId, setEmpDefaultPunchLocationId] = useState("");
+  const [empAllowMultiplePunchLocations, setEmpAllowMultiplePunchLocations] = useState(false);
+  const [empAllowOfficePunch, setEmpAllowOfficePunch] = useState(true);
+  const [empAllowProjectSitePunch, setEmpAllowProjectSitePunch] = useState(true);
+  const [empAllowOnCallPunch, setEmpAllowOnCallPunch] = useState(false);
+  const [empAllowOutOfZonePunch, setEmpAllowOutOfZonePunch] = useState(false);
+  const [empRequireOutOfZoneReview, setEmpRequireOutOfZoneReview] = useState(true);
+  const [empGeofenceRadiusOverrideMeters, setEmpGeofenceRadiusOverrideMeters] = useState("");
+  const [empAllowedPunchLocationAssignments, setEmpAllowedPunchLocationAssignments] = useState<any[]>([]);
   const [costCenters, setCostCenters] = useState<any[]>([]);
 
   const [empDesignationId, setEmpDesignationId] = useState("");
@@ -89,7 +99,7 @@ export default function WorkforcePage() {
 
   const fetchDb = async () => {
     try {
-      const [empRes, deptRes, projRes, catRes, desRes, trdRes, locRes, ccRes] = await Promise.all([
+      const [empRes, deptRes, projRes, catRes, desRes, trdRes, locRes, ccRes, aplRes] = await Promise.all([
         fetch("/api/v1/employees"),
         fetch("/api/v1/departments"),
         fetch("/api/v1/projects"),
@@ -97,7 +107,8 @@ export default function WorkforcePage() {
         fetch("/api/v1/masters/designations"),
         fetch("/api/v1/masters/trade-classifications"),
         fetch("/api/v1/masters/locations"),
-        fetch("/api/v1/masters/cost-centers")
+        fetch("/api/v1/masters/cost-centers"),
+        fetch("/api/v1/attendance/allowed-locations")
       ]);
       if (empRes.ok && deptRes.ok) {
         setEmployees(await empRes.json());
@@ -113,6 +124,7 @@ export default function WorkforcePage() {
       if (trdRes && trdRes.ok) setTrades(await trdRes.json());
       if (locRes && locRes.ok) setLocations(await locRes.json());
       if (ccRes && ccRes.ok) setCostCenters(await ccRes.json());
+      if (aplRes && aplRes.ok) setAllowedPunchLocations(await aplRes.json());
       await fetchDeployments();
     } catch (e) {
       console.error(e);
@@ -253,6 +265,15 @@ export default function WorkforcePage() {
         setEmpDefaultLocationId("");
         setEmpIsRelieverEligible(false);
         setEmpIsStandbyEligible(false);
+        setEmpDefaultPunchLocationId("");
+        setEmpAllowMultiplePunchLocations(false);
+        setEmpAllowOfficePunch(true);
+        setEmpAllowProjectSitePunch(true);
+        setEmpAllowOnCallPunch(false);
+        setEmpAllowOutOfZonePunch(false);
+        setEmpRequireOutOfZoneReview(true);
+        setEmpGeofenceRadiusOverrideMeters("");
+        setEmpAllowedPunchLocationAssignments([]);
         fetchDb();
       } else {
         const err = await res.json();
@@ -291,6 +312,22 @@ export default function WorkforcePage() {
           defaultLocationId: empDefaultLocationId || null,
           isRelieverEligible: empIsRelieverEligible,
           isStandbyEligible: empIsStandbyEligible
+        })
+      });
+
+      // Patch the punch policy
+      await fetch(`/api/v1/employees/${selectedEmp.id}/punch-policy`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          defaultPunchLocationId: empDefaultPunchLocationId || null,
+          allowMultiplePunchLocations: empAllowMultiplePunchLocations,
+          allowOfficePunch: empAllowOfficePunch,
+          allowProjectSitePunch: empAllowProjectSitePunch,
+          allowOnCallPunch: empAllowOnCallPunch,
+          allowOutOfZonePunch: empAllowOutOfZonePunch,
+          requireOutOfZoneReview: empRequireOutOfZoneReview,
+          geofenceRadiusOverrideMeters: empGeofenceRadiusOverrideMeters || null
         })
       });
 
@@ -403,7 +440,7 @@ export default function WorkforcePage() {
     }
   };
 
-  const openEditModal = (emp: Employee) => {
+  const openEditModal = async (emp: Employee) => {
     setSelectedEmp(emp);
     setEmpName(emp.name);
     setEmpEmail(emp.email);
@@ -423,6 +460,24 @@ export default function WorkforcePage() {
     setEmpDefaultLocationId((emp as any).defaultLocationId || "");
     setEmpIsRelieverEligible(!!(emp as any).isRelieverEligible);
     setEmpIsStandbyEligible(!!(emp as any).isStandbyEligible);
+    setEmpDefaultPunchLocationId((emp as any).defaultPunchLocationId || "");
+    setEmpAllowMultiplePunchLocations(!!(emp as any).allowMultiplePunchLocations);
+    setEmpAllowOfficePunch((emp as any).allowOfficePunch !== false);
+    setEmpAllowProjectSitePunch((emp as any).allowProjectSitePunch !== false);
+    setEmpAllowOnCallPunch(!!(emp as any).allowOnCallPunch);
+    setEmpAllowOutOfZonePunch(!!(emp as any).allowOutOfZonePunch);
+    setEmpRequireOutOfZoneReview((emp as any).requireOutOfZoneReview !== false);
+    setEmpGeofenceRadiusOverrideMeters((emp as any).geofenceRadiusOverrideMeters?.toString() || "");
+    try {
+      const aplRes = await fetch(`/api/v1/employees/${emp.id}/allowed-locations`);
+      if (aplRes.ok) {
+        setEmpAllowedPunchLocationAssignments(await aplRes.json());
+      } else {
+        setEmpAllowedPunchLocationAssignments([]);
+      }
+    } catch (e) {
+      setEmpAllowedPunchLocationAssignments([]);
+    }
     setValidationError(null);
     setIsEditEmpOpen(true);
   };
@@ -788,7 +843,7 @@ export default function WorkforcePage() {
                 <Button
                   variant="secondary"
                   className="flex-1 font-bold text-xs py-1.5"
-                  onClick={() => openEditModal(emp)}
+                  onClick={() => { openEditModal(emp); }}
                 >
                   Edit Profile
                 </Button>
@@ -1098,7 +1153,7 @@ export default function WorkforcePage() {
                 >
                   <option value="">Select Location</option>
                   {locations.map((l) => (
-                    <option key={l.id} value={l.id}>{l.name} ({l.code})</option>
+                    <option key={l.id} value={l.id}>{l.locationName || l.name} ({l.locationCode || l.code})</option>
                   ))}
                 </select>
               </div>
@@ -1137,6 +1192,131 @@ export default function WorkforcePage() {
               </label>
             </div>
           </div>
+          {/* Mobile Punch Location Settings */}
+          {isEditEmpOpen && (
+            <div className="p-4 bg-primary/5 border border-primary/10 rounded-xl space-y-3 mt-4">
+              <p className="text-[10px] font-bold text-primary uppercase tracking-wider">Mobile Punch Location Settings</p>
+              
+              <div className="grid grid-cols-1 gap-4">
+                <div className="space-y-1">
+                  <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Default Punch Location</label>
+                  <select
+                    className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                    value={empDefaultPunchLocationId}
+                    onChange={(e) => setEmpDefaultPunchLocationId(e.target.value)}
+                  >
+                    <option value="">Select Default Punch Location</option>
+                    {allowedPunchLocations.map((l) => {
+                      let displayName = l.name;
+                      if (l.locationType === "OFFICE" || l.locationType === "CUSTOM") {
+                         displayName = l.name + (l.address ? " — " + l.address : "");
+                      } else if (l.locationType === "PROJECT_SITE") {
+                         displayName = l.name;
+                      }
+                      return (
+                        <option key={l.id} value={l.id}>{displayName}</option>
+                      );
+                    })}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <label className="flex items-center gap-2 text-xs font-bold text-on-surface cursor-pointer">
+                  <input type="checkbox" checked={empAllowMultiplePunchLocations} onChange={(e) => setEmpAllowMultiplePunchLocations(e.target.checked)} className="w-4 h-4 rounded border-outline-variant text-primary focus:ring-0" />
+                  Allow Multiple Punch Locations
+                </label>
+                <label className="flex items-center gap-2 text-xs font-bold text-on-surface cursor-pointer">
+                  <input type="checkbox" checked={empAllowOfficePunch} onChange={(e) => setEmpAllowOfficePunch(e.target.checked)} className="w-4 h-4 rounded border-outline-variant text-primary focus:ring-0" />
+                  Allow Office Punch
+                </label>
+                <label className="flex items-center gap-2 text-xs font-bold text-on-surface cursor-pointer">
+                  <input type="checkbox" checked={empAllowProjectSitePunch} onChange={(e) => setEmpAllowProjectSitePunch(e.target.checked)} className="w-4 h-4 rounded border-outline-variant text-primary focus:ring-0" />
+                  Allow Project Site Punch
+                </label>
+                <label className="flex items-center gap-2 text-xs font-bold text-on-surface cursor-pointer">
+                  <input type="checkbox" checked={empAllowOnCallPunch} onChange={(e) => setEmpAllowOnCallPunch(e.target.checked)} className="w-4 h-4 rounded border-outline-variant text-primary focus:ring-0" />
+                  Allow On-Call Punch
+                </label>
+                <label className="flex items-center gap-2 text-xs font-bold text-on-surface cursor-pointer">
+                  <input type="checkbox" checked={empAllowOutOfZonePunch} onChange={(e) => setEmpAllowOutOfZonePunch(e.target.checked)} className="w-4 h-4 rounded border-outline-variant text-primary focus:ring-0" />
+                  Allow Out-of-Zone Punch
+                </label>
+                <label className="flex items-center gap-2 text-xs font-bold text-on-surface cursor-pointer">
+                  <input type="checkbox" checked={empRequireOutOfZoneReview} onChange={(e) => setEmpRequireOutOfZoneReview(e.target.checked)} className="w-4 h-4 rounded border-outline-variant text-primary focus:ring-0" />
+                  Require Out-of-Zone Review
+                </label>
+              </div>
+
+              <div className="space-y-1">
+                <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Geofence Radius Override (Meters)</label>
+                <input
+                  type="number"
+                  className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                  value={empGeofenceRadiusOverrideMeters}
+                  onChange={(e) => setEmpGeofenceRadiusOverrideMeters(e.target.value)}
+                  placeholder="e.g. 150"
+                />
+              </div>
+              
+              {empAllowMultiplePunchLocations && (
+                <div className="space-y-2 mt-4 pt-4 border-t border-primary/10">
+                  <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Additional Allowed Locations</label>
+                  <div className="flex gap-2 mb-2 flex-wrap">
+                    {empAllowedPunchLocationAssignments.map((a: any) => (
+                      <div key={a.id} className="flex items-center gap-2 bg-primary/10 text-primary text-xs px-2 py-1 rounded-full">
+                        <span>{a.allowedPunchLocation?.name}</span>
+                        <button 
+                          type="button" 
+                          onClick={async () => {
+                            const res = await fetch(`/api/v1/employees/${selectedEmp?.id}/allowed-locations?assignmentId=${a.id}`, { method: "DELETE" });
+                            if (res.ok) {
+                              setEmpAllowedPunchLocationAssignments(prev => prev.filter(x => x.id !== a.id));
+                            }
+                          }}
+                          className="text-primary hover:text-red-500 font-bold"
+                        >
+                          &times;
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  
+                  <div className="flex gap-2">
+                     <select
+                      className="flex-1 bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                      id="newAllowedLocationSelect"
+                    >
+                      <option value="">Add Allowed Location...</option>
+                      {allowedPunchLocations.filter(l => !empAllowedPunchLocationAssignments.some((a: any) => a.allowedPunchLocationId === l.id) && l.id !== empDefaultPunchLocationId).map((l) => (
+                        <option key={l.id} value={l.id}>{l.name}</option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const sel = document.getElementById("newAllowedLocationSelect") as HTMLSelectElement;
+                        if (!sel || !sel.value) return;
+                        const res = await fetch(`/api/v1/employees/${selectedEmp?.id}/allowed-locations`, {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ allowedPunchLocationId: sel.value })
+                        });
+                        if (res.ok) {
+                          const assignment = await res.json();
+                          setEmpAllowedPunchLocationAssignments(prev => [...prev, assignment]);
+                          sel.value = "";
+                        }
+                      }}
+                      className="px-4 py-2 bg-primary text-on-primary rounded-lg text-xs font-bold"
+                    >
+                      Add
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-4">
             <Input
               label="Default Password"
@@ -1360,7 +1540,7 @@ export default function WorkforcePage() {
                   >
                     <option value="">Select Location</option>
                     {locations.map((l) => (
-                      <option key={l.id} value={l.id}>{l.name} ({l.code})</option>
+                      <option key={l.id} value={l.id}>{l.locationName || l.name} ({l.locationCode || l.code})</option>
                     ))}
                   </select>
                 </div>

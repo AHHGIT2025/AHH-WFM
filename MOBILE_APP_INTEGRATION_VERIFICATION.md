@@ -43,9 +43,10 @@ Server-side strict priority enforcement for determining the active worksite coor
 1. Active Deployment (`Project/Site`)
 2. Active On-Call Assignment
 3. Shift Assignment (`Project/Site/OfficeLocation`)
-4. Custom Allowed Punch Location overrides
-5. Home Office Location
-6. Policy Fallback / Default Location
+4. Employee Default Punch Location
+5. Employee Allowed Punch Locations
+6. Office Location
+7. Company Policy Fallback
 
 ## 7. Shared Database Integration
 - `apps/mobile` directly queries `@repo/database` using Prisma Client.

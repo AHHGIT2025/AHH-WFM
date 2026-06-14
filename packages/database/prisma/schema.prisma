@@ -51,6 +51,16 @@ model Employee {
   isRelieverEligible Boolean                     @default(false)
   isStandbyEligible  Boolean                     @default(false)
 
+  defaultPunchLocationId       String?
+  defaultPunchLocation         AllowedPunchLocation? @relation("EmployeeDefaultPunchLocation", fields: [defaultPunchLocationId], references: [id])
+  allowMultiplePunchLocations  Boolean               @default(false)
+  allowOfficePunch             Boolean               @default(true)
+  allowProjectSitePunch        Boolean               @default(true)
+  allowOnCallPunch             Boolean               @default(false)
+  allowOutOfZonePunch          Boolean               @default(false)
+  requireOutOfZoneReview       Boolean               @default(true)
+  geofenceRadiusOverrideMeters Float?
+
   allowedPunchLocations EmployeeAllowedPunchLocation[]
   onCallAssignments     OnCallAssignment[]
 }
@@ -879,6 +889,7 @@ model AllowedPunchLocation {
   employeeAssignments         EmployeeAllowedPunchLocation[]
   attendanceRecords           AttendanceRecord[] @relation("AllowedLocationAttendance")
   onCallAssignments           OnCallAssignment[]
+  defaultForEmployees         Employee[] @relation("EmployeeDefaultPunchLocation")
 }
 
 model EmployeeAllowedPunchLocation {

@@ -121,3 +121,4 @@ AHH WFM is a full-stack, enterprise-grade workforce management application built
 - **Master Data Hub UI**: Centralized dynamic dashboard (`/admin/masters`) using a unified `MasterDataEntityTab` component for Companies, Departments, Designations, Trades, Locations, Projects, and Standby Rules.
 - **Advanced Scheduler Grid**: Enabled deep cell-actions (`/shifts`) for assigning deployments, splits, on-call duties, and reliever linkage.
 - **Mobile PWA Integration**: Verified seamless flow of data where web-created projects, sites, custom allowed punch locations, and deployments dynamically feed into the Mobile BFF and correctly enforce geofence priorities.
+- **Flexible Employee Punch Policies**: Added granular overrides per employee (Default Punch Location, Multiple Allowances, Office/Site/On-Call Flags, Radius Overrides, and Out-of-Zone permissions) managed from the Workforce UI.
