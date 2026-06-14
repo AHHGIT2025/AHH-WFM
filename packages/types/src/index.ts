@@ -1,3 +1,12 @@
+
+export interface Company {
+  id: string;
+  companyCode: string;
+  companyName: string;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
 export interface Department {
   id: string;
   name: string;
@@ -10,6 +19,8 @@ export interface Employee {
   name: string;
   department: string; // compatibility string
   departmentId?: string;
+  companyId?: string;
+  profilePhotoUrl?: string;
   role: string;
   status: "On Duty" | "On Break" | "Offline" | "On Leave" | string;
   avatarUrl?: string;

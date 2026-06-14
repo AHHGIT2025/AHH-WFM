@@ -1653,6 +1653,19 @@ export default function WorkforcePage() {
             {/* WORK ASSIGNMENT TAB */}
             {editTab === 'assignment' && (
               <div className="space-y-4">
+                <div className="p-4 bg-surface-container border border-outline-variant/30 rounded-xl space-y-3">
+                  <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">General Role & Designation</p>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Designation *</label>
+                      <select className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-2.5 py-2 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" value={empDesignationId} onChange={(e) => setEmpDesignationId(e.target.value)} required>
+                        <option value="">Select Designation</option>
+                        {designations.map((d) => <option key={d.id} value={d.id}>{d.name} ({d.code})</option>)}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+  
                 {empWorkerCategory === "BLUE_COLLAR" && (
                   <div className="p-4 bg-secondary/5 border border-secondary/10 rounded-xl space-y-3">
                     <p className="text-[10px] font-bold text-secondary uppercase tracking-wider">Blue Collar Core Settings</p>
@@ -1664,13 +1677,7 @@ export default function WorkforcePage() {
                           {positionCategories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                         </select>
                       </div>
-                      <div className="space-y-1">
-                        <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Designation *</label>
-                        <select className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-2.5 py-2 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" value={empDesignationId} onChange={(e) => setEmpDesignationId(e.target.value)} required>
-                          <option value="">Select Designation</option>
-                          {designations.map((d) => <option key={d.id} value={d.id}>{d.name} ({d.code})</option>)}
-                        </select>
-                      </div>
+                      
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-1">

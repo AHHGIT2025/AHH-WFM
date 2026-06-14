@@ -1,4 +1,4 @@
-import { Employee, AttendanceRecord, Shift, LeaveRequest, SapMapping, SyncLog, Announcement, Department, Worksite, AttendanceCorrection, LeaveType, LeaveBalance, LeaveBalanceLedger, Holiday, LeaveApprovalWorkflow, LeaveApprovalStep, LeaveApprovalHistory, LeaveApprovalDelegation, ShiftTemplate, RotationTemplate, ShiftAssignment, ShiftSwapRequest, OvertimeRate, SapConnection, SapSyncJob, SapSyncLog, SapFieldMapping, SapRetryQueue, SapExportQueue, SapPayrollStage, SapReconciliationLog, SapPayrollPeriodLock, SavedReport, ReportExportLog, UserActivityLog, ProductionCheckLog, BackupJob, BackupAuditLog, EmployeeBulkUploadJob, SystemRole, SystemPermission, RolePermission, UserRoleAssignment, BlueCollarPositionCategory, Project, ProjectSite, EmployeeDeployment, Designation, TradeClassification, LocationMaster, CostCenter, ShiftRelieverAssignment, RelieverStandbyRule } from "@ahh-wfm/types";
+import { Employee, AttendanceRecord, Shift, LeaveRequest, SapMapping, SyncLog, Announcement, Department, Worksite, AttendanceCorrection, LeaveType, LeaveBalance, LeaveBalanceLedger, Holiday, LeaveApprovalWorkflow, LeaveApprovalStep, LeaveApprovalHistory, LeaveApprovalDelegation, ShiftTemplate, RotationTemplate, ShiftAssignment, ShiftSwapRequest, OvertimeRate, SapConnection, SapSyncJob, SapSyncLog, SapFieldMapping, SapRetryQueue, SapExportQueue, SapPayrollStage, SapReconciliationLog, SapPayrollPeriodLock, SavedReport, ReportExportLog, UserActivityLog, ProductionCheckLog, BackupJob, BackupAuditLog, EmployeeBulkUploadJob, SystemRole, SystemPermission, RolePermission, UserRoleAssignment, BlueCollarPositionCategory, Project, ProjectSite, EmployeeDeployment, Designation, TradeClassification, LocationMaster, CostCenter, ShiftRelieverAssignment, RelieverStandbyRule, Company } from "@ahh-wfm/types";
 import * as fs from "fs";
 import * as path from "path";
 import * as bcrypt from "bcryptjs";
@@ -82,6 +82,7 @@ let memoryDb: {
   sapMappings: SapMapping[];
   syncLogs: SyncLog[];
   announcements: Announcement[];
+  companies: Company[];
   departments: Department[];
   worksites: Worksite[];
   attendanceCorrections: AttendanceCorrection[];
@@ -129,6 +130,9 @@ let memoryDb: {
   shiftRelieverAssignments: ShiftRelieverAssignment[];
   relieverStandbyRules: RelieverStandbyRule[];
 } = {
+  companies: [
+    { id: "COMP-001", companyCode: "AHH", companyName: "Al Hattab Holding", isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
+  ],
   departments: [
     { id: "DEPT-001", name: "Operations", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
     { id: "DEPT-002", name: "Engineering", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
@@ -137,12 +141,12 @@ let memoryDb: {
     { id: "DEPT-005", name: "IT", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
   ],
   employees: [
-    { id: "SK-90210", name: "Sarah Kim", department: "Operations", departmentId: "DEPT-001", role: "SUPERVISOR", status: "On Break", email: "sarah.kim@alhattab.qa", phone: "+974 5555 1234", shiftId: "MOR-102", passwordHash: defaultHash, isActive: true },
-    { id: "AM-8821", name: "Alex Martinez", department: "Engineering", departmentId: "DEPT-002", role: "EMPLOYEE", status: "On Duty", email: "alex.m@alhattab.qa", phone: "+974 5555 5678", shiftId: "GEN-001", passwordHash: defaultHash, isActive: true },
-    { id: "BR-8823", name: "Brandon Reed", department: "Logistics", departmentId: "DEPT-003", role: "EMPLOYEE", status: "On Duty", email: "brandon.r@alhattab.qa", phone: "+974 5555 9012", shiftId: "AFT-103", passwordHash: defaultHash, isActive: true },
-    { id: "JL-8824", name: "Jordan Lee", department: "Sales", departmentId: "DEPT-004", role: "EMPLOYEE", status: "Offline", email: "jordan.lee@alhattab.qa", phone: "+974 5555 3456", shiftId: "ROT-A", passwordHash: defaultHash, isActive: true },
-    { id: "AA-1001", name: "Ahmed Ali", department: "Operations", departmentId: "DEPT-001", role: "EMPLOYEE", status: "Offline", email: "ahmed.ali@alhattab.qa", phone: "+974 6666 1111", shiftId: "GEN-001", passwordHash: defaultHash, isActive: true },
-    { id: "AD-0001", name: "System Administrator", department: "IT", departmentId: "DEPT-005", role: "ADMIN", status: "Offline", email: "admin@alhattab.qa", phone: "+974 0000 0000", shiftId: "GEN-001", passwordHash: defaultHash, isActive: true }
+    { id: "SK-90210", name: "Sarah Kim", department: "Operations", departmentId: "DEPT-001", companyId: "COMP-001", designationId: "DES-HRM", role: "SUPERVISOR", status: "On Break", email: "sarah.kim@alhattab.qa", phone: "+974 5555 1234", shiftId: "MOR-102", passwordHash: defaultHash, isActive: true },
+    { id: "AM-8821", name: "Alex Martinez", department: "Engineering", departmentId: "DEPT-002", companyId: "COMP-001", designationId: "DES-ACC", workerCategory: "WHITE_COLLAR", role: "EMPLOYEE", status: "On Duty", email: "alex.m@alhattab.qa", phone: "+974 5555 5678", shiftId: "GEN-001", passwordHash: defaultHash, isActive: true },
+    { id: "BR-8823", name: "Brandon Reed", department: "Logistics", departmentId: "DEPT-003", companyId: "COMP-001", designationId: "DES-001", workerCategory: "BLUE_COLLAR", role: "EMPLOYEE", status: "On Duty", email: "brandon.r@alhattab.qa", phone: "+974 5555 9012", shiftId: "AFT-103", passwordHash: defaultHash, isActive: true },
+    { id: "JL-8824", name: "Jordan Lee", department: "Sales", departmentId: "DEPT-004", companyId: "COMP-001", role: "EMPLOYEE", status: "Offline", email: "jordan.lee@alhattab.qa", phone: "+974 5555 3456", shiftId: "ROT-A", passwordHash: defaultHash, isActive: true },
+    { id: "AA-1001", name: "Ahmed Ali", department: "Operations", departmentId: "DEPT-001", companyId: "COMP-001", designationId: "DES-001", workerCategory: "BLUE_COLLAR", role: "EMPLOYEE", status: "Offline", email: "ahmed.ali@alhattab.qa", phone: "+974 6666 1111", shiftId: "GEN-001", passwordHash: defaultHash, isActive: true },
+    { id: "AD-0001", name: "System Administrator", department: "IT", departmentId: "DEPT-005", companyId: "COMP-001", role: "ADMIN", status: "Offline", email: "admin@alhattab.qa", phone: "+974 0000 0000", shiftId: "GEN-001", passwordHash: defaultHash, isActive: true }
   ],
   attendance: [
     { id: "ATT-001", employeeId: "AM-8821", employeeName: "Alex Martinez", checkIn: "2026-06-11T08:55:00Z", checkOut: "2026-06-11T18:02:00Z", originalCheckIn: "2026-06-11T08:55:00Z", originalCheckOut: "2026-06-11T18:02:00Z", lat: 25.2854, lng: 51.5310, device: "Galaxy S23 · 5G · GPS Active", status: "ON_TIME", locationName: "Doha Headquarters", lateMinutes: 0 },
@@ -296,6 +300,8 @@ let memoryDb: {
   projectSites: [],
   deployments: [],
   designations: [
+    { id: "DES-HRM", code: "HRM", name: "HR Manager", description: "Human Resources Manager", workerCategory: "WHITE_COLLAR", isSupervisorPosition: true, isRelieverEligible: false, isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+    { id: "DES-ACC", code: "ACC", name: "Accountant", description: "Accountant", workerCategory: "WHITE_COLLAR", isSupervisorPosition: false, isRelieverEligible: false, isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
     { id: "DES-001", code: "WKR", name: "General Worker", description: "Blue collar manual worker", workerCategory: "BLUE_COLLAR", isSupervisorPosition: false, isRelieverEligible: true, isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
     { id: "DES-002", code: "SUP", name: "Operations Supervisor", description: "Supervisor of site operations", workerCategory: "BOTH", isSupervisorPosition: true, isRelieverEligible: true, isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
     { id: "DES-003", code: "MGR", name: "Operations Manager", description: "Manager of operations", workerCategory: "WHITE_COLLAR", isSupervisorPosition: true, isRelieverEligible: false, isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
@@ -327,6 +333,21 @@ const seedMySQL = async () => {
   if (!isDbConnected()) return;
   
   try {
+    const companyCount = await prismaClient.company.count();
+    if (companyCount === 0) {
+      console.log("Seeding Companies...");
+      for (const comp of memoryDb.companies) {
+        await prismaClient.company.create({
+          data: {
+            id: comp.id,
+            companyCode: comp.companyCode,
+            companyName: comp.companyName,
+            isActive: comp.isActive
+          }
+        });
+      }
+    }
+    
     const desCount = await prismaClient.designation.count();
     if (desCount === 0) {
       console.log("Seeding Designations...");

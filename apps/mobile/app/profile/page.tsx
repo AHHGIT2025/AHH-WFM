@@ -1,66 +1,182 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useSession, signOut } from "next-auth/react";
 
 export default function ProfilePage() {
   const { data: session } = useSession();
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
+  const fetchProfile = () => {
     fetch("/api/v1/me")
       .then(res => res.json())
       .then(d => {
         setData(d);
         setLoading(false);
       });
+  };
+
+  useEffect(() => {
+    fetchProfile();
   }, []);
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      setErrorMsg("File must be smaller than 5MB");
+      return;
+    }
+
+    setUploading(true);
+    setErrorMsg("");
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      const res = await fetch("/api/v1/me/profile-photo", {
+        method: "POST",
+        body: formData,
+      });
+
+      const result = await res.json();
+      if (!res.ok) {
+        throw new Error(result.error || "Upload failed");
+      }
+
+      // Success, refresh profile
+      fetchProfile();
+    } catch (err: any) {
+      setErrorMsg(err.message);
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
+  };
 
   if (loading) {
     return <div className="flex justify-center py-20"><div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin"></div></div>;
   }
 
+  // Primary title logic: designation.name || positionCategory.name || role || workerCategory
+  const primaryTitle = data?.designation?.name || data?.role || "Employee";
+
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-4 bg-surface p-4 rounded-2xl border border-outline-variant/30 shadow-sm">
-        <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center text-primary text-xl font-bold">
-          {data?.name?.charAt(0)}
+    <div className="space-y-4 pb-8">
+      <div className="flex flex-col items-center gap-4 bg-surface p-6 rounded-2xl border border-outline-variant/30 shadow-sm relative overflow-hidden">
+        {/* Abstract background shape for premium feel */}
+        <div className="absolute top-0 left-0 w-full h-1/2 bg-gradient-to-b from-primary/10 to-transparent"></div>
+        
+        <div className="relative z-10">
+          <div className="w-24 h-24 rounded-full bg-surface-container-high border-4 border-surface shadow-md overflow-hidden flex items-center justify-center relative group">
+            {data?.profilePhotoUrl ? (
+              <img src={data.profilePhotoUrl} alt={data?.name} className="w-full h-full object-cover" />
+            ) : (
+              <span className="text-primary text-3xl font-bold">{data?.name?.charAt(0)}</span>
+            )}
+            {uploading && (
+              <div className="absolute inset-0 bg-black/40 flex items-center justify-center backdrop-blur-sm">
+                <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+              </div>
+            )}
+          </div>
+          <button 
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
+            className="absolute -bottom-2 -right-2 w-8 h-8 bg-primary text-on-primary rounded-full flex items-center justify-center shadow-lg active:scale-95 transition-transform"
+          >
+            <span className="material-symbols-outlined text-[14px]">edit</span>
+          </button>
+          <input 
+            type="file" 
+            ref={fileInputRef} 
+            className="hidden" 
+            accept="image/jpeg, image/png, image/webp" 
+            onChange={handleFileChange}
+          />
         </div>
-        <div>
-          <h2 className="text-lg font-bold text-on-surface leading-tight">{data?.name}</h2>
+        
+        {errorMsg && (
+          <div className="text-[10px] text-status-error bg-status-error/10 px-3 py-1.5 rounded-lg w-full text-center">
+            {errorMsg}
+          </div>
+        )}
+
+        <div className="text-center z-10 w-full">
+          <h2 className="text-xl font-bold text-on-surface leading-tight">{data?.name}</h2>
+          <p className="text-[12px] font-bold text-primary mt-1">{primaryTitle}</p>
           <p className="text-[11px] text-on-surface-variant font-medium mt-0.5">{data?.email}</p>
-          <span className="inline-block mt-1 bg-secondary-container/30 text-secondary text-[9px] font-bold px-2 py-0.5 rounded uppercase">
-            {data?.workerCategory || "Standard"} Worker
+          {data?.phone && (
+            <p className="text-[11px] text-on-surface-variant font-medium">{data?.phone}</p>
+          )}
+          <span className="inline-block mt-3 bg-secondary-container/30 text-secondary text-[9px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wide">
+            {data?.workerCategory ? `${data.workerCategory.replace('_', ' ')} WORKER` : "STANDARD WORKER"}
           </span>
         </div>
       </div>
 
       <div className="bg-surface rounded-2xl border border-outline-variant/30 shadow-sm overflow-hidden">
-        <div className="px-4 py-3 border-b border-outline-variant/20 bg-surface-container-lowest">
+        <div className="px-4 py-3 border-b border-outline-variant/20 bg-surface-container-lowest flex items-center gap-2">
+          <span className="material-symbols-outlined text-[14px] text-primary">work</span>
           <h3 className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Employment Details</h3>
         </div>
         <div className="divide-y divide-outline-variant/20">
-          <div className="px-4 py-3 flex justify-between items-center">
-            <span className="text-[11px] text-on-surface-variant">Company</span>
-            <span className="text-[11px] font-bold text-on-surface text-right">{data?.company || "Not set"}</span>
+          <div className="px-4 py-3.5 flex justify-between items-center">
+            <span className="text-[11px] text-on-surface-variant flex items-center gap-1.5">
+              <span className="material-symbols-outlined text-[12px] opacity-70">corporate_fare</span>
+              Company
+            </span>
+            <span className="text-[11px] font-bold text-on-surface text-right">{data?.company?.name || "Not set"}</span>
           </div>
-          <div className="px-4 py-3 flex justify-between items-center">
-            <span className="text-[11px] text-on-surface-variant">Department</span>
-            <span className="text-[11px] font-bold text-on-surface text-right">{data?.department || "Not set"}</span>
+          <div className="px-4 py-3.5 flex justify-between items-center">
+            <span className="text-[11px] text-on-surface-variant flex items-center gap-1.5">
+              <span className="material-symbols-outlined text-[12px] opacity-70">lan</span>
+              Department
+            </span>
+            <span className="text-[11px] font-bold text-on-surface text-right">{data?.department?.name || "Not set"}</span>
           </div>
-          <div className="px-4 py-3 flex justify-between items-center">
-            <span className="text-[11px] text-on-surface-variant">Designation</span>
-            <span className="text-[11px] font-bold text-on-surface text-right">{data?.designation || "Not set"}</span>
+          <div className="px-4 py-3.5 flex justify-between items-center">
+            <span className="text-[11px] text-on-surface-variant flex items-center gap-1.5">
+              <span className="material-symbols-outlined text-[12px] opacity-70">badge</span>
+              Designation
+            </span>
+            <span className="text-[11px] font-bold text-on-surface text-right">{data?.designation?.name || "Not set"}</span>
           </div>
-          <div className="px-4 py-3 flex justify-between items-center">
-            <span className="text-[11px] text-on-surface-variant">Trade</span>
-            <span className="text-[11px] font-bold text-on-surface text-right">{data?.trade || "N/A"}</span>
+          {data?.tradeClassification && (
+            <div className="px-4 py-3.5 flex justify-between items-center">
+              <span className="text-[11px] text-on-surface-variant flex items-center gap-1.5">
+                <span className="material-symbols-outlined text-[12px] opacity-70">construction</span>
+                Trade
+              </span>
+              <span className="text-[11px] font-bold text-on-surface text-right">{data?.tradeClassification.name}</span>
+            </div>
+          )}
+          <div className="px-4 py-3.5 flex justify-between items-center">
+            <span className="text-[11px] text-on-surface-variant flex items-center gap-1.5">
+              <span className="material-symbols-outlined text-[12px] opacity-70">location_on</span>
+              Location
+            </span>
+            <span className="text-[11px] font-bold text-on-surface text-right">
+              {data?.defaultLocation?.name || data?.officeLocation?.name || data?.defaultSite?.name || "Not set"}
+            </span>
           </div>
-          <div className="px-4 py-3 flex justify-between items-center">
-            <span className="text-[11px] text-on-surface-variant">System Role</span>
-            <span className="text-[11px] font-bold text-primary text-right">{data?.role}</span>
-          </div>
+          {data?.immediateSupervisor && (
+            <div className="px-4 py-3.5 flex justify-between items-center">
+              <span className="text-[11px] text-on-surface-variant flex items-center gap-1.5">
+                <span className="material-symbols-outlined text-[12px] opacity-70">supervisor_account</span>
+                Supervisor
+              </span>
+              <span className="text-[11px] font-bold text-primary text-right">{data?.immediateSupervisor.name}</span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -72,10 +188,10 @@ export default function ProfilePage() {
         <span className="text-[11px]">Sign Out Securely</span>
       </button>
 
-      <div className="text-center mt-6">
-        <p className="text-[9px] text-on-surface-variant/40 font-bold uppercase tracking-widest">Al Hattab Holding</p>
-        <p className="text-[9px] text-on-surface-variant/40 italic">"Endless Confidence"</p>
-        <p className="text-[8px] text-on-surface-variant/30 mt-2">App Version 1.0.0 • Mobile Client</p>
+      <div className="text-center mt-6 opacity-60">
+        <p className="text-[9px] text-on-surface-variant font-bold uppercase tracking-widest">{data?.company?.name || "Al Hattab Holding"}</p>
+        <p className="text-[9px] text-on-surface-variant italic">"Endless Confidence"</p>
+        <p className="text-[8px] text-on-surface-variant mt-2">App Version 1.0.0 • Mobile Client</p>
       </div>
     </div>
   );

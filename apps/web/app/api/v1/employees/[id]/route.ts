@@ -38,7 +38,8 @@ export async function PATCH(request: Request, { params }: RouteParams) {
       isRelieverEligible, isStandbyEligible,
       immediateSupervisorId, reportingManagerId, projectSupervisorId, siteSupervisorId,
       isSupervisor, supervisorScopeType,
-      username, authMode, ssoProvider, ssoSubject, isLoginEnabled, mustChangePassword, isLocked
+      username, authMode, ssoProvider, ssoSubject, isLoginEnabled, mustChangePassword, isLocked,
+      profilePhotoUrl
     } = payload;
 
     // Validation checks
@@ -61,6 +62,9 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     }
     if (role !== undefined && role.trim() === "") {
       return NextResponse.json({ error: "Role is required" }, { status: 400 });
+    }
+    if (profilePhotoUrl !== undefined && (auth.session?.user as any)?.role !== "ADMIN") {
+      return NextResponse.json({ error: "Only admins can update profile photo from Web UI" }, { status: 403 });
     }
 
     const updated = await mockDb.updateEmployee(params.id, {
@@ -95,7 +99,8 @@ export async function PATCH(request: Request, { params }: RouteParams) {
       ...(ssoSubject !== undefined ? { ssoSubject: ssoSubject || null } : {}),
       ...(isLoginEnabled !== undefined ? { isLoginEnabled } : {}),
       ...(mustChangePassword !== undefined ? { mustChangePassword } : {}),
-      ...(isLocked !== undefined ? { isLocked } : {})
+      ...(isLocked !== undefined ? { isLocked } : {}),
+      ...(profilePhotoUrl !== undefined ? { profilePhotoUrl: profilePhotoUrl ? profilePhotoUrl.trim() : null } : {})
     } as any);
 
     if (!updated) {

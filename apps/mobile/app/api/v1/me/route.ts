@@ -20,7 +20,8 @@ export async function GET() {
         defaultProject: true,
         defaultSite: true,
         defaultLocation: true,
-        officeLocation: true
+        officeLocation: true,
+        immediateSupervisor: true
       }
     });
 
@@ -30,18 +31,52 @@ export async function GET() {
 
     return NextResponse.json({
       id: employee.id,
+      employeeId: employee.id,
       name: employee.name,
       email: employee.email,
+      phone: employee.phone,
       role: employee.role,
-      company: employee.company?.companyName,
-      companyCode: employee.company?.companyCode,
-      companyId: employee.company?.id,
-      department: employee.departmentRef?.name || employee.department,
-      designation: employee.designation?.name,
-      trade: employee.tradeClassification?.name,
+      profilePhotoUrl: employee.profilePhotoUrl,
+      companyId: employee.companyId,
+      company: employee.company ? {
+        id: employee.company.id,
+        name: employee.company.companyName,
+        code: employee.company.companyCode
+      } : null,
+      departmentId: employee.departmentId,
+      department: employee.departmentRef ? {
+        id: employee.departmentRef.id,
+        name: employee.departmentRef.name
+      } : { name: employee.department },
+      designationId: employee.designationId,
+      designation: employee.designation ? {
+        id: employee.designation.id,
+        name: employee.designation.name,
+        code: employee.designation.code
+      } : null,
+      tradeClassification: employee.tradeClassification ? {
+        id: employee.tradeClassification.id,
+        name: employee.tradeClassification.name
+      } : null,
+      immediateSupervisor: employee.immediateSupervisor ? {
+        id: employee.immediateSupervisor.id,
+        name: employee.immediateSupervisor.name
+      } : null,
+      reportingManagerId: employee.reportingManagerId, // Just keeping ID if needed
       workerCategory: employee.workerCategory,
       dutyStatus: employee.dutyStatus,
-      defaultLocation: employee.officeLocation?.locationName || employee.defaultLocation?.locationName,
+      defaultLocation: employee.defaultLocation ? {
+        id: employee.defaultLocation.id,
+        name: employee.defaultLocation.locationName
+      } : null,
+      defaultSite: employee.defaultSite ? {
+        id: employee.defaultSite.id,
+        name: employee.defaultSite.siteName
+      } : null,
+      officeLocation: employee.officeLocation ? {
+        id: employee.officeLocation.id,
+        name: employee.officeLocation.locationName
+      } : null,
       isSupervisor: employee.role === "SUPERVISOR" || employee.role === "ADMIN",
     });
 
