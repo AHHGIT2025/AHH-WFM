@@ -3,13 +3,14 @@ import { prisma } from "@ahh-wfm/database";
 
 const entityMap: Record<string, keyof typeof prisma> = {
   companies: "company",
+  departments: "department",
   designations: "designation",
-  trades: "tradeClassification",
+  "trade-classifications": "tradeClassification",
   locations: "locationMaster",
   "cost-centers": "costCenter",
   projects: "project",
-  sites: "projectSite",
-  "punch-locations": "allowedPunchLocation",
+  "project-sites": "projectSite",
+  "allowed-punch-locations": "allowedPunchLocation",
   "standby-rules": "relieverStandbyRule",
 };
 
@@ -32,9 +33,9 @@ export async function GET(request: Request, { params }: { params: { entity: stri
 
     // Include relations based on entity
     let includeClause = undefined;
-    if (entity === "sites") includeClause = { project: true, company: true };
+    if (entity === "project-sites") includeClause = { project: true, company: true };
     if (entity === "projects") includeClause = { company: true };
-    if (entity === "punch-locations") includeClause = { company: true };
+    if (entity === "allowed-punch-locations") includeClause = { company: true };
 
     const dbModel: any = prisma[modelName];
     const records = await dbModel.findMany({

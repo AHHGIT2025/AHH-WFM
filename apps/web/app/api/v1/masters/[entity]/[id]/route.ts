@@ -3,13 +3,14 @@ import { prisma } from "@ahh-wfm/database";
 
 const entityMap: Record<string, keyof typeof prisma> = {
   companies: "company",
+  departments: "department",
   designations: "designation",
-  trades: "tradeClassification",
+  "trade-classifications": "tradeClassification",
   locations: "locationMaster",
   "cost-centers": "costCenter",
   projects: "project",
-  sites: "projectSite",
-  "punch-locations": "allowedPunchLocation",
+  "project-sites": "projectSite",
+  "allowed-punch-locations": "allowedPunchLocation",
   "standby-rules": "relieverStandbyRule",
 };
 
@@ -91,4 +92,8 @@ export async function DELETE(request: Request, { params }: { params: { entity: s
     }
     return NextResponse.json({ error: `Failed to delete ${params.entity}` }, { status: 500 });
   }
+}
+
+export async function PATCH(request: Request, context: { params: { entity: string; id: string } }) {
+  return PUT(request, context);
 }

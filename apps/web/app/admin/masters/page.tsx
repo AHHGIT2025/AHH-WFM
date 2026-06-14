@@ -20,7 +20,7 @@ const MASTER_TABS = [
     { key: "isSupervisorPosition", label: "Is Supervisor", type: "boolean" },
     { key: "isRelieverEligible", label: "Reliever Eligible", type: "boolean" }
   ]},
-  { id: "trades", label: "Trade Classifications", icon: Factory, apiPath: "/api/v1/masters/trades", columns: [
+  { id: "trade-classifications", label: "Trade Classifications", icon: Factory, apiPath: "/api/v1/masters/trade-classifications", columns: [
     { key: "code", label: "Code", required: true },
     { key: "name", label: "Trade Name", required: true },
     { key: "description", label: "Description" }
@@ -46,7 +46,7 @@ const MASTER_TABS = [
     { key: "projectType", label: "Type", type: "select", options: [{id:"NORMAL", label:"Normal"}, {id:"ON_CALL", label:"On-Call"}] },
     { key: "locationId", label: "Location", type: "select", optionsApi: "/api/v1/masters/locations", optionLabel: "locationName" }
   ]},
-  { id: "sites", label: "Project Sites", icon: LocateFixed, apiPath: "/api/v1/masters/sites", columns: [
+  { id: "project-sites", label: "Project Sites", icon: LocateFixed, apiPath: "/api/v1/masters/project-sites", columns: [
     { key: "projectId", label: "Project", type: "select", optionsApi: "/api/v1/masters/projects", optionLabel: "projectName", required: true },
     { key: "siteCode", label: "Site Code", required: true },
     { key: "siteName", label: "Site Name", required: true },
@@ -54,7 +54,7 @@ const MASTER_TABS = [
     { key: "longitude", label: "Longitude", type: "number" },
     { key: "geofenceRadiusMeters", label: "Geofence Radius (m)", type: "number" }
   ]},
-  { id: "punch-locations", label: "Allowed Punch Locations", icon: CircleDot, apiPath: "/api/v1/masters/punch-locations", columns: [
+  { id: "allowed-punch-locations", label: "Allowed Punch Locations", icon: CircleDot, apiPath: "/api/v1/masters/allowed-punch-locations", columns: [
     { key: "companyId", label: "Company", type: "select", optionsApi: "/api/v1/masters/companies", optionLabel: "companyName", required: true },
     { key: "name", label: "Location Name", required: true },
     { key: "locationType", label: "Type", type: "select", required: true, options: [{id:"OFFICE", label:"Office"}, {id:"PROJECT_SITE", label:"Project Site"}, {id:"CUSTOM", label:"Custom"}, {id:"ON_CALL", label:"On-Call Client"}] },

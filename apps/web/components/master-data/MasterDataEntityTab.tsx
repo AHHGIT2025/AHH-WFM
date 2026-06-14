@@ -89,7 +89,7 @@ export function MasterDataEntityTab({ config }: { config: TabConfig }) {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     const url = editId ? `${config.apiPath}/${editId}` : config.apiPath;
-    const method = editId ? "PUT" : "POST";
+    const method = editId ? "PATCH" : "POST";
 
     // Transform data based on types
     const payload = { ...formData };
@@ -110,31 +110,36 @@ export function MasterDataEntityTab({ config }: { config: TabConfig }) {
         setIsModalOpen(false);
         fetchData();
       } else {
-        const err = await res.json();
-        alert(err.error || "Failed to save record");
+        const err = await res.json().catch(() => ({}));
+        console.error(`[MasterDataEntityTab] Save failed: ${method} ${url} ${res.status}`, err);
+        alert(`Save failed: ${err.error || res.statusText || "Unknown error"}`);
       }
-    } catch (error) {
-      console.error(error);
-      alert("Network error");
+    } catch (error: any) {
+      console.error(`[MasterDataEntityTab] Network error: ${method} ${url}`, error);
+      alert(`Save failed: Network error - ${error.message}`);
     }
   };
 
   const handleToggleStatus = async (item: any) => {
     if (!confirm(`Are you sure you want to ${item.isActive ? 'deactivate' : 'activate'} this record?`)) return;
     
+    const url = `${config.apiPath}/${item.id}`;
     try {
-      const res = await fetch(`${config.apiPath}/${item.id}`, {
-        method: "PUT",
+      const res = await fetch(url, {
+        method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ isActive: !item.isActive }),
       });
       if (res.ok) {
         fetchData();
       } else {
-        alert("Action failed");
+        const err = await res.json().catch(() => ({}));
+        console.error(`[MasterDataEntityTab] Toggle status failed: PATCH ${url} ${res.status}`, err);
+        alert(`Action failed: ${err.error || res.statusText}`);
       }
-    } catch (e) {
-      alert("Network error");
+    } catch (e: any) {
+      console.error(`[MasterDataEntityTab] Toggle status network error: PATCH ${url}`, e);
+      alert(`Action failed: Network error - ${e.message}`);
     }
   };
 
