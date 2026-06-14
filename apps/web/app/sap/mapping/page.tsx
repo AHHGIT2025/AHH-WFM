@@ -12,7 +12,7 @@ export default function SapMappingPageRedirect() {
 
   return (
     <div className="p-8 text-center text-xs text-on-surface-variant font-mono">
-      Redirecting to SAP SuccessFactors Integration Hub mapping console...
+      Redirecting to ERP Field Mapping console...
     </div>
   );
 }

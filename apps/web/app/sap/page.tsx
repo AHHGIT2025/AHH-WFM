@@ -356,7 +356,7 @@ export default function SapIntegrationHub() {
       {/* Page Title & Tab Selector */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-primary">SAP SuccessFactors Integration Hub</h1>
+          <h1 className="text-2xl font-bold text-primary">Integration Hub</h1>
           <p className="text-sm text-on-surface-variant">Manage inbound master data sync, schema field transformations, and logs</p>
         </div>
         <div className="flex bg-surface-container border border-outline-variant p-0.5 rounded-lg text-xs font-bold gap-1">
@@ -728,7 +728,7 @@ export default function SapIntegrationHub() {
           <div className="p-4 border-b border-border-subtle bg-surface-container-low flex justify-between items-center">
             <div className="flex items-center gap-2">
               <span className="material-symbols-outlined text-primary">warning</span>
-              <h3 className="text-xs font-bold uppercase text-primary font-bold">SAP Retry Queue & Dead-Letter Logs</h3>
+              <h3 className="text-xs font-bold uppercase text-primary font-bold">ERP Retry Queue & Dead-Letter Logs</h3>
             </div>
             <Button
               size="sm"
@@ -1065,7 +1065,7 @@ export default function SapIntegrationHub() {
           <Card className="p-0 overflow-hidden">
             <div className="p-4 border-b border-border-subtle bg-surface-container-low flex items-center gap-2">
               <span className="material-symbols-outlined text-primary">difference</span>
-              <h3 className="text-xs font-bold uppercase text-primary font-bold">WFM vs SAP Reconciliation Audit Logs</h3>
+              <h3 className="text-xs font-bold uppercase text-primary font-bold">WFM vs ERP Reconciliation Audit Logs</h3>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left">
