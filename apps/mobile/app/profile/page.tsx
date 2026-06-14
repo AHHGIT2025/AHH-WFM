@@ -104,20 +104,13 @@ export default function ProfilePage() {
           <h2 className="text-xl font-bold text-on-surface leading-tight">{data?.name}</h2>
           
           {/* Primary Chip is now Designation / Role */}
-          <span className="inline-block mt-2 bg-primary text-on-primary text-[10px] font-bold px-3 py-1.5 rounded-full uppercase tracking-wide shadow-sm">
+          <span className="inline-block mt-2 bg-primary text-white text-[10px] font-bold px-3 py-1.5 rounded-full uppercase tracking-wide shadow-sm">
             {primaryTitle}
           </span>
           
           <p className="text-[11px] text-on-surface-variant font-medium mt-3">{data?.email}</p>
           {data?.phone && (
             <p className="text-[11px] text-on-surface-variant font-medium">{data?.phone}</p>
-          )}
-          
-          {/* Worker Category is demoted to a secondary row display if needed, but not as the primary chip. */}
-          {data?.workerCategory && (
-            <p className="text-[10px] text-on-surface-variant/70 mt-1">
-              Worker Type: {data.workerCategory.replace('_', ' ')}
-            </p>
           )}
         </div>
       </div>
