@@ -35,7 +35,10 @@ export async function PATCH(request: Request, { params }: RouteParams) {
       employmentStatus, dutyStatus, workerCategory, 
       positionCategoryId, defaultProjectId, defaultSiteId,
       designationId, tradeClassificationId, costCenterId, defaultLocationId,
-      isRelieverEligible, isStandbyEligible
+      isRelieverEligible, isStandbyEligible,
+      immediateSupervisorId, reportingManagerId, projectSupervisorId, siteSupervisorId,
+      isSupervisor, supervisorScopeType,
+      username, authMode, ssoProvider, ssoSubject, isLoginEnabled, mustChangePassword, isLocked
     } = payload;
 
     // Validation checks
@@ -79,7 +82,20 @@ export async function PATCH(request: Request, { params }: RouteParams) {
       ...(costCenterId !== undefined ? { costCenterId: costCenterId || null } : {}),
       ...(defaultLocationId !== undefined ? { defaultLocationId: defaultLocationId || null } : {}),
       ...(isRelieverEligible !== undefined ? { isRelieverEligible } : {}),
-      ...(isStandbyEligible !== undefined ? { isStandbyEligible } : {})
+      ...(isStandbyEligible !== undefined ? { isStandbyEligible } : {}),
+      ...(immediateSupervisorId !== undefined ? { immediateSupervisorId: immediateSupervisorId || null } : {}),
+      ...(reportingManagerId !== undefined ? { reportingManagerId: reportingManagerId || null } : {}),
+      ...(projectSupervisorId !== undefined ? { projectSupervisorId: projectSupervisorId || null } : {}),
+      ...(siteSupervisorId !== undefined ? { siteSupervisorId: siteSupervisorId || null } : {}),
+      ...(isSupervisor !== undefined ? { isSupervisor } : {}),
+      ...(supervisorScopeType !== undefined ? { supervisorScopeType } : {}),
+      ...(username !== undefined ? { username: username ? username.trim() : null } : {}),
+      ...(authMode !== undefined ? { authMode } : {}),
+      ...(ssoProvider !== undefined ? { ssoProvider: ssoProvider || null } : {}),
+      ...(ssoSubject !== undefined ? { ssoSubject: ssoSubject || null } : {}),
+      ...(isLoginEnabled !== undefined ? { isLoginEnabled } : {}),
+      ...(mustChangePassword !== undefined ? { mustChangePassword } : {}),
+      ...(isLocked !== undefined ? { isLocked } : {})
     } as any);
 
     if (!updated) {

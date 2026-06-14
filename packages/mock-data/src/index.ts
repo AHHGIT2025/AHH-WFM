@@ -3076,7 +3076,12 @@ export const mockDb = {
       isActive: empData.isActive !== undefined ? empData.isActive : true,
       employmentStatus: empData.employmentStatus || "ACTIVE",
       dutyStatus: empData.dutyStatus || "OFF_DUTY",
-      workerCategory: empData.workerCategory || "WHITE_COLLAR"
+      workerCategory: empData.workerCategory || "WHITE_COLLAR",
+      authMode: empData.authMode || "LOCAL",
+      isLoginEnabled: empData.isLoginEnabled !== undefined ? empData.isLoginEnabled : true,
+      mustChangePassword: empData.mustChangePassword || false,
+      isLocked: empData.isLocked || false,
+      failedLoginAttempts: empData.failedLoginAttempts || 0
     };
 
     if (isDbConnected()) {

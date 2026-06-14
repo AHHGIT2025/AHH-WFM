@@ -66,6 +66,12 @@ export default function WorkforcePage() {
   const [empDefaultLocationId, setEmpDefaultLocationId] = useState("");
   const [empIsRelieverEligible, setEmpIsRelieverEligible] = useState(false);
   const [empIsStandbyEligible, setEmpIsStandbyEligible] = useState(false);
+    const [empImmediateSupervisorId, setEmpImmediateSupervisorId] = useState("");
+  const [empReportingManagerId, setEmpReportingManagerId] = useState("");
+  const [empProjectSupervisorId, setEmpProjectSupervisorId] = useState("");
+  const [empSiteSupervisorId, setEmpSiteSupervisorId] = useState("");
+  const [empIsSupervisor, setEmpIsSupervisor] = useState(false);
+  const [empSupervisorScopeType, setEmpSupervisorScopeType] = useState("DIRECT_REPORTS");
   const [formSites, setFormSites] = useState<any[]>([]);
   const [deployments, setDeployments] = useState<any[]>([]);
 
@@ -84,6 +90,18 @@ export default function WorkforcePage() {
 
   // Validation errors state
   const [validationError, setValidationError] = useState<string | null>(null);
+
+  
+  const handleResetFilters = () => {
+    setSearch("");
+    setDeptFilter("all");
+    setStatusFilter("all");
+    setCategoryFilter("all");
+    setPositionCategoryFilter("all");
+    setProjectFilter("all");
+    setSiteFilter("all");
+    fetchDb();
+  };
 
   const fetchDeployments = async () => {
     try {
@@ -238,7 +256,14 @@ export default function WorkforcePage() {
           costCenterId: empCostCenterId || undefined,
           defaultLocationId: empDefaultLocationId || undefined,
           isRelieverEligible: empIsRelieverEligible,
-          isStandbyEligible: empIsStandbyEligible
+          isStandbyEligible: empIsStandbyEligible,
+          immediateSupervisorId: empImmediateSupervisorId || null,
+          reportingManagerId: empReportingManagerId || null,
+          projectSupervisorId: empProjectSupervisorId || null,
+          siteSupervisorId: empSiteSupervisorId || null,
+          isSupervisor: empIsSupervisor,
+          supervisorScopeType: empSupervisorScopeType,
+
         })
       });
 
@@ -264,6 +289,12 @@ export default function WorkforcePage() {
         setEmpCostCenterId("");
         setEmpDefaultLocationId("");
         setEmpIsRelieverEligible(false);
+        setEmpImmediateSupervisorId("");
+        setEmpReportingManagerId("");
+        setEmpProjectSupervisorId("");
+        setEmpSiteSupervisorId("");
+        setEmpIsSupervisor(false);
+        setEmpSupervisorScopeType("DIRECT_REPORTS");
         setEmpIsStandbyEligible(false);
         setEmpDefaultPunchLocationId("");
         setEmpAllowMultiplePunchLocations(false);
@@ -311,7 +342,13 @@ export default function WorkforcePage() {
           costCenterId: empCostCenterId || null,
           defaultLocationId: empDefaultLocationId || null,
           isRelieverEligible: empIsRelieverEligible,
-          isStandbyEligible: empIsStandbyEligible
+          isStandbyEligible: empIsStandbyEligible,
+          immediateSupervisorId: empImmediateSupervisorId || null,
+          reportingManagerId: empReportingManagerId || null,
+          projectSupervisorId: empProjectSupervisorId || null,
+          siteSupervisorId: empSiteSupervisorId || null,
+          isSupervisor: empIsSupervisor,
+          supervisorScopeType: empSupervisorScopeType
         })
       });
 
@@ -459,6 +496,12 @@ export default function WorkforcePage() {
     setEmpCostCenterId((emp as any).costCenterId || "");
     setEmpDefaultLocationId((emp as any).defaultLocationId || "");
     setEmpIsRelieverEligible(!!(emp as any).isRelieverEligible);
+    setEmpImmediateSupervisorId((emp as any).immediateSupervisorId || "");
+    setEmpReportingManagerId((emp as any).reportingManagerId || "");
+    setEmpProjectSupervisorId((emp as any).projectSupervisorId || "");
+    setEmpSiteSupervisorId((emp as any).siteSupervisorId || "");
+    setEmpIsSupervisor(!!(emp as any).isSupervisor);
+    setEmpSupervisorScopeType((emp as any).supervisorScopeType || "DIRECT_REPORTS");
     setEmpIsStandbyEligible(!!(emp as any).isStandbyEligible);
     setEmpDefaultPunchLocationId((emp as any).defaultPunchLocationId || "");
     setEmpAllowMultiplePunchLocations(!!(emp as any).allowMultiplePunchLocations);
@@ -735,6 +778,14 @@ export default function WorkforcePage() {
               </select>
             </>
           )}
+          <Button 
+            variant="secondary" 
+            onClick={handleResetFilters}
+            className="flex items-center gap-1.5 text-xs bg-surface border border-outline-variant"
+          >
+            <span className="material-symbols-outlined text-[16px] text-on-surface-variant">filter_alt_off</span>
+            Reset Filters
+          </Button>
         </div>
       </Card>
 
@@ -1140,6 +1191,95 @@ export default function WorkforcePage() {
             </div>
           )}
 
+
+          {/* Supervisor Hierarchy Settings */}
+          <div className="p-4 bg-primary/5 border border-primary/10 rounded-xl space-y-3 mt-4">
+            <p className="text-[10px] font-bold text-primary uppercase tracking-wider">Supervisor & Hierarchy</p>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Immediate Supervisor (White Collar)</label>
+                <select
+                  className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                  value={empImmediateSupervisorId}
+                  onChange={(e) => setEmpImmediateSupervisorId(e.target.value)}
+                >
+                  <option value="">Select Supervisor</option>
+                  {employees.filter(e => e.id !== selectedEmp?.id).map((e) => (
+                    <option key={e.id} value={e.id}>{e.name} ({e.id})</option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1">
+                <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Reporting Manager</label>
+                <select
+                  className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                  value={empReportingManagerId}
+                  onChange={(e) => setEmpReportingManagerId(e.target.value)}
+                >
+                  <option value="">Select Manager</option>
+                  {employees.filter(e => e.id !== selectedEmp?.id).map((e) => (
+                    <option key={e.id} value={e.id}>{e.name} ({e.id})</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            {empWorkerCategory === "BLUE_COLLAR" && (
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Project Supervisor</label>
+                  <select
+                    className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                    value={empProjectSupervisorId}
+                    onChange={(e) => setEmpProjectSupervisorId(e.target.value)}
+                  >
+                    <option value="">Select Supervisor</option>
+                    {employees.filter(e => e.id !== selectedEmp?.id).map((e) => (
+                      <option key={e.id} value={e.id}>{e.name} ({e.id})</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Site Supervisor</label>
+                  <select
+                    className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                    value={empSiteSupervisorId}
+                    onChange={(e) => setEmpSiteSupervisorId(e.target.value)}
+                  >
+                    <option value="">Select Supervisor</option>
+                    {employees.filter(e => e.id !== selectedEmp?.id).map((e) => (
+                      <option key={e.id} value={e.id}>{e.name} ({e.id})</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            )}
+            <div className="flex items-center gap-6 pt-2">
+              <label className="flex items-center gap-2 text-xs font-bold text-on-surface cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={empIsSupervisor}
+                  onChange={(e) => setEmpIsSupervisor(e.target.checked)}
+                  className="w-4 h-4 rounded border-outline-variant text-primary focus:ring-0"
+                />
+                Is Supervisor
+              </label>
+              {empIsSupervisor && (
+                <div className="flex items-center gap-2">
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Scope Type:</label>
+                  <select
+                    className="bg-surface-container-low border border-outline-variant rounded-lg px-2 text-xs py-1"
+                    value={empSupervisorScopeType}
+                    onChange={(e) => setEmpSupervisorScopeType(e.target.value)}
+                  >
+                    <option value="DIRECT_REPORTS">Direct Reports Only</option>
+                    <option value="DEPARTMENT">Department Level</option>
+                    <option value="PROJECT">Project Level</option>
+                    <option value="SITE">Site Level</option>
+                  </select>
+                </div>
+              )}
+            </div>
+          </div>
           {/* Location & Cost Center Settings */}
           <div className="p-4 bg-primary/5 border border-primary/10 rounded-xl space-y-3">
             <p className="text-[10px] font-bold text-primary uppercase tracking-wider">Location & Allocation Settings</p>

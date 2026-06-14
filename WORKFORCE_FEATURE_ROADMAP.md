@@ -323,3 +323,23 @@ This document outlines the evolutionary development roadmap for the **AHH WFM** 
 ### 8.5 Master Data Profile Persistence (Hotfix)
 *   **Business Purpose**: Ensure location assignments, cost center linkage, and advanced scheduling flags consistently persist across the `/admin/workforce` modal and the unified `/api/v1/employees` endpoint.
 *   **Estimated Implementation Effort**: Completed
+
+---
+
+## Phase 9: Supervisor Hierarchy & User Accounts (Completed)
+
+### 9.1 User Account Management
+*   **Business Purpose**: Manage auth modes, lockouts, and forced password resets.
+*   **UI Screens Affected**:
+    *   Web: /admin/users, /change-password
+*   **Estimated Implementation Effort**: Completed
+
+### 9.2 Supervisor Hierarchy Scoping
+*   **Business Purpose**: Restrict data access via strict boundaries (DIRECT_REPORTS, PROJECT, SITE, DEPARTMENT).
+*   **Estimated Implementation Effort**: Completed
+
+### 9.3 Mobile Supervisor Action Dashboard
+*   **Business Purpose**: Expose live attendance metrics and inline leave approval.
+*   **UI Screens Affected**:
+    *   Mobile: /supervisor
+*   **Estimated Implementation Effort**: Completed

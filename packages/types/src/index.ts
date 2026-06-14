@@ -30,6 +30,21 @@ export interface Employee {
   defaultLocationId?: string;
   isRelieverEligible?: boolean;
   isStandbyEligible?: boolean;
+  
+  // Phase 9: Auth & Supervisor Fields
+  username?: string;
+  authMode?: "LOCAL" | "SSO" | "LOCAL_AND_SSO" | string;
+  isLoginEnabled?: boolean;
+  isLocked?: boolean;
+  failedLoginAttempts?: number;
+  mustChangePassword?: boolean;
+  passwordUpdatedAt?: string;
+  immediateSupervisorId?: string;
+  reportingManagerId?: string;
+  projectSupervisorId?: string;
+  siteSupervisorId?: string;
+  isSupervisor?: boolean;
+  supervisorScopeType?: "DIRECT_REPORTS" | "PROJECT" | "SITE" | "DEPARTMENT" | string;
 }
 
 export interface Worksite {

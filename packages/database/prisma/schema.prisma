@@ -63,6 +63,30 @@ model Employee {
 
   allowedPunchLocations EmployeeAllowedPunchLocation[]
   onCallAssignments     OnCallAssignment[]
+
+  // --- Supervisor Hierarchy ---
+  immediateSupervisorId String?
+  immediateSupervisor   Employee?  @relation("ImmediateSupervisor", fields: [immediateSupervisorId], references: [id])
+  subordinates          Employee[] @relation("ImmediateSupervisor")
+  
+  reportingManagerId    String?
+  projectSupervisorId   String?
+  siteSupervisorId      String?
+  isSupervisor          Boolean    @default(false)
+  supervisorScopeType   String     @default("DIRECT_REPORTS") // DIRECT_REPORTS, DEPARTMENT, COMPANY, PROJECT, SITE, CUSTOM
+  
+  // --- User Account & Auth (Instead of separate UserAccount table) ---
+  // TODO: Consider migrating these fields to a dedicated UserAccount table in the future
+  username              String?    @unique
+  authMode              String     @default("LOCAL") // LOCAL, SSO, LOCAL_AND_SSO
+  ssoProvider           String?
+  ssoSubject            String?
+  isLoginEnabled        Boolean    @default(true)
+  mustChangePassword    Boolean    @default(false)
+  isLocked              Boolean    @default(false)
+  failedLoginAttempts   Int        @default(0)
+  lastLoginAt           DateTime?
+  passwordUpdatedAt     DateTime?
 }
 
 model Department {

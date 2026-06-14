@@ -29,23 +29,64 @@ export const authOptions: NextAuthOptions = {
 
         try {
           const employees = await mockDb.getEmployees();
+          // We support login by either email or username
           const employee = employees.find(
-            (e) => e.email.toLowerCase() === credentials.email.toLowerCase()
+            (e) => e.email.toLowerCase() === credentials.email.toLowerCase() || 
+                   (e.username && e.username.toLowerCase() === credentials.email.toLowerCase())
           );
 
-          if (employee && employee.passwordHash) {
-            const isPasswordValid = bcrypt.compareSync(credentials.password, employee.passwordHash);
-            if (isPasswordValid) {
-              return {
-                id: employee.id,
-                name: employee.name,
-                email: employee.email,
-                role: employee.role,
-              };
+          if (employee) {
+            // Check if login is enabled
+            if (employee.isLoginEnabled === false) {
+              throw new Error("Account is disabled. Contact administrator.");
+            }
+            
+            // Check if locked
+            if (employee.isLocked) {
+              throw new Error("Account is locked due to too many failed attempts.");
+            }
+
+            // Check auth mode (LOCAL or LOCAL_AND_SSO only)
+            if (employee.authMode === "SSO") {
+              throw new Error("Local login is disabled for this account. Please use SSO.");
+            }
+
+            if (employee.passwordHash) {
+              const isPasswordValid = bcrypt.compareSync(credentials.password, employee.passwordHash);
+              if (isPasswordValid) {
+                // Reset failed attempts and set last login
+                await mockDb.updateEmployee(employee.id, {
+                  failedLoginAttempts: 0,
+                  lastLoginAt: new Date()
+                } as any);
+
+                return {
+                  id: employee.id,
+                  name: employee.name,
+                  email: employee.email,
+                  role: employee.role,
+                  mustChangePassword: employee.mustChangePassword
+                } as any;
+              }
+            }
+
+            // If we reach here, password was invalid. Increment failed login attempts.
+            const newFailCount = (employee.failedLoginAttempts || 0) + 1;
+            const isNowLocked = newFailCount >= 5;
+            await mockDb.updateEmployee(employee.id, {
+              failedLoginAttempts: newFailCount,
+              isLocked: isNowLocked
+            } as any);
+            
+            if (isNowLocked) {
+              throw new Error("Account locked due to too many failed attempts.");
+            } else {
+              throw new Error("Invalid credentials");
             }
           }
-        } catch (e) {
+        } catch (e: any) {
           console.error("Authorize error", e);
+          throw new Error(e.message || "Invalid credentials");
         }
         return null;
       }
@@ -56,6 +97,7 @@ export const authOptions: NextAuthOptions = {
       if (user) {
         token.role = (user as any).role || "EMPLOYEE";
         token.id = user.id;
+        token.mustChangePassword = (user as any).mustChangePassword || false;
       } else if (token.email && !token.role) {
         try {
           const employees = await mockDb.getEmployees();
@@ -65,6 +107,7 @@ export const authOptions: NextAuthOptions = {
           if (employee) {
             token.role = employee.role;
             token.id = employee.id;
+            token.mustChangePassword = employee.mustChangePassword || false;
           } else {
             token.role = "EMPLOYEE";
           }
@@ -78,6 +121,7 @@ export const authOptions: NextAuthOptions = {
       if (session.user) {
         (session.user as any).role = token.role;
         (session.user as any).id = token.id;
+        (session.user as any).mustChangePassword = token.mustChangePassword;
       }
       return session;
     }

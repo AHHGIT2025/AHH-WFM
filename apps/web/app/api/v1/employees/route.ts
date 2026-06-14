@@ -24,7 +24,10 @@ export async function POST(request: Request) {
       id, name, email, role, departmentId, phone, shiftId, password, 
       employmentStatus, dutyStatus, workerCategory, positionCategoryId, 
       defaultProjectId, defaultSiteId, designationId, tradeClassificationId, 
-      costCenterId, defaultLocationId, isRelieverEligible, isStandbyEligible 
+      costCenterId, defaultLocationId, isRelieverEligible, isStandbyEligible,
+      immediateSupervisorId, reportingManagerId, projectSupervisorId, siteSupervisorId,
+      isSupervisor, supervisorScopeType,
+      username, authMode, ssoProvider, ssoSubject, isLoginEnabled, mustChangePassword, isLocked
     } = payload;
 
     // 1. Validation
@@ -54,6 +57,12 @@ export async function POST(request: Request) {
     if (employees.some(e => e.email.toLowerCase() === email.trim().toLowerCase())) {
       return NextResponse.json({ error: "Employee email already exists" }, { status: 400 });
     }
+    // 4. Prevent duplicate Username (if local login)
+    if (username && username.trim() !== "") {
+      if (employees.some(e => e.username && e.username.toLowerCase() === username.trim().toLowerCase())) {
+        return NextResponse.json({ error: "Username already exists" }, { status: 400 });
+      }
+    }
 
     const newEmp = await mockDb.createEmployee({
       id: id.trim(),
@@ -78,7 +87,21 @@ export async function POST(request: Request) {
       costCenterId: costCenterId || undefined,
       defaultLocationId: defaultLocationId || undefined,
       isRelieverEligible: isRelieverEligible || false,
-      isStandbyEligible: isStandbyEligible || false
+      isStandbyEligible: isStandbyEligible || false,
+      immediateSupervisorId: immediateSupervisorId || undefined,
+      reportingManagerId: reportingManagerId || undefined,
+      projectSupervisorId: projectSupervisorId || undefined,
+      siteSupervisorId: siteSupervisorId || undefined,
+      isSupervisor: isSupervisor || false,
+      supervisorScopeType: supervisorScopeType || "DIRECT_REPORTS",
+      username: username ? username.trim() : undefined,
+      authMode: authMode || "LOCAL",
+      ssoProvider: ssoProvider || undefined,
+      ssoSubject: ssoSubject || undefined,
+      isLoginEnabled: isLoginEnabled !== undefined ? isLoginEnabled : true,
+      mustChangePassword: mustChangePassword || false,
+      isLocked: isLocked || false,
+      failedLoginAttempts: 0
     } as any);
 
     return NextResponse.json(newEmp);

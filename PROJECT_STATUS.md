@@ -123,6 +123,13 @@ AHH WFM is a full-stack, enterprise-grade workforce management application built
 - **Mobile PWA Integration**: Verified seamless flow of data where web-created projects, sites, custom allowed punch locations, and deployments dynamically feed into the Mobile BFF and correctly enforce geofence priorities.
 - **Flexible Employee Punch Policies**: Added granular overrides per employee (Default Punch Location, Multiple Allowances, Office/Site/On-Call Flags, Radius Overrides, and Out-of-Zone permissions) managed from the Workforce UI.
 
-- **Current Focus:** Regression Bugfix (Employee Profile Master Data Form Persistence)
-- **Latest Checkpoint:** `v0.16-flexible-employee-punch-location-policies` + `employee-persistence-hotfix`
-- **Next Phase:** Final Integration Validation & Release Stabilization
+### Phase 9: Supervisor Hierarchy & User Accounts
+- **Account Management Dashboard**: Centralized `/admin/users` UI to manage auth modes (LOCAL, SSO, LOCAL_AND_SSO), enforce account locks, view failed attempts, and force password resets.
+- **Enforced Password Cycle**: Implementation of the `mustChangePassword` flag intercepting logins to force a `/change-password` redirection.
+- **Multi-tiered Supervisor Scoping**: Backend scoping algorithms sorting managers into DIRECT_REPORTS, PROJECT, SITE, and DEPARTMENT categories.
+- **Mobile Supervisor UI Uplift**: Dashboard now aggregates live attendance figures utilizing direct server-side team scopes. Adds inline leave approvals directly within the mobile layout.
+- **Universal Filters Reset**: Global UI action to instantly revert complex multi-select filtering states across admin data grids.
+
+- **Current Focus:** Final Integration Validation & Release Stabilization
+- **Latest Checkpoint:** `v0.17-supervisor-scoping-and-auth`
+- **Next Phase:** N/A (Project Wrap-Up)
