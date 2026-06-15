@@ -20,6 +20,7 @@ const navItems: NavItem[] = [
   { label: "Workforce Directory", path: "/workforce", icon: "group" },
   { label: "Attendance Monitor", path: "/attendance", icon: "fact_check" },
   { label: "Leave Management", path: "/leave", icon: "event_busy" },
+  { label: "Clearance Management", path: "/clearance", icon: "task" },
   { label: "Reports Hub", path: "/reports", icon: "analytics" },
   { label: "Integration Hub", path: "/sap", icon: "hub" },
   { label: "Shift Master", path: "/shifts", icon: "schedule" },

@@ -89,6 +89,9 @@ model Employee {
   failedLoginAttempts   Int        @default(0)
   lastLoginAt           DateTime?
   passwordUpdatedAt     DateTime?
+
+  clearanceRequests     ClearanceRequest[] @relation("EmployeeClearance")
+  clearanceApprovals    ClearanceApprovalStep[] @relation("Approver")
 }
 
 model Department {
@@ -880,6 +883,7 @@ model Company {
   shiftAssignments      ShiftAssignment[]
   attendanceRecords     AttendanceRecord[] @relation("CompanyAttendance")
   onCallAssignments     OnCallAssignment[]
+  clearanceRequests     ClearanceRequest[]
 }
 
 model CompanyAttendancePolicy {
@@ -956,4 +960,142 @@ model OnCallAssignment {
   updatedAt              DateTime             @updatedAt
 
   attendanceRecords      AttendanceRecord[] @relation("OnCallAttendance")
+}
+
+model ClearanceRequest {
+  id                    String                  @id @default(uuid())
+  clearanceNumber       String                  @unique
+  formCode              String?                 // e.g. "26-12-2020"
+  issueRef              String?                 // e.g. "FM-14-04-02"
+  issueDate             String?                 // e.g. "26th DEC, 2020"
+  companyId             String?
+  company               Company?                @relation(fields: [companyId], references: [id])
+  employeeId            String
+  employee              Employee                @relation("EmployeeClearance", fields: [employeeId], references: [id], onDelete: Cascade)
+  clearanceType         String                  // "LEAVE_VACATION" | "SEPARATION"
+  separationType        String?                 // "RESIGNATION" | "TERMINATION" | "END_OF_CONTRACT" | "FINAL_EXIT" | "OTHER"
+  linkedLeaveRequestId  String?                 // Reference to LeaveRequest if spawned from leave
+  requestedById         String                  // User ID who created it (HR/Admin)
+  requestDate           DateTime                @default(now())
+  
+  // Snapshots
+  dateOfJoiningSnapshot String?
+  employeeCodeSnapshot  String?
+  employeeNameSnapshot  String?
+  designationSnapshot   String?
+  workingForSnapshot    String?
+  qidNumberSnapshot     String?
+  qidExpiryDateSnapshot String?
+  
+  // Dates
+  departureDate         DateTime?
+  returningDate         DateTime?
+  lastWorkingDate       DateTime?
+  expectedReturnDate    DateTime?
+  
+  typeOfProcess         String?                 // Copied from form field
+  employeeRemarks       String?                 @db.Text
+  
+  // Employee Signature
+  employeeSignedAt      DateTime?
+  employeeSignatureName String?
+  employeeSignatureData String?                 @db.Text // Optional drawn signature base64
+  
+  status                String                  @default("DRAFT") // DRAFT, SUBMITTED, PENDING_EMPLOYEE_SIGNATURE, IN_PROGRESS, PENDING_APPROVAL, APPROVED, REJECTED, RETURNED_FOR_CORRECTION, CANCELLED, COMPLETED
+  currentStepOrder      Int                     @default(0)
+  finalApprovedAt       DateTime?
+  completedAt           DateTime?
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
+
+  approvalSteps         ClearanceApprovalStep[]
+  history               ClearanceHistory[]
+}
+
+model ClearanceTemplate {
+  id                    String                     @id @default(uuid())
+  name                  String                     @unique // e.g., "Leave / Vacation Clearance", "Separation Clearance"
+  clearanceType         String                     // "LEAVE_VACATION" | "SEPARATION"
+  description           String?                    @db.Text
+  isActive              Boolean                    @default(true)
+  createdAt             DateTime                   @default(now())
+  updatedAt             DateTime                   @updatedAt
+  
+  sections              ClearanceTemplateSection[]
+}
+
+model ClearanceTemplateSection {
+  id                    String                     @id @default(uuid())
+  templateId            String
+  template              ClearanceTemplate          @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  sectionName           String                     // e.g. "Direct Supervisor", "Finance Department"
+  stepOrder             Int
+  defaultApproverId     String?                    // Optional specific user ID
+  defaultApproverRole   String?                    // Optional specific role string fallback
+  isExecutive           Boolean                    @default(false)
+  isRequiredByDefault   Boolean                    @default(true)
+  conditionalRule       String?                    // e.g. "HAS_IT_ASSETS", "HAS_ACCOMMODATION"
+  createdAt             DateTime                   @default(now())
+  updatedAt             DateTime                   @updatedAt
+
+  checklistItems        ClearanceChecklistItem[]
+}
+
+model ClearanceChecklistItem {
+  id                    String                     @id @default(uuid())
+  sectionId             String
+  section               ClearanceTemplateSection   @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  itemText              String                     @db.Text
+  isRequired            Boolean                    @default(true)
+  createdAt             DateTime                   @default(now())
+  updatedAt             DateTime                   @updatedAt
+}
+
+model ClearanceApprovalStep {
+  id                    String                     @id @default(uuid())
+  clearanceRequestId    String
+  clearanceRequest      ClearanceRequest           @relation(fields: [clearanceRequestId], references: [id], onDelete: Cascade)
+  stepOrder             Int
+  sectionName           String                     // e.g. "Finance Department"
+  isApplicable          Boolean                    @default(true)
+  notApplicableReason   String?                    @db.Text
+  status                String                     @default("PENDING") // PENDING, APPROVED, REJECTED, RETURNED, SKIPPED, NOT_APPLICABLE
+  
+  // Routing
+  assignedApproverId    String?                    // HR override or default template approver or dynamically resolved supervisor
+  assignedApprover      Employee?                  @relation("Approver", fields: [assignedApproverId], references: [id])
+  fallbackRole          String?                    // if no explicit approver
+  
+  // Execution
+  notes                 String?                    @db.Text
+  remarks               String?                    @db.Text
+  signatureName         String?
+  signatureDate         DateTime?
+  actedAt               DateTime?
+  actedById             String?                    // The actual user who took the action
+  
+  createdAt             DateTime                   @default(now())
+  updatedAt             DateTime                   @updatedAt
+
+  responses             ClearanceApprovalResponse[]
+}
+
+model ClearanceApprovalResponse {
+  id                    String                     @id @default(uuid())
+  stepId                String
+  step                  ClearanceApprovalStep      @relation(fields: [stepId], references: [id], onDelete: Cascade)
+  actionType            String                     // "APPROVE", "REJECT", "RETURN", "MARK_NOT_APPLICABLE", "REASSIGN"
+  actorId               String                     // User ID who performed the action
+  remarks               String?                    @db.Text
+  createdAt             DateTime                   @default(now())
+}
+
+model ClearanceHistory {
+  id                    String                     @id @default(uuid())
+  clearanceRequestId    String
+  clearanceRequest      ClearanceRequest           @relation(fields: [clearanceRequestId], references: [id], onDelete: Cascade)
+  actorId               String                     // User ID who performed the action
+  actionType            String                     // "CREATED", "SUBMITTED", "SIGNED", "APPROVED", "REJECTED", "RETURNED", "OVERRIDE_APPLICABILITY", "COMPLETED"
+  details               String                     @db.Text
+  createdAt             DateTime                   @default(now())
 }
