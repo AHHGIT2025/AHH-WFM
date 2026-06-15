@@ -1,4 +1,4 @@
-import { Employee, AttendanceRecord, Shift, LeaveRequest, SapMapping, SyncLog, Announcement, Department, Worksite, AttendanceCorrection, LeaveType, LeaveBalance, LeaveBalanceLedger, Holiday, LeaveApprovalWorkflow, LeaveApprovalStep, LeaveApprovalHistory, LeaveApprovalDelegation, ShiftTemplate, RotationTemplate, ShiftAssignment, ShiftSwapRequest, OvertimeRate, SapConnection, SapSyncJob, SapSyncLog, SapFieldMapping, SapRetryQueue, SapExportQueue, SapPayrollStage, SapReconciliationLog, SapPayrollPeriodLock, SavedReport, ReportExportLog, UserActivityLog, ProductionCheckLog, BackupJob, BackupAuditLog, EmployeeBulkUploadJob, SystemRole, SystemPermission, RolePermission, UserRoleAssignment, BlueCollarPositionCategory, Project, ProjectSite, EmployeeDeployment, Designation, TradeClassification, LocationMaster, CostCenter, ShiftRelieverAssignment, RelieverStandbyRule, Company } from "@ahh-wfm/types";
+import { Employee, AttendanceRecord, Shift, LeaveRequest, SapMapping, SyncLog, Announcement, Department, Worksite, AttendanceCorrection, LeaveType, LeaveBalance, LeaveBalanceLedger, Holiday, LeaveApprovalWorkflow, LeaveApprovalStep, LeaveApprovalHistory, LeaveApprovalDelegation, ShiftTemplate, RotationTemplate, ShiftAssignment, ShiftSwapRequest, OvertimeRate, SapConnection, SapSyncJob, SapSyncLog, SapFieldMapping, SapRetryQueue, SapExportQueue, SapPayrollStage, SapReconciliationLog, SapPayrollPeriodLock, SavedReport, ReportExportLog, UserActivityLog, ProductionCheckLog, BackupJob, BackupAuditLog, EmployeeBulkUploadJob, SystemRole, SystemPermission, RolePermission, UserRoleAssignment, BlueCollarPositionCategory, Project, ProjectSite, EmployeeDeployment, Designation, TradeClassification, LocationMaster, CostCenter, ShiftRelieverAssignment, RelieverStandbyRule, Company, AllowedPunchLocation, EmployeeAllowedPunchLocation } from "@ahh-wfm/types";
 import * as fs from "fs";
 import * as path from "path";
 import * as bcrypt from "bcryptjs";
@@ -8,7 +8,7 @@ const defaultHash = bcrypt.hashSync("Password123!", 10);
 
 // Initialize Prisma dynamically if DATABASE_URL is available
 let prismaClient: any = null;
-const isDbConnected = () => {
+export const isDbConnected = () => {
   if (typeof window !== "undefined") return false;
   if (!process.env.DATABASE_URL) return false;
   
@@ -129,6 +129,8 @@ let memoryDb: {
   costCenters: CostCenter[];
   shiftRelieverAssignments: ShiftRelieverAssignment[];
   relieverStandbyRules: RelieverStandbyRule[];
+  allowedPunchLocations: AllowedPunchLocation[];
+  employeeAllowedPunchLocations: EmployeeAllowedPunchLocation[];
 } = {
   companies: [
     { id: "COMP-001", companyCode: "AHH", companyName: "Al Hattab Holding", isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
@@ -312,18 +314,24 @@ let memoryDb: {
     { id: "TRD-003", code: "ELEC", name: "Electrical Work", description: "Electrical installations and repair", linkedDesignationId: "DES-001", isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
   ],
   locations: [
-    { id: "LOC-001", locationCode: "DOHA-HQ", locationName: "Doha Headquarters", address: "West Bay, Doha, Qatar", latitude: 25.3186, longitude: 51.5284, defaultGeofenceRadiusMeters: 150.0, isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-    { id: "LOC-002", locationCode: "IND-DEPOT", locationName: "Industrial Area Depot", address: "Street 24, Industrial Area, Doha", latitude: 25.2012, longitude: 51.4567, defaultGeofenceRadiusMeters: 200.0, isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
+    { id: "LOC-001", companyId: "COMP-001", locationCode: "DOHA-HQ", locationName: "Doha Headquarters", address: "West Bay, Doha, Qatar", latitude: 25.3186, longitude: 51.5284, defaultGeofenceRadiusMeters: 150.0, isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+    { id: "LOC-002", companyId: "COMP-001", locationCode: "IND-DEPOT", locationName: "Industrial Area Depot", address: "Street 24, Industrial Area, Doha", latitude: 25.2012, longitude: 51.4567, defaultGeofenceRadiusMeters: 200.0, isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
   ],
   costCenters: [
-    { id: "CC-001", costCenterCode: "CC-OPS", costCenterName: "Operations Cost Center", description: "Cost center for Operations department", sapCostCenterCode: "SAP-CC-OPS", isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-    { id: "CC-002", costCenterCode: "CC-ENG", costCenterName: "Engineering Cost Center", description: "Cost center for Engineering department", sapCostCenterCode: "SAP-CC-ENG", isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
+    { id: "CC-001", companyId: "COMP-001", costCenterCode: "CC-OPS", costCenterName: "Operations Cost Center", description: "Cost center for Operations department", sapCostCenterCode: "SAP-CC-OPS", isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+    { id: "CC-002", companyId: "COMP-001", costCenterCode: "CC-ENG", costCenterName: "Engineering Cost Center", description: "Cost center for Engineering department", sapCostCenterCode: "SAP-CC-ENG", isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
   ],
   shiftRelieverAssignments: [],
   relieverStandbyRules: [
     { id: "RULE-001", ruleName: "General Worker Standby Rule", designationId: "DES-001", standbyRequired: true, relieverRequiredForLeave: true, relieverRequiredForOff: false, relieverRequiredForVacation: true, isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
     { id: "RULE-002", ruleName: "Mason Standby Rule", tradeClassificationId: "TRD-001", standbyRequired: true, relieverRequiredForLeave: true, relieverRequiredForOff: true, relieverRequiredForVacation: true, isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
-  ]
+  ],
+  allowedPunchLocations: [
+    { id: "APL-001", companyId: "COMP-001", name: "Doha Headquarters", locationType: "OFFICE", latitude: 25.2854, longitude: 51.5310, radiusMeters: 150.0, isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+    { id: "APL-002", companyId: "COMP-001", name: "West Bay Office", locationType: "OFFICE", latitude: 25.2867, longitude: 51.5325, radiusMeters: 150.0, isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+    { id: "APL-003", companyId: "COMP-001", name: "Industrial Area Depot", locationType: "PROJECT_SITE", latitude: 25.2905, longitude: 51.5201, radiusMeters: 150.0, isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
+  ],
+  employeeAllowedPunchLocations: []
 };
 
 // Seeding helper to pre-fill MySQL with mock data if it is empty
@@ -789,7 +797,12 @@ const getDbPath = () => {
   }
 };
 
-const readDb = (): typeof memoryDb & { worksites: Worksite[]; attendanceCorrections: AttendanceCorrection[] } => {
+export const readDb = (): typeof memoryDb & {
+  worksites: Worksite[];
+  attendanceCorrections: AttendanceCorrection[];
+  allowedPunchLocations: AllowedPunchLocation[];
+  employeeAllowedPunchLocations: EmployeeAllowedPunchLocation[];
+} => {
   const dbPath = getDbPath();
   if (!dbPath) return memoryDb as any;
   
@@ -917,6 +930,12 @@ const readDb = (): typeof memoryDb & { worksites: Worksite[]; attendanceCorrecti
     if (!parsed.relieverStandbyRules) {
       parsed.relieverStandbyRules = memoryDb.relieverStandbyRules;
     }
+    if (!parsed.allowedPunchLocations) {
+      parsed.allowedPunchLocations = memoryDb.allowedPunchLocations;
+    }
+    if (!parsed.employeeAllowedPunchLocations) {
+      parsed.employeeAllowedPunchLocations = memoryDb.employeeAllowedPunchLocations || [];
+    }
     return parsed;
   } catch (e) {
     console.error("Failed to read JSON DB, using memory fallback", e);
@@ -924,7 +943,7 @@ const readDb = (): typeof memoryDb & { worksites: Worksite[]; attendanceCorrecti
   }
 };
 
-const writeDb = (data: typeof memoryDb & { worksites: Worksite[]; attendanceCorrections: AttendanceCorrection[] }) => {
+export const writeDb = (data: typeof memoryDb & { worksites: Worksite[]; attendanceCorrections: AttendanceCorrection[] }) => {
   memoryDb = data as any;
   const dbPath = getDbPath();
   if (!dbPath) return;
@@ -1956,6 +1975,19 @@ export const mockDb = {
         }
       });
 
+      const hasSupervisor = !!(employee.immediateSupervisorId || employee.reportingManagerId || employee.projectSupervisorId || employee.siteSupervisorId);
+      if (!hasSupervisor && status !== "Approved") {
+        await prismaClient.leaveApprovalHistory.create({
+          data: {
+            leaveRequestId: request.id,
+            action: "SYSTEM_WARNING",
+            remarks: "WARNING: No supervisor assigned to employee. Request routed to HR/Admin fallback queue.",
+            previousStatus: status,
+            newStatus: status
+          }
+        });
+      }
+
       if (status === "Approved") {
         await prismaClient.leaveApprovalHistory.create({
           data: {
@@ -2084,6 +2116,19 @@ export const mockDb = {
       newStatus: status,
       createdAt: new Date().toISOString()
     });
+
+    const hasSupervisor = !!(employee.immediateSupervisorId || employee.reportingManagerId || employee.projectSupervisorId || employee.siteSupervisorId);
+    if (!hasSupervisor && status !== "Approved") {
+      db.leaveApprovalHistories.push({
+        id: `HIST-${Date.now()}-WARN`,
+        leaveRequestId: request.id,
+        action: "SYSTEM_WARNING",
+        remarks: "WARNING: No supervisor assigned to employee. Request routed to HR/Admin fallback queue.",
+        previousStatus: status,
+        newStatus: status,
+        createdAt: new Date().toISOString()
+      });
+    }
 
     if (status === "Approved") {
       db.leaveApprovalHistories.push({
@@ -7294,6 +7339,93 @@ export const mockDb = {
     });
 
     return available;
+  },
+
+  getAllowedPunchLocations: async (): Promise<AllowedPunchLocation[]> => {
+    if (isDbConnected()) {
+      return await prismaClient.allowedPunchLocation.findMany({
+        where: { isActive: true },
+        orderBy: { name: "asc" }
+      });
+    }
+    return readDb().allowedPunchLocations || [];
+  },
+
+  getEmployeeAllowedPunchLocations: async (employeeId: string): Promise<EmployeeAllowedPunchLocation[]> => {
+    if (isDbConnected()) {
+      return await prismaClient.employeeAllowedPunchLocation.findMany({
+        where: { employeeId },
+        include: { allowedPunchLocation: true },
+        orderBy: { priority: "asc" }
+      });
+    }
+    const db = readDb();
+    const list = db.employeeAllowedPunchLocations || [];
+    const filtered = list.filter((x: any) => x.employeeId === employeeId);
+    return filtered.map((x: any) => ({
+      ...x,
+      allowedPunchLocation: db.allowedPunchLocations.find((l: any) => l.id === x.allowedPunchLocationId)
+    }));
+  },
+
+  createEmployeeAllowedPunchLocation: async (data: any): Promise<EmployeeAllowedPunchLocation> => {
+    if (isDbConnected()) {
+      if (data.isDefault) {
+        await prismaClient.employeeAllowedPunchLocation.updateMany({
+          where: { employeeId: data.employeeId, isDefault: true },
+          data: { isDefault: false }
+        });
+      }
+      return await prismaClient.employeeAllowedPunchLocation.create({
+        data: {
+          employeeId: data.employeeId,
+          allowedPunchLocationId: data.allowedPunchLocationId,
+          validFrom: data.validFrom ? new Date(data.validFrom) : null,
+          validTo: data.validTo ? new Date(data.validTo) : null,
+          priority: data.priority || 1,
+          isDefault: data.isDefault || false,
+          isActive: data.isActive !== undefined ? data.isActive : true
+        },
+        include: { allowedPunchLocation: true }
+      });
+    }
+    const db = readDb();
+    if (data.isDefault) {
+      db.employeeAllowedPunchLocations.forEach((x: any) => {
+        if (x.employeeId === data.employeeId) x.isDefault = false;
+      });
+    }
+    const newRecord = {
+      id: `EAPL-${Date.now()}`,
+      employeeId: data.employeeId,
+      allowedPunchLocationId: data.allowedPunchLocationId,
+      validFrom: data.validFrom || null,
+      validTo: data.validTo || null,
+      priority: data.priority || 1,
+      isDefault: data.isDefault || false,
+      isActive: data.isActive !== undefined ? data.isActive : true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    db.employeeAllowedPunchLocations.push(newRecord);
+    writeDb(db);
+    return {
+      ...newRecord,
+      allowedPunchLocation: db.allowedPunchLocations.find((l: any) => l.id === data.allowedPunchLocationId)
+    } as any;
+  },
+
+  deleteEmployeeAllowedPunchLocation: async (assignmentId: string): Promise<boolean> => {
+    if (isDbConnected()) {
+      await prismaClient.employeeAllowedPunchLocation.delete({
+        where: { id: assignmentId }
+      });
+      return true;
+    }
+    const db = readDb();
+    db.employeeAllowedPunchLocations = db.employeeAllowedPunchLocations.filter((x: any) => x.id !== assignmentId);
+    writeDb(db);
+    return true;
   }
 };
 

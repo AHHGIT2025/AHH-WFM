@@ -128,6 +128,7 @@ export default function WorkforcePage() {
   const [empPassportIssuingCountry, setEmpPassportIssuingCountry] = useState("");
   const [empDateOfJoining, setEmpDateOfJoining] = useState("");
   const [empSponsor, setEmpSponsor] = useState("");
+  const [sponsorMode, setSponsorMode] = useState<"select" | "manual">("select");
   const [companyFilter, setCompanyFilter] = useState("all");
   const [addTab, setAddTab] = useState("basic");
   const [prevCompanyId, setPrevCompanyId] = useState("");
@@ -193,6 +194,34 @@ export default function WorkforcePage() {
 
   // Validation errors state
   const [validationError, setValidationError] = useState<string | null>(null);
+
+  const formatSupervisorLabel = (emp: any) => {
+    let designationName = "";
+    if (emp.designation?.name) {
+      designationName = emp.designation.name;
+    } else if (emp.designationId) {
+      const des = designations.find(d => d.id === emp.designationId);
+      designationName = des ? (des.name || des.designationName || "") : "";
+    }
+    return designationName 
+      ? `${emp.id} — ${emp.name} — ${designationName}` 
+      : `${emp.id} — ${emp.name}`;
+  };
+
+  const getFilteredSupervisors = (currentEmployeeId?: string) => {
+    return employees.filter(emp => {
+      const isEmpActive = emp.isActive !== false && emp.employmentStatus === "ACTIVE";
+      if (!isEmpActive) return false;
+
+      if (currentEmployeeId && emp.id === currentEmployeeId) return false;
+
+      if (empCompanyId && emp.companyId && emp.companyId !== empCompanyId) {
+        return false;
+      }
+
+      return true;
+    });
+  };
 
   const handleCompanyChange = (newCompanyId: string) => {
     setEmpCompanyId(newCompanyId);
@@ -557,6 +586,7 @@ export default function WorkforcePage() {
         setEmpPassportIssuingCountry("");
         setEmpDateOfJoining("");
         setEmpSponsor("");
+        setSponsorMode("select");
         setAddTab("basic");
         fetchDb();
       } else {
@@ -662,8 +692,9 @@ export default function WorkforcePage() {
       if (res.ok) {
         setEmpIsLocked(lock);
         const updated = await res.json();
-        if(updated.employee && updated.employee.failedLoginAttempts !== undefined) {
-           setEmpFailedLoginAttempts(updated.employee.failedLoginAttempts);
+        const failedAttempts = updated.employee?.failedLoginAttempts ?? updated.user?.failedLoginAttempts;
+        if (failedAttempts !== undefined) {
+           setEmpFailedLoginAttempts(failedAttempts);
         }
       } else {
         const err = await res.json();
@@ -824,6 +855,12 @@ export default function WorkforcePage() {
     setEmpPassportIssuingCountry(emp.passportIssuingCountry || "");
     setEmpDateOfJoining(emp.dateOfJoining ? new Date(emp.dateOfJoining).toISOString().split("T")[0] : "");
     setEmpSponsor(emp.sponsor || "");
+    const matchesCompany = companies.some(c => (c.name || c.companyName || "").toLowerCase() === (emp.sponsor || "").toLowerCase());
+    if (emp.sponsor && !matchesCompany) {
+      setSponsorMode("manual");
+    } else {
+      setSponsorMode("select");
+    }
     setEmpIsStandbyEligible(!!(emp as any).isStandbyEligible);
     setEmpDefaultPunchLocationId((emp as any).defaultPunchLocationId || "");
     setEmpAllowMultiplePunchLocations(!!(emp as any).allowMultiplePunchLocations);
@@ -1620,9 +1657,13 @@ export default function WorkforcePage() {
                       onChange={(e) => setEmpDefaultLocationId(e.target.value)}
                     >
                       <option value="">Select Location</option>
-                      {locations.filter(l => !empCompanyId || l.companyId === empCompanyId).map((l) => (
-                        <option key={l.id} value={l.id}>{formatLocationLabel(l)}</option>
-                      ))}
+                      {locations.filter(l => !empCompanyId || !l.companyId || l.companyId === empCompanyId).length === 0 ? (
+                        <option value="" disabled>No locations found for selected company</option>
+                      ) : (
+                        locations.filter(l => !empCompanyId || !l.companyId || l.companyId === empCompanyId).map((l) => (
+                          <option key={l.id} value={l.id}>{formatLocationLabel(l)}</option>
+                        ))
+                      )}
                     </select>
                   </div>
                   <div className="space-y-1">
@@ -1633,9 +1674,13 @@ export default function WorkforcePage() {
                       onChange={(e) => setEmpCostCenterId(e.target.value)}
                     >
                       <option value="">Select Cost Center</option>
-                      {costCenters.filter(cc => !empCompanyId || cc.companyId === empCompanyId).map((cc) => (
-                        <option key={cc.id} value={cc.id}>{formatCostCenterLabel(cc)}</option>
-                      ))}
+                      {costCenters.filter(cc => !empCompanyId || !cc.companyId || cc.companyId === empCompanyId).length === 0 ? (
+                        <option value="" disabled>No cost centers found for selected company</option>
+                      ) : (
+                        costCenters.filter(cc => !empCompanyId || !cc.companyId || cc.companyId === empCompanyId).map((cc) => (
+                          <option key={cc.id} value={cc.id}>{formatCostCenterLabel(cc)}</option>
+                        ))
+                      )}
                     </select>
                   </div>
                 </div>
@@ -1708,13 +1753,55 @@ export default function WorkforcePage() {
                   onChange={(e) => setEmpPassportExpiryDate(e.target.value)}
                 />
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <Input
-                  label="Sponsor"
-                  value={empSponsor}
-                  onChange={(e) => setEmpSponsor(e.target.value)}
-                  placeholder="e.g. Al Hattab Holding"
-                />
+               <div className="grid grid-cols-2 gap-4">
+                {sponsorMode === "select" ? (
+                  <div className="space-y-1">
+                    <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Sponsor</label>
+                    <select
+                      className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-2.5 py-2 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                      value={empSponsor}
+                      onChange={(e) => {
+                        if (e.target.value === "manual") {
+                          setSponsorMode("manual");
+                          setEmpSponsor("");
+                        } else {
+                          setEmpSponsor(e.target.value);
+                        }
+                      }}
+                    >
+                      <option value="">Select Sponsor</option>
+                      {companies.map(c => {
+                        const code = c.code || c.companyCode || "";
+                        const name = c.name || c.companyName || "";
+                        return (
+                          <option key={c.id} value={name}>
+                            {code ? `${code} — ${name}` : name}
+                          </option>
+                        );
+                      })}
+                      <option value="manual">Other / Manual Sponsor</option>
+                    </select>
+                  </div>
+                ) : (
+                  <div className="space-y-1 relative">
+                    <Input
+                      label="Sponsor"
+                      value={empSponsor}
+                      onChange={(e) => setEmpSponsor(e.target.value)}
+                      placeholder="Enter custom sponsor name"
+                    />
+                    <button
+                      type="button"
+                      className="absolute right-2 top-8 text-[10px] font-bold text-primary hover:underline"
+                      onClick={() => {
+                        setSponsorMode("select");
+                        setEmpSponsor("");
+                      }}
+                    >
+                      Use Dropdown
+                    </button>
+                  </div>
+                )}
                 <Input
                   label="Date of Joining"
                   type="date"
@@ -1781,7 +1868,7 @@ export default function WorkforcePage() {
                       onChange={(e) => setEmpImmediateSupervisorId(e.target.value)}
                     >
                       <option value="">Select Supervisor</option>
-                      {employees.map(e => <option key={e.id} value={e.id}>{e.id} - {e.name}</option>)}
+                      {getFilteredSupervisors().map(e => <option key={e.id} value={e.id}>{formatSupervisorLabel(e)}</option>)}
                     </select>
                   </div>
                   <div className="space-y-1">
@@ -1792,7 +1879,7 @@ export default function WorkforcePage() {
                       onChange={(e) => setEmpReportingManagerId(e.target.value)}
                     >
                       <option value="">Select Manager</option>
-                      {employees.map(e => <option key={e.id} value={e.id}>{e.id} - {e.name}</option>)}
+                      {getFilteredSupervisors().map(e => <option key={e.id} value={e.id}>{formatSupervisorLabel(e)}</option>)}
                     </select>
                   </div>
                 </div>
@@ -1806,7 +1893,7 @@ export default function WorkforcePage() {
                         onChange={(e) => setEmpProjectSupervisorId(e.target.value)}
                       >
                         <option value="">Select Project Supervisor</option>
-                        {employees.map(e => <option key={e.id} value={e.id}>{e.id} - {e.name}</option>)}
+                        {getFilteredSupervisors().map(e => <option key={e.id} value={e.id}>{formatSupervisorLabel(e)}</option>)}
                       </select>
                     </div>
                     <div className="space-y-1">
@@ -1817,7 +1904,7 @@ export default function WorkforcePage() {
                         onChange={(e) => setEmpSiteSupervisorId(e.target.value)}
                       >
                         <option value="">Select Site Supervisor</option>
-                        {employees.map(e => <option key={e.id} value={e.id}>{e.id} - {e.name}</option>)}
+                        {getFilteredSupervisors().map(e => <option key={e.id} value={e.id}>{formatSupervisorLabel(e)}</option>)}
                       </select>
                     </div>
                   </div>
@@ -2077,14 +2164,26 @@ export default function WorkforcePage() {
                       <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Default Location</label>
                       <select className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" value={empDefaultLocationId} onChange={(e) => setEmpDefaultLocationId(e.target.value)}>
                         <option value="">Select Location</option>
-                        {locations.filter(l => !empCompanyId || l.companyId === empCompanyId).map((l) => <option key={l.id} value={l.id}>{formatLocationLabel(l)}</option>)}
+                        {locations.filter(l => !empCompanyId || !l.companyId || l.companyId === empCompanyId).length === 0 ? (
+                          <option value="" disabled>No locations found for selected company</option>
+                        ) : (
+                          locations.filter(l => !empCompanyId || !l.companyId || l.companyId === empCompanyId).map((l) => (
+                            <option key={l.id} value={l.id}>{formatLocationLabel(l)}</option>
+                          ))
+                        )}
                       </select>
                     </div>
                     <div className="space-y-1">
                       <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Cost Center</label>
                       <select className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" value={empCostCenterId} onChange={(e) => setEmpCostCenterId(e.target.value)}>
                         <option value="">Select Cost Center</option>
-                        {costCenters.filter(cc => !empCompanyId || cc.companyId === empCompanyId).map((cc) => <option key={cc.id} value={cc.id}>{formatCostCenterLabel(cc)}</option>)}
+                        {costCenters.filter(cc => !empCompanyId || !cc.companyId || cc.companyId === empCompanyId).length === 0 ? (
+                          <option value="" disabled>No cost centers found for selected company</option>
+                        ) : (
+                          costCenters.filter(cc => !empCompanyId || !cc.companyId || cc.companyId === empCompanyId).map((cc) => (
+                            <option key={cc.id} value={cc.id}>{formatCostCenterLabel(cc)}</option>
+                          ))
+                        )}
                       </select>
                     </div>
                   </div>
@@ -2117,8 +2216,55 @@ export default function WorkforcePage() {
                   <Input label="Passport Issue Date" type="date" value={empPassportIssueDate} onChange={(e) => setEmpPassportIssueDate(e.target.value)} />
                   <Input label="Passport Expiry Date" type="date" value={empPassportExpiryDate} onChange={(e) => setEmpPassportExpiryDate(e.target.value)} />
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <Input label="Sponsor" value={empSponsor} onChange={(e) => setEmpSponsor(e.target.value)} placeholder="e.g. Al Hattab Holding" />
+                 <div className="grid grid-cols-2 gap-4">
+                  {sponsorMode === "select" ? (
+                    <div className="space-y-1">
+                      <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Sponsor</label>
+                      <select
+                        className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-2.5 py-2 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                        value={empSponsor}
+                        onChange={(e) => {
+                          if (e.target.value === "manual") {
+                            setSponsorMode("manual");
+                            setEmpSponsor("");
+                          } else {
+                            setEmpSponsor(e.target.value);
+                          }
+                        }}
+                      >
+                        <option value="">Select Sponsor</option>
+                        {companies.map(c => {
+                          const code = c.code || c.companyCode || "";
+                          const name = c.name || c.companyName || "";
+                          return (
+                            <option key={c.id} value={name}>
+                              {code ? `${code} — ${name}` : name}
+                            </option>
+                          );
+                        })}
+                        <option value="manual">Other / Manual Sponsor</option>
+                      </select>
+                    </div>
+                  ) : (
+                    <div className="space-y-1 relative">
+                      <Input
+                        label="Sponsor"
+                        value={empSponsor}
+                        onChange={(e) => setEmpSponsor(e.target.value)}
+                        placeholder="Enter custom sponsor name"
+                      />
+                      <button
+                        type="button"
+                        className="absolute right-2 top-8 text-[10px] font-bold text-primary hover:underline"
+                        onClick={() => {
+                          setSponsorMode("select");
+                          setEmpSponsor("");
+                        }}
+                      >
+                        Use Dropdown
+                      </button>
+                    </div>
+                  )}
                   <Input label="Date of Joining" type="date" value={empDateOfJoining} onChange={(e) => setEmpDateOfJoining(e.target.value)} />
                 </div>
               </div>
@@ -2224,14 +2370,14 @@ export default function WorkforcePage() {
                       <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Immediate Supervisor</label>
                       <select className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-2.5 py-2 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" value={empImmediateSupervisorId} onChange={(e) => setEmpImmediateSupervisorId(e.target.value)}>
                         <option value="">Clear Supervisor</option>
-                        {employees.filter(e => e.isActive !== false && e.id !== selectedEmp.id).map(e => <option key={e.id} value={e.id}>{e.id} - {e.name}</option>)}
+                        {getFilteredSupervisors(selectedEmp.id).map(e => <option key={e.id} value={e.id}>{formatSupervisorLabel(e)}</option>)}
                       </select>
                     </div>
                     <div className="space-y-1">
                       <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Reporting Manager</label>
                       <select className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-2.5 py-2 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" value={empReportingManagerId} onChange={(e) => setEmpReportingManagerId(e.target.value)}>
                         <option value="">Clear Manager</option>
-                        {employees.filter(e => e.isActive !== false && e.id !== selectedEmp.id).map(e => <option key={e.id} value={e.id}>{e.id} - {e.name}</option>)}
+                        {getFilteredSupervisors(selectedEmp.id).map(e => <option key={e.id} value={e.id}>{formatSupervisorLabel(e)}</option>)}
                       </select>
                     </div>
                   </div>
@@ -2241,14 +2387,14 @@ export default function WorkforcePage() {
                         <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Project Supervisor</label>
                         <select className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-2.5 py-2 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" value={empProjectSupervisorId} onChange={(e) => setEmpProjectSupervisorId(e.target.value)}>
                           <option value="">Clear Project Supervisor</option>
-                          {employees.filter(e => e.isActive !== false && e.id !== selectedEmp.id).map(e => <option key={e.id} value={e.id}>{e.id} - {e.name}</option>)}
+                          {getFilteredSupervisors(selectedEmp.id).map(e => <option key={e.id} value={e.id}>{formatSupervisorLabel(e)}</option>)}
                         </select>
                       </div>
                       <div className="space-y-1">
                         <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Site Supervisor</label>
                         <select className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-2.5 py-2 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" value={empSiteSupervisorId} onChange={(e) => setEmpSiteSupervisorId(e.target.value)}>
                           <option value="">Clear Site Supervisor</option>
-                          {employees.filter(e => e.isActive !== false && e.id !== selectedEmp.id).map(e => <option key={e.id} value={e.id}>{e.id} - {e.name}</option>)}
+                          {getFilteredSupervisors(selectedEmp.id).map(e => <option key={e.id} value={e.id}>{formatSupervisorLabel(e)}</option>)}
                         </select>
                       </div>
                     </div>

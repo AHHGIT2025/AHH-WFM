@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@ahh-wfm/database";
+import { isDbConnected, readDb, writeDb } from "@ahh-wfm/mock-data";
 
 const entityMap: Record<string, keyof typeof prisma> = {
   companies: "company",
@@ -12,6 +13,19 @@ const entityMap: Record<string, keyof typeof prisma> = {
   "project-sites": "projectSite",
   "allowed-punch-locations": "allowedPunchLocation",
   "standby-rules": "relieverStandbyRule",
+};
+
+const memoryKeyMap: Record<string, string> = {
+  companies: "companies",
+  departments: "departments",
+  designations: "designations",
+  "trade-classifications": "tradeClassifications",
+  locations: "locations",
+  "cost-centers": "costCenters",
+  projects: "projects",
+  "project-sites": "projectSites",
+  "allowed-punch-locations": "allowedPunchLocations",
+  "standby-rules": "relieverStandbyRules",
 };
 
 function normalizeRecord(entity: string, record: any) {
@@ -71,14 +85,45 @@ function normalizeRecord(entity: string, record: any) {
 export async function GET(request: Request, { params }: { params: { entity: string } }) {
   try {
     const { entity } = params;
-    const modelName = entityMap[entity];
-
-    if (!modelName) {
-      return NextResponse.json({ error: "Invalid master entity" }, { status: 400 });
-    }
 
     const { searchParams } = new URL(request.url);
     const isActive = searchParams.get("isActive");
+
+    if (!isDbConnected()) {
+      const memoryKey = memoryKeyMap[entity];
+      if (!memoryKey) {
+        return NextResponse.json({ error: "Invalid master entity" }, { status: 400 });
+      }
+
+      const db = readDb();
+      let records = (db as any)[memoryKey] || [];
+
+      // Filter by isActive
+      if (isActive !== null) {
+        const activeBool = isActive === "true";
+        records = records.filter((r: any) => r.isActive === activeBool);
+      }
+
+      // Populate relations
+      records = records.map((r: any) => {
+        const record = { ...r };
+        if (record.companyId && !record.company) {
+          record.company = db.companies.find((c: any) => c.id === record.companyId);
+        }
+        if (record.projectId && !record.project) {
+          record.project = db.projects.find((p: any) => p.id === record.projectId);
+        }
+        return record;
+      });
+
+      const normalized = records.map((r: any) => normalizeRecord(entity, r));
+      return NextResponse.json(normalized);
+    }
+
+    const modelName = entityMap[entity];
+    if (!modelName) {
+      return NextResponse.json({ error: "Invalid master entity" }, { status: 400 });
+    }
 
     let whereClause = {};
     if (isActive !== null) {
@@ -112,13 +157,45 @@ export async function GET(request: Request, { params }: { params: { entity: stri
 export async function POST(request: Request, { params }: { params: { entity: string } }) {
   try {
     const { entity } = params;
-    const modelName = entityMap[entity];
+    const body = await request.json();
 
+    if (!isDbConnected()) {
+      const memoryKey = memoryKeyMap[entity];
+      if (!memoryKey) {
+        return NextResponse.json({ error: "Invalid master entity" }, { status: 400 });
+      }
+
+      const db = readDb();
+      const newRecord = {
+        id: body.id || `${entity.substring(0, 3).toUpperCase()}-${Date.now()}`,
+        ...body,
+        isActive: body.isActive !== undefined ? body.isActive : true,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      if (!(db as any)[memoryKey]) {
+        (db as any)[memoryKey] = [];
+      }
+      (db as any)[memoryKey].push(newRecord);
+      writeDb(db);
+
+      // Populate relation for normalization if present
+      const populatedRecord = { ...newRecord };
+      if (populatedRecord.companyId) {
+        populatedRecord.company = db.companies.find((c: any) => c.id === populatedRecord.companyId);
+      }
+      if (populatedRecord.projectId) {
+        populatedRecord.project = db.projects.find((p: any) => p.id === populatedRecord.projectId);
+      }
+
+      return NextResponse.json(normalizeRecord(entity, populatedRecord), { status: 201 });
+    }
+
+    const modelName = entityMap[entity];
     if (!modelName) {
       return NextResponse.json({ error: "Invalid master entity" }, { status: 400 });
     }
-
-    const body = await request.json();
 
     const dbModel: any = prisma[modelName];
     const newRecord = await dbModel.create({

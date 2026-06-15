@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@ahh-wfm/database";
+import { mockDb } from "@ahh-wfm/mock-data";
 import { checkApiAuth } from "@/lib/api-guards";
 
 export async function PATCH(request: Request, { params }: { params: { id: string } }) {
@@ -25,17 +25,15 @@ export async function PATCH(request: Request, { params }: { params: { id: string
       return NextResponse.json({ error: "No fields to update" }, { status: 400 });
     }
 
-    const updatedEmployee = await prisma.employee.update({
-      where: { id: params.id },
-      data: updateData
-    });
+    const updatedEmployee = await mockDb.updateEmployee(params.id, updateData);
+
+    if (!updatedEmployee) {
+      return NextResponse.json({ error: "Employee not found" }, { status: 404 });
+    }
 
     return NextResponse.json(updatedEmployee);
   } catch (error: any) {
     console.error("Error updating employee punch policy:", error);
-    if (error.code === "P2025") {
-      return NextResponse.json({ error: "Employee not found" }, { status: 404 });
-    }
     return NextResponse.json({ error: "Failed to update punch policy" }, { status: 500 });
   }
 }

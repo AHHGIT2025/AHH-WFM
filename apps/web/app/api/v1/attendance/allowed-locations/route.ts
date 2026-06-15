@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@ahh-wfm/database";
+import { mockDb } from "@ahh-wfm/mock-data";
 import { checkApiAuth } from "@/lib/api-guards";
 
 export async function GET(request: Request) {
@@ -7,11 +7,7 @@ export async function GET(request: Request) {
   if (auth.error) return auth.error;
 
   try {
-    const locations = await prisma.allowedPunchLocation.findMany({
-      where: { isActive: true },
-      orderBy: { name: "asc" }
-    });
-
+    const locations = await mockDb.getAllowedPunchLocations();
     return NextResponse.json(locations);
   } catch (error: any) {
     console.error("Error fetching allowed punch locations:", error);

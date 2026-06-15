@@ -1,16 +1,10 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@ahh-wfm/database";
+import { mockDb } from "@ahh-wfm/mock-data";
 
 export async function GET(request: Request, { params }: { params: { id: string } }) {
   try {
     const { id } = params;
-
-    const locations = await prisma.employeeAllowedPunchLocation.findMany({
-      where: { employeeId: id },
-      include: { allowedPunchLocation: true },
-      orderBy: { priority: "asc" },
-    });
-
+    const locations = await mockDb.getEmployeeAllowedPunchLocations(id);
     return NextResponse.json(locations);
   } catch (error: any) {
     console.error("Error fetching employee locations:", error);
@@ -27,25 +21,14 @@ export async function POST(request: Request, { params }: { params: { id: string 
       return NextResponse.json({ error: "Allowed Punch Location ID is required" }, { status: 400 });
     }
 
-    // if isDefault is true, unset other defaults
-    if (body.isDefault) {
-      await prisma.employeeAllowedPunchLocation.updateMany({
-        where: { employeeId: id, isDefault: true },
-        data: { isDefault: false },
-      });
-    }
-
-    const newAssignment = await prisma.employeeAllowedPunchLocation.create({
-      data: {
-        employeeId: id,
-        allowedPunchLocationId: body.allowedPunchLocationId,
-        validFrom: body.validFrom ? new Date(body.validFrom) : null,
-        validTo: body.validTo ? new Date(body.validTo) : null,
-        priority: body.priority || 1,
-        isDefault: body.isDefault || false,
-        isActive: body.isActive !== undefined ? body.isActive : true,
-      },
-      include: { allowedPunchLocation: true },
+    const newAssignment = await mockDb.createEmployeeAllowedPunchLocation({
+      employeeId: id,
+      allowedPunchLocationId: body.allowedPunchLocationId,
+      validFrom: body.validFrom || null,
+      validTo: body.validTo || null,
+      priority: body.priority || 1,
+      isDefault: body.isDefault || false,
+      isActive: body.isActive !== undefined ? body.isActive : true,
     });
 
     return NextResponse.json(newAssignment, { status: 201 });
@@ -64,10 +47,7 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
        return NextResponse.json({ error: "Assignment ID is required" }, { status: 400 });
     }
 
-    await prisma.employeeAllowedPunchLocation.delete({
-      where: { id: assignmentId },
-    });
-
+    await mockDb.deleteEmployeeAllowedPunchLocation(assignmentId);
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error("Error deleting location assignment:", error);

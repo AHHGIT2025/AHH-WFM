@@ -713,6 +713,8 @@ export interface LocationMaster {
   id: string;
   locationCode: string;
   locationName: string;
+  companyId?: string;
+  company?: any;
   address?: string;
   latitude?: number;
   longitude?: number;
@@ -722,10 +724,45 @@ export interface LocationMaster {
   updatedAt?: string;
 }
 
+export interface AllowedPunchLocation {
+  id: string;
+  companyId: string;
+  name: string;
+  locationType: string;
+  locationId?: string;
+  projectId?: string;
+  siteId?: string;
+  latitude: number;
+  longitude: number;
+  radiusMeters: number;
+  address?: string;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface EmployeeAllowedPunchLocation {
+  id: string;
+  employeeId: string;
+  allowedPunchLocationId: string;
+  validFrom?: string;
+  validTo?: string;
+  priority: number;
+  isDefault: boolean;
+  isActive: boolean;
+  createdById?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  allowedPunchLocation?: AllowedPunchLocation;
+}
+
+
 export interface CostCenter {
   id: string;
   costCenterCode: string;
   costCenterName: string;
+  companyId?: string;
+  company?: any;
   description?: string;
   sapCostCenterCode?: string;
   isActive: boolean;

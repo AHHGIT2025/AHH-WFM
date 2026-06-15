@@ -100,14 +100,14 @@ function maskNumber(num: string | null | undefined): string | null {
   if (clean.length <= 4) return clean;
   return "*".repeat(clean.length - 4) + clean.substring(clean.length - 4);
 }
-
 export async function GET(request: Request, { params }: RouteParams) {
   const auth = await checkApiAuth(["ADMIN", "SUPERVISOR"]);
   if (auth.error) return auth.error;
 
   try {
     const employees = await mockDb.getEmployees();
-    const employee = employees.find(e => e.id === params.id);
+    const targetId = params.id === "me" ? (auth.session?.user as any)?.id : params.id;
+    const employee = employees.find(e => e.id === targetId);
     if (!employee) {
       return NextResponse.json({ error: "Employee not found" }, { status: 404 });
     }

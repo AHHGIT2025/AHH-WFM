@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@ahh-wfm/database";
+import { isDbConnected, readDb, writeDb } from "@ahh-wfm/mock-data";
 
 const entityMap: Record<string, keyof typeof prisma> = {
   companies: "company",
@@ -12,6 +13,19 @@ const entityMap: Record<string, keyof typeof prisma> = {
   "project-sites": "projectSite",
   "allowed-punch-locations": "allowedPunchLocation",
   "standby-rules": "relieverStandbyRule",
+};
+
+const memoryKeyMap: Record<string, string> = {
+  companies: "companies",
+  departments: "departments",
+  designations: "designations",
+  "trade-classifications": "tradeClassifications",
+  locations: "locations",
+  "cost-centers": "costCenters",
+  projects: "projects",
+  "project-sites": "projectSites",
+  "allowed-punch-locations": "allowedPunchLocations",
+  "standby-rules": "relieverStandbyRules",
 };
 
 function normalizeRecord(entity: string, record: any) {
@@ -71,8 +85,34 @@ function normalizeRecord(entity: string, record: any) {
 export async function GET(request: Request, { params }: { params: { entity: string; id: string } }) {
   try {
     const { entity, id } = params;
-    const modelName = entityMap[entity];
 
+    if (!isDbConnected()) {
+      const memoryKey = memoryKeyMap[entity];
+      if (!memoryKey) {
+        return NextResponse.json({ error: "Invalid master entity" }, { status: 400 });
+      }
+
+      const db = readDb();
+      const records = (db as any)[memoryKey] || [];
+      const record = records.find((r: any) => r.id === id);
+
+      if (!record) {
+        return NextResponse.json({ error: "Record not found" }, { status: 404 });
+      }
+
+      // Populate relations
+      const populatedRecord = { ...record };
+      if (populatedRecord.companyId && !populatedRecord.company) {
+        populatedRecord.company = db.companies.find((c: any) => c.id === populatedRecord.companyId);
+      }
+      if (populatedRecord.projectId && !populatedRecord.project) {
+        populatedRecord.project = db.projects.find((p: any) => p.id === populatedRecord.projectId);
+      }
+
+      return NextResponse.json(normalizeRecord(entity, populatedRecord));
+    }
+
+    const modelName = entityMap[entity];
     if (!modelName) {
       return NextResponse.json({ error: "Invalid master entity" }, { status: 400 });
     }
@@ -96,13 +136,47 @@ export async function GET(request: Request, { params }: { params: { entity: stri
 export async function PUT(request: Request, { params }: { params: { entity: string; id: string } }) {
   try {
     const { entity, id } = params;
-    const modelName = entityMap[entity];
+    const body = await request.json();
 
+    if (!isDbConnected()) {
+      const memoryKey = memoryKeyMap[entity];
+      if (!memoryKey) {
+        return NextResponse.json({ error: "Invalid master entity" }, { status: 400 });
+      }
+
+      const db = readDb();
+      const records = (db as any)[memoryKey] || [];
+      const index = records.findIndex((r: any) => r.id === id);
+
+      if (index === -1) {
+        return NextResponse.json({ error: "Record not found" }, { status: 404 });
+      }
+
+      const updatedRecord = {
+        ...records[index],
+        ...body,
+        updatedAt: new Date().toISOString(),
+      };
+
+      records[index] = updatedRecord;
+      writeDb(db);
+
+      // Populate relations
+      const populatedRecord = { ...updatedRecord };
+      if (populatedRecord.companyId) {
+        populatedRecord.company = db.companies.find((c: any) => c.id === populatedRecord.companyId);
+      }
+      if (populatedRecord.projectId) {
+        populatedRecord.project = db.projects.find((p: any) => p.id === populatedRecord.projectId);
+      }
+
+      return NextResponse.json(normalizeRecord(entity, populatedRecord));
+    }
+
+    const modelName = entityMap[entity];
     if (!modelName) {
       return NextResponse.json({ error: "Invalid master entity" }, { status: 400 });
     }
-
-    const body = await request.json();
 
     const dbModel: any = prisma[modelName];
     const updatedRecord = await dbModel.update({
@@ -123,8 +197,28 @@ export async function PUT(request: Request, { params }: { params: { entity: stri
 export async function DELETE(request: Request, { params }: { params: { entity: string; id: string } }) {
   try {
     const { entity, id } = params;
-    const modelName = entityMap[entity];
 
+    if (!isDbConnected()) {
+      const memoryKey = memoryKeyMap[entity];
+      if (!memoryKey) {
+        return NextResponse.json({ error: "Invalid master entity" }, { status: 400 });
+      }
+
+      const db = readDb();
+      const records = (db as any)[memoryKey] || [];
+      const index = records.findIndex((r: any) => r.id === id);
+
+      if (index === -1) {
+        return NextResponse.json({ error: "Record not found" }, { status: 404 });
+      }
+
+      records.splice(index, 1);
+      writeDb(db);
+
+      return NextResponse.json({ success: true });
+    }
+
+    const modelName = entityMap[entity];
     if (!modelName) {
       return NextResponse.json({ error: "Invalid master entity" }, { status: 400 });
     }
