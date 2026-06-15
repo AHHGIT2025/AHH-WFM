@@ -3,6 +3,13 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "../../../../lib/auth";
 import { prisma } from "@ahh-wfm/database";
 
+function maskNumber(num: string | null | undefined): string | null {
+  if (!num) return null;
+  const clean = num.trim();
+  if (clean.length <= 4) return clean;
+  return "*".repeat(clean.length - 4) + clean.substring(clean.length - 4);
+}
+
 export async function GET() {
   try {
     const session = await getServerSession(authOptions);
@@ -79,6 +86,11 @@ export async function GET() {
         name: employee.officeLocation.locationName
       } : null,
       isSupervisor: employee.role === "SUPERVISOR" || employee.role === "ADMIN",
+      
+      // Identity fields for mobile
+      dateOfJoining: employee.dateOfJoining ? employee.dateOfJoining.toISOString() : null,
+      qidNumber: employee.qidNumber ? maskNumber(employee.qidNumber) : null,
+      qidExpiryDate: employee.qidExpiryDate ? employee.qidExpiryDate.toISOString() : null
     });
 
   } catch (error) {

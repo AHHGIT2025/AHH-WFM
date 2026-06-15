@@ -124,6 +124,8 @@ export async function POST(request: NextRequest) {
         workingForSnapshot: workingFor,
         qidNumberSnapshot: employee.qidNumber || null,
         qidExpiryDateSnapshot: employee.qidExpiryDate ? employee.qidExpiryDate.toISOString() : null,
+        passportNumberSnapshot: employee.passportNumber || null,
+        passportExpiryDateSnapshot: employee.passportExpiryDate ? employee.passportExpiryDate.toISOString() : null,
         
         status: data.status || "DRAFT"
       }

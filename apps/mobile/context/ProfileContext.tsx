@@ -23,6 +23,10 @@ export interface ProfileData {
   defaultLocation?: { id: string; name: string };
   defaultSite?: { id: string; name: string };
   isSupervisor: boolean;
+  qidNumber?: string;
+  qidExpiryDate?: string;
+  dateOfJoining?: string;
+  sponsor?: string;
 }
 
 interface ProfileContextProps {

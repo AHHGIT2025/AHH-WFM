@@ -161,6 +161,46 @@ export default function ProfilePage() {
         </div>
       </div>
 
+      {data?.qidNumber && (
+        <div className="bg-surface rounded-2xl border border-outline-variant/30 shadow-sm overflow-hidden">
+          <div className="px-4 py-3 border-b border-outline-variant/20 bg-surface-container-lowest flex items-center gap-2">
+            <span className="material-symbols-outlined text-[14px] text-primary">description</span>
+            <h3 className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Identity Documents</h3>
+          </div>
+          <div className="divide-y divide-outline-variant/20">
+            <div className="px-4 py-3.5 flex justify-between items-center">
+              <span className="text-[11px] text-on-surface-variant flex items-center gap-1.5">
+                <span className="material-symbols-outlined text-[12px] opacity-70">badge</span>
+                Qatar ID Number
+              </span>
+              <span className="text-[11px] font-bold text-on-surface text-right font-mono">{data.qidNumber}</span>
+            </div>
+            {data.qidExpiryDate && (
+              <div className="px-4 py-3.5 flex justify-between items-center">
+                <span className="text-[11px] text-on-surface-variant flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-[12px] opacity-70">event</span>
+                  QID Expiry Date
+                </span>
+                <span className="text-[11px] font-bold text-on-surface text-right">
+                  {new Date(data.qidExpiryDate).toLocaleDateString()}
+                </span>
+              </div>
+            )}
+            {data.dateOfJoining && (
+              <div className="px-4 py-3.5 flex justify-between items-center">
+                <span className="text-[11px] text-on-surface-variant flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-[12px] opacity-70">calendar_today</span>
+                  Date of Joining
+                </span>
+                <span className="text-[11px] font-bold text-on-surface text-right">
+                  {new Date(data.dateOfJoining).toLocaleDateString()}
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       <button 
         onClick={() => signOut({ callbackUrl: "/login" })}
         className="w-full bg-surface border border-status-error/30 text-status-error font-bold py-3.5 rounded-2xl flex items-center justify-center gap-2 active:scale-95 transition-transform"

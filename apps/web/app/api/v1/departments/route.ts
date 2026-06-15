@@ -19,7 +19,7 @@ export async function POST(request: Request) {
   if (auth.error) return auth.error;
 
   try {
-    const { name } = await request.json();
+    const { name, companyId } = await request.json();
     if (!name || name.trim() === "") {
       return NextResponse.json({ error: "Department name is required" }, { status: 400 });
     }
@@ -29,7 +29,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Department name already exists" }, { status: 400 });
     }
 
-    const newDept = await mockDb.createDepartment(name.trim());
+    const newDept = await mockDb.createDepartment(name.trim(), companyId || undefined);
     return NextResponse.json(newDept);
   } catch (e) {
     return NextResponse.json({ error: "Failed to create department" }, { status: 500 });

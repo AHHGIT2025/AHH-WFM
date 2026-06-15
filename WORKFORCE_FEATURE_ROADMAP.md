@@ -343,3 +343,27 @@ This document outlines the evolutionary development roadmap for the **AHH WFM** 
 *   **UI Screens Affected**:
     *   Mobile: /supervisor
 *   **Estimated Implementation Effort**: Completed
+
+---
+
+## Phase 10: Company Assignment & Identity Integration (Completed - v0.18.2)
+
+### 10.1 Company Assignment & Cascading Filtering
+*   **Business Purpose**: Ensure that all employee profiles are linked to a registered Company. Restrict Department, Location, Project, Site, and Cost Center dropdown assignments dynamically based on the selected Company, warning and resetting mismatched options upon Company changes.
+*   **Database Impact**: Link `Department` to `Company` via `companyId` relation (MySQL and mockDb schema).
+*   **UI Screens Affected**:
+    *   Web: Workforce Directory (`/workforce`) - Add / Edit Employee Tabbed Modals.
+*   **Estimated Implementation Effort**: Completed
+
+### 10.2 Identity Document Integration & Privacy Masking
+*   **Business Purpose**: Centralize Qatar ID (QID) and Passport parameters for HR records and mobile profile. Enforce strict role-based privacy masking at the API boundary, limiting raw exposure to Admin/HR roles while showing masked strings (`*******7890`) for all other users.
+*   **Database Impact**: Add QID, Sponsor, Date of Joining, and Passport fields (`passportNumber`, `passportExpiryDate`, `passportIssueDate`, `passportIssuingCountry`) to `Employee`, and snapshot fields (`passportNumberSnapshot`, `passportExpiryDateSnapshot`) on `ClearanceRequest`.
+*   **API Endpoints Required**:
+    *   `GET /api/v1/employees` (Masked based on user session role)
+    *   `GET /api/v1/employees/:id` (Masked based on user session role)
+    *   `GET /api/v1/me` (Mobile BFF returns masked QID, hides Passport details)
+*   **UI Screens Affected**:
+    *   Web: Workforce Directory grid, Clearance request preview panel (`/clearance/new`).
+    *   Mobile: Profile screen (`/profile`) showing masked QID, expiry, sponsor, and joining date (no passport).
+*   **Estimated Implementation Effort**: Completed
+

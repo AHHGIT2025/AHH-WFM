@@ -1,6 +1,25 @@
 import { NextResponse } from "next/server";
 import { mockDb } from "@ahh-wfm/mock-data";
 import { checkApiAuth } from "@/lib/api-guards";
+import { hasPermission } from "@/lib/permissions";
+
+function canViewIdentity(user: any): boolean {
+  if (!user) return false;
+  const role = user.role?.toUpperCase();
+  if (role === "ADMIN" || role === "SUPER_ADMIN" || role === "HR" || role === "HR_MANAGER") return true;
+  try {
+    return hasPermission(user, "employee.identity.viewSensitive");
+  } catch (e) {
+    return false;
+  }
+}
+
+function maskNumber(num: string | null | undefined): string | null {
+  if (!num) return null;
+  const clean = num.trim();
+  if (clean.length <= 4) return clean;
+  return "*".repeat(clean.length - 4) + clean.substring(clean.length - 4);
+}
 
 export async function GET() {
   const auth = await checkApiAuth(["ADMIN", "SUPERVISOR"]);
@@ -8,7 +27,19 @@ export async function GET() {
 
   try {
     const employees = await mockDb.getEmployees();
-    return NextResponse.json(employees);
+    const canView = canViewIdentity(auth.session?.user);
+
+    const mapped = employees.map(emp => {
+      const copy = { ...emp };
+      delete (copy as any).passwordHash;
+      if (!canView) {
+        if (copy.qidNumber) copy.qidNumber = maskNumber(copy.qidNumber) as any;
+        if (copy.passportNumber) copy.passportNumber = maskNumber(copy.passportNumber) as any;
+      }
+      return copy;
+    });
+
+    return NextResponse.json(mapped);
   } catch (e) {
     return NextResponse.json({ error: "Failed to fetch employees" }, { status: 500 });
   }
@@ -27,7 +58,8 @@ export async function POST(request: Request) {
       costCenterId, defaultLocationId, isRelieverEligible, isStandbyEligible,
       immediateSupervisorId, reportingManagerId, projectSupervisorId, siteSupervisorId,
       isSupervisor, supervisorScopeType,
-      username, authMode, ssoProvider, ssoSubject, isLoginEnabled, mustChangePassword, isLocked
+      username, authMode, ssoProvider, ssoSubject, isLoginEnabled, mustChangePassword, isLocked,
+      companyId, qidNumber, qidExpiryDate, passportNumber, passportExpiryDate, passportIssueDate, passportIssuingCountry, dateOfJoining, sponsor
     } = payload;
 
     // 1. Validation
@@ -48,6 +80,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Role is required" }, { status: 400 });
     }
 
+    // New business validation: Company is required for new active employees
+    if ((employmentStatus === "ACTIVE" || !employmentStatus) && (!companyId || companyId.trim() === "")) {
+      return NextResponse.json({ error: "Company is required" }, { status: 400 });
+    }
+
     const employees = await mockDb.getEmployees();
     // 2. Prevent duplicate Employee ID
     if (employees.some(e => e.id.toLowerCase() === id.trim().toLowerCase())) {
@@ -61,6 +98,30 @@ export async function POST(request: Request) {
     if (username && username.trim() !== "") {
       if (employees.some(e => e.username && e.username.toLowerCase() === username.trim().toLowerCase())) {
         return NextResponse.json({ error: "Username already exists" }, { status: 400 });
+      }
+    }
+
+    // 5. Prevent duplicate QID / Passport
+    if (qidNumber && qidNumber.trim() !== "") {
+      if (employees.some(e => e.qidNumber && e.qidNumber.trim() === qidNumber.trim())) {
+        return NextResponse.json({ error: "Qatar ID number already exists" }, { status: 400 });
+      }
+    }
+    if (passportNumber && passportNumber.trim() !== "") {
+      if (employees.some(e => e.passportNumber && e.passportNumber.trim().toUpperCase() === passportNumber.trim().toUpperCase())) {
+        return NextResponse.json({ error: "Passport number already exists" }, { status: 400 });
+      }
+    }
+
+    // Date validations
+    if (qidExpiryDate && dateOfJoining) {
+      if (new Date(qidExpiryDate) < new Date(dateOfJoining)) {
+        return NextResponse.json({ error: "Qatar ID expiry date cannot be before date of joining" }, { status: 400 });
+      }
+    }
+    if (passportExpiryDate && passportIssueDate) {
+      if (new Date(passportExpiryDate) < new Date(passportIssueDate)) {
+        return NextResponse.json({ error: "Passport expiry date cannot be before issue date" }, { status: 400 });
       }
     }
 
@@ -101,10 +162,29 @@ export async function POST(request: Request) {
       isLoginEnabled: isLoginEnabled !== undefined ? isLoginEnabled : true,
       mustChangePassword: mustChangePassword || false,
       isLocked: isLocked || false,
-      failedLoginAttempts: 0
+      failedLoginAttempts: 0,
+      
+      // New company & identity fields
+      companyId: companyId || undefined,
+      qidNumber: qidNumber ? qidNumber.trim() : undefined,
+      qidExpiryDate: qidExpiryDate ? new Date(qidExpiryDate) : undefined,
+      passportNumber: passportNumber ? passportNumber.trim().toUpperCase() : undefined,
+      passportExpiryDate: passportExpiryDate ? new Date(passportExpiryDate) : undefined,
+      passportIssueDate: passportIssueDate ? new Date(passportIssueDate) : undefined,
+      passportIssuingCountry: passportIssuingCountry ? passportIssuingCountry.trim() : undefined,
+      dateOfJoining: dateOfJoining ? new Date(dateOfJoining) : undefined,
+      sponsor: sponsor ? sponsor.trim() : undefined
     } as any);
 
-    return NextResponse.json(newEmp);
+    const canView = canViewIdentity(auth.session?.user);
+    const copy = { ...newEmp };
+    delete (copy as any).passwordHash;
+    if (!canView) {
+      if (copy.qidNumber) copy.qidNumber = maskNumber(copy.qidNumber) as any;
+      if (copy.passportNumber) copy.passportNumber = maskNumber(copy.passportNumber) as any;
+    }
+
+    return NextResponse.json(copy);
   } catch (e) {
     return NextResponse.json({ error: "Failed to create employee" }, { status: 500 });
   }

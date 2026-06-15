@@ -698,6 +698,12 @@ export default function NewClearanceRequest() {
                     <span className="font-bold text-gray-900 text-right">{getWorkingForString(selectedEmployee)}</span>
                   </div>
                   <div className="flex justify-between">
+                    <span className="text-gray-500 font-medium">Company:</span>
+                    <span className="font-bold text-gray-900 text-right">
+                      {selectedEmployee.company ? `${selectedEmployee.company.companyCode} — ${selectedEmployee.company.companyName}` : "N/A"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
                     <span className="text-gray-500 font-medium">Sponsor:</span>
                     <span className="font-bold text-gray-900 text-right">{selectedEmployee.sponsor || "N/A"}</span>
                   </div>
@@ -715,6 +721,16 @@ export default function NewClearanceRequest() {
                     <span className="text-gray-500 font-medium">QID Expiry Date:</span>
                     <span className="font-bold text-gray-900 text-right">
                       {selectedEmployee.qidExpiryDate ? new Date(selectedEmployee.qidExpiryDate).toLocaleDateString() : "N/A"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500 font-medium">Passport Number:</span>
+                    <span className="font-bold text-gray-900 text-right">{selectedEmployee.passportNumber || "N/A"}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500 font-medium">Passport Expiry Date:</span>
+                    <span className="font-bold text-gray-900 text-right">
+                      {selectedEmployee.passportExpiryDate ? new Date(selectedEmployee.passportExpiryDate).toLocaleDateString() : "N/A"}
                     </span>
                   </div>
                   <div className="flex justify-between">

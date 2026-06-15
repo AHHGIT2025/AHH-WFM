@@ -2,6 +2,16 @@ import { NextResponse } from "next/server";
 import { checkApiAuth } from "@/lib/api-guards";
 import { mockDb } from "@ahh-wfm/mock-data";
 
+function parseDateStr(fieldLabel: string, val: any, errors: string[]): Date | undefined {
+  if (val === undefined || val === null || String(val).trim() === "") return undefined;
+  const parsed = new Date(val);
+  if (isNaN(parsed.getTime())) {
+    errors.push(`Invalid date format for ${fieldLabel}: ${val}`);
+    return undefined;
+  }
+  return parsed;
+}
+
 export async function POST(request: Request) {
   const auth = await checkApiAuth(["ADMIN", "SUPERVISOR"]);
   if (auth.error) return auth.error;
@@ -16,6 +26,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Missing rows array in payload" }, { status: 400 });
     }
 
+    const companies = await mockDb.getCompanies();
     const depts = await mockDb.getDepartments();
     const existingEmployees = await mockDb.getEmployees();
     const projects = await mockDb.getProjects();
@@ -41,7 +52,7 @@ export async function POST(request: Request) {
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
       const rowNum = i + 2;
-      const errors = [];
+      const errors: string[] = [];
 
       if (!row.employeeId || !row.fullName || !row.email || !row.department || !row.role) {
         errors.push("Missing core required parameters");
@@ -54,6 +65,73 @@ export async function POST(request: Request) {
       }
 
       try {
+        // 1. Resolve Company
+        let companyId: string | undefined = undefined;
+        const matchedEmp = existingEmployees.find(e => e.id === row.employeeId);
+        const isNewEmployee = !matchedEmp;
+        const empStatus = row.employmentStatus || (matchedEmp ? matchedEmp.employmentStatus : "ACTIVE");
+
+        if (row.companyCode) {
+          const matchComp = companies.find(c => c.companyCode.toLowerCase() === row.companyCode.toLowerCase());
+          if (matchComp) {
+            companyId = matchComp.id;
+          } else {
+            errors.push(`Company Code '${row.companyCode}' not found in Master Data`);
+          }
+        } else {
+          // Company required for new active employees
+          if (isNewEmployee && empStatus === "ACTIVE") {
+            errors.push("Company Code is required for active employees");
+          } else if (matchedEmp && matchedEmp.companyId) {
+            companyId = matchedEmp.companyId; // keep existing if not provided
+          }
+        }
+
+        // Date Parsing & Validation
+        const dateOfJoining = parseDateStr("joiningDate/dateOfJoining", row.dateOfJoining || row.joiningDate, errors);
+        const qidExpiryDate = parseDateStr("qidExpiryDate", row.qidExpiryDate, errors);
+        const passportIssueDate = parseDateStr("passportIssueDate", row.passportIssueDate, errors);
+        const passportExpiryDate = parseDateStr("passportExpiryDate", row.passportExpiryDate, errors);
+
+        // Business logic date rules
+        const finalJoiningDate = dateOfJoining || (matchedEmp ? (matchedEmp.dateOfJoining ? new Date(matchedEmp.dateOfJoining) : undefined) : undefined);
+        const finalQidExpiry = qidExpiryDate || (matchedEmp ? (matchedEmp.qidExpiryDate ? new Date(matchedEmp.qidExpiryDate) : undefined) : undefined);
+        if (finalJoiningDate && finalQidExpiry && finalQidExpiry < finalJoiningDate) {
+          errors.push("Qatar ID expiry date cannot be before date of joining");
+        }
+
+        const finalPassIssue = passportIssueDate || (matchedEmp ? (matchedEmp.passportIssueDate ? new Date(matchedEmp.passportIssueDate) : undefined) : undefined);
+        const finalPassExpiry = passportExpiryDate || (matchedEmp ? (matchedEmp.passportExpiryDate ? new Date(matchedEmp.passportExpiryDate) : undefined) : undefined);
+        if (finalPassIssue && finalPassExpiry && finalPassExpiry < finalPassIssue) {
+          errors.push("Passport expiry date cannot be before issue date");
+        }
+
+        // Document values (cleaned)
+        const qidNumber = row.qidNumber ? String(row.qidNumber).trim() : undefined;
+        const passportNumber = row.passportNumber ? String(row.passportNumber).trim().toUpperCase() : undefined;
+
+        // Duplicate QID check
+        if (qidNumber) {
+          const dupQid = existingEmployees.find(e => e.id !== row.employeeId && e.qidNumber && e.qidNumber.trim() === qidNumber);
+          if (dupQid) {
+            errors.push(`Qatar ID '${qidNumber}' is already assigned to employee ${dupQid.name} (${dupQid.id})`);
+          }
+        }
+
+        // Duplicate Passport check
+        if (passportNumber) {
+          const dupPass = existingEmployees.find(e => e.id !== row.employeeId && e.passportNumber && e.passportNumber.trim().toUpperCase() === passportNumber);
+          if (dupPass) {
+            errors.push(`Passport '${passportNumber}' is already assigned to employee ${dupPass.name} (${dupPass.id})`);
+          }
+        }
+
+        if (errors.length > 0) {
+          failedCount++;
+          failures.push({ row: rowNum, errors });
+          continue;
+        }
+
         // Resolve/Create department if needed
         let deptId = "";
         const matchedDept = depts.find(d => d.name.toLowerCase() === row.department.toLowerCase());
@@ -87,9 +165,6 @@ export async function POST(request: Request) {
           if (matchCat) positionCategoryId = matchCat.id;
         }
 
-        // Check if employee exists
-        const matchedEmp = existingEmployees.find(e => e.id === row.employeeId);
-        
         if (matchedEmp) {
           if (updateExisting) {
             // Update employee
@@ -106,7 +181,18 @@ export async function POST(request: Request) {
               isActive: row.employmentStatus ? (row.employmentStatus === "ACTIVE") : matchedEmp.isActive,
               positionCategoryId: positionCategoryId || matchedEmp.positionCategoryId,
               defaultProjectId: defaultProjectId || matchedEmp.defaultProjectId,
-              defaultSiteId: defaultSiteId || matchedEmp.defaultSiteId
+              defaultSiteId: defaultSiteId || matchedEmp.defaultSiteId,
+              
+              // New fields
+              companyId: companyId || matchedEmp.companyId,
+              qidNumber: qidNumber || matchedEmp.qidNumber,
+              qidExpiryDate: qidExpiryDate || matchedEmp.qidExpiryDate,
+              passportNumber: passportNumber || matchedEmp.passportNumber,
+              passportIssueDate: passportIssueDate || matchedEmp.passportIssueDate,
+              passportExpiryDate: passportExpiryDate || matchedEmp.passportExpiryDate,
+              passportIssuingCountry: row.passportIssuingCountry || matchedEmp.passportIssuingCountry,
+              dateOfJoining: dateOfJoining || matchedEmp.dateOfJoining,
+              sponsor: row.sponsor || matchedEmp.sponsor
             });
             importedCount++;
           } else {
@@ -130,7 +216,18 @@ export async function POST(request: Request) {
             workerCategory: row.workerCategory || "WHITE_COLLAR",
             positionCategoryId: positionCategoryId || undefined,
             defaultProjectId: defaultProjectId || undefined,
-            defaultSiteId: defaultSiteId || undefined
+            defaultSiteId: defaultSiteId || undefined,
+
+            // New fields
+            companyId: companyId || undefined,
+            qidNumber: qidNumber || undefined,
+            qidExpiryDate: qidExpiryDate || undefined,
+            passportNumber: passportNumber || undefined,
+            passportIssueDate: passportIssueDate || undefined,
+            passportExpiryDate: passportExpiryDate || undefined,
+            passportIssuingCountry: row.passportIssuingCountry || undefined,
+            dateOfJoining: dateOfJoining || undefined,
+            sponsor: row.sponsor || undefined
           });
           importedCount++;
         }

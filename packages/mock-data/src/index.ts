@@ -134,19 +134,19 @@ let memoryDb: {
     { id: "COMP-001", companyCode: "AHH", companyName: "Al Hattab Holding", isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
   ],
   departments: [
-    { id: "DEPT-001", name: "Operations", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-    { id: "DEPT-002", name: "Engineering", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-    { id: "DEPT-003", name: "Logistics", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-    { id: "DEPT-004", name: "Sales", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-    { id: "DEPT-005", name: "IT", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
+    { id: "DEPT-001", name: "Operations", companyId: "COMP-001", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+    { id: "DEPT-002", name: "Engineering", companyId: "COMP-001", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+    { id: "DEPT-003", name: "Logistics", companyId: "COMP-001", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+    { id: "DEPT-004", name: "Sales", companyId: "COMP-001", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+    { id: "DEPT-005", name: "IT", companyId: "COMP-001", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
   ],
   employees: [
-    { id: "SK-90210", name: "Sarah Kim", department: "Operations", departmentId: "DEPT-001", companyId: "COMP-001", designationId: "DES-HRM", role: "SUPERVISOR", status: "On Break", email: "sarah.kim@alhattab.qa", phone: "+974 5555 1234", shiftId: "MOR-102", passwordHash: defaultHash, isActive: true, dateOfJoining: "2022-01-15T00:00:00Z", qidNumber: "28532400123", qidExpiryDate: "2027-05-20T00:00:00Z", sponsor: "Al Hattab Holding", hasAccommodation: false, hasItAssets: true },
-    { id: "AM-8821", name: "Alex Martinez", department: "Engineering", departmentId: "DEPT-002", companyId: "COMP-001", designationId: "DES-ACC", workerCategory: "WHITE_COLLAR", role: "EMPLOYEE", status: "On Duty", email: "alex.m@alhattab.qa", phone: "+974 5555 5678", shiftId: "GEN-001", passwordHash: defaultHash, isActive: true, dateOfJoining: "2023-04-10T00:00:00Z", qidNumber: "28932400456", qidExpiryDate: "2026-12-15T00:00:00Z", sponsor: "Al Hattab Holding", hasAccommodation: false, hasItAssets: true },
-    { id: "BR-8823", name: "Brandon Reed", department: "Logistics", departmentId: "DEPT-003", companyId: "COMP-001", designationId: "DES-001", workerCategory: "BLUE_COLLAR", role: "EMPLOYEE", status: "On Duty", email: "brandon.r@alhattab.qa", phone: "+974 5555 9012", shiftId: "AFT-103", passwordHash: defaultHash, isActive: true, dateOfJoining: "2024-02-01T00:00:00Z", qidNumber: "29532400789", qidExpiryDate: "2025-08-30T00:00:00Z", sponsor: "Al Hattab Logistics", hasAccommodation: true, hasItAssets: false },
-    { id: "JL-8824", name: "Jordan Lee", department: "Sales", departmentId: "DEPT-004", companyId: "COMP-001", role: "EMPLOYEE", status: "Offline", email: "jordan.lee@alhattab.qa", phone: "+974 5555 3456", shiftId: "ROT-A", passwordHash: defaultHash, isActive: true, dateOfJoining: "2023-09-01T00:00:00Z", qidNumber: "29132400111", qidExpiryDate: "2027-01-10T00:00:00Z", sponsor: "Al Hattab Holding", hasAccommodation: false, hasItAssets: true },
-    { id: "AA-1001", name: "Ahmed Ali", department: "Operations", departmentId: "DEPT-001", companyId: "COMP-001", designationId: "DES-001", workerCategory: "BLUE_COLLAR", role: "EMPLOYEE", status: "Offline", email: "ahmed.ali@alhattab.qa", phone: "+974 6666 1111", shiftId: "GEN-001", passwordHash: defaultHash, isActive: true, dateOfJoining: "2024-05-15T00:00:00Z", qidNumber: "29632400222", qidExpiryDate: "2026-06-25T00:00:00Z", sponsor: "Al Hattab Contracting", hasAccommodation: true, hasItAssets: false },
-    { id: "AD-0001", name: "System Administrator", department: "IT", departmentId: "DEPT-005", companyId: "COMP-001", role: "ADMIN", status: "Offline", email: "admin@alhattab.qa", phone: "+974 0000 0000", shiftId: "GEN-001", passwordHash: defaultHash, isActive: true, dateOfJoining: "2020-01-01T00:00:00Z", qidNumber: "28032400000", qidExpiryDate: "2029-12-31T00:00:00Z", sponsor: "Al Hattab Holding", hasAccommodation: false, hasItAssets: true }
+    { id: "SK-90210", name: "Sarah Kim", department: "Operations", departmentId: "DEPT-001", companyId: "COMP-001", designationId: "DES-HRM", role: "SUPERVISOR", status: "On Break", email: "sarah.kim@alhattab.qa", phone: "+974 5555 1234", shiftId: "MOR-102", passwordHash: defaultHash, isActive: true, dateOfJoining: "2022-01-15T00:00:00Z", qidNumber: "28532400123", qidExpiryDate: "2027-05-20T00:00:00Z", passportNumber: "P-SK90210", passportIssueDate: "2022-01-15T00:00:00Z", passportExpiryDate: "2032-01-15T00:00:00Z", passportIssuingCountry: "South Korea", sponsor: "Al Hattab Holding", hasAccommodation: false, hasItAssets: true },
+    { id: "AM-8821", name: "Alex Martinez", department: "Engineering", departmentId: "DEPT-002", companyId: "COMP-001", designationId: "DES-ACC", workerCategory: "WHITE_COLLAR", role: "EMPLOYEE", status: "On Duty", email: "alex.m@alhattab.qa", phone: "+974 5555 5678", shiftId: "GEN-001", passwordHash: defaultHash, isActive: true, dateOfJoining: "2023-04-10T00:00:00Z", qidNumber: "28932400456", qidExpiryDate: "2026-12-15T00:00:00Z", passportNumber: "P-AM8821", passportIssueDate: "2023-04-10T00:00:00Z", passportExpiryDate: "2033-04-10T00:00:00Z", passportIssuingCountry: "Spain", sponsor: "Al Hattab Holding", hasAccommodation: false, hasItAssets: true },
+    { id: "BR-8823", name: "Brandon Reed", department: "Logistics", departmentId: "DEPT-003", companyId: "COMP-001", designationId: "DES-001", workerCategory: "BLUE_COLLAR", role: "EMPLOYEE", status: "On Duty", email: "brandon.r@alhattab.qa", phone: "+974 5555 9012", shiftId: "AFT-103", passwordHash: defaultHash, isActive: true, dateOfJoining: "2024-02-01T00:00:00Z", qidNumber: "29532400789", qidExpiryDate: "2025-08-30T00:00:00Z", passportNumber: "P-BR8823", passportIssueDate: "2024-02-01T00:00:00Z", passportExpiryDate: "2034-02-01T00:00:00Z", passportIssuingCountry: "United Kingdom", sponsor: "Al Hattab Logistics", hasAccommodation: true, hasItAssets: false },
+    { id: "JL-8824", name: "Jordan Lee", department: "Sales", departmentId: "DEPT-004", companyId: "COMP-001", role: "EMPLOYEE", status: "Offline", email: "jordan.lee@alhattab.qa", phone: "+974 5555 3456", shiftId: "ROT-A", passwordHash: defaultHash, isActive: true, dateOfJoining: "2023-09-01T00:00:00Z", qidNumber: "29132400111", qidExpiryDate: "2027-01-10T00:00:00Z", passportNumber: "P-JL8824", passportIssueDate: "2023-09-01T00:00:00Z", passportExpiryDate: "2033-09-01T00:00:00Z", passportIssuingCountry: "United States", sponsor: "Al Hattab Holding", hasAccommodation: false, hasItAssets: true },
+    { id: "AA-1001", name: "Ahmed Ali", department: "Operations", departmentId: "DEPT-001", companyId: "COMP-001", designationId: "DES-001", workerCategory: "BLUE_COLLAR", role: "EMPLOYEE", status: "Offline", email: "ahmed.ali@alhattab.qa", phone: "+974 6666 1111", shiftId: "GEN-001", passwordHash: defaultHash, isActive: true, dateOfJoining: "2024-05-15T00:00:00Z", qidNumber: "29632400222", qidExpiryDate: "2026-06-25T00:00:00Z", passportNumber: "P-AA1001", passportIssueDate: "2024-05-15T00:00:00Z", passportExpiryDate: "2034-05-15T00:00:00Z", passportIssuingCountry: "Egypt", sponsor: "Al Hattab Contracting", hasAccommodation: true, hasItAssets: false },
+    { id: "AD-0001", name: "System Administrator", department: "IT", departmentId: "DEPT-005", companyId: "COMP-001", role: "ADMIN", status: "Offline", email: "admin@alhattab.qa", phone: "+974 0000 0000", shiftId: "GEN-001", passwordHash: defaultHash, isActive: true, dateOfJoining: "2020-01-01T00:00:00Z", qidNumber: "28032400000", qidExpiryDate: "2029-12-31T00:00:00Z", passportNumber: "P-AD0001", passportIssueDate: "2020-01-01T00:00:00Z", passportExpiryDate: "2030-01-01T00:00:00Z", passportIssuingCountry: "Qatar", sponsor: "Al Hattab Holding", hasAccommodation: false, hasItAssets: true }
   ],
   attendance: [
     { id: "ATT-001", employeeId: "AM-8821", employeeName: "Alex Martinez", checkIn: "2026-06-11T08:55:00Z", checkOut: "2026-06-11T18:02:00Z", originalCheckIn: "2026-06-11T08:55:00Z", originalCheckOut: "2026-06-11T18:02:00Z", lat: 25.2854, lng: 51.5310, device: "Galaxy S23 · 5G · GPS Active", status: "ON_TIME", locationName: "Doha Headquarters", lateMinutes: 0 },
@@ -1093,6 +1093,22 @@ export const mockDb = {
             emp.qidExpiryDate = new Date(mockEmp.qidExpiryDate);
             changed = true;
           }
+          if (!emp.passportNumber && mockEmp.passportNumber) {
+            emp.passportNumber = mockEmp.passportNumber;
+            changed = true;
+          }
+          if (!emp.passportExpiryDate && mockEmp.passportExpiryDate) {
+            emp.passportExpiryDate = new Date(mockEmp.passportExpiryDate);
+            changed = true;
+          }
+          if (!emp.passportIssueDate && mockEmp.passportIssueDate) {
+            emp.passportIssueDate = new Date(mockEmp.passportIssueDate);
+            changed = true;
+          }
+          if (!emp.passportIssuingCountry && mockEmp.passportIssuingCountry) {
+            emp.passportIssuingCountry = mockEmp.passportIssuingCountry;
+            changed = true;
+          }
           if (!emp.sponsor && mockEmp.sponsor) {
             emp.sponsor = mockEmp.sponsor;
             changed = true;
@@ -1117,6 +1133,10 @@ export const mockDb = {
               dateOfJoining: emp.dateOfJoining,
               qidNumber: emp.qidNumber,
               qidExpiryDate: emp.qidExpiryDate,
+              passportNumber: emp.passportNumber,
+              passportExpiryDate: emp.passportExpiryDate,
+              passportIssueDate: emp.passportIssueDate,
+              passportIssuingCountry: emp.passportIssuingCountry,
               sponsor: emp.sponsor,
               hasAccommodation: emp.hasAccommodation,
               hasItAssets: emp.hasItAssets
@@ -3047,6 +3067,32 @@ export const mockDb = {
     return readDb().announcements;
   },
 
+  // Companies CRUD
+  getCompanies: async (): Promise<Company[]> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      const companies = await prismaClient.company.findMany({
+        orderBy: { companyName: "asc" }
+      });
+      return companies.map((c: any) => ({
+        id: c.id,
+        companyCode: c.companyCode,
+        companyName: c.companyName,
+        isActive: c.isActive,
+        createdAt: c.createdAt.toISOString(),
+        updatedAt: c.updatedAt.toISOString()
+      }));
+    }
+    const db = readDb();
+    if (!db.companies) {
+      db.companies = [
+        { id: "COMP-001", companyCode: "AHH", companyName: "Al Hattab Holding", isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
+      ];
+      writeDb(db);
+    }
+    return db.companies;
+  },
+
   // Departments CRUD
   getDepartments: async (): Promise<Department[]> => {
     if (isDbConnected()) {
@@ -3057,6 +3103,7 @@ export const mockDb = {
       return departments.map((d: any) => ({
         id: d.id,
         name: d.name,
+        companyId: d.companyId || undefined,
         createdAt: d.createdAt.toISOString(),
         updatedAt: d.updatedAt.toISOString()
       }));
@@ -3064,25 +3111,26 @@ export const mockDb = {
     const db = readDb();
     if (!db.departments) {
       db.departments = [
-        { id: "DEPT-001", name: "Operations", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-        { id: "DEPT-002", name: "Engineering", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-        { id: "DEPT-003", name: "Logistics", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-        { id: "DEPT-004", name: "Sales", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-        { id: "DEPT-005", name: "IT", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
+        { id: "DEPT-001", name: "Operations", companyId: "COMP-001", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+        { id: "DEPT-002", name: "Engineering", companyId: "COMP-001", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+        { id: "DEPT-003", name: "Logistics", companyId: "COMP-001", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+        { id: "DEPT-004", name: "Sales", companyId: "COMP-001", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+        { id: "DEPT-005", name: "IT", companyId: "COMP-001", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
       ];
       writeDb(db);
     }
     return db.departments;
   },
-  createDepartment: async (name: string): Promise<Department> => {
+  createDepartment: async (name: string, companyId?: string): Promise<Department> => {
     if (isDbConnected()) {
       await seedMySQL();
       const dept = await prismaClient.department.create({
-        data: { name }
+        data: { name, companyId }
       });
       return {
         id: dept.id,
         name: dept.name,
+        companyId: dept.companyId || undefined,
         createdAt: dept.createdAt.toISOString(),
         updatedAt: dept.updatedAt.toISOString()
       };
@@ -3092,6 +3140,7 @@ export const mockDb = {
     const newDept: Department = {
       id: `DEPT-${Date.now()}`,
       name,
+      companyId,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
@@ -3110,6 +3159,7 @@ export const mockDb = {
         return {
           id: dept.id,
           name: dept.name,
+          companyId: dept.companyId || undefined,
           createdAt: dept.createdAt.toISOString(),
           updatedAt: dept.updatedAt.toISOString()
         };

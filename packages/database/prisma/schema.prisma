@@ -31,6 +31,10 @@ model Employee {
   dateOfJoining      DateTime?
   qidNumber          String?
   qidExpiryDate      DateTime?
+  passportNumber     String?
+  passportExpiryDate DateTime?
+  passportIssueDate  DateTime?
+  passportIssuingCountry String?
   sponsor            String?
   hasAccommodation   Boolean         @default(false)
   hasItAssets        Boolean         @default(false)
@@ -992,6 +996,8 @@ model ClearanceRequest {
   workingForSnapshot    String?
   qidNumberSnapshot     String?
   qidExpiryDateSnapshot String?
+  passportNumberSnapshot     String?
+  passportExpiryDateSnapshot String?
   
   // Dates
   departureDate         DateTime?

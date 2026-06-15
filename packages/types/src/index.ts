@@ -10,6 +10,7 @@ export interface Company {
 export interface Department {
   id: string;
   name: string;
+  companyId?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -61,6 +62,10 @@ export interface Employee {
   dateOfJoining?: Date | string;
   qidNumber?: string;
   qidExpiryDate?: Date | string;
+  passportNumber?: string;
+  passportExpiryDate?: Date | string;
+  passportIssueDate?: Date | string;
+  passportIssuingCountry?: string;
   sponsor?: string;
   hasAccommodation?: boolean;
   hasItAssets?: boolean;

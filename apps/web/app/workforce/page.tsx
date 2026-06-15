@@ -47,6 +47,19 @@ export default function WorkforcePage() {
   const [allSites, setAllSites] = useState<any[]>([]);
   const [designations, setDesignations] = useState<any[]>([]);
   const [trades, setTrades] = useState<any[]>([]);
+  const [companies, setCompanies] = useState<any[]>([]);
+  const [empCompanyId, setEmpCompanyId] = useState("");
+  const [empQidNumber, setEmpQidNumber] = useState("");
+  const [empQidExpiryDate, setEmpQidExpiryDate] = useState("");
+  const [empPassportNumber, setEmpPassportNumber] = useState("");
+  const [empPassportExpiryDate, setEmpPassportExpiryDate] = useState("");
+  const [empPassportIssueDate, setEmpPassportIssueDate] = useState("");
+  const [empPassportIssuingCountry, setEmpPassportIssuingCountry] = useState("");
+  const [empDateOfJoining, setEmpDateOfJoining] = useState("");
+  const [empSponsor, setEmpSponsor] = useState("");
+  const [companyFilter, setCompanyFilter] = useState("all");
+  const [addTab, setAddTab] = useState("basic");
+  const [prevCompanyId, setPrevCompanyId] = useState("");
   const [locations, setLocations] = useState<any[]>([]);
   const [allowedPunchLocations, setAllowedPunchLocations] = useState<any[]>([]);
   const [empDefaultPunchLocationId, setEmpDefaultPunchLocationId] = useState("");
@@ -119,6 +132,7 @@ export default function WorkforcePage() {
     setPositionCategoryFilter("all");
     setProjectFilter("all");
     setSiteFilter("all");
+    setCompanyFilter("all");
     fetchDb();
   };
 
@@ -145,7 +159,7 @@ export default function WorkforcePage() {
 
   const fetchDb = async () => {
     try {
-      const [empRes, deptRes, projRes, catRes, desRes, trdRes, locRes, ccRes, aplRes] = await Promise.all([
+      const [empRes, deptRes, projRes, catRes, desRes, trdRes, locRes, ccRes, aplRes, compRes] = await Promise.all([
         fetch("/api/v1/employees"),
         fetch("/api/v1/departments"),
         fetch("/api/v1/projects"),
@@ -154,7 +168,8 @@ export default function WorkforcePage() {
         fetch("/api/v1/masters/trade-classifications"),
         fetch("/api/v1/masters/locations"),
         fetch("/api/v1/masters/cost-centers"),
-        fetch("/api/v1/attendance/allowed-locations")
+        fetch("/api/v1/attendance/allowed-locations"),
+        fetch("/api/v1/masters/companies")
       ]);
       if (empRes.ok && deptRes.ok) {
         setEmployees(await empRes.json());
@@ -219,11 +234,72 @@ export default function WorkforcePage() {
     }
   }, [projects]);
 
+  useEffect(() => {
+    if (empCompanyId && prevCompanyId && empCompanyId !== prevCompanyId) {
+      let clearedAny = false;
+      let msgParts = [];
+      if (empDeptId) {
+        const dept = departments.find(d => d.id === empDeptId);
+        if (dept && dept.companyId && dept.companyId !== empCompanyId) {
+          setEmpDeptId("");
+          clearedAny = true;
+          msgParts.push("Department");
+        }
+      }
+      if (empCostCenterId) {
+        const cc = costCenters.find(c => c.id === empCostCenterId);
+        if (cc && cc.companyId && cc.companyId !== empCompanyId) {
+          setEmpCostCenterId("");
+          clearedAny = true;
+          msgParts.push("Cost Center");
+        }
+      }
+      if (empDefaultLocationId) {
+        const loc = locations.find(l => l.id === empDefaultLocationId);
+        if (loc && loc.companyId && loc.companyId !== empCompanyId) {
+          setEmpDefaultLocationId("");
+          clearedAny = true;
+          msgParts.push("Location");
+        }
+      }
+      if (empDefaultProjectId) {
+        const proj = projects.find(p => p.id === empDefaultProjectId);
+        if (proj && proj.companyId && proj.companyId !== empCompanyId) {
+          setEmpDefaultProjectId("");
+          setEmpDefaultSiteId("");
+          clearedAny = true;
+          msgParts.push("Project & Site");
+        }
+      }
+      if (clearedAny) {
+        setValidationError(`Company changed. Cleared mismatched fields: ${msgParts.join(", ")}`);
+        setTimeout(() => setValidationError(null), 5000);
+      }
+    }
+    setPrevCompanyId(empCompanyId);
+  }, [empCompanyId, departments, costCenters, locations, projects]);
+
   // Employee form validation helper
   const validateEmployeeForm = (email: string, name: string, role: string, id: string, isEdit = false): boolean => {
     if (!isEdit && (!id || id.trim() === "")) {
       setValidationError("Employee ID is required");
       return false;
+    }
+    if (!isEdit && empEmploymentStatus === "ACTIVE" && (!empCompanyId || empCompanyId.trim() === "")) {
+      setValidationError("Company is required");
+      return false;
+    }
+    if (empQidExpiryDate && empDateOfJoining) {
+      if (new Date(empQidExpiryDate) < new Date(empDateOfJoining)) {
+        setValidationError("Qatar ID expiry date cannot be before date of joining");
+        return false;
+      }
+    }
+    if (empPassportExpiryDate && empPassportIssueDate) {
+      if (new Date(empPassportExpiryDate) < new Date(empPassportIssueDate)) {
+        setValidationError("Passport expiry date cannot be before issue date");
+        return false;
+      }
     }
     if (!name || name.trim() === "") {
       setValidationError("Employee name is required");
@@ -291,7 +367,15 @@ export default function WorkforcePage() {
           siteSupervisorId: empSiteSupervisorId || null,
           isSupervisor: empIsSupervisor,
           supervisorScopeType: empSupervisorScopeType,
-
+          companyId: empCompanyId || undefined,
+          qidNumber: empQidNumber ? empQidNumber.trim() : undefined,
+          qidExpiryDate: empQidExpiryDate || undefined,
+          passportNumber: empPassportNumber ? empPassportNumber.trim().toUpperCase() : undefined,
+          passportExpiryDate: empPassportExpiryDate || undefined,
+          passportIssueDate: empPassportIssueDate || undefined,
+          passportIssuingCountry: empPassportIssuingCountry ? empPassportIssuingCountry.trim() : undefined,
+          dateOfJoining: empDateOfJoining || undefined,
+          sponsor: empSponsor ? empSponsor.trim() : undefined,
         })
       });
 
@@ -333,6 +417,16 @@ export default function WorkforcePage() {
         setEmpRequireOutOfZoneReview(true);
         setEmpGeofenceRadiusOverrideMeters("");
         setEmpAllowedPunchLocationAssignments([]);
+        setEmpCompanyId("");
+        setEmpQidNumber("");
+        setEmpQidExpiryDate("");
+        setEmpPassportNumber("");
+        setEmpPassportExpiryDate("");
+        setEmpPassportIssueDate("");
+        setEmpPassportIssuingCountry("");
+        setEmpDateOfJoining("");
+        setEmpSponsor("");
+        setAddTab("basic");
         fetchDb();
       } else {
         const err = await res.json();
@@ -379,7 +473,16 @@ export default function WorkforcePage() {
           supervisorScopeType: empSupervisorScopeType,
           username: empUsername || null,
           authMode: empAuthMode,
-          isLoginEnabled: empIsLoginEnabled
+          isLoginEnabled: empIsLoginEnabled,
+          companyId: empCompanyId || null,
+          qidNumber: empQidNumber ? empQidNumber.trim() : null,
+          qidExpiryDate: empQidExpiryDate || null,
+          passportNumber: empPassportNumber ? empPassportNumber.trim().toUpperCase() : null,
+          passportExpiryDate: empPassportExpiryDate || null,
+          passportIssueDate: empPassportIssueDate || null,
+          passportIssuingCountry: empPassportIssuingCountry ? empPassportIssuingCountry.trim() : null,
+          dateOfJoining: empDateOfJoining || null,
+          sponsor: empSponsor ? empSponsor.trim() : null
         })
       });
 
@@ -581,6 +684,15 @@ export default function WorkforcePage() {
     setEmpSiteSupervisorId((emp as any).siteSupervisorId || "");
     setEmpIsSupervisor(!!(emp as any).isSupervisor);
     setEmpSupervisorScopeType((emp as any).supervisorScopeType || "DIRECT_REPORTS");
+    setEmpCompanyId(emp.companyId || "");
+    setEmpQidNumber(emp.qidNumber || "");
+    setEmpQidExpiryDate(emp.qidExpiryDate ? new Date(emp.qidExpiryDate).toISOString().split("T")[0] : "");
+    setEmpPassportNumber(emp.passportNumber || "");
+    setEmpPassportExpiryDate(emp.passportExpiryDate ? new Date(emp.passportExpiryDate).toISOString().split("T")[0] : "");
+    setEmpPassportIssueDate(emp.passportIssueDate ? new Date(emp.passportIssueDate).toISOString().split("T")[0] : "");
+    setEmpPassportIssuingCountry(emp.passportIssuingCountry || "");
+    setEmpDateOfJoining(emp.dateOfJoining ? new Date(emp.dateOfJoining).toISOString().split("T")[0] : "");
+    setEmpSponsor(emp.sponsor || "");
     setEmpIsStandbyEligible(!!(emp as any).isStandbyEligible);
     setEmpDefaultPunchLocationId((emp as any).defaultPunchLocationId || "");
     setEmpAllowMultiplePunchLocations(!!(emp as any).allowMultiplePunchLocations);
@@ -696,6 +808,7 @@ export default function WorkforcePage() {
       emp.email.toLowerCase().includes(search.toLowerCase());
 
     const matchesDept = deptFilter === "all" || emp.departmentId === deptFilter;
+    const matchesCompany = companyFilter === "all" || emp.companyId === companyFilter;
 
     // Filter by Worker Category
     const matchesCategory = categoryFilter === "all" || emp.workerCategory === categoryFilter;
@@ -725,7 +838,7 @@ export default function WorkforcePage() {
       matchesStatus = isEmpActive && (emp.status === statusFilter || emp.dutyStatus === statusFilter);
     }
 
-    return matchesSearch && matchesDept && matchesCategory && matchesPositionCategory && matchesProject && matchesSite && matchesStatus;
+    return matchesSearch && matchesDept && matchesCategory && matchesPositionCategory && matchesProject && matchesSite && matchesStatus && matchesCompany;
   });
 
   return (
@@ -799,6 +912,18 @@ export default function WorkforcePage() {
           />
         </div>
         <div className="flex flex-wrap gap-2 w-full md:w-auto">
+          <select
+            className="bg-surface border border-outline-variant text-sm rounded-lg py-2 px-4 focus:ring-2 focus:ring-primary/20 focus:border-primary w-full sm:w-48 outline-none"
+            value={companyFilter}
+            onChange={(e) => setCompanyFilter(e.target.value)}
+          >
+            <option value="all">All Companies</option>
+            {companies.map((comp) => (
+              <option key={comp.id} value={comp.id}>
+                {comp.companyCode} — {comp.companyName}
+              </option>
+            ))}
+          </select>
           <select
             className="bg-surface border border-outline-variant text-sm rounded-lg py-2 px-4 focus:ring-2 focus:ring-primary/20 focus:border-primary w-full sm:w-48 outline-none"
             value={deptFilter}
@@ -932,6 +1057,19 @@ export default function WorkforcePage() {
                 <div>
                   <p className="opacity-60 font-semibold uppercase">ID</p>
                   <p className="font-mono text-xs mt-0.5 text-primary font-bold">{emp.id}</p>
+                </div>
+                <div>
+                  <p className="opacity-60 font-semibold uppercase">Company</p>
+                  {(() => {
+                    const comp = companies.find(c => c.id === emp.companyId);
+                    return comp ? (
+                      <p className="font-bold text-primary mt-0.5">{comp.companyCode} — {comp.companyName}</p>
+                    ) : (
+                      <p className="font-bold text-status-error bg-status-error/10 px-2 py-0.5 rounded text-[10px] inline-flex items-center gap-1 mt-0.5">
+                        ⚠️ Company missing
+                      </p>
+                    );
+                  })()}
                 </div>
                 <div>
                   <p className="opacity-60 font-semibold uppercase">Department</p>
@@ -1113,460 +1251,529 @@ export default function WorkforcePage() {
               {validationError}
             </div>
           )}
-          <div className="grid grid-cols-2 gap-4">
-            <Input
-              label="Employee ID"
-              placeholder="e.g. AA-1002"
-              value={empId}
-              onChange={(e) => setEmpId(e.target.value)}
-              required
-            />
-            <Input
-              label="Full Name"
-              placeholder="e.g. Ahmed Al-Mansoori"
-              value={empName}
-              onChange={(e) => setEmpName(e.target.value)}
-              required
-            />
+
+          <div className="flex border-b border-outline-variant/30 mb-4 overflow-x-auto no-scrollbar">
+            <button type="button" className={`px-4 py-2 text-xs font-bold border-b-2 whitespace-nowrap ${addTab === 'basic' ? 'border-primary text-primary' : 'border-transparent text-on-surface-variant hover:text-on-surface'}`} onClick={() => setAddTab('basic')}>Basic Info</button>
+            <button type="button" className={`px-4 py-2 text-xs font-bold border-b-2 whitespace-nowrap ${addTab === 'assignment' ? 'border-primary text-primary' : 'border-transparent text-on-surface-variant hover:text-on-surface'}`} onClick={() => setAddTab('assignment')}>Work Assignment</button>
+            <button type="button" className={`px-4 py-2 text-xs font-bold border-b-2 whitespace-nowrap ${addTab === 'identity' ? 'border-primary text-primary' : 'border-transparent text-on-surface-variant hover:text-on-surface'}`} onClick={() => setAddTab('identity')}>Identity Documents</button>
+            <button type="button" className={`px-4 py-2 text-xs font-bold border-b-2 whitespace-nowrap ${addTab === 'punch' ? 'border-primary text-primary' : 'border-transparent text-on-surface-variant hover:text-on-surface'}`} onClick={() => setAddTab('punch')}>Punch Settings</button>
+            <button type="button" className={`px-4 py-2 text-xs font-bold border-b-2 whitespace-nowrap ${addTab === 'supervisor' ? 'border-primary text-primary' : 'border-transparent text-on-surface-variant hover:text-on-surface'}`} onClick={() => setAddTab('supervisor')}>Supervisor & Reporting</button>
+            <button type="button" className={`px-4 py-2 text-xs font-bold border-b-2 whitespace-nowrap ${addTab === 'account' ? 'border-primary text-primary' : 'border-transparent text-on-surface-variant hover:text-on-surface'}`} onClick={() => setAddTab('account')}>Account Access</button>
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <Input
-              label="Email Address"
-              type="email"
-              placeholder="e.g. ahmed@alhattab.qa"
-              value={empEmail}
-              onChange={(e) => setEmpEmail(e.target.value)}
-              required
-            />
-            <Input
-              label="Phone Number"
-              placeholder="e.g. +974 5555 4433"
-              value={empPhone}
-              onChange={(e) => setEmpPhone(e.target.value)}
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Department</label>
-              <select
-                className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                value={empDeptId}
-                onChange={(e) => setEmpDeptId(e.target.value)}
-              >
-                <option value="">Select Department (Optional)</option>
-                {departments.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="space-y-1">
-              <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Role</label>
-              <select
-                className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                value={empRole}
-                onChange={(e) => setEmpRole(e.target.value)}
-              >
-                <option value="EMPLOYEE">EMPLOYEE (Mobile App)</option>
-                <option value="SUPERVISOR">SUPERVISOR (Web Admin)</option>
-                <option value="ADMIN">ADMIN (Full Control)</option>
-              </select>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Worker Category</label>
-              <select
-                className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                value={empWorkerCategory}
-                onChange={(e) => setEmpWorkerCategory(e.target.value)}
-              >
-                <option value="WHITE_COLLAR">White Collar (Staff)</option>
-                <option value="BLUE_COLLAR">Blue Collar (Laborer)</option>
-              </select>
-            </div>
-            <div className="space-y-1">
-              <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Default Shift</label>
-              <select
-                className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                value={empShiftId}
-                onChange={(e) => setEmpShiftId(e.target.value)}
-              >
-                <option value="GEN-001">General Shift (9 AM - 6 PM)</option>
-                <option value="MOR-102">Morning Shift (6 AM - 2 PM)</option>
-                <option value="AFT-103">Afternoon Shift (2 PM - 10 PM)</option>
-                <option value="NGT-201">Night Shift (10 PM - 6 AM)</option>
-              </select>
-            </div>
-          </div>
-          {empWorkerCategory === "BLUE_COLLAR" && (
-            <div className="p-4 bg-secondary/5 border border-secondary/10 rounded-xl space-y-3">
-              <p className="text-[10px] font-bold text-secondary uppercase tracking-wider">Blue Collar Core Settings</p>
+
+          {/* BASIC INFO TAB */}
+          {addTab === 'basic' && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <Input
+                  label="Employee ID *"
+                  placeholder="e.g. AA-1002"
+                  value={empId}
+                  onChange={(e) => setEmpId(e.target.value)}
+                  required
+                />
+                <Input
+                  label="Full Name *"
+                  placeholder="e.g. Ahmed Al-Mansoori"
+                  value={empName}
+                  onChange={(e) => setEmpName(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <Input
+                  label="Email Address *"
+                  type="email"
+                  placeholder="e.g. ahmed@alhattab.qa"
+                  value={empEmail}
+                  onChange={(e) => setEmpEmail(e.target.value)}
+                  required
+                />
+                <Input
+                  label="Phone Number"
+                  placeholder="e.g. +974 5555 4433"
+                  value={empPhone}
+                  onChange={(e) => setEmpPhone(e.target.value)}
+                />
+              </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Trade / Position Category</label>
+                  <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Worker Category</label>
                   <select
-                    className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-2.5 py-2 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                    value={empPositionCategoryId}
-                    onChange={(e) => setEmpPositionCategoryId(e.target.value)}
-                    required
+                    className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                    value={empWorkerCategory}
+                    onChange={(e) => setEmpWorkerCategory(e.target.value)}
                   >
-                    <option value="">Select Trade/Position Category</option>
-                    {positionCategories.map((c) => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
+                    <option value="WHITE_COLLAR">White Collar (Staff)</option>
+                    <option value="BLUE_COLLAR">Blue Collar (Laborer)</option>
                   </select>
                 </div>
                 <div className="space-y-1">
-                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Designation *</label>
+                  <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Role</label>
                   <select
-                    className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-2.5 py-2 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                    value={empDesignationId}
-                    onChange={(e) => setEmpDesignationId(e.target.value)}
-                    required
+                    className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                    value={empRole}
+                    onChange={(e) => setEmpRole(e.target.value)}
                   >
-                    <option value="">Select Designation</option>
-                    {designations.map((d) => (
-                      <option key={d.id} value={d.id}>{d.name} ({d.code})</option>
-                    ))}
+                    <option value="EMPLOYEE">EMPLOYEE (Mobile App)</option>
+                    <option value="SUPERVISOR">SUPERVISOR (Web Admin)</option>
+                    <option value="ADMIN">ADMIN (Full Control)</option>
                   </select>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Trade Classification *</label>
+                  <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Employment Status</label>
                   <select
-                    className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-2.5 py-2 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                    value={empTradeClassificationId}
-                    onChange={(e) => setEmpTradeClassificationId(e.target.value)}
-                    required
+                    className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                    value={empEmploymentStatus}
+                    onChange={(e) => setEmpEmploymentStatus(e.target.value)}
                   >
-                    <option value="">Select Trade Classification</option>
-                    {trades.map((t) => (
-                      <option key={t.id} value={t.id}>{t.name} ({t.code})</option>
-                    ))}
+                    <option value="ACTIVE">ACTIVE</option>
+                    <option value="INACTIVE">DEACTIVATED</option>
                   </select>
                 </div>
                 <div className="space-y-1">
-                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Default Project</label>
+                  <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Duty Status</label>
                   <select
-                    className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-2.5 py-2 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                    value={empDefaultProjectId}
-                    onChange={(e) => setEmpDefaultProjectId(e.target.value)}
+                    className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                    value={empDutyStatus}
+                    onChange={(e) => setEmpDutyStatus(e.target.value)}
                   >
-                    <option value="">Select Project</option>
-                    {projects.map((p) => (
-                      <option key={p.id} value={p.id}>{p.projectName}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Default Site</label>
-                  <select
-                    className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-2.5 py-2 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                    value={empDefaultSiteId}
-                    onChange={(e) => setEmpDefaultSiteId(e.target.value)}
-                    disabled={!empDefaultProjectId}
-                  >
-                    <option value="">Select Site</option>
-                    {formSites.map((s) => (
-                      <option key={s.id} value={s.id}>{s.siteName}</option>
-                    ))}
+                    <option value="OFF_DUTY">Offline</option>
+                    <option value="ON_DUTY">On Duty</option>
+                    <option value="ON_BREAK">On Break</option>
+                    <option value="ON_LEAVE">On Leave</option>
                   </select>
                 </div>
               </div>
             </div>
           )}
 
-
-          {/* Supervisor Hierarchy Settings */}
-          <div className="p-4 bg-primary/5 border border-primary/10 rounded-xl space-y-3 mt-4">
-            <p className="text-[10px] font-bold text-primary uppercase tracking-wider">Supervisor & Hierarchy</p>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Immediate Supervisor (White Collar)</label>
-                <select
-                  className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                  value={empImmediateSupervisorId}
-                  onChange={(e) => setEmpImmediateSupervisorId(e.target.value)}
-                >
-                  <option value="">Select Supervisor</option>
-                  {employees.filter(e => e.id !== selectedEmp?.id).map((e) => (
-                    <option key={e.id} value={e.id}>{e.name} ({e.id})</option>
-                  ))}
-                </select>
-              </div>
-              <div className="space-y-1">
-                <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Reporting Manager</label>
-                <select
-                  className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                  value={empReportingManagerId}
-                  onChange={(e) => setEmpReportingManagerId(e.target.value)}
-                >
-                  <option value="">Select Manager</option>
-                  {employees.filter(e => e.id !== selectedEmp?.id).map((e) => (
-                    <option key={e.id} value={e.id}>{e.name} ({e.id})</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-            {empWorkerCategory === "BLUE_COLLAR" && (
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Project Supervisor</label>
-                  <select
-                    className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                    value={empProjectSupervisorId}
-                    onChange={(e) => setEmpProjectSupervisorId(e.target.value)}
-                  >
-                    <option value="">Select Supervisor</option>
-                    {employees.filter(e => e.id !== selectedEmp?.id).map((e) => (
-                      <option key={e.id} value={e.id}>{e.name} ({e.id})</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="space-y-1">
-                  <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Site Supervisor</label>
-                  <select
-                    className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                    value={empSiteSupervisorId}
-                    onChange={(e) => setEmpSiteSupervisorId(e.target.value)}
-                  >
-                    <option value="">Select Supervisor</option>
-                    {employees.filter(e => e.id !== selectedEmp?.id).map((e) => (
-                      <option key={e.id} value={e.id}>{e.name} ({e.id})</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-            )}
-            <div className="flex items-center gap-6 pt-2">
-              <label className="flex items-center gap-2 text-xs font-bold text-on-surface cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={empIsSupervisor}
-                  onChange={(e) => setEmpIsSupervisor(e.target.checked)}
-                  className="w-4 h-4 rounded border-outline-variant text-primary focus:ring-0"
-                />
-                Is Supervisor
-              </label>
-              {empIsSupervisor && (
-                <div className="flex items-center gap-2">
-                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Scope Type:</label>
-                  <select
-                    className="bg-surface-container-low border border-outline-variant rounded-lg px-2 text-xs py-1"
-                    value={empSupervisorScopeType}
-                    onChange={(e) => setEmpSupervisorScopeType(e.target.value)}
-                  >
-                    <option value="DIRECT_REPORTS">Direct Reports Only</option>
-                    <option value="DEPARTMENT">Department Level</option>
-                    <option value="PROJECT">Project Level</option>
-                    <option value="SITE">Site Level</option>
-                  </select>
-                </div>
-              )}
-            </div>
-          </div>
-          {/* Location & Cost Center Settings */}
-          <div className="p-4 bg-primary/5 border border-primary/10 rounded-xl space-y-3">
-            <p className="text-[10px] font-bold text-primary uppercase tracking-wider">Location & Allocation Settings</p>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Default Location</label>
-                <select
-                  className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                  value={empDefaultLocationId}
-                  onChange={(e) => setEmpDefaultLocationId(e.target.value)}
-                >
-                  <option value="">Select Location</option>
-                  {locations.map((l) => (
-                    <option key={l.id} value={l.id}>{l.locationName || l.name} ({l.locationCode || l.code})</option>
-                  ))}
-                </select>
-              </div>
-              <div className="space-y-1">
-                <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Cost Center</label>
-                <select
-                  className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                  value={empCostCenterId}
-                  onChange={(e) => setEmpCostCenterId(e.target.value)}
-                >
-                  <option value="">Select Cost Center</option>
-                  {costCenters.map((cc) => (
-                    <option key={cc.id} value={cc.id}>{cc.name} ({cc.code})</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-            <div className="flex gap-6 pt-2">
-              <label className="flex items-center gap-2 text-xs font-bold text-on-surface cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={empIsRelieverEligible}
-                  onChange={(e) => setEmpIsRelieverEligible(e.target.checked)}
-                  className="w-4 h-4 rounded border-outline-variant text-primary focus:ring-0"
-                />
-                Eligible as Reliever / Cover
-              </label>
-              <label className="flex items-center gap-2 text-xs font-bold text-on-surface cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={empIsStandbyEligible}
-                  onChange={(e) => setEmpIsStandbyEligible(e.target.checked)}
-                  className="w-4 h-4 rounded border-outline-variant text-primary focus:ring-0"
-                />
-                Standby Pool Operative
-              </label>
-            </div>
-          </div>
-          {/* Mobile Punch Location Settings */}
-          {isEditEmpOpen && (
-            <div className="p-4 bg-primary/5 border border-primary/10 rounded-xl space-y-3 mt-4">
-              <p className="text-[10px] font-bold text-primary uppercase tracking-wider">Mobile Punch Location Settings</p>
-              
-              <div className="grid grid-cols-1 gap-4">
-                <div className="space-y-1">
-                  <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Default Punch Location</label>
-                  <select
-                    className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                    value={empDefaultPunchLocationId}
-                    onChange={(e) => setEmpDefaultPunchLocationId(e.target.value)}
-                  >
-                    <option value="">Select Default Punch Location</option>
-                    {allowedPunchLocations.map((l) => {
-                      let displayName = l.name;
-                      if (l.locationType === "OFFICE" || l.locationType === "CUSTOM") {
-                         displayName = l.name + (l.address ? " — " + l.address : "");
-                      } else if (l.locationType === "PROJECT_SITE") {
-                         displayName = l.name;
-                      }
-                      return (
-                        <option key={l.id} value={l.id}>{displayName}</option>
-                      );
-                    })}
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <label className="flex items-center gap-2 text-xs font-bold text-on-surface cursor-pointer">
-                  <input type="checkbox" checked={empAllowMultiplePunchLocations} onChange={(e) => setEmpAllowMultiplePunchLocations(e.target.checked)} className="w-4 h-4 rounded border-outline-variant text-primary focus:ring-0" />
-                  Allow Multiple Punch Locations
-                </label>
-                <label className="flex items-center gap-2 text-xs font-bold text-on-surface cursor-pointer">
-                  <input type="checkbox" checked={empAllowOfficePunch} onChange={(e) => setEmpAllowOfficePunch(e.target.checked)} className="w-4 h-4 rounded border-outline-variant text-primary focus:ring-0" />
-                  Allow Office Punch
-                </label>
-                <label className="flex items-center gap-2 text-xs font-bold text-on-surface cursor-pointer">
-                  <input type="checkbox" checked={empAllowProjectSitePunch} onChange={(e) => setEmpAllowProjectSitePunch(e.target.checked)} className="w-4 h-4 rounded border-outline-variant text-primary focus:ring-0" />
-                  Allow Project Site Punch
-                </label>
-                <label className="flex items-center gap-2 text-xs font-bold text-on-surface cursor-pointer">
-                  <input type="checkbox" checked={empAllowOnCallPunch} onChange={(e) => setEmpAllowOnCallPunch(e.target.checked)} className="w-4 h-4 rounded border-outline-variant text-primary focus:ring-0" />
-                  Allow On-Call Punch
-                </label>
-                <label className="flex items-center gap-2 text-xs font-bold text-on-surface cursor-pointer">
-                  <input type="checkbox" checked={empAllowOutOfZonePunch} onChange={(e) => setEmpAllowOutOfZonePunch(e.target.checked)} className="w-4 h-4 rounded border-outline-variant text-primary focus:ring-0" />
-                  Allow Out-of-Zone Punch
-                </label>
-                <label className="flex items-center gap-2 text-xs font-bold text-on-surface cursor-pointer">
-                  <input type="checkbox" checked={empRequireOutOfZoneReview} onChange={(e) => setEmpRequireOutOfZoneReview(e.target.checked)} className="w-4 h-4 rounded border-outline-variant text-primary focus:ring-0" />
-                  Require Out-of-Zone Review
-                </label>
-              </div>
-
-              <div className="space-y-1">
-                <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Geofence Radius Override (Meters)</label>
-                <input
-                  type="number"
-                  className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                  value={empGeofenceRadiusOverrideMeters}
-                  onChange={(e) => setEmpGeofenceRadiusOverrideMeters(e.target.value)}
-                  placeholder="e.g. 150"
-                />
-              </div>
-              
-              {empAllowMultiplePunchLocations && (
-                <div className="space-y-2 mt-4 pt-4 border-t border-primary/10">
-                  <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Additional Allowed Locations</label>
-                  <div className="flex gap-2 mb-2 flex-wrap">
-                    {empAllowedPunchLocationAssignments.map((a: any) => (
-                      <div key={a.id} className="flex items-center gap-2 bg-primary/10 text-primary text-xs px-2 py-1 rounded-full">
-                        <span>{a.allowedPunchLocation?.name}</span>
-                        <button 
-                          type="button" 
-                          onClick={async () => {
-                            const res = await fetch(`/api/v1/employees/${selectedEmp?.id}/allowed-locations?assignmentId=${a.id}`, { method: "DELETE" });
-                            if (res.ok) {
-                              setEmpAllowedPunchLocationAssignments(prev => prev.filter(x => x.id !== a.id));
-                            }
-                          }}
-                          className="text-primary hover:text-red-500 font-bold"
-                        >
-                          &times;
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                  
-                  <div className="flex gap-2">
-                     <select
-                      className="flex-1 bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                      id="newAllowedLocationSelect"
+          {/* WORK ASSIGNMENT TAB */}
+          {addTab === 'assignment' && (
+            <div className="space-y-4">
+              <div className="p-4 bg-surface-container border border-outline-variant/30 rounded-xl space-y-3">
+                <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Company & Department</p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Company *</label>
+                    <select
+                      className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                      value={empCompanyId}
+                      onChange={(e) => setEmpCompanyId(e.target.value)}
+                      required={empEmploymentStatus === 'ACTIVE'}
                     >
-                      <option value="">Add Allowed Location...</option>
-                      {allowedPunchLocations.filter(l => !empAllowedPunchLocationAssignments.some((a: any) => a.allowedPunchLocationId === l.id) && l.id !== empDefaultPunchLocationId).map((l) => (
-                        <option key={l.id} value={l.id}>{l.name}</option>
+                      <option value="">Select Company</option>
+                      {companies.map((c) => (
+                        <option key={c.id} value={c.id}>{c.companyCode} — {c.companyName}</option>
                       ))}
                     </select>
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        const sel = document.getElementById("newAllowedLocationSelect") as HTMLSelectElement;
-                        if (!sel || !sel.value) return;
-                        const res = await fetch(`/api/v1/employees/${selectedEmp?.id}/allowed-locations`, {
-                          method: "POST",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({ allowedPunchLocationId: sel.value })
-                        });
-                        if (res.ok) {
-                          const assignment = await res.json();
-                          setEmpAllowedPunchLocationAssignments(prev => [...prev, assignment]);
-                          sel.value = "";
-                        }
-                      }}
-                      className="px-4 py-2 bg-primary text-on-primary rounded-lg text-xs font-bold"
+                  </div>
+                  <div className="space-y-1">
+                    <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Department</label>
+                    <select
+                      className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                      value={empDeptId}
+                      onChange={(e) => setEmpDeptId(e.target.value)}
                     >
-                      Add
-                    </button>
+                      <option value="">Select Department (Optional)</option>
+                      {departments.filter(d => !empCompanyId || d.companyId === empCompanyId).map((d) => (
+                        <option key={d.id} value={d.id}>{d.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Default Shift</label>
+                    <select
+                      className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                      value={empShiftId}
+                      onChange={(e) => setEmpShiftId(e.target.value)}
+                    >
+                      <option value="GEN-001">General Shift (9 AM - 6 PM)</option>
+                      <option value="MOR-102">Morning Shift (6 AM - 2 PM)</option>
+                      <option value="AFT-103">Afternoon Shift (2 PM - 10 PM)</option>
+                      <option value="NGT-201">Night Shift (10 PM - 6 AM)</option>
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Designation</label>
+                    <select
+                      className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                      value={empDesignationId}
+                      onChange={(e) => setEmpDesignationId(e.target.value)}
+                    >
+                      <option value="">Select Designation</option>
+                      {designations.map((d) => (
+                        <option key={d.id} value={d.id}>{d.name} ({d.code})</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {empWorkerCategory === "BLUE_COLLAR" && (
+                <div className="p-4 bg-secondary/5 border border-secondary/10 rounded-xl space-y-3">
+                  <p className="text-[10px] font-bold text-secondary uppercase tracking-wider">Blue Collar Core Settings</p>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Trade / Position Category *</label>
+                      <select
+                        className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-2.5 py-2 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                        value={empPositionCategoryId}
+                        onChange={(e) => setEmpPositionCategoryId(e.target.value)}
+                        required
+                      >
+                        <option value="">Select Trade/Position Category</option>
+                        {positionCategories.map((c) => (
+                          <option key={c.id} value={c.id}>{c.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Trade Classification *</label>
+                      <select
+                        className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-2.5 py-2 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                        value={empTradeClassificationId}
+                        onChange={(e) => setEmpTradeClassificationId(e.target.value)}
+                        required
+                      >
+                        <option value="">Select Trade Classification</option>
+                        {trades.map((t) => (
+                          <option key={t.id} value={t.id}>{t.name} ({t.code})</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Default Project</label>
+                      <select
+                        className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-2.5 py-2 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                        value={empDefaultProjectId}
+                        onChange={(e) => setEmpDefaultProjectId(e.target.value)}
+                      >
+                        <option value="">Select Project</option>
+                        {projects.filter(p => !empCompanyId || p.companyId === empCompanyId).map((p) => (
+                          <option key={p.id} value={p.id}>{p.projectName}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Default Site</label>
+                      <select
+                        className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-2.5 py-2 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                        value={empDefaultSiteId}
+                        onChange={(e) => setEmpDefaultSiteId(e.target.value)}
+                        disabled={!empDefaultProjectId}
+                      >
+                        <option value="">Select Site</option>
+                        {formSites.map((s) => (
+                          <option key={s.id} value={s.id}>{s.siteName}</option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
                 </div>
               )}
+
+              <div className="p-4 bg-primary/5 border border-primary/10 rounded-xl space-y-3">
+                <p className="text-[10px] font-bold text-primary uppercase tracking-wider">Location & Allocation Settings</p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Default Location</label>
+                    <select
+                      className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                      value={empDefaultLocationId}
+                      onChange={(e) => setEmpDefaultLocationId(e.target.value)}
+                    >
+                      <option value="">Select Location</option>
+                      {locations.filter(l => !empCompanyId || l.companyId === empCompanyId).map((l) => (
+                        <option key={l.id} value={l.id}>{l.locationName || l.name} ({l.locationCode || l.code})</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Cost Center</label>
+                    <select
+                      className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                      value={empCostCenterId}
+                      onChange={(e) => setEmpCostCenterId(e.target.value)}
+                    >
+                      <option value="">Select Cost Center</option>
+                      {costCenters.filter(cc => !empCompanyId || cc.companyId === empCompanyId).map((cc) => (
+                        <option key={cc.id} value={cc.id}>{cc.name} ({cc.code})</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div className="flex gap-6 pt-2">
+                  <label className="flex items-center gap-2 text-xs font-bold text-on-surface cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={empIsRelieverEligible}
+                      onChange={(e) => setEmpIsRelieverEligible(e.target.checked)}
+                      className="w-4 h-4 rounded border-outline-variant text-primary focus:ring-0"
+                    />
+                    Eligible as Reliever / Cover
+                  </label>
+                  <label className="flex items-center gap-2 text-xs font-bold text-on-surface cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={empIsStandbyEligible}
+                      onChange={(e) => setEmpIsStandbyEligible(e.target.checked)}
+                      className="w-4 h-4 rounded border-outline-variant text-primary focus:ring-0"
+                    />
+                    Standby Pool Operative
+                  </label>
+                </div>
+              </div>
             </div>
           )}
-          <div className="grid grid-cols-2 gap-4">
-            <Input
-              label="Default Password"
-              type="password"
-              placeholder="Optional (Default: Password123!)"
-              value={empPassword}
-              onChange={(e) => setEmpPassword(e.target.value)}
-            />
-            <div className="space-y-1">
-              <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Employment Status</label>
-              <select
-                className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                value={empEmploymentStatus}
-                onChange={(e) => setEmpEmploymentStatus(e.target.value)}
-              >
-                <option value="ACTIVE">ACTIVE</option>
-                <option value="INACTIVE">DEACTIVATED</option>
-              </select>
+
+          {/* IDENTITY DOCUMENTS TAB */}
+          {addTab === 'identity' && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <Input
+                  label="Qatar ID Number"
+                  value={empQidNumber}
+                  onChange={(e) => setEmpQidNumber(e.target.value)}
+                  placeholder="e.g. 28232400123"
+                />
+                <Input
+                  label="Qatar ID Expiry Date"
+                  type="date"
+                  value={empQidExpiryDate}
+                  onChange={(e) => setEmpQidExpiryDate(e.target.value)}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <Input
+                  label="Passport Number"
+                  value={empPassportNumber}
+                  onChange={(e) => setEmpPassportNumber(e.target.value)}
+                  placeholder="e.g. EP123456"
+                />
+                <Input
+                  label="Passport Issue Country"
+                  value={empPassportIssuingCountry}
+                  onChange={(e) => setEmpPassportIssuingCountry(e.target.value)}
+                  placeholder="e.g. India"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <Input
+                  label="Passport Issue Date"
+                  type="date"
+                  value={empPassportIssueDate}
+                  onChange={(e) => setEmpPassportIssueDate(e.target.value)}
+                />
+                <Input
+                  label="Passport Expiry Date"
+                  type="date"
+                  value={empPassportExpiryDate}
+                  onChange={(e) => setEmpPassportExpiryDate(e.target.value)}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <Input
+                  label="Sponsor"
+                  value={empSponsor}
+                  onChange={(e) => setEmpSponsor(e.target.value)}
+                  placeholder="e.g. Al Hattab Holding"
+                />
+                <Input
+                  label="Date of Joining"
+                  type="date"
+                  value={empDateOfJoining}
+                  onChange={(e) => setEmpDateOfJoining(e.target.value)}
+                />
+              </div>
             </div>
-          </div>
+          )}
+
+          {/* PUNCH SETTINGS TAB */}
+          {addTab === 'punch' && (
+            <div className="space-y-4">
+              <div className="p-4 bg-tertiary/5 border border-tertiary/10 rounded-xl space-y-4">
+                <p className="text-[10px] font-bold text-tertiary uppercase tracking-wider">Mobile Punch-in Settings</p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Default Mobile Punch Location</label>
+                    <select
+                      className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-2.5 py-2 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                      value={empDefaultPunchLocationId}
+                      onChange={(e) => setEmpDefaultPunchLocationId(e.target.value)}
+                    >
+                      <option value="">-- Let System Decide Automatically --</option>
+                      {allowedPunchLocations.map((l) => (
+                        <option key={l.id} value={l.id}>{l.name} ({l.locationType})</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Geofence Radius Override (m)</label>
+                    <input
+                      type="number"
+                      placeholder="e.g. 500"
+                      className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-2.5 py-2 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                      value={empGeofenceRadiusOverrideMeters}
+                      onChange={(e) => setEmpGeofenceRadiusOverrideMeters(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3 pt-2 border-t border-border-subtle">
+                  <label className="flex items-center gap-2 text-xs font-semibold text-on-surface cursor-pointer"><input type="checkbox" checked={empAllowMultiplePunchLocations} onChange={(e) => setEmpAllowMultiplePunchLocations(e.target.checked)} className="w-4 h-4 rounded border-outline-variant text-primary" /> Allow Multiple Locations</label>
+                  <label className="flex items-center gap-2 text-xs font-semibold text-on-surface cursor-pointer"><input type="checkbox" checked={empAllowOfficePunch} onChange={(e) => setEmpAllowOfficePunch(e.target.checked)} className="w-4 h-4 rounded border-outline-variant text-primary" /> Allow Office Punch</label>
+                  <label className="flex items-center gap-2 text-xs font-semibold text-on-surface cursor-pointer"><input type="checkbox" checked={empAllowProjectSitePunch} onChange={(e) => setEmpAllowProjectSitePunch(e.target.checked)} className="w-4 h-4 rounded border-outline-variant text-primary" /> Allow Project Site Punch</label>
+                  <label className="flex items-center gap-2 text-xs font-semibold text-on-surface cursor-pointer"><input type="checkbox" checked={empAllowOnCallPunch} onChange={(e) => setEmpAllowOnCallPunch(e.target.checked)} className="w-4 h-4 rounded border-outline-variant text-primary" /> Allow On-Call Location Punch</label>
+                  <label className="flex items-center gap-2 text-xs font-semibold text-on-surface cursor-pointer"><input type="checkbox" checked={empAllowOutOfZonePunch} onChange={(e) => setEmpAllowOutOfZonePunch(e.target.checked)} className="w-4 h-4 rounded border-outline-variant text-primary" /> Allow Out of Zone Punch</label>
+                  <label className="flex items-center gap-2 text-xs font-semibold text-on-surface cursor-pointer"><input type="checkbox" checked={empRequireOutOfZoneReview} onChange={(e) => setEmpRequireOutOfZoneReview(e.target.checked)} className="w-4 h-4 rounded border-outline-variant text-primary" disabled={!empAllowOutOfZonePunch}/> Flag Out of Zone for Review</label>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* SUPERVISOR & REPORTING TAB */}
+          {addTab === 'supervisor' && (
+            <div className="space-y-4">
+              <div className="p-4 bg-primary/5 border border-primary/10 rounded-xl space-y-4">
+                <p className="text-[10px] font-bold text-primary uppercase tracking-wider">Hierarchy Assignment</p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Immediate Supervisor</label>
+                    <select
+                      className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-2.5 py-2 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                      value={empImmediateSupervisorId}
+                      onChange={(e) => setEmpImmediateSupervisorId(e.target.value)}
+                    >
+                      <option value="">Select Supervisor</option>
+                      {employees.map(e => <option key={e.id} value={e.id}>{e.id} - {e.name}</option>)}
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Reporting Manager</label>
+                    <select
+                      className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-2.5 py-2 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                      value={empReportingManagerId}
+                      onChange={(e) => setEmpReportingManagerId(e.target.value)}
+                    >
+                      <option value="">Select Manager</option>
+                      {employees.map(e => <option key={e.id} value={e.id}>{e.id} - {e.name}</option>)}
+                    </select>
+                  </div>
+                </div>
+                {empWorkerCategory === 'BLUE_COLLAR' && (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Project Supervisor</label>
+                      <select
+                        className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-2.5 py-2 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                        value={empProjectSupervisorId}
+                        onChange={(e) => setEmpProjectSupervisorId(e.target.value)}
+                      >
+                        <option value="">Select Project Supervisor</option>
+                        {employees.map(e => <option key={e.id} value={e.id}>{e.id} - {e.name}</option>)}
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Site Supervisor</label>
+                      <select
+                        className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-2.5 py-2 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                        value={empSiteSupervisorId}
+                        onChange={(e) => setEmpSiteSupervisorId(e.target.value)}
+                      >
+                        <option value="">Select Site Supervisor</option>
+                        {employees.map(e => <option key={e.id} value={e.id}>{e.id} - {e.name}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="p-4 bg-tertiary/5 border border-tertiary/10 rounded-xl space-y-4">
+                <p className="text-[10px] font-bold text-tertiary uppercase tracking-wider">Supervisor Scope</p>
+                <label className="flex items-center gap-2 text-xs font-semibold text-on-surface cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={empIsSupervisor}
+                    onChange={(e) => setEmpIsSupervisor(e.target.checked)}
+                    className="w-4 h-4 rounded border-outline-variant text-primary focus:ring-0"
+                  />
+                  Employee is a Supervisor
+                </label>
+                {empIsSupervisor && (
+                  <div className="space-y-1 pt-2">
+                    <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Supervisor Scope Type</label>
+                    <select
+                      className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-2.5 py-2 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                      value={empSupervisorScopeType}
+                      onChange={(e) => setEmpSupervisorScopeType(e.target.value)}
+                    >
+                      <option value="DIRECT_REPORTS">Direct Reports Only</option>
+                      <option value="DEPARTMENT">Department-Wide</option>
+                      <option value="PROJECT">Project-Wide</option>
+                      <option value="SITE">Site-Wide</option>
+                      <option value="COMPANY">Company-Wide</option>
+                      <option value="CUSTOM">Custom Scope</option>
+                    </select>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ACCOUNT ACCESS TAB */}
+          {addTab === 'account' && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <Input
+                  label="Default Password"
+                  type="password"
+                  placeholder="Optional (Default: Password123!)"
+                  value={empPassword}
+                  onChange={(e) => setEmpPassword(e.target.value)}
+                />
+                <div className="space-y-1">
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Username</label>
+                  <Input
+                    value={empUsername}
+                    onChange={(e) => setEmpUsername(e.target.value)}
+                    placeholder="e.g. ahmed.mansoori"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Auth Mode</label>
+                  <select
+                    className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-2.5 py-2 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                    value={empAuthMode}
+                    onChange={(e) => setEmpAuthMode(e.target.value)}
+                  >
+                    <option value="LOCAL">Local Only</option>
+                    <option value="SSO">SSO Only</option>
+                    <option value="LOCAL_AND_SSO">Local & SSO</option>
+                  </select>
+                </div>
+                <div className="flex items-center gap-6 pt-6">
+                  <label className="flex items-center gap-2 text-xs font-semibold text-on-surface cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={empIsLoginEnabled}
+                      onChange={(e) => setEmpIsLoginEnabled(e.target.checked)}
+                      className="w-4 h-4 rounded border-outline-variant text-primary focus:ring-0"
+                    />
+                    Login Enabled
+                  </label>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="flex justify-end gap-2 border-t border-border-subtle pt-4 mt-6">
             <Button variant="secondary" type="button" onClick={() => setIsAddEmpOpen(false)}>Cancel</Button>
             <Button type="submit">Register Employee</Button>
@@ -1587,6 +1794,7 @@ export default function WorkforcePage() {
             <div className="flex border-b border-outline-variant/30 mb-4 overflow-x-auto no-scrollbar">
               <button type="button" className={`px-4 py-2 text-xs font-bold border-b-2 whitespace-nowrap ${editTab === 'basic' ? 'border-primary text-primary' : 'border-transparent text-on-surface-variant hover:text-on-surface'}`} onClick={() => setEditTab('basic')}>Basic Info</button>
               <button type="button" className={`px-4 py-2 text-xs font-bold border-b-2 whitespace-nowrap ${editTab === 'assignment' ? 'border-primary text-primary' : 'border-transparent text-on-surface-variant hover:text-on-surface'}`} onClick={() => setEditTab('assignment')}>Work Assignment</button>
+              <button type="button" className={`px-4 py-2 text-xs font-bold border-b-2 whitespace-nowrap ${editTab === 'identity' ? 'border-primary text-primary' : 'border-transparent text-on-surface-variant hover:text-on-surface'}`} onClick={() => setEditTab('identity')}>Identity Documents</button>
               <button type="button" className={`px-4 py-2 text-xs font-bold border-b-2 whitespace-nowrap ${editTab === 'punch' ? 'border-primary text-primary' : 'border-transparent text-on-surface-variant hover:text-on-surface'}`} onClick={() => setEditTab('punch')}>Punch Settings</button>
               <button type="button" className={`px-4 py-2 text-xs font-bold border-b-2 whitespace-nowrap ${editTab === 'supervisor' ? 'border-primary text-primary' : 'border-transparent text-on-surface-variant hover:text-on-surface'}`} onClick={() => setEditTab('supervisor')}>Supervisor & Reporting</button>
               {isAdmin && (
@@ -1616,23 +1824,6 @@ export default function WorkforcePage() {
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
-                    <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Department</label>
-                    <select className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" value={empDeptId} onChange={(e) => setEmpDeptId(e.target.value)}>
-                      <option value="">Select Department (Optional)</option>
-                      {departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
-                    </select>
-                  </div>
-                  <div className="space-y-1">
-                    <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Role</label>
-                    <select className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" value={empRole} onChange={(e) => setEmpRole(e.target.value)}>
-                      <option value="EMPLOYEE">EMPLOYEE</option>
-                      <option value="SUPERVISOR">SUPERVISOR</option>
-                      <option value="ADMIN">ADMIN</option>
-                    </select>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1">
                     <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Worker Category</label>
                     <select className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" value={empWorkerCategory} onChange={(e) => setEmpWorkerCategory(e.target.value)}>
                       <option value="WHITE_COLLAR">White Collar (Staff)</option>
@@ -1654,11 +1845,57 @@ export default function WorkforcePage() {
             {editTab === 'assignment' && (
               <div className="space-y-4">
                 <div className="p-4 bg-surface-container border border-outline-variant/30 rounded-xl space-y-3">
-                  <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">General Role & Designation</p>
+                  <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Company & Department</p>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1">
-                      <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Designation *</label>
-                      <select className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-2.5 py-2 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" value={empDesignationId} onChange={(e) => setEmpDesignationId(e.target.value)} required>
+                      <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Company *</label>
+                      <select
+                        className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                        value={empCompanyId}
+                        onChange={(e) => setEmpCompanyId(e.target.value)}
+                        required={empEmploymentStatus === 'ACTIVE'}
+                      >
+                        <option value="">Select Company</option>
+                        {companies.map((c) => (
+                          <option key={c.id} value={c.id}>{c.companyCode} — {c.companyName}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Department</label>
+                      <select className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" value={empDeptId} onChange={(e) => setEmpDeptId(e.target.value)}>
+                        <option value="">Select Department (Optional)</option>
+                        {departments.filter(d => !empCompanyId || d.companyId === empCompanyId).map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Role</label>
+                      <select className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" value={empRole} onChange={(e) => setEmpRole(e.target.value)}>
+                        <option value="EMPLOYEE">EMPLOYEE</option>
+                        <option value="SUPERVISOR">SUPERVISOR</option>
+                        <option value="ADMIN">ADMIN</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Default Shift</label>
+                      <select className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" value={empShiftId} onChange={(e) => setEmpShiftId(e.target.value)}>
+                        <option value="GEN-001">General Shift (9 AM - 6 PM)</option>
+                        <option value="MOR-102">Morning Shift (6 AM - 2 PM)</option>
+                        <option value="AFT-103">Afternoon Shift (2 PM - 10 PM)</option>
+                        <option value="NGT-201">Night Shift (10 PM - 6 AM)</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-4 bg-surface-container border border-outline-variant/30 rounded-xl space-y-3">
+                  <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">General Designation</p>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Designation</label>
+                      <select className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-2.5 py-2 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" value={empDesignationId} onChange={(e) => setEmpDesignationId(e.target.value)}>
                         <option value="">Select Designation</option>
                         {designations.map((d) => <option key={d.id} value={d.id}>{d.name} ({d.code})</option>)}
                       </select>
@@ -1671,15 +1908,12 @@ export default function WorkforcePage() {
                     <p className="text-[10px] font-bold text-secondary uppercase tracking-wider">Blue Collar Core Settings</p>
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-1">
-                        <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Trade / Position Category</label>
+                        <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Trade / Position Category *</label>
                         <select className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-2.5 py-2 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" value={empPositionCategoryId} onChange={(e) => setEmpPositionCategoryId(e.target.value)} required>
                           <option value="">Select Trade/Position Category</option>
                           {positionCategories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                         </select>
                       </div>
-                      
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-1">
                         <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Trade Classification *</label>
                         <select className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-2.5 py-2 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" value={empTradeClassificationId} onChange={(e) => setEmpTradeClassificationId(e.target.value)} required>
@@ -1687,15 +1921,15 @@ export default function WorkforcePage() {
                           {trades.map((t) => <option key={t.id} value={t.id}>{t.name} ({t.code})</option>)}
                         </select>
                       </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-1">
                         <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Default Project</label>
                         <select className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-2.5 py-2 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" value={empDefaultProjectId} onChange={(e) => setEmpDefaultProjectId(e.target.value)}>
                           <option value="">Select Project</option>
-                          {projects.map((p) => <option key={p.id} value={p.id}>{p.projectName}</option>)}
+                          {projects.filter(p => !empCompanyId || p.companyId === empCompanyId).map((p) => <option key={p.id} value={p.id}>{p.projectName}</option>)}
                         </select>
                       </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-1">
                         <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Default Site</label>
                         <select className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-2.5 py-2 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" value={empDefaultSiteId} onChange={(e) => setEmpDefaultSiteId(e.target.value)} disabled={!empDefaultProjectId}>
@@ -1713,14 +1947,14 @@ export default function WorkforcePage() {
                       <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Default Location</label>
                       <select className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" value={empDefaultLocationId} onChange={(e) => setEmpDefaultLocationId(e.target.value)}>
                         <option value="">Select Location</option>
-                        {locations.map((l) => <option key={l.id} value={l.id}>{l.locationName || l.name} ({l.locationCode || l.code})</option>)}
+                        {locations.filter(l => !empCompanyId || l.companyId === empCompanyId).map((l) => <option key={l.id} value={l.id}>{l.locationName || l.name} ({l.locationCode || l.code})</option>)}
                       </select>
                     </div>
                     <div className="space-y-1">
                       <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Cost Center</label>
                       <select className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" value={empCostCenterId} onChange={(e) => setEmpCostCenterId(e.target.value)}>
                         <option value="">Select Cost Center</option>
-                        {costCenters.map((cc) => <option key={cc.id} value={cc.id}>{cc.name} ({cc.code})</option>)}
+                        {costCenters.filter(cc => !empCompanyId || cc.companyId === empCompanyId).map((cc) => <option key={cc.id} value={cc.id}>{cc.name} ({cc.code})</option>)}
                       </select>
                     </div>
                   </div>
@@ -1734,6 +1968,28 @@ export default function WorkforcePage() {
                       Standby Pool Operative
                     </label>
                   </div>
+                </div>
+              </div>
+            )}
+
+            {/* IDENTITY DOCUMENTS TAB */}
+            {editTab === 'identity' && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <Input label="Qatar ID Number" value={empQidNumber} onChange={(e) => setEmpQidNumber(e.target.value)} placeholder="e.g. 28232400123" />
+                  <Input label="Qatar ID Expiry Date" type="date" value={empQidExpiryDate} onChange={(e) => setEmpQidExpiryDate(e.target.value)} />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <Input label="Passport Number" value={empPassportNumber} onChange={(e) => setEmpPassportNumber(e.target.value)} placeholder="e.g. EP123456" />
+                  <Input label="Passport Issue Country" value={empPassportIssuingCountry} onChange={(e) => setEmpPassportIssuingCountry(e.target.value)} placeholder="e.g. India" />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <Input label="Passport Issue Date" type="date" value={empPassportIssueDate} onChange={(e) => setEmpPassportIssueDate(e.target.value)} />
+                  <Input label="Passport Expiry Date" type="date" value={empPassportExpiryDate} onChange={(e) => setEmpPassportExpiryDate(e.target.value)} />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <Input label="Sponsor" value={empSponsor} onChange={(e) => setEmpSponsor(e.target.value)} placeholder="e.g. Al Hattab Holding" />
+                  <Input label="Date of Joining" type="date" value={empDateOfJoining} onChange={(e) => setEmpDateOfJoining(e.target.value)} />
                 </div>
               </div>
             )}
@@ -1764,6 +2020,66 @@ export default function WorkforcePage() {
                     <label className="flex items-center gap-2 text-xs font-semibold text-on-surface cursor-pointer"><input type="checkbox" checked={empAllowOutOfZonePunch} onChange={(e) => setEmpAllowOutOfZonePunch(e.target.checked)} className="w-4 h-4 rounded border-outline-variant text-primary" /> Allow Out of Zone Punch</label>
                     <label className="flex items-center gap-2 text-xs font-semibold text-on-surface cursor-pointer"><input type="checkbox" checked={empRequireOutOfZoneReview} onChange={(e) => setEmpRequireOutOfZoneReview(e.target.checked)} className="w-4 h-4 rounded border-outline-variant text-primary" disabled={!empAllowOutOfZonePunch}/> Flag Out of Zone for Review</label>
                   </div>
+                </div>
+
+                <div className="p-4 bg-primary/5 border border-primary/10 rounded-xl space-y-3 mt-4">
+                  <p className="text-[10px] font-bold text-primary uppercase tracking-wider font-mono">Additional Punch Locations Management</p>
+                  {empAllowMultiplePunchLocations && (
+                    <div className="space-y-2">
+                      <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Additional Allowed Locations</label>
+                      <div className="flex gap-2 mb-2 flex-wrap">
+                        {empAllowedPunchLocationAssignments.map((a: any) => (
+                          <div key={a.id} className="flex items-center gap-2 bg-primary/10 text-primary text-xs px-2 py-1 rounded-full">
+                            <span>{a.allowedPunchLocation?.name}</span>
+                            <button 
+                              type="button" 
+                              onClick={async () => {
+                                const res = await fetch(`/api/v1/employees/${selectedEmp?.id}/allowed-locations?assignmentId=${a.id}`, { method: "DELETE" });
+                                if (res.ok) {
+                                  setEmpAllowedPunchLocationAssignments(prev => prev.filter(x => x.id !== a.id));
+                                }
+                              }}
+                              className="text-primary hover:text-red-500 font-bold"
+                            >
+                              &times;
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                      
+                      <div className="flex gap-2">
+                         <select
+                          className="flex-1 bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                          id="newAllowedLocationSelect"
+                        >
+                          <option value="">Add Allowed Location...</option>
+                          {allowedPunchLocations.filter(l => !empAllowedPunchLocationAssignments.some((a: any) => a.allowedPunchLocationId === l.id) && l.id !== empDefaultPunchLocationId).map((l) => (
+                            <option key={l.id} value={l.id}>{l.name}</option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const sel = document.getElementById("newAllowedLocationSelect") as HTMLSelectElement;
+                            if (!sel || !sel.value) return;
+                            const res = await fetch(`/api/v1/employees/${selectedEmp?.id}/allowed-locations`, {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ allowedPunchLocationId: sel.value })
+                            });
+                            if (res.ok) {
+                              const assignment = await res.json();
+                              setEmpAllowedPunchLocationAssignments(prev => [...prev, assignment]);
+                              sel.value = "";
+                            }
+                          }}
+                          className="px-4 py-2 bg-primary text-on-primary rounded-lg text-xs font-bold"
+                        >
+                          Add
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
