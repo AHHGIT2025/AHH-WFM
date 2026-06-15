@@ -3,6 +3,80 @@ import { mockDb } from "@ahh-wfm/mock-data";
 import { checkApiAuth } from "@/lib/api-guards";
 import { hasPermission } from "@/lib/permissions";
 
+function normalizeEmployee(emp: any) {
+  if (!emp) return emp;
+  const copy = { ...emp };
+
+  // Normalize Company
+  if (emp.company) {
+    copy.company = {
+      id: emp.company.id,
+      code: emp.company.companyCode,
+      name: emp.company.companyName,
+      companyCode: emp.company.companyCode,
+      companyName: emp.company.companyName
+    };
+  } else if (emp.companyId) {
+    copy.company = { id: emp.companyId, code: "", name: "" };
+  } else {
+    copy.company = null;
+  }
+
+  // Normalize Department (map departmentRef to department)
+  if (emp.departmentRef) {
+    copy.department = {
+      id: emp.departmentRef.id,
+      code: "",
+      name: emp.departmentRef.name
+    };
+  } else if (emp.departmentId) {
+    copy.department = { id: emp.departmentId, code: "", name: "" };
+  } else {
+    copy.department = null;
+  }
+
+  // Normalize Cost Center (map costCenterRef to costCenter)
+  if (emp.costCenterRef) {
+    copy.costCenter = {
+      id: emp.costCenterRef.id,
+      code: emp.costCenterRef.costCenterCode,
+      name: emp.costCenterRef.costCenterName
+    };
+  } else if (emp.costCenterId) {
+    copy.costCenter = { id: emp.costCenterId, code: "", name: "" };
+  } else {
+    copy.costCenter = null;
+  }
+
+  // Normalize Default Location
+  if (emp.defaultLocation) {
+    copy.defaultLocation = {
+      id: emp.defaultLocation.id,
+      code: emp.defaultLocation.locationCode,
+      name: emp.defaultLocation.locationName
+    };
+  } else if (emp.defaultLocationId) {
+    copy.defaultLocation = { id: emp.defaultLocationId, code: "", name: "" };
+  } else {
+    copy.defaultLocation = null;
+  }
+
+  // Normalize Designation
+  if (emp.designation) {
+    copy.designation = {
+      id: emp.designation.id,
+      code: emp.designation.code,
+      name: emp.designation.name
+    };
+  } else if (emp.designationId) {
+    copy.designation = { id: emp.designationId, code: "", name: "" };
+  } else {
+    copy.designation = null;
+  }
+
+  return copy;
+}
+
 interface RouteParams {
   params: {
     id: string;
@@ -38,14 +112,14 @@ export async function GET(request: Request, { params }: RouteParams) {
       return NextResponse.json({ error: "Employee not found" }, { status: 404 });
     }
 
-    const copy = { ...employee };
-    delete (copy as any).passwordHash;
+    const normalized = normalizeEmployee(employee);
+    delete (normalized as any).passwordHash;
     if (!canViewIdentity(auth.session?.user)) {
-      if (copy.qidNumber) copy.qidNumber = maskNumber(copy.qidNumber) as any;
-      if (copy.passportNumber) copy.passportNumber = maskNumber(copy.passportNumber) as any;
+      if (normalized.qidNumber) normalized.qidNumber = maskNumber(normalized.qidNumber) as any;
+      if (normalized.passportNumber) normalized.passportNumber = maskNumber(normalized.passportNumber) as any;
     }
 
-    return NextResponse.json(copy);
+    return NextResponse.json(normalized);
   } catch (e) {
     return NextResponse.json({ error: "Failed to fetch employee" }, { status: 500 });
   }
@@ -181,14 +255,16 @@ export async function PATCH(request: Request, { params }: RouteParams) {
       return NextResponse.json({ error: "Employee not found" }, { status: 404 });
     }
 
-    const copy = { ...updated };
-    delete (copy as any).passwordHash;
+    const employeesList = await mockDb.getEmployees();
+    const resolvedEmp = employeesList.find(e => e.id === params.id) || updated;
+    const normalized = normalizeEmployee(resolvedEmp);
+    delete (normalized as any).passwordHash;
     if (!canViewIdentity(auth.session?.user)) {
-      if (copy.qidNumber) copy.qidNumber = maskNumber(copy.qidNumber) as any;
-      if (copy.passportNumber) copy.passportNumber = maskNumber(copy.passportNumber) as any;
+      if (normalized.qidNumber) normalized.qidNumber = maskNumber(normalized.qidNumber) as any;
+      if (normalized.passportNumber) normalized.passportNumber = maskNumber(normalized.passportNumber) as any;
     }
 
-    return NextResponse.json(copy);
+    return NextResponse.json(normalized);
   } catch (e) {
     return NextResponse.json({ error: "Failed to update employee" }, { status: 500 });
   }

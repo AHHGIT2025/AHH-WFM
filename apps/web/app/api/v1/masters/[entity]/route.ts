@@ -14,6 +14,60 @@ const entityMap: Record<string, keyof typeof prisma> = {
   "standby-rules": "relieverStandbyRule",
 };
 
+function normalizeRecord(entity: string, record: any) {
+  if (!record) return record;
+  const copy = { ...record };
+
+  // Normalize Company
+  if (entity === "companies") {
+    copy.code = record.companyCode;
+    copy.name = record.companyName;
+  }
+  // Normalize Department
+  if (entity === "departments") {
+    copy.code = "";
+  }
+  // Normalize Cost Center
+  if (entity === "cost-centers") {
+    copy.code = record.costCenterCode;
+    copy.name = record.costCenterName;
+  }
+  // Normalize Location
+  if (entity === "locations") {
+    copy.code = record.locationCode;
+    copy.name = record.locationName;
+  }
+  // Normalize Project
+  if (entity === "projects") {
+    copy.code = record.projectCode;
+    copy.name = record.projectName;
+  }
+  // Normalize Project Site
+  if (entity === "project-sites") {
+    copy.code = record.siteCode;
+    copy.name = record.siteName;
+  }
+
+  // Normalize nested company relation
+  if (copy.company) {
+    copy.company = {
+      ...copy.company,
+      code: copy.company.companyCode,
+      name: copy.company.companyName
+    };
+  }
+  // Normalize nested project relation
+  if (copy.project) {
+    copy.project = {
+      ...copy.project,
+      code: copy.project.projectCode,
+      name: copy.project.projectName
+    };
+  }
+
+  return copy;
+}
+
 export async function GET(request: Request, { params }: { params: { entity: string } }) {
   try {
     const { entity } = params;
@@ -32,10 +86,13 @@ export async function GET(request: Request, { params }: { params: { entity: stri
     }
 
     // Include relations based on entity
-    let includeClause = undefined;
+    let includeClause: any = undefined;
     if (entity === "project-sites") includeClause = { project: true, company: true };
-    if (entity === "projects") includeClause = { company: true };
-    if (entity === "allowed-punch-locations") includeClause = { company: true };
+    else if (entity === "projects") includeClause = { company: true };
+    else if (entity === "allowed-punch-locations") includeClause = { company: true };
+    else if (entity === "departments") includeClause = { company: true };
+    else if (entity === "locations") includeClause = { company: true };
+    else if (entity === "cost-centers") includeClause = { company: true };
 
     const dbModel: any = prisma[modelName];
     const records = await dbModel.findMany({
@@ -44,7 +101,8 @@ export async function GET(request: Request, { params }: { params: { entity: stri
       orderBy: { createdAt: "desc" },
     });
 
-    return NextResponse.json(records);
+    const normalized = records.map((r: any) => normalizeRecord(entity, r));
+    return NextResponse.json(normalized);
   } catch (error: any) {
     console.error(`Error fetching ${params.entity}:`, error);
     return NextResponse.json({ error: `Failed to fetch ${params.entity}` }, { status: 500 });
@@ -67,7 +125,7 @@ export async function POST(request: Request, { params }: { params: { entity: str
       data: body,
     });
 
-    return NextResponse.json(newRecord, { status: 201 });
+    return NextResponse.json(normalizeRecord(entity, newRecord), { status: 201 });
   } catch (error: any) {
     console.error(`Error creating ${params.entity}:`, error);
     if (error.code === "P2002") {

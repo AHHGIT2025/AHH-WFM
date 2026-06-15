@@ -1051,7 +1051,9 @@ export const mockDb = {
       departmentRef: true,
       defaultProject: true,
       defaultSite: true,
-      immediateSupervisor: true
+      immediateSupervisor: true,
+      costCenterRef: true,
+      defaultLocation: true
     };
     if (isDbConnected()) {
       await seedMySQL();
@@ -1185,6 +1187,8 @@ export const mockDb = {
         emp.defaultProject = db.projects?.find((p: any) => p.id === emp.defaultProjectId);
         emp.defaultSite = db.projectSites?.find((s: any) => s.id === emp.defaultSiteId);
         emp.immediateSupervisor = db.employees.find(e => e.id === emp.immediateSupervisorId);
+        emp.costCenterRef = db.costCenters?.find((cc: any) => cc.id === emp.costCenterId);
+        emp.defaultLocation = db.locations?.find((l: any) => l.id === emp.defaultLocationId);
       }
       return emps;
     }

@@ -139,7 +139,7 @@ export async function POST(request: Request) {
           deptId = matchedDept.id;
         } else {
           // Create new department
-          const newDept = await mockDb.createDepartment(row.department);
+          const newDept = await mockDb.createDepartment(row.department, companyId);
           depts.push(newDept);
           deptId = newDept.id;
         }

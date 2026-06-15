@@ -77,6 +77,8 @@ export interface Employee {
   defaultProject?: Project;
   defaultSite?: ProjectSite;
   immediateSupervisor?: Employee;
+  costCenterRef?: CostCenter;
+  defaultLocation?: LocationMaster;
 }
 
 export interface Worksite {

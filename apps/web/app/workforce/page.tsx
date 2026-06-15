@@ -5,12 +5,83 @@ import { Employee, Department } from "@ahh-wfm/types";
 import { Card, Badge, Input, Button, Modal } from "@ahh-wfm/ui/src";
 import Link from "next/link";
 
+function formatCompanyLabel(company: any) {
+  if (!company) return "Unnamed Company";
+  const code = company.code || company.companyCode || "";
+  const name = company.name || company.companyName || "";
+  if (code && name) return `${code} — ${name}`;
+  if (name) return name;
+  if (code) return code;
+  return "Unnamed Company";
+}
+
+function formatDepartmentLabel(department: any) {
+  if (!department) return "Unnamed Department";
+  const code = department.code || department.departmentCode || "";
+  const name = department.name || department.departmentName || "";
+  if (code && name) return `${code} — ${name}`;
+  if (name) return name;
+  if (code) return code;
+  return "Unnamed Department";
+}
+
+function formatCostCenterLabel(costCenter: any) {
+  if (!costCenter) return "Unnamed Cost Center";
+  const code = costCenter.code || costCenter.costCenterCode || costCenter.costCode || "";
+  const name = costCenter.name || costCenter.costCenterName || costCenter.label || "";
+  if (code && name) return `${code} — ${name}`;
+  if (name) return name;
+  if (code) return code;
+  return "Unnamed Cost Center";
+}
+
+function formatLocationLabel(location: any) {
+  if (!location) return "Unnamed Location";
+  const code = location.code || location.locationCode || "";
+  const name = location.name || location.locationName || "";
+  if (code && name) return `${code} — ${name}`;
+  if (name) return name;
+  if (code) return code;
+  return "Unnamed Location";
+}
+
+function formatDesignationLabel(designation: any) {
+  if (!designation) return "Unnamed Designation";
+  const code = designation.code || designation.designationCode || "";
+  const name = designation.name || designation.designationName || "";
+  if (code && name) return `${code} — ${name}`;
+  if (name) return name;
+  if (code) return code;
+  return "Unnamed Designation";
+}
+
+function formatProjectLabel(project: any) {
+  if (!project) return "Unnamed Project";
+  const code = project.code || project.projectCode || "";
+  const name = project.name || project.projectName || "";
+  if (code && name) return `${code} — ${name}`;
+  if (name) return name;
+  if (code) return code;
+  return "Unnamed Project";
+}
+
+function formatProjectSiteLabel(site: any) {
+  if (!site) return "Unnamed Site";
+  const code = site.code || site.siteCode || "";
+  const name = site.name || site.siteName || "";
+  if (code && name) return `${code} — ${name}`;
+  if (name) return name;
+  if (code) return code;
+  return "Unnamed Site";
+}
+
 export default function WorkforcePage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [search, setSearch] = useState("");
   const [deptFilter, setDeptFilter] = useState("all");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [employmentStatusFilter, setEmploymentStatusFilter] = useState("all");
+  const [dutyStatusFilter, setDutyStatusFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
 
   // Modals state
@@ -123,11 +194,70 @@ export default function WorkforcePage() {
   // Validation errors state
   const [validationError, setValidationError] = useState<string | null>(null);
 
-  
+  const handleCompanyChange = (newCompanyId: string) => {
+    setEmpCompanyId(newCompanyId);
+    if (!newCompanyId) return;
+
+    const clearedFields: string[] = [];
+
+    // Check Department
+    if (empDeptId) {
+      const dept = departments.find(d => d.id === empDeptId);
+      if (dept && dept.companyId && dept.companyId !== newCompanyId) {
+        setEmpDeptId("");
+        clearedFields.push("Department");
+      }
+    }
+
+    // Check Cost Center
+    if (empCostCenterId) {
+      const cc = costCenters.find(c => c.id === empCostCenterId);
+      if (cc && cc.companyId && cc.companyId !== newCompanyId) {
+        setEmpCostCenterId("");
+        clearedFields.push("Cost Center");
+      }
+    }
+
+    // Check Default Location
+    if (empDefaultLocationId) {
+      const loc = locations.find(l => l.id === empDefaultLocationId);
+      if (loc && loc.companyId && loc.companyId !== newCompanyId) {
+        setEmpDefaultLocationId("");
+        clearedFields.push("Location");
+      }
+    }
+
+    // Check Default Project
+    if (empDefaultProjectId) {
+      const proj = projects.find(p => p.id === empDefaultProjectId);
+      if (proj && proj.companyId && proj.companyId !== newCompanyId) {
+        setEmpDefaultProjectId("");
+        setEmpDefaultSiteId("");
+        clearedFields.push("Project & Site");
+      }
+    } else if (empDefaultSiteId) {
+      // Check Site
+      const site = allSites.find(s => s.id === empDefaultSiteId);
+      if (site && site.companyId && site.companyId !== newCompanyId) {
+        setEmpDefaultSiteId("");
+        clearedFields.push("Site");
+      }
+    }
+
+    if (clearedFields.length > 0) {
+      const msg = `Company changed. The following mismatched selections were cleared: ${clearedFields.join(", ")}.`;
+      setValidationError(msg);
+      setTimeout(() => {
+        setValidationError(prev => prev === msg ? null : prev);
+      }, 5000);
+    }
+  };
+
   const handleResetFilters = () => {
     setSearch("");
     setDeptFilter("all");
-    setStatusFilter("all");
+    setEmploymentStatusFilter("all");
+    setDutyStatusFilter("all");
     setCategoryFilter("all");
     setPositionCategoryFilter("all");
     setProjectFilter("all");
@@ -186,6 +316,7 @@ export default function WorkforcePage() {
       if (locRes && locRes.ok) setLocations(await locRes.json());
       if (ccRes && ccRes.ok) setCostCenters(await ccRes.json());
       if (aplRes && aplRes.ok) setAllowedPunchLocations(await aplRes.json());
+      if (compRes && compRes.ok) setCompanies(await compRes.json());
       await fetchDeployments();
     } catch (e) {
       console.error(e);
@@ -827,18 +958,10 @@ export default function WorkforcePage() {
       (emp as any).defaultSiteId === siteFilter ||
       empDeployments.some(d => d.siteId === siteFilter);
 
-    let matchesStatus = true;
-    const isEmpActive = emp.employmentStatus ? (emp.employmentStatus === "ACTIVE") : (emp.isActive !== false);
+    const matchesEmploymentStatus = employmentStatusFilter === "all" || emp.employmentStatus === employmentStatusFilter;
+    const matchesDutyStatus = dutyStatusFilter === "all" || emp.dutyStatus === dutyStatusFilter;
 
-    if (statusFilter === "active") {
-      matchesStatus = isEmpActive;
-    } else if (statusFilter === "inactive") {
-      matchesStatus = !isEmpActive;
-    } else if (statusFilter !== "all") {
-      matchesStatus = isEmpActive && (emp.status === statusFilter || emp.dutyStatus === statusFilter);
-    }
-
-    return matchesSearch && matchesDept && matchesCategory && matchesPositionCategory && matchesProject && matchesSite && matchesStatus && matchesCompany;
+    return matchesSearch && matchesDept && matchesCategory && matchesPositionCategory && matchesProject && matchesSite && matchesEmploymentStatus && matchesDutyStatus && matchesCompany;
   });
 
   return (
@@ -920,7 +1043,7 @@ export default function WorkforcePage() {
             <option value="all">All Companies</option>
             {companies.map((comp) => (
               <option key={comp.id} value={comp.id}>
-                {comp.companyCode} — {comp.companyName}
+                {formatCompanyLabel(comp)}
               </option>
             ))}
           </select>
@@ -930,24 +1053,31 @@ export default function WorkforcePage() {
             onChange={(e) => setDeptFilter(e.target.value)}
           >
             <option value="all">All Departments</option>
-            {departments.map((dept) => (
+            {departments.filter(d => companyFilter === "all" || d.companyId === companyFilter).map((dept) => (
               <option key={dept.id} value={dept.id}>
-                {dept.name}
+                {formatDepartmentLabel(dept)}
               </option>
             ))}
           </select>
           <select
             className="bg-surface border border-outline-variant text-sm rounded-lg py-2 px-4 focus:ring-2 focus:ring-primary/20 focus:border-primary w-full sm:w-48 outline-none"
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
+            value={employmentStatusFilter}
+            onChange={(e) => setEmploymentStatusFilter(e.target.value)}
           >
-            <option value="all">All Statuses</option>
-            <option value="active">Active Only</option>
-            <option value="inactive">Inactive Only</option>
-            <option value="On Duty">On Duty</option>
-            <option value="On Break">On Break</option>
-            <option value="Offline">Offline</option>
-            <option value="On Leave">On Leave</option>
+            <option value="all">All Employment Statuses</option>
+            <option value="ACTIVE">Active</option>
+            <option value="INACTIVE">Deactivated</option>
+          </select>
+          <select
+            className="bg-surface border border-outline-variant text-sm rounded-lg py-2 px-4 focus:ring-2 focus:ring-primary/20 focus:border-primary w-full sm:w-48 outline-none"
+            value={dutyStatusFilter}
+            onChange={(e) => setDutyStatusFilter(e.target.value)}
+          >
+            <option value="all">All Duty Statuses</option>
+            <option value="OFF_DUTY">Offline</option>
+            <option value="ON_DUTY">On Duty</option>
+            <option value="ON_BREAK">On Break</option>
+            <option value="ON_LEAVE">On Leave</option>
           </select>
           <select
             className="bg-surface border border-outline-variant text-sm rounded-lg py-2 px-4 focus:ring-2 focus:ring-primary/20 focus:border-primary w-full sm:w-48 outline-none"
@@ -977,7 +1107,7 @@ export default function WorkforcePage() {
               >
                 <option value="all">All Projects</option>
                 {projects.map((proj) => (
-                  <option key={proj.id} value={proj.id}>{proj.projectName}</option>
+                  <option key={proj.id} value={proj.id}>{formatProjectLabel(proj)}</option>
                 ))}
               </select>
               <select
@@ -988,7 +1118,7 @@ export default function WorkforcePage() {
               >
                 <option value="all">All Sites</option>
                 {filterSites.map((site) => (
-                  <option key={site.id} value={site.id}>{site.siteName}</option>
+                  <option key={site.id} value={site.id}>{formatProjectSiteLabel(site)}</option>
                 ))}
               </select>
             </>
@@ -1361,12 +1491,12 @@ export default function WorkforcePage() {
                     <select
                       className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
                       value={empCompanyId}
-                      onChange={(e) => setEmpCompanyId(e.target.value)}
+                      onChange={(e) => handleCompanyChange(e.target.value)}
                       required={empEmploymentStatus === 'ACTIVE'}
                     >
                       <option value="">Select Company</option>
                       {companies.map((c) => (
-                        <option key={c.id} value={c.id}>{c.companyCode} — {c.companyName}</option>
+                        <option key={c.id} value={c.id}>{formatCompanyLabel(c)}</option>
                       ))}
                     </select>
                   </div>
@@ -1379,7 +1509,7 @@ export default function WorkforcePage() {
                     >
                       <option value="">Select Department (Optional)</option>
                       {departments.filter(d => !empCompanyId || d.companyId === empCompanyId).map((d) => (
-                        <option key={d.id} value={d.id}>{d.name}</option>
+                        <option key={d.id} value={d.id}>{formatDepartmentLabel(d)}</option>
                       ))}
                     </select>
                   </div>
@@ -1407,7 +1537,7 @@ export default function WorkforcePage() {
                     >
                       <option value="">Select Designation</option>
                       {designations.map((d) => (
-                        <option key={d.id} value={d.id}>{d.name} ({d.code})</option>
+                        <option key={d.id} value={d.id}>{formatDesignationLabel(d)}</option>
                       ))}
                     </select>
                   </div>
@@ -1457,7 +1587,7 @@ export default function WorkforcePage() {
                       >
                         <option value="">Select Project</option>
                         {projects.filter(p => !empCompanyId || p.companyId === empCompanyId).map((p) => (
-                          <option key={p.id} value={p.id}>{p.projectName}</option>
+                          <option key={p.id} value={p.id}>{formatProjectLabel(p)}</option>
                         ))}
                       </select>
                     </div>
@@ -1471,7 +1601,7 @@ export default function WorkforcePage() {
                       >
                         <option value="">Select Site</option>
                         {formSites.map((s) => (
-                          <option key={s.id} value={s.id}>{s.siteName}</option>
+                          <option key={s.id} value={s.id}>{formatProjectSiteLabel(s)}</option>
                         ))}
                       </select>
                     </div>
@@ -1491,7 +1621,7 @@ export default function WorkforcePage() {
                     >
                       <option value="">Select Location</option>
                       {locations.filter(l => !empCompanyId || l.companyId === empCompanyId).map((l) => (
-                        <option key={l.id} value={l.id}>{l.locationName || l.name} ({l.locationCode || l.code})</option>
+                        <option key={l.id} value={l.id}>{formatLocationLabel(l)}</option>
                       ))}
                     </select>
                   </div>
@@ -1504,7 +1634,7 @@ export default function WorkforcePage() {
                     >
                       <option value="">Select Cost Center</option>
                       {costCenters.filter(cc => !empCompanyId || cc.companyId === empCompanyId).map((cc) => (
-                        <option key={cc.id} value={cc.id}>{cc.name} ({cc.code})</option>
+                        <option key={cc.id} value={cc.id}>{formatCostCenterLabel(cc)}</option>
                       ))}
                     </select>
                   </div>
@@ -1852,12 +1982,12 @@ export default function WorkforcePage() {
                       <select
                         className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
                         value={empCompanyId}
-                        onChange={(e) => setEmpCompanyId(e.target.value)}
+                        onChange={(e) => handleCompanyChange(e.target.value)}
                         required={empEmploymentStatus === 'ACTIVE'}
                       >
                         <option value="">Select Company</option>
                         {companies.map((c) => (
-                          <option key={c.id} value={c.id}>{c.companyCode} — {c.companyName}</option>
+                          <option key={c.id} value={c.id}>{formatCompanyLabel(c)}</option>
                         ))}
                       </select>
                     </div>
@@ -1865,7 +1995,7 @@ export default function WorkforcePage() {
                       <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Department</label>
                       <select className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" value={empDeptId} onChange={(e) => setEmpDeptId(e.target.value)}>
                         <option value="">Select Department (Optional)</option>
-                        {departments.filter(d => !empCompanyId || d.companyId === empCompanyId).map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+                        {departments.filter(d => !empCompanyId || d.companyId === empCompanyId).map((d) => <option key={d.id} value={d.id}>{formatDepartmentLabel(d)}</option>)}
                       </select>
                     </div>
                   </div>
@@ -1897,7 +2027,7 @@ export default function WorkforcePage() {
                       <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Designation</label>
                       <select className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-2.5 py-2 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" value={empDesignationId} onChange={(e) => setEmpDesignationId(e.target.value)}>
                         <option value="">Select Designation</option>
-                        {designations.map((d) => <option key={d.id} value={d.id}>{d.name} ({d.code})</option>)}
+                        {designations.map((d) => <option key={d.id} value={d.id}>{formatDesignationLabel(d)}</option>)}
                       </select>
                     </div>
                   </div>
@@ -1927,14 +2057,14 @@ export default function WorkforcePage() {
                         <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Default Project</label>
                         <select className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-2.5 py-2 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" value={empDefaultProjectId} onChange={(e) => setEmpDefaultProjectId(e.target.value)}>
                           <option value="">Select Project</option>
-                          {projects.filter(p => !empCompanyId || p.companyId === empCompanyId).map((p) => <option key={p.id} value={p.id}>{p.projectName}</option>)}
+                          {projects.filter(p => !empCompanyId || p.companyId === empCompanyId).map((p) => <option key={p.id} value={p.id}>{formatProjectLabel(p)}</option>)}
                         </select>
                       </div>
                       <div className="space-y-1">
                         <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Default Site</label>
                         <select className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-2.5 py-2 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" value={empDefaultSiteId} onChange={(e) => setEmpDefaultSiteId(e.target.value)} disabled={!empDefaultProjectId}>
                           <option value="">Select Site</option>
-                          {formSites.map((s) => <option key={s.id} value={s.id}>{s.siteName}</option>)}
+                          {formSites.map((s) => <option key={s.id} value={s.id}>{formatProjectSiteLabel(s)}</option>)}
                         </select>
                       </div>
                     </div>
@@ -1947,14 +2077,14 @@ export default function WorkforcePage() {
                       <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Default Location</label>
                       <select className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" value={empDefaultLocationId} onChange={(e) => setEmpDefaultLocationId(e.target.value)}>
                         <option value="">Select Location</option>
-                        {locations.filter(l => !empCompanyId || l.companyId === empCompanyId).map((l) => <option key={l.id} value={l.id}>{l.locationName || l.name} ({l.locationCode || l.code})</option>)}
+                        {locations.filter(l => !empCompanyId || l.companyId === empCompanyId).map((l) => <option key={l.id} value={l.id}>{formatLocationLabel(l)}</option>)}
                       </select>
                     </div>
                     <div className="space-y-1">
                       <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Cost Center</label>
                       <select className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" value={empCostCenterId} onChange={(e) => setEmpCostCenterId(e.target.value)}>
                         <option value="">Select Cost Center</option>
-                        {costCenters.filter(cc => !empCompanyId || cc.companyId === empCompanyId).map((cc) => <option key={cc.id} value={cc.id}>{cc.name} ({cc.code})</option>)}
+                        {costCenters.filter(cc => !empCompanyId || cc.companyId === empCompanyId).map((cc) => <option key={cc.id} value={cc.id}>{formatCostCenterLabel(cc)}</option>)}
                       </select>
                     </div>
                   </div>

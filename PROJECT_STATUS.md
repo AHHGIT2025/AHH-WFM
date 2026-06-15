@@ -37,7 +37,7 @@ AHH WFM is a full-stack, enterprise-grade workforce management application built
 | **Phase 9** | Completed | `v0.17-supervisor-scoping-and-auth` | Supervisor scopes, LOCAL/SSO accounts, force password rotation, and universal filters reset. |
 | **v0.18** | Completed | `v0.18-mobile-profile-photo-and-polish` | Mobile profile photo uploads, cache-busting sync, Designation tags, ERP terminology rebrand, and Android Capacitor wrapper support. |
 | **v0.18.1** | Completed | `v0.18.1-clearance-management-workflow` | Dynamic 15-step clearance requests, cascading filters, details snapshot, auto-applicability skipping, and template configuration builder. |
-| **v0.18.2** | Completed | `v0.18.2-employee-company-identity-integration` | Company assignment, Qatar ID (QID), and Passport integration across workforce directory, REST APIs (with role masking), bulk import, clearance snapshots, and mobile profile. |
+| **v0.18.2** | Completed | `v0.18.2-employee-company-identity-integration` | Company assignment, Qatar ID (QID), and Passport integration across workforce directory, REST APIs (with role masking), bulk import, clearance snapshots, and mobile profile. Also includes Company and Cost Center dropdown labels and population fixes. |
 
 ---
 
@@ -136,6 +136,7 @@ AHH WFM is a full-stack, enterprise-grade workforce management application built
 
 - **Clearance Management Module**: Dynamic 15-step clearance requests, cascading Company -> Department -> Employee filters, details snapshot, auto-skipping IT (credentials/email/asset check) and Accommodation steps, dynamic approver overrides, custom template builder panel, and printable FM-14-04-02 layouts.
 - **Company Assignment & Identity Integration**: Integrated Company assignment and identity document tracking (Qatar ID & Passport details) with strict role-based privacy masking, cascading filtering in Workforce Directory forms, automatic mismatched field resets, and mobile profile sync.
+- **Company & Cost Center Dropdown Labels & Population Fix**: Resolved database relation populations for companies, departments, locations, and cost centers. Corrected blank options `()` and raw UUID leaks in Master Data Hub tables and Add/Edit employee modal dropdowns. Implemented dual filters (Employment Status vs Duty Status) and cascading select resets in the Workforce Directory.
 
 - **Current Focus:** Final Integration Validation & Release Stabilization
 - **Latest Checkpoint:** `v0.18.2-employee-company-identity-integration`

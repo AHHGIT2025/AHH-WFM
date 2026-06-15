@@ -372,9 +372,14 @@ export default function NewClearanceRequest() {
                   className="w-full rounded-md border-gray-300 shadow-sm focus:border-[#800000] focus:ring focus:ring-[#800000]/20 text-sm py-2 px-3 bg-white border"
                 >
                   <option value="">All Companies</option>
-                  {companies.map(c => (
-                    <option key={c.id} value={c.id}>{c.companyName} ({c.companyCode})</option>
-                  ))}
+                  {companies.map(c => {
+                    const code = c.code || c.companyCode || "";
+                    const name = c.name || c.companyName || "";
+                    const label = code && name ? `${code} — ${name}` : (name || code || c.id);
+                    return (
+                      <option key={c.id} value={c.id}>{label}</option>
+                    );
+                  })}
                 </select>
               </div>
 
@@ -424,9 +429,10 @@ export default function NewClearanceRequest() {
               >
                 <option value="">-- Select Employee --</option>
                 {filteredEmployees.map(emp => {
-                  const label = emp.name 
-                    ? `${emp.id} — ${emp.name} — ${emp.designation?.name || "N/A"}`
-                    : `${emp.id} — Unknown Employee`;
+                  const empId = emp.id || "N/A";
+                  const empName = emp.name || "Unknown Name";
+                  const designationName = emp.designation?.name || emp.designation || "N/A";
+                  const label = `${empId} — ${empName} — ${designationName}`;
                   return (
                     <option key={emp.id} value={emp.id}>
                       {label}

@@ -14,6 +14,60 @@ const entityMap: Record<string, keyof typeof prisma> = {
   "standby-rules": "relieverStandbyRule",
 };
 
+function normalizeRecord(entity: string, record: any) {
+  if (!record) return record;
+  const copy = { ...record };
+
+  // Normalize Company
+  if (entity === "companies") {
+    copy.code = record.companyCode;
+    copy.name = record.companyName;
+  }
+  // Normalize Department
+  if (entity === "departments") {
+    copy.code = "";
+  }
+  // Normalize Cost Center
+  if (entity === "cost-centers") {
+    copy.code = record.costCenterCode;
+    copy.name = record.costCenterName;
+  }
+  // Normalize Location
+  if (entity === "locations") {
+    copy.code = record.locationCode;
+    copy.name = record.locationName;
+  }
+  // Normalize Project
+  if (entity === "projects") {
+    copy.code = record.projectCode;
+    copy.name = record.projectName;
+  }
+  // Normalize Project Site
+  if (entity === "project-sites") {
+    copy.code = record.siteCode;
+    copy.name = record.siteName;
+  }
+
+  // Normalize nested company relation
+  if (copy.company) {
+    copy.company = {
+      ...copy.company,
+      code: copy.company.companyCode,
+      name: copy.company.companyName
+    };
+  }
+  // Normalize nested project relation
+  if (copy.project) {
+    copy.project = {
+      ...copy.project,
+      code: copy.project.projectCode,
+      name: copy.project.projectName
+    };
+  }
+
+  return copy;
+}
+
 export async function GET(request: Request, { params }: { params: { entity: string; id: string } }) {
   try {
     const { entity, id } = params;
@@ -32,7 +86,7 @@ export async function GET(request: Request, { params }: { params: { entity: stri
       return NextResponse.json({ error: "Record not found" }, { status: 404 });
     }
 
-    return NextResponse.json(record);
+    return NextResponse.json(normalizeRecord(entity, record));
   } catch (error: any) {
     console.error(`Error fetching ${params.entity}:`, error);
     return NextResponse.json({ error: `Failed to fetch ${params.entity}` }, { status: 500 });
@@ -56,7 +110,7 @@ export async function PUT(request: Request, { params }: { params: { entity: stri
       data: body,
     });
 
-    return NextResponse.json(updatedRecord);
+    return NextResponse.json(normalizeRecord(entity, updatedRecord));
   } catch (error: any) {
     console.error(`Error updating ${params.entity}:`, error);
     if (error.code === "P2025") {

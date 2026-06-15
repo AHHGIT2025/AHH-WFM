@@ -204,9 +204,30 @@ export function MasterDataEntityTab({ config }: { config: TabConfig }) {
                       <td key={col.key} className="px-6 py-4 whitespace-nowrap text-gray-700 dark:text-gray-200">
                         {col.type === "boolean" ? (
                           item[col.key] ? <CheckCircle2 className="h-4 w-4 text-green-500" /> : <X className="h-4 w-4 text-red-500" />
-                        ) : col.type === "select" && col.optionLabel && item[col.key.replace("Id", "")] ? (
-                          // If it's a relation like companyId, the backend sends the joined \`company\` object.
-                          String(item[col.key.replace("Id", "")][col.optionLabel])
+                        ) : col.type === "select" && col.optionLabel ? (
+                          (() => {
+                            const relKey = col.key.replace("Id", "");
+                            const relationObj = item[relKey];
+                            if (relationObj) {
+                              const code = relationObj.code || relationObj.companyCode || relationObj.projectCode || relationObj.locationCode || relationObj.costCenterCode || relationObj.siteCode || "";
+                              const name = relationObj.name || relationObj.companyName || relationObj.projectName || relationObj.locationName || relationObj.costCenterName || relationObj.siteName || relationObj[col.optionLabel] || "";
+                              if (code && name) return `${code} — ${name}`;
+                              if (name) return name;
+                              if (code) return code;
+                              return String(relationObj[col.optionLabel] || "-");
+                            }
+                            const options = dynamicOptions[col.key] || [];
+                            const matched = options.find((opt: any) => opt.id === item[col.key]);
+                            if (matched) {
+                              const code = matched.code || matched.companyCode || matched.projectCode || matched.locationCode || matched.costCenterCode || matched.siteCode || "";
+                              const name = matched.name || matched.companyName || matched.projectName || matched.locationName || matched.costCenterName || matched.siteName || matched[col.optionLabel] || "";
+                              if (code && name) return `${code} — ${name}`;
+                              if (name) return name;
+                              if (code) return code;
+                              return String(matched[col.optionLabel] || "-");
+                            }
+                            return String(item[col.key] || "-");
+                          })()
                         ) : (
                           String(item[col.key] || "-")
                         )}
@@ -259,10 +280,15 @@ export function MasterDataEntityTab({ config }: { config: TabConfig }) {
                     className="w-full px-3 py-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
                   >
                     <option value="">Select {col.label}</option>
-                    {col.optionsApi ? (
-                      dynamicOptions[col.key]?.map(opt => (
-                        <option key={opt.id} value={opt.id}>{opt[col.optionLabel || "name"]}</option>
-                      ))
+                     {col.optionsApi ? (
+                      dynamicOptions[col.key]?.map(opt => {
+                        const code = opt.code || opt.companyCode || opt.projectCode || opt.locationCode || opt.costCenterCode || opt.siteCode || "";
+                        const name = opt.name || opt.companyName || opt.projectName || opt.locationName || opt.costCenterName || opt.siteName || opt[col.optionLabel || "name"] || "";
+                        const label = code && name ? `${code} — ${name}` : (name || code || opt.id);
+                        return (
+                          <option key={opt.id} value={opt.id}>{label}</option>
+                        );
+                      })
                     ) : (
                       col.options?.map(opt => (
                         <option key={opt.id} value={opt.id}>{opt.label}</option>

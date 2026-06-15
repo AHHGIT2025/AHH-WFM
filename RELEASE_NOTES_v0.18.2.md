@@ -15,9 +15,10 @@ We are pleased to announce the release of **v0.18.2**, which completes the end-t
   * Company assignment is strictly required for active employee status.
 
 ### 2. Company Assignment & Dynamic Filter Resets
-* **Company Dropdown**: Formatted company listings as `CODE — Company Name`.
-* **Cascading Filters**: Selecting or changing an employee's Company dynamically filters dependent fields (Department, Cost Center, Location, Project, Site).
+* **Company Dropdown**: Formatted company listings as `CODE — Company Name` across Master Data Hub tables, Workforce Directory filters, Add/Edit modals, and Clearance requests.
+* **Cascading Filters**: Selecting or changing an employee's Company dynamically filters dependent fields (Department, Cost Center, Location, Project, Site) and displays options in `CODE — Name` format, preventing blank parentheses `()`.
 * **Auto-Reset Side-Effects**: Changing an employee's company automatically flags, warns, and resets mismatched references (e.g. if the previously selected Department belongs to a different Company) to maintain data consistency.
+* **Workforce Filter Controls**: Populated the Company filter dropdown and split the unified Status filter into distinct **Employment Status** and **Duty Status** dropdown selections.
 * **Departments Extended**: Extended the `Department` model to support `companyId` relations, pre-seeded departments accordingly, and updated the respective REST endpoints.
 
 ### 3. Role-Based Privacy Masking & Security
