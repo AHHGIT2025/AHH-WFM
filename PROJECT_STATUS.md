@@ -34,6 +34,9 @@ AHH WFM is a full-stack, enterprise-grade workforce management application built
 | **Phase 6.1**| Completed | `v0.13-reporting-backup-foundation` | Executive & domain-specific reports API, CSV/JSON exports, user audits, and admin backups. |
 | **Phase 7** | Completed | `v0.14-mobile-app-foundation` | Next.js Mobile PWA client with dedicated BFF API, Geofence priority routing, and supervisor dashboards. |
 | **Phase 8** | Completed | `v0.15-master-data-scheduler-mobile-integration` | Master Data Hub CRUD UI, Advanced Scheduler Grid Cell Actions, Mobile Integration & Priority Cascade. |
+| **Phase 9** | Completed | `v0.17-supervisor-scoping-and-auth` | Supervisor scopes, LOCAL/SSO accounts, force password rotation, and universal filters reset. |
+| **v0.18** | Completed | `v0.18-mobile-profile-photo-and-polish` | Mobile profile photo uploads, cache-busting sync, Designation tags, ERP terminology rebrand, and Android Capacitor wrapper support. |
+| **v0.18.1** | Completed | `v0.18.1-clearance-management-workflow` | Dynamic 15-step clearance requests, cascading filters, details snapshot, auto-applicability skipping, and template configuration builder. |
 
 ---
 
@@ -130,6 +133,8 @@ AHH WFM is a full-stack, enterprise-grade workforce management application built
 - **Mobile Supervisor UI Uplift**: Dashboard now aggregates live attendance figures utilizing direct server-side team scopes. Adds inline leave approvals directly within the mobile layout.
 - **Universal Filters Reset**: Global UI action to instantly revert complex multi-select filtering states across admin data grids.
 
+- **Clearance Management Module**: Dynamic 15-step clearance requests, cascading Company -> Department -> Employee filters, details snapshot, auto-skipping IT (credentials/email/asset check) and Accommodation steps, dynamic approver overrides, custom template builder panel, and printable FM-14-04-02 layouts.
+
 - **Current Focus:** Final Integration Validation & Release Stabilization
-- **Latest Checkpoint:** `v0.17-supervisor-scoping-and-auth`
+- **Latest Checkpoint:** `v0.18.1-clearance-management-workflow`
 - **Next Phase:** N/A (Project Wrap-Up)

@@ -7,7 +7,6 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   try {
     const clearanceId = params.id;
     const data = await request.json(); 
-    // data needs: stepId, actorId, remarks, notes
     
     const clearance = await prisma.clearanceRequest.findUnique({
       where: { id: clearanceId },
@@ -56,39 +55,16 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         clearanceRequestId: clearance.id,
         actorId: data.actorId || "system",
         actionType: "RETURN",
-        details: `Step ${step.sectionName} was ${"RETURNED"}.`
+        details: `Step ${step.sectionName} was RETURNED.`
       }
     });
 
-    // Check if all steps are completed (for approve / not applicable)
-    if ("RETURNED" === "APPROVED" || "RETURNED" === "NOT_APPLICABLE") {
-      const allSteps = await prisma.clearanceApprovalStep.findMany({
-        where: { clearanceRequestId: clearanceId }
-      });
-      
-      const allDone = allSteps.every(s => s.status === "APPROVED" || s.status === "NOT_APPLICABLE" || s.status === "SKIPPED");
-      
-      if (allDone) {
-        await prisma.clearanceRequest.update({
-          where: { id: clearanceId },
-          data: { 
-            status: "COMPLETED",
-            finalApprovedAt: new Date(),
-            completedAt: new Date()
-          }
-        });
-      }
-    } else if ("RETURNED" === "REJECTED") {
-        await prisma.clearanceRequest.update({
-            where: { id: clearanceId },
-            data: { status: "REJECTED" }
-        });
-    } else if ("RETURNED" === "RETURNED") {
+    
         await prisma.clearanceRequest.update({
             where: { id: clearanceId },
             data: { status: "RETURNED_FOR_CORRECTION" }
         });
-    }
+    
 
     return NextResponse.json({ success: true, message: "Action recorded successfully" });
   } catch (error: any) {

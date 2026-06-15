@@ -73,7 +73,7 @@ export default function ClearanceDashboard() {
           <div className="p-4 bg-white border-b flex items-center space-x-4">
             <Input placeholder="Search Employee..." className="max-w-xs" />
             <Button variant="secondary">Filters</Button>
-            <Button variant="outline">Reset Filters</Button>
+            <Button variant="ghost">Reset Filters</Button>
           </div>
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
@@ -105,7 +105,7 @@ export default function ClearanceDashboard() {
                         <Badge variant={c.status === "COMPLETED" ? "success" : "warning"}>{c.status}</Badge>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        <Button variant="outline" size="sm" onClick={() => window.location.href = \`/clearance/\${c.id}\`}>View</Button>
+                        <Button variant="ghost" size="sm" onClick={() => window.location.href = `/clearance/${c.id}`}>View</Button>
                       </td>
                     </tr>
                   ))

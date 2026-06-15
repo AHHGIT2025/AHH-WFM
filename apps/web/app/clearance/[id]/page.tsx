@@ -12,7 +12,7 @@ export default function ClearanceDetail({ params }: { params: { id: string } }) 
   const [loading, setLoading] = useState(true);
 
   const fetchClearance = () => {
-    fetch(\`/api/v1/clearance/\${params.id}\`)
+    fetch(`/api/v1/clearance/${params.id}`)
       .then(res => res.json())
       .then(data => {
         if(data.success) setClearance(data.data);
@@ -29,7 +29,7 @@ export default function ClearanceDetail({ params }: { params: { id: string } }) 
     const stepId = clearance.approvalSteps.find((s: any) => s.status === 'PENDING')?.id;
     if (!stepId && action !== 'submit' && action !== 'sign') return;
 
-    let endpoint = \`/api/v1/clearance/\${params.id}/\${action}\`;
+    let endpoint = `/api/v1/clearance/${params.id}/${action}`;
     let body: any = {};
 
     if (action === 'submit') {
@@ -71,8 +71,8 @@ export default function ClearanceDetail({ params }: { params: { id: string } }) 
           </div>
         </div>
         <div className="space-x-2">
-          <Button variant="outline" onClick={() => window.open(\`/clearance/\${clearance.id}/print\`, '_blank')}>Print Form</Button>
-          <Badge variant={clearance.status === 'COMPLETED' ? 'success' : clearance.status === 'REJECTED' ? 'danger' : 'warning'}>
+          <Button variant="ghost" onClick={() => window.open(`/clearance/${clearance.id}/print`, '_blank')}>Print Form</Button>
+          <Badge variant={clearance.status === 'COMPLETED' ? 'success' : clearance.status === 'REJECTED' ? 'error' : 'warning'}>
             {clearance.status}
           </Badge>
         </div>
@@ -119,7 +119,7 @@ export default function ClearanceDetail({ params }: { params: { id: string } }) 
             ) : (
               <div className="space-y-4">
                 {clearance.approvalSteps?.map((step: any, idx: number) => (
-                  <div key={step.id} className={\`p-4 border rounded-md flex justify-between items-center \${step.status === 'PENDING' ? 'border-yellow-400 bg-yellow-50' : 'border-gray-200'}\`}>
+                  <div key={step.id} className={`p-4 border rounded-md flex justify-between items-center ${step.status === 'PENDING' ? 'border-yellow-400 bg-yellow-50' : 'border-gray-200'}`}>
                     <div>
                       <div className="font-medium text-gray-800">{idx + 1}. {step.sectionName}</div>
                       <div className="text-sm text-gray-500 mt-1">
@@ -136,8 +136,8 @@ export default function ClearanceDetail({ params }: { params: { id: string } }) 
                     </div>
                     {step.status === 'PENDING' && (
                        <div className="space-x-2">
-                         <Button variant="outline" className="text-green-600 border-green-600" onClick={() => handleAction('approve')}>Approve</Button>
-                         <Button variant="outline" className="text-red-600 border-red-600" onClick={() => handleAction('reject')}>Reject</Button>
+                         <Button variant="ghost" className="text-green-600 border-green-600" onClick={() => handleAction('approve')}>Approve</Button>
+                         <Button variant="ghost" className="text-red-600 border-red-600" onClick={() => handleAction('reject')}>Reject</Button>
                        </div>
                     )}
                   </div>

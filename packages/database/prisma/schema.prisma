@@ -28,6 +28,12 @@ model Employee {
   dutyStatus    String               @default("OFF_DUTY")
   workerCategory String              @default("WHITE_COLLAR")
   workAssignmentType String          @default("OFFICE_BASED")
+  dateOfJoining      DateTime?
+  qidNumber          String?
+  qidExpiryDate      DateTime?
+  sponsor            String?
+  hasAccommodation   Boolean         @default(false)
+  hasItAssets        Boolean         @default(false)
   attendance    AttendanceRecord[]
   leaves        LeaveRequest[]
   leaveBalances LeaveBalance[]

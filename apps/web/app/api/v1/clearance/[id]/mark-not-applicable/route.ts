@@ -7,7 +7,6 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   try {
     const clearanceId = params.id;
     const data = await request.json(); 
-    // data needs: stepId, actorId, remarks, notes
     
     const clearance = await prisma.clearanceRequest.findUnique({
       where: { id: clearanceId },
@@ -56,12 +55,11 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         clearanceRequestId: clearance.id,
         actorId: data.actorId || "system",
         actionType: "MARK_NOT_APPLICABLE",
-        details: `Step ${step.sectionName} was ${"NOT_APPLICABLE"}.`
+        details: `Step ${step.sectionName} was NOT_APPLICABLE.`
       }
     });
 
-    // Check if all steps are completed (for approve / not applicable)
-    if ("NOT_APPLICABLE" === "APPROVED" || "NOT_APPLICABLE" === "NOT_APPLICABLE") {
+    
       const allSteps = await prisma.clearanceApprovalStep.findMany({
         where: { clearanceRequestId: clearanceId }
       });
@@ -78,17 +76,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
           }
         });
       }
-    } else if ("NOT_APPLICABLE" === "REJECTED") {
-        await prisma.clearanceRequest.update({
-            where: { id: clearanceId },
-            data: { status: "REJECTED" }
-        });
-    } else if ("NOT_APPLICABLE" === "RETURNED") {
-        await prisma.clearanceRequest.update({
-            where: { id: clearanceId },
-            data: { status: "RETURNED_FOR_CORRECTION" }
-        });
-    }
+    
 
     return NextResponse.json({ success: true, message: "Action recorded successfully" });
   } catch (error: any) {

@@ -141,12 +141,12 @@ let memoryDb: {
     { id: "DEPT-005", name: "IT", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
   ],
   employees: [
-    { id: "SK-90210", name: "Sarah Kim", department: "Operations", departmentId: "DEPT-001", companyId: "COMP-001", designationId: "DES-HRM", role: "SUPERVISOR", status: "On Break", email: "sarah.kim@alhattab.qa", phone: "+974 5555 1234", shiftId: "MOR-102", passwordHash: defaultHash, isActive: true },
-    { id: "AM-8821", name: "Alex Martinez", department: "Engineering", departmentId: "DEPT-002", companyId: "COMP-001", designationId: "DES-ACC", workerCategory: "WHITE_COLLAR", role: "EMPLOYEE", status: "On Duty", email: "alex.m@alhattab.qa", phone: "+974 5555 5678", shiftId: "GEN-001", passwordHash: defaultHash, isActive: true },
-    { id: "BR-8823", name: "Brandon Reed", department: "Logistics", departmentId: "DEPT-003", companyId: "COMP-001", designationId: "DES-001", workerCategory: "BLUE_COLLAR", role: "EMPLOYEE", status: "On Duty", email: "brandon.r@alhattab.qa", phone: "+974 5555 9012", shiftId: "AFT-103", passwordHash: defaultHash, isActive: true },
-    { id: "JL-8824", name: "Jordan Lee", department: "Sales", departmentId: "DEPT-004", companyId: "COMP-001", role: "EMPLOYEE", status: "Offline", email: "jordan.lee@alhattab.qa", phone: "+974 5555 3456", shiftId: "ROT-A", passwordHash: defaultHash, isActive: true },
-    { id: "AA-1001", name: "Ahmed Ali", department: "Operations", departmentId: "DEPT-001", companyId: "COMP-001", designationId: "DES-001", workerCategory: "BLUE_COLLAR", role: "EMPLOYEE", status: "Offline", email: "ahmed.ali@alhattab.qa", phone: "+974 6666 1111", shiftId: "GEN-001", passwordHash: defaultHash, isActive: true },
-    { id: "AD-0001", name: "System Administrator", department: "IT", departmentId: "DEPT-005", companyId: "COMP-001", role: "ADMIN", status: "Offline", email: "admin@alhattab.qa", phone: "+974 0000 0000", shiftId: "GEN-001", passwordHash: defaultHash, isActive: true }
+    { id: "SK-90210", name: "Sarah Kim", department: "Operations", departmentId: "DEPT-001", companyId: "COMP-001", designationId: "DES-HRM", role: "SUPERVISOR", status: "On Break", email: "sarah.kim@alhattab.qa", phone: "+974 5555 1234", shiftId: "MOR-102", passwordHash: defaultHash, isActive: true, dateOfJoining: "2022-01-15T00:00:00Z", qidNumber: "28532400123", qidExpiryDate: "2027-05-20T00:00:00Z", sponsor: "Al Hattab Holding", hasAccommodation: false, hasItAssets: true },
+    { id: "AM-8821", name: "Alex Martinez", department: "Engineering", departmentId: "DEPT-002", companyId: "COMP-001", designationId: "DES-ACC", workerCategory: "WHITE_COLLAR", role: "EMPLOYEE", status: "On Duty", email: "alex.m@alhattab.qa", phone: "+974 5555 5678", shiftId: "GEN-001", passwordHash: defaultHash, isActive: true, dateOfJoining: "2023-04-10T00:00:00Z", qidNumber: "28932400456", qidExpiryDate: "2026-12-15T00:00:00Z", sponsor: "Al Hattab Holding", hasAccommodation: false, hasItAssets: true },
+    { id: "BR-8823", name: "Brandon Reed", department: "Logistics", departmentId: "DEPT-003", companyId: "COMP-001", designationId: "DES-001", workerCategory: "BLUE_COLLAR", role: "EMPLOYEE", status: "On Duty", email: "brandon.r@alhattab.qa", phone: "+974 5555 9012", shiftId: "AFT-103", passwordHash: defaultHash, isActive: true, dateOfJoining: "2024-02-01T00:00:00Z", qidNumber: "29532400789", qidExpiryDate: "2025-08-30T00:00:00Z", sponsor: "Al Hattab Logistics", hasAccommodation: true, hasItAssets: false },
+    { id: "JL-8824", name: "Jordan Lee", department: "Sales", departmentId: "DEPT-004", companyId: "COMP-001", role: "EMPLOYEE", status: "Offline", email: "jordan.lee@alhattab.qa", phone: "+974 5555 3456", shiftId: "ROT-A", passwordHash: defaultHash, isActive: true, dateOfJoining: "2023-09-01T00:00:00Z", qidNumber: "29132400111", qidExpiryDate: "2027-01-10T00:00:00Z", sponsor: "Al Hattab Holding", hasAccommodation: false, hasItAssets: true },
+    { id: "AA-1001", name: "Ahmed Ali", department: "Operations", departmentId: "DEPT-001", companyId: "COMP-001", designationId: "DES-001", workerCategory: "BLUE_COLLAR", role: "EMPLOYEE", status: "Offline", email: "ahmed.ali@alhattab.qa", phone: "+974 6666 1111", shiftId: "GEN-001", passwordHash: defaultHash, isActive: true, dateOfJoining: "2024-05-15T00:00:00Z", qidNumber: "29632400222", qidExpiryDate: "2026-06-25T00:00:00Z", sponsor: "Al Hattab Contracting", hasAccommodation: true, hasItAssets: false },
+    { id: "AD-0001", name: "System Administrator", department: "IT", departmentId: "DEPT-005", companyId: "COMP-001", role: "ADMIN", status: "Offline", email: "admin@alhattab.qa", phone: "+974 0000 0000", shiftId: "GEN-001", passwordHash: defaultHash, isActive: true, dateOfJoining: "2020-01-01T00:00:00Z", qidNumber: "28032400000", qidExpiryDate: "2029-12-31T00:00:00Z", sponsor: "Al Hattab Holding", hasAccommodation: false, hasItAssets: true }
   ],
   attendance: [
     { id: "ATT-001", employeeId: "AM-8821", employeeName: "Alex Martinez", checkIn: "2026-06-11T08:55:00Z", checkOut: "2026-06-11T18:02:00Z", originalCheckIn: "2026-06-11T08:55:00Z", originalCheckOut: "2026-06-11T18:02:00Z", lat: 25.2854, lng: 51.5310, device: "Galaxy S23 · 5G · GPS Active", status: "ON_TIME", locationName: "Doha Headquarters", lateMinutes: 0 },
@@ -1045,9 +1045,17 @@ export const mockDb = {
   // Employees
   getEmployees: async (): Promise<Employee[]> => {
     let emps: Employee[] = [];
+    const includeOptions = {
+      company: true,
+      designation: true,
+      departmentRef: true,
+      defaultProject: true,
+      defaultSite: true,
+      immediateSupervisor: true
+    };
     if (isDbConnected()) {
       await seedMySQL();
-      emps = await prismaClient.employee.findMany();
+      emps = await prismaClient.employee.findMany({ include: includeOptions });
       let modified = false;
       for (const emp of emps) {
         let changed = false;
@@ -1070,20 +1078,55 @@ export const mockDb = {
           changed = true;
         }
 
+        // Migrate missing database fields from memory mock if null
+        const mockEmp = memoryDb.employees.find(me => me.id === emp.id);
+        if (mockEmp) {
+          if (!emp.dateOfJoining && mockEmp.dateOfJoining) {
+            emp.dateOfJoining = new Date(mockEmp.dateOfJoining);
+            changed = true;
+          }
+          if (!emp.qidNumber && mockEmp.qidNumber) {
+            emp.qidNumber = mockEmp.qidNumber;
+            changed = true;
+          }
+          if (!emp.qidExpiryDate && mockEmp.qidExpiryDate) {
+            emp.qidExpiryDate = new Date(mockEmp.qidExpiryDate);
+            changed = true;
+          }
+          if (!emp.sponsor && mockEmp.sponsor) {
+            emp.sponsor = mockEmp.sponsor;
+            changed = true;
+          }
+          if (emp.hasAccommodation !== mockEmp.hasAccommodation && mockEmp.hasAccommodation) {
+            emp.hasAccommodation = mockEmp.hasAccommodation;
+            changed = true;
+          }
+          if (emp.hasItAssets !== mockEmp.hasItAssets && mockEmp.hasItAssets) {
+            emp.hasItAssets = mockEmp.hasItAssets;
+            changed = true;
+          }
+        }
+
         if (changed) {
           await prismaClient.employee.update({
             where: { id: emp.id },
             data: {
               isActive: emp.isActive,
               employmentStatus: emp.employmentStatus,
-              dutyStatus: emp.dutyStatus
+              dutyStatus: emp.dutyStatus,
+              dateOfJoining: emp.dateOfJoining,
+              qidNumber: emp.qidNumber,
+              qidExpiryDate: emp.qidExpiryDate,
+              sponsor: emp.sponsor,
+              hasAccommodation: emp.hasAccommodation,
+              hasItAssets: emp.hasItAssets
             }
           });
           modified = true;
         }
       }
       if (modified) {
-        emps = await prismaClient.employee.findMany();
+        emps = await prismaClient.employee.findMany({ include: includeOptions });
       }
       return emps;
     } else {
@@ -1113,6 +1156,15 @@ export const mockDb = {
       }
       if (modified) {
         writeDb(db);
+      }
+      // Map relations for in-memory DB
+      for (const emp of emps) {
+        emp.company = db.companies.find(c => c.id === emp.companyId);
+        emp.departmentRef = db.departments.find(d => d.id === emp.departmentId);
+        emp.designation = db.designations.find(d => d.id === emp.designationId);
+        emp.defaultProject = db.projects?.find((p: any) => p.id === emp.defaultProjectId);
+        emp.defaultSite = db.projectSites?.find((s: any) => s.id === emp.defaultSiteId);
+        emp.immediateSupervisor = db.employees.find(e => e.id === emp.immediateSupervisorId);
       }
       return emps;
     }

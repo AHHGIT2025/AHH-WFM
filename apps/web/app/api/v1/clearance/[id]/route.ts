@@ -12,7 +12,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       include: {
         employee: {
           include: {
-            department: true,
+            departmentRef: true,
             designation: true,
             company: true
           }
@@ -22,9 +22,8 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
           include: {
             assignedApprover: {
               select: {
-                firstName: true,
-                lastName: true,
-                employeeCode: true
+                name: true,
+                id: true
               }
             },
             responses: {

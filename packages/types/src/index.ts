@@ -56,6 +56,22 @@ export interface Employee {
   siteSupervisorId?: string;
   isSupervisor?: boolean;
   supervisorScopeType?: "DIRECT_REPORTS" | "PROJECT" | "SITE" | "DEPARTMENT" | string;
+  
+  // New fields for clearance
+  dateOfJoining?: Date | string;
+  qidNumber?: string;
+  qidExpiryDate?: Date | string;
+  sponsor?: string;
+  hasAccommodation?: boolean;
+  hasItAssets?: boolean;
+  
+  // Relations
+  company?: Company;
+  departmentRef?: Department;
+  designation?: Designation;
+  defaultProject?: Project;
+  defaultSite?: ProjectSite;
+  immediateSupervisor?: Employee;
 }
 
 export interface Worksite {

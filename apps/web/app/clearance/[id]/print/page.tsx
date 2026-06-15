@@ -7,7 +7,7 @@ export default function ClearancePrint({ params }: { params: { id: string } }) {
   const [clearance, setClearance] = useState<any>(null);
 
   useEffect(() => {
-    fetch(\`/api/v1/clearance/\${params.id}\`)
+    fetch(`/api/v1/clearance/${params.id}`)
       .then(res => res.json())
       .then(data => {
         if(data.success) setClearance(data.data);
