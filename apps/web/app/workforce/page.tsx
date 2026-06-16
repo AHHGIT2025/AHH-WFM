@@ -75,6 +75,48 @@ function formatProjectSiteLabel(site: any) {
   return "Unnamed Site";
 }
 
+// ── Safe employee category normalizer ──────────────────────────────────────
+// Returns "BLUE_COLLAR", "WHITE_COLLAR", or "" (never throws).
+function normalizeEmployeeCategory(emp: any): string {
+  const raw =
+    emp?.employeeCategory ||
+    emp?.workerCategory ||
+    emp?.employeeType ||
+    emp?.category ||
+    "";
+  const v = String(raw).toUpperCase().replace(/[\s-]/g, "_");
+  if (v.includes("BLUE")) return "BLUE_COLLAR";
+  if (v.includes("WHITE")) return "WHITE_COLLAR";
+  return "";
+}
+
+// ── Safe active-status helper ──────────────────────────────────────────────
+// Uses only employment/status fields – never login/access fields.
+function isEmployeeActive(emp: any): boolean {
+  if (emp?.isActive === false) return false;
+  const status = String(
+    emp?.employmentStatus || emp?.status || ""
+  ).toUpperCase();
+  if (
+    status === "TERMINATED" ||
+    status === "INACTIVE" ||
+    status === "DEACTIVATED" ||
+    status === "RESIGNED" ||
+    status === "CANCELLED"
+  ) return false;
+  return true;
+}
+
+// ── Defensive response-shape unwrapper ────────────────────────────────────
+function unwrapArray(result: any): any[] {
+  if (Array.isArray(result)) return result;
+  if (Array.isArray(result?.data)) return result.data;
+  if (Array.isArray(result?.employees)) return result.employees;
+  if (Array.isArray(result?.items)) return result.items;
+  return [];
+}
+
+
 export default function WorkforcePage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
@@ -107,7 +149,7 @@ export default function WorkforcePage() {
   const [empPassword, setEmpPassword] = useState("");
   const [empEmploymentStatus, setEmpEmploymentStatus] = useState("ACTIVE");
   const [empDutyStatus, setEmpDutyStatus] = useState("OFF_DUTY");
-  const [empWorkerCategory, setEmpWorkerCategory] = useState("WHITE_COLLAR");
+  const [empEmployeeCategory, setEmpEmployeeCategory] = useState("WHITE_COLLAR");
 
   // Blue Collar & Project states
   const [empPositionCategoryId, setEmpPositionCategoryId] = useState("");
@@ -170,6 +212,29 @@ export default function WorkforcePage() {
 
   // Modal Tabs State
   const [editTab, setEditTab] = useState("basic");
+  
+  // v0.18.4 States
+  const [empWebAccessEnabled, setEmpWebAccessEnabled] = useState(true);
+  const [empMobileAccessEnabled, setEmpMobileAccessEnabled] = useState(true);
+  const [empUsernameStrategy, setEmpUsernameStrategy] = useState<"EMPLOYEE_CODE" | "EMAIL" | "MANUAL">("EMAIL");
+  const [empConfirmPassword, setEmpConfirmPassword] = useState("");
+
+  const [leaveBalances, setLeaveBalances] = useState<any[]>([]);
+  const [leaveTypes, setLeaveTypes] = useState<any[]>([]);
+
+  const [isAddBalanceOpen, setIsAddBalanceOpen] = useState(false);
+  const [isEditBalanceOpen, setIsEditBalanceOpen] = useState(false);
+  const [selectedBalance, setSelectedBalance] = useState<any | null>(null);
+
+  const [balLeaveTypeId, setBalLeaveTypeId] = useState("");
+  const [balYear, setBalYear] = useState(new Date().getFullYear());
+  const [balAllocatedDays, setBalAllocatedDays] = useState(0);
+  const [balCarriedForwardDays, setBalCarriedForwardDays] = useState(0);
+  const [balAdjustmentDays, setBalAdjustmentDays] = useState(0);
+  const [balUsedDays, setBalUsedDays] = useState(0);
+  const [balPendingDays, setBalPendingDays] = useState(0);
+  const [balRemarks, setBalRemarks] = useState("");
+  const [balError, setBalError] = useState("");
   
   // Reset Password Modal State
   const [isResetPasswordOpen, setIsResetPasswordOpen] = useState(false);
@@ -318,7 +383,7 @@ export default function WorkforcePage() {
 
   const fetchDb = async () => {
     try {
-      const [empRes, deptRes, projRes, catRes, desRes, trdRes, locRes, ccRes, aplRes, compRes] = await Promise.all([
+      const [empRes, deptRes, projRes, catRes, desRes, trdRes, locRes, ccRes, aplRes, compRes, ltRes] = await Promise.all([
         fetch("/api/v1/employees"),
         fetch("/api/v1/departments"),
         fetch("/api/v1/projects"),
@@ -328,27 +393,41 @@ export default function WorkforcePage() {
         fetch("/api/v1/masters/locations"),
         fetch("/api/v1/masters/cost-centers"),
         fetch("/api/v1/attendance/allowed-locations"),
-        fetch("/api/v1/masters/companies")
+        fetch("/api/v1/masters/companies"),
+        fetch("/api/v1/masters/leave-types")
       ]);
-      if (empRes.ok && deptRes.ok) {
-        setEmployees(await empRes.json());
-        setDepartments(await deptRes.json());
+
+      // Defensive parse: handle array / {data:[]} / {employees:[]} / {items:[]}
+      if (empRes.ok) {
+        const empJson = await empRes.json();
+        const empList = unwrapArray(empJson);
+        setEmployees(empList);
+      } else {
+        console.warn("[Workforce] /api/v1/employees returned", empRes.status, empRes.statusText);
+      }
+
+      if (deptRes.ok) {
+        const deptJson = await deptRes.json();
+        setDepartments(unwrapArray(deptJson));
       }
       if (projRes.ok) {
-        setProjects(await projRes.json());
+        const projJson = await projRes.json();
+        setProjects(unwrapArray(projJson));
       }
       if (catRes.ok) {
-        setPositionCategories(await catRes.json());
+        const catJson = await catRes.json();
+        setPositionCategories(unwrapArray(catJson));
       }
-      if (desRes && desRes.ok) setDesignations(await desRes.json());
-      if (trdRes && trdRes.ok) setTrades(await trdRes.json());
-      if (locRes && locRes.ok) setLocations(await locRes.json());
-      if (ccRes && ccRes.ok) setCostCenters(await ccRes.json());
-      if (aplRes && aplRes.ok) setAllowedPunchLocations(await aplRes.json());
-      if (compRes && compRes.ok) setCompanies(await compRes.json());
+      if (desRes && desRes.ok) setDesignations(unwrapArray(await desRes.json()));
+      if (trdRes && trdRes.ok) setTrades(unwrapArray(await trdRes.json()));
+      if (locRes && locRes.ok) setLocations(unwrapArray(await locRes.json()));
+      if (ccRes && ccRes.ok) setCostCenters(unwrapArray(await ccRes.json()));
+      if (aplRes && aplRes.ok) setAllowedPunchLocations(unwrapArray(await aplRes.json()));
+      if (compRes && compRes.ok) setCompanies(unwrapArray(await compRes.json()));
+      if (ltRes && ltRes.ok) setLeaveTypes(unwrapArray(await ltRes.json()));
       await fetchDeployments();
     } catch (e) {
-      console.error(e);
+      console.error("[Workforce] fetchDb error:", e);
     }
   };
 
@@ -478,7 +557,7 @@ export default function WorkforcePage() {
       setValidationError("Role is required");
       return false;
     }
-    if (empWorkerCategory === "BLUE_COLLAR") {
+    if (empEmployeeCategory === "BLUE_COLLAR") {
       if (!empDesignationId) {
         setValidationError("Designation is required for Blue Collar employees");
         return false;
@@ -496,6 +575,17 @@ export default function WorkforcePage() {
     e.preventDefault();
     if (!validateEmployeeForm(empEmail, empName, empRole, empId)) return;
 
+    if (empAuthMode !== "SSO" && empPassword) {
+      if (empPassword !== empConfirmPassword) {
+        setValidationError("Passwords do not match");
+        return;
+      }
+      if (empPassword.length < 8) {
+        setValidationError("Password must be at least 8 characters long");
+        return;
+      }
+    }
+
     try {
       const res = await fetch("/api/v1/employees", {
         method: "POST",
@@ -508,13 +598,20 @@ export default function WorkforcePage() {
           role: empRole,
           departmentId: empDeptId || undefined,
           shiftId: empShiftId || undefined,
-          password: empPassword || undefined,
+          usernameStrategy: empUsernameStrategy,
+          username: empUsernameStrategy === "EMPLOYEE_CODE" ? empId : empUsernameStrategy === "EMAIL" ? empEmail : empUsername,
+          webAccessEnabled: empWebAccessEnabled,
+          mobileAccessEnabled: empMobileAccessEnabled,
+          authMode: empAuthMode,
+          isLoginEnabled: empIsLoginEnabled,
+          defaultPassword: empPassword || undefined,
+          mustChangePasswordOnFirstLogin: empMustChangePassword,
           employmentStatus: empEmploymentStatus,
           dutyStatus: empDutyStatus,
-          workerCategory: empWorkerCategory,
-          positionCategoryId: empWorkerCategory === "BLUE_COLLAR" ? (empPositionCategoryId || undefined) : undefined,
-          defaultProjectId: empWorkerCategory === "BLUE_COLLAR" ? (empDefaultProjectId || undefined) : undefined,
-          defaultSiteId: empWorkerCategory === "BLUE_COLLAR" ? (empDefaultSiteId || undefined) : undefined,
+          employeeCategory: empEmployeeCategory,
+          positionCategoryId: empEmployeeCategory === "BLUE_COLLAR" ? (empPositionCategoryId || undefined) : undefined,
+          defaultProjectId: empEmployeeCategory === "BLUE_COLLAR" ? (empDefaultProjectId || undefined) : undefined,
+          defaultSiteId: empEmployeeCategory === "BLUE_COLLAR" ? (empDefaultSiteId || undefined) : undefined,
           designationId: empDesignationId || undefined,
           tradeClassificationId: empTradeClassificationId || undefined,
           costCenterId: empCostCenterId || undefined,
@@ -552,7 +649,7 @@ export default function WorkforcePage() {
         setEmpPassword("");
         setEmpEmploymentStatus("ACTIVE");
         setEmpDutyStatus("OFF_DUTY");
-        setEmpWorkerCategory("WHITE_COLLAR");
+        setEmpEmployeeCategory("WHITE_COLLAR");
         setEmpPositionCategoryId("");
         setEmpDefaultProjectId("");
         setEmpDefaultSiteId("");
@@ -603,6 +700,17 @@ export default function WorkforcePage() {
     if (!selectedEmp) return;
     if (!validateEmployeeForm(empEmail, empName, empRole, selectedEmp.id, true)) return;
 
+    if (empAuthMode !== "SSO" && empPassword) {
+      if (empPassword !== empConfirmPassword) {
+        setValidationError("Passwords do not match");
+        return;
+      }
+      if (empPassword.length < 8) {
+        setValidationError("Password must be at least 8 characters long");
+        return;
+      }
+    }
+
     try {
       const res = await fetch(`/api/v1/employees/${selectedEmp.id}`, {
         method: "PATCH",
@@ -616,10 +724,10 @@ export default function WorkforcePage() {
           shiftId: empShiftId || null,
           employmentStatus: empEmploymentStatus,
           dutyStatus: empDutyStatus,
-          workerCategory: empWorkerCategory,
-          positionCategoryId: empWorkerCategory === "BLUE_COLLAR" ? (empPositionCategoryId || null) : null,
-          defaultProjectId: empWorkerCategory === "BLUE_COLLAR" ? (empDefaultProjectId || null) : null,
-          defaultSiteId: empWorkerCategory === "BLUE_COLLAR" ? (empDefaultSiteId || null) : null,
+          employeeCategory: empEmployeeCategory,
+          positionCategoryId: empEmployeeCategory === "BLUE_COLLAR" ? (empPositionCategoryId || null) : null,
+          defaultProjectId: empEmployeeCategory === "BLUE_COLLAR" ? (empDefaultProjectId || null) : null,
+          defaultSiteId: empEmployeeCategory === "BLUE_COLLAR" ? (empDefaultSiteId || null) : null,
           designationId: empDesignationId || null,
           tradeClassificationId: empTradeClassificationId || null,
           costCenterId: empCostCenterId || null,
@@ -632,9 +740,16 @@ export default function WorkforcePage() {
           siteSupervisorId: empSiteSupervisorId || null,
           isSupervisor: empIsSupervisor,
           supervisorScopeType: empSupervisorScopeType,
-          username: empUsername || null,
+          usernameStrategy: empUsernameStrategy,
+          username: empUsernameStrategy === "EMPLOYEE_CODE" ? selectedEmp.id : empUsernameStrategy === "EMAIL" ? empEmail : empUsername,
+          webAccessEnabled: empWebAccessEnabled,
+          mobileAccessEnabled: empMobileAccessEnabled,
           authMode: empAuthMode,
           isLoginEnabled: empIsLoginEnabled,
+          mustChangePassword: empMustChangePassword,
+          defaultPassword: empPassword || undefined,
+          confirmDefaultPassword: empConfirmPassword || undefined,
+          mustChangePasswordOnFirstLogin: empMustChangePassword,
           companyId: empCompanyId || null,
           qidNumber: empQidNumber ? empQidNumber.trim() : null,
           qidExpiryDate: empQidExpiryDate || null,
@@ -831,7 +946,7 @@ export default function WorkforcePage() {
     setEmpShiftId(emp.shiftId || "GEN-001");
     setEmpEmploymentStatus(emp.employmentStatus || (emp.isActive !== false ? "ACTIVE" : "INACTIVE"));
     setEmpDutyStatus(emp.dutyStatus || "OFF_DUTY");
-    setEmpWorkerCategory(emp.workerCategory || "WHITE_COLLAR");
+    setEmpEmployeeCategory(emp.employeeCategory || "WHITE_COLLAR");
     setEmpPositionCategoryId((emp as any).positionCategoryId || "");
     setEmpDefaultProjectId((emp as any).defaultProjectId || "");
     setEmpDefaultSiteId((emp as any).defaultSiteId || "");
@@ -880,16 +995,30 @@ export default function WorkforcePage() {
     setEmpLastLoginAt((emp as any).lastLoginAt ? new Date((emp as any).lastLoginAt).toLocaleString() : null);
     setEmpPasswordUpdatedAt((emp as any).passwordUpdatedAt ? new Date((emp as any).passwordUpdatedAt).toLocaleString() : null);
 
+    setEmpWebAccessEnabled((emp as any).webAccessEnabled !== false);
+    setEmpMobileAccessEnabled((emp as any).mobileAccessEnabled !== false);
+    const strategy = (emp as any).usernameStrategy || "MANUAL";
+    setEmpUsernameStrategy(strategy as any);
+
     setEditTab("basic");
     try {
-      const aplRes = await fetch(`/api/v1/employees/${emp.id}/allowed-locations`);
+      const [aplRes, balRes] = await Promise.all([
+        fetch(`/api/v1/employees/${emp.id}/allowed-locations`),
+        fetch(`/api/v1/employees/${emp.id}/leave-balances`)
+      ]);
       if (aplRes.ok) {
         setEmpAllowedPunchLocationAssignments(await aplRes.json());
       } else {
         setEmpAllowedPunchLocationAssignments([]);
       }
+      if (balRes.ok) {
+        setLeaveBalances(await balRes.json());
+      } else {
+        setLeaveBalances([]);
+      }
     } catch (e) {
       setEmpAllowedPunchLocationAssignments([]);
+      setLeaveBalances([]);
     }
     setValidationError(null);
     setIsEditEmpOpen(true);
@@ -968,38 +1097,67 @@ export default function WorkforcePage() {
     }
   };
 
-  // Filter logic
+  // ── Filter logic (legacy-safe) ───────────────────────────────────────────
   const filtered = employees.filter((emp) => {
-    const matchesSearch =
-      emp.name.toLowerCase().includes(search.toLowerCase()) ||
-      emp.id.toLowerCase().includes(search.toLowerCase()) ||
-      emp.email.toLowerCase().includes(search.toLowerCase());
+    // Search: name / id / email
+    const name  = (emp.name  || "").toLowerCase();
+    const eid   = (emp.id    || "").toLowerCase();
+    const email = (emp.email || "").toLowerCase();
+    const q     = search.toLowerCase();
+    const matchesSearch = !q || name.includes(q) || eid.includes(q) || email.includes(q);
 
-    const matchesDept = deptFilter === "all" || emp.departmentId === deptFilter;
-    const matchesCompany = companyFilter === "all" || emp.companyId === companyFilter;
+    // Department / Company
+    const matchesDept    = deptFilter    === "all" || emp.departmentId === deptFilter;
+    const matchesCompany = companyFilter === "all" || emp.companyId    === companyFilter;
 
-    // Filter by Worker Category
-    const matchesCategory = categoryFilter === "all" || emp.workerCategory === categoryFilter;
+    // Employee Category – safe normalization, never excludes on missing
+    const empCat = normalizeEmployeeCategory(emp);
+    const matchesCategory =
+      categoryFilter === "all" ||
+      empCat === categoryFilter ||
+      (!empCat && categoryFilter === "all"); // employees without category still visible in "all"
 
-    // Filter by Trade Position Category
-    const matchesPositionCategory = positionCategoryFilter === "all" || (emp as any).positionCategoryId === positionCategoryFilter;
+    // Trade / Position category (Blue-Collar extra filter)
+    const matchesPositionCategory =
+      positionCategoryFilter === "all" ||
+      (emp as any).positionCategoryId === positionCategoryFilter;
 
-    // Filter by Project
+    // Project / Site
     const empDeployments = deployments.filter(d => d.employeeId === emp.id);
-    const matchesProject = projectFilter === "all" ||
+    const matchesProject =
+      projectFilter === "all" ||
       (emp as any).defaultProjectId === projectFilter ||
       empDeployments.some(d => d.projectId === projectFilter);
-
-    // Filter by Site
-    const matchesSite = siteFilter === "all" ||
+    const matchesSite =
+      siteFilter === "all" ||
       (emp as any).defaultSiteId === siteFilter ||
       empDeployments.some(d => d.siteId === siteFilter);
 
-    const matchesEmploymentStatus = employmentStatusFilter === "all" || emp.employmentStatus === employmentStatusFilter;
-    const matchesDutyStatus = dutyStatusFilter === "all" || emp.dutyStatus === dutyStatusFilter;
+    // Employment status – safe, never uses login/access fields
+    const active = isEmployeeActive(emp);
+    const matchesEmploymentStatus =
+      employmentStatusFilter === "all" ||
+      (employmentStatusFilter === "ACTIVE"   && active) ||
+      (employmentStatusFilter === "INACTIVE" && !active);
 
-    return matchesSearch && matchesDept && matchesCategory && matchesPositionCategory && matchesProject && matchesSite && matchesEmploymentStatus && matchesDutyStatus && matchesCompany;
+    // Duty status
+    const matchesDutyStatus =
+      dutyStatusFilter === "all" ||
+      emp.dutyStatus === dutyStatusFilter;
+
+    return (
+      matchesSearch &&
+      matchesDept &&
+      matchesCategory &&
+      matchesPositionCategory &&
+      matchesProject &&
+      matchesSite &&
+      matchesEmploymentStatus &&
+      matchesDutyStatus &&
+      matchesCompany
+    );
   });
+
 
   return (
     <div className="space-y-6">
@@ -1048,7 +1206,7 @@ export default function WorkforcePage() {
               setEmpPassword("");
               setEmpEmploymentStatus("ACTIVE");
               setEmpDutyStatus("OFF_DUTY");
-              setEmpWorkerCategory("WHITE_COLLAR");
+              setEmpEmployeeCategory("WHITE_COLLAR");
               setIsAddEmpOpen(true);
             }}
             className="font-bold flex items-center gap-1.5 text-xs"
@@ -1172,9 +1330,24 @@ export default function WorkforcePage() {
       </Card>
 
       {/* Employee Grid */}
+      {employees.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-24 text-center">
+          <span className="material-symbols-outlined text-[48px] text-on-surface-variant/40 mb-4">group_off</span>
+          <p className="text-lg font-bold text-on-surface-variant">No employee data loaded</p>
+          <p className="text-sm text-on-surface-variant/60 mt-1">Check the employee API or mock database connection.</p>
+          <Button variant="secondary" onClick={fetchDb} className="mt-4 text-xs">Retry</Button>
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-24 text-center">
+          <span className="material-symbols-outlined text-[48px] text-on-surface-variant/40 mb-4">filter_alt_off</span>
+          <p className="text-lg font-bold text-on-surface-variant">No employees match the selected filters</p>
+          <p className="text-sm text-on-surface-variant/60 mt-1">Try adjusting or resetting your filters.</p>
+          <Button variant="secondary" onClick={handleResetFilters} className="mt-4 text-xs">Reset Filters</Button>
+        </div>
+      ) : (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filtered.map((emp) => {
-          const isEmpActive = emp.employmentStatus ? (emp.employmentStatus === "ACTIVE") : (emp.isActive !== false);
+          const isEmpActive = isEmployeeActive(emp);
           const empDept = departments.find(d => d.id === emp.departmentId)?.name || emp.department || "N/A";
           const defaultProject = projects.find(p => p.id === (emp as any).defaultProjectId);
           const defaultSite = allSites.find(s => s.id === (emp as any).defaultSiteId);
@@ -1193,7 +1366,7 @@ export default function WorkforcePage() {
                     <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">{emp.role}</p>
                     <div className="mt-1">
                       <span className="px-1.5 py-0.5 rounded text-[8px] font-black bg-secondary/10 text-secondary uppercase">
-                        {emp.workerCategory === "BLUE_COLLAR" ? "Blue Collar" : "White Collar"}
+                        {normalizeEmployeeCategory(emp) === "BLUE_COLLAR" ? "Blue Collar" : normalizeEmployeeCategory(emp) === "WHITE_COLLAR" ? "White Collar" : "Unassigned"}
                       </span>
                     </div>
                   </div>
@@ -1242,7 +1415,7 @@ export default function WorkforcePage() {
                   <p className="opacity-60 font-semibold uppercase">Department</p>
                   <p className="font-bold text-primary mt-0.5">{empDept}</p>
                 </div>
-                {emp.workerCategory === "BLUE_COLLAR" && (
+                {emp.employeeCategory === "BLUE_COLLAR" && (
                   <>
                     <div>
                       <p className="opacity-60 font-semibold uppercase">Trade/Position</p>
@@ -1315,6 +1488,7 @@ export default function WorkforcePage() {
           );
         })}
       </div>
+      )} {/* end employee grid ternary */}
 
       {/* Bulk Upload Modal */}
       <Modal isOpen={isBulkUploadOpen} onClose={() => setIsBulkUploadOpen(false)} title="Bulk Upload Employees Gateway">
@@ -1426,6 +1600,7 @@ export default function WorkforcePage() {
             <button type="button" className={`px-4 py-2 text-xs font-bold border-b-2 whitespace-nowrap ${addTab === 'punch' ? 'border-primary text-primary' : 'border-transparent text-on-surface-variant hover:text-on-surface'}`} onClick={() => setAddTab('punch')}>Punch Settings</button>
             <button type="button" className={`px-4 py-2 text-xs font-bold border-b-2 whitespace-nowrap ${addTab === 'supervisor' ? 'border-primary text-primary' : 'border-transparent text-on-surface-variant hover:text-on-surface'}`} onClick={() => setAddTab('supervisor')}>Supervisor & Reporting</button>
             <button type="button" className={`px-4 py-2 text-xs font-bold border-b-2 whitespace-nowrap ${addTab === 'account' ? 'border-primary text-primary' : 'border-transparent text-on-surface-variant hover:text-on-surface'}`} onClick={() => setAddTab('account')}>Account Access</button>
+            <button type="button" className={`px-4 py-2 text-xs font-bold border-b-2 whitespace-nowrap ${addTab === 'leave-balances' ? 'border-primary text-primary' : 'border-transparent text-on-surface-variant hover:text-on-surface'}`} onClick={() => setAddTab('leave-balances')}>Leave Balances</button>
           </div>
 
           {/* BASIC INFO TAB */}
@@ -1468,8 +1643,8 @@ export default function WorkforcePage() {
                   <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Worker Category</label>
                   <select
                     className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                    value={empWorkerCategory}
-                    onChange={(e) => setEmpWorkerCategory(e.target.value)}
+                    value={empEmployeeCategory}
+                    onChange={(e) => setEmpEmployeeCategory(e.target.value)}
                   >
                     <option value="WHITE_COLLAR">White Collar (Staff)</option>
                     <option value="BLUE_COLLAR">Blue Collar (Laborer)</option>
@@ -1581,7 +1756,7 @@ export default function WorkforcePage() {
                 </div>
               </div>
 
-              {empWorkerCategory === "BLUE_COLLAR" && (
+              {empEmployeeCategory === "BLUE_COLLAR" && (
                 <div className="p-4 bg-secondary/5 border border-secondary/10 rounded-xl space-y-3">
                   <p className="text-[10px] font-bold text-secondary uppercase tracking-wider">Blue Collar Core Settings</p>
                   <div className="grid grid-cols-2 gap-4">
@@ -1883,7 +2058,7 @@ export default function WorkforcePage() {
                     </select>
                   </div>
                 </div>
-                {empWorkerCategory === 'BLUE_COLLAR' && (
+                {empEmployeeCategory === 'BLUE_COLLAR' && (
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1">
                       <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Project Supervisor</label>
@@ -1946,48 +2121,124 @@ export default function WorkforcePage() {
           {/* ACCOUNT ACCESS TAB */}
           {addTab === 'account' && (
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <Input
-                  label="Default Password"
-                  type="password"
-                  placeholder="Optional (Default: Password123!)"
-                  value={empPassword}
-                  onChange={(e) => setEmpPassword(e.target.value)}
-                />
-                <div className="space-y-1">
-                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Username</label>
-                  <Input
-                    value={empUsername}
-                    onChange={(e) => setEmpUsername(e.target.value)}
-                    placeholder="e.g. ahmed.mansoori"
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Auth Mode</label>
-                  <select
-                    className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-2.5 py-2 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                    value={empAuthMode}
-                    onChange={(e) => setEmpAuthMode(e.target.value)}
-                  >
-                    <option value="LOCAL">Local Only</option>
-                    <option value="SSO">SSO Only</option>
-                    <option value="LOCAL_AND_SSO">Local & SSO</option>
-                  </select>
-                </div>
-                <div className="flex items-center gap-6 pt-6">
+              <div className="p-4 bg-surface-container-lowest border border-outline-variant/50 rounded-xl space-y-4">
+                <p className="text-[10px] font-bold text-primary uppercase tracking-wider">Access Permissions</p>
+                <div className="flex gap-6">
                   <label className="flex items-center gap-2 text-xs font-semibold text-on-surface cursor-pointer">
                     <input
                       type="checkbox"
-                      checked={empIsLoginEnabled}
-                      onChange={(e) => setEmpIsLoginEnabled(e.target.checked)}
+                      checked={empWebAccessEnabled}
+                      onChange={(e) => setEmpWebAccessEnabled(e.target.checked)}
                       className="w-4 h-4 rounded border-outline-variant text-primary focus:ring-0"
                     />
-                    Login Enabled
+                    Allow Web Application Access
+                  </label>
+                  <label className="flex items-center gap-2 text-xs font-semibold text-on-surface cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={empMobileAccessEnabled}
+                      onChange={(e) => setEmpMobileAccessEnabled(e.target.checked)}
+                      className="w-4 h-4 rounded border-outline-variant text-primary focus:ring-0"
+                    />
+                    Allow Mobile Application Access
                   </label>
                 </div>
               </div>
+
+              <div className="p-4 bg-surface-container-lowest border border-outline-variant/50 rounded-xl space-y-4">
+                <p className="text-[10px] font-bold text-primary uppercase tracking-wider">Account Settings</p>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Username Generation</label>
+                    <select
+                      className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-2.5 py-2 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                      value={empUsernameStrategy}
+                      onChange={(e) => setEmpUsernameStrategy(e.target.value as any)}
+                    >
+                      <option value="EMPLOYEE_CODE">Auto (Employee Code)</option>
+                      <option value="EMAIL">Auto (Email)</option>
+                      <option value="MANUAL">Manual Entry</option>
+                    </select>
+                  </div>
+                  
+                  <div className="space-y-1">
+                    <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Username Preview / Input</label>
+                    {empUsernameStrategy !== "MANUAL" ? (
+                      <div className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-xs font-mono text-on-surface-variant/80 select-all select-none">
+                        {empEmployeeCategory === "BLUE_COLLAR" 
+                          ? (empId || "(Enter Employee Code in Basic Info)") 
+                          : (empEmail || "(Enter Email in Basic Info)")}
+                      </div>
+                    ) : (
+                      <Input
+                        value={empUsername}
+                        onChange={(e) => setEmpUsername(e.target.value)}
+                        placeholder="e.g. ahmed.mansoori"
+                      />
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Auth Mode</label>
+                    <select
+                      className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-2.5 py-2 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                      value={empAuthMode}
+                      onChange={(e) => setEmpAuthMode(e.target.value)}
+                    >
+                      <option value="LOCAL">Local Only</option>
+                      <option value="SSO">SSO Only</option>
+                      <option value="LOCAL_AND_SSO">Local & SSO</option>
+                    </select>
+                  </div>
+
+                  <div className="flex items-center gap-6 pt-6">
+                    <label className="flex items-center gap-2 text-xs font-semibold text-on-surface cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={empIsLoginEnabled}
+                        onChange={(e) => setEmpIsLoginEnabled(e.target.checked)}
+                        className="w-4 h-4 rounded border-outline-variant text-primary focus:ring-0"
+                      />
+                      Login Enabled
+                    </label>
+                  </div>
+                </div>
+
+                {empAuthMode !== "SSO" && (
+                  <div className="grid grid-cols-2 gap-4 border-t border-outline-variant/30 pt-4">
+                    <Input
+                      label="Default Password"
+                      type="password"
+                      placeholder="Optional (Default: Password123!)"
+                      value={empPassword}
+                      onChange={(e) => setEmpPassword(e.target.value)}
+                    />
+                    <div className="flex items-center gap-6 pt-6">
+                      <label className="flex items-center gap-2 text-xs font-semibold text-on-surface cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={empMustChangePassword}
+                          onChange={(e) => setEmpMustChangePassword(e.target.checked)}
+                          className="w-4 h-4 rounded border-outline-variant text-primary focus:ring-0"
+                        />
+                        Force Password Change on First Login
+                      </label>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* LEAVE BALANCES TAB */}
+          {addTab === 'leave-balances' && (
+            <div className="py-12 text-center bg-surface border border-outline-variant/30 rounded-2xl">
+              <span className="material-symbols-outlined text-[48px] text-on-surface-variant/40 mb-2">flight_takeoff</span>
+              <p className="text-sm font-semibold text-on-surface">Leave Balances Tab</p>
+              <p className="text-xs text-on-surface-variant mt-1">Please save this new employee profile first to configure leave balances.</p>
             </div>
           )}
 
@@ -2017,6 +2268,9 @@ export default function WorkforcePage() {
               {isAdmin && (
                 <button type="button" className={`px-4 py-2 text-xs font-bold border-b-2 whitespace-nowrap ${editTab === 'account' ? 'border-primary text-primary' : 'border-transparent text-on-surface-variant hover:text-on-surface'}`} onClick={() => setEditTab('account')}>Login & Account Access</button>
               )}
+              {isAdmin && (
+                <button type="button" className={`px-4 py-2 text-xs font-bold border-b-2 whitespace-nowrap ${editTab === 'leave-balances' ? 'border-primary text-primary' : 'border-transparent text-on-surface-variant hover:text-on-surface'}`} onClick={() => setEditTab('leave-balances')}>Leave Balances</button>
+              )}
             </div>
 
             {/* BASIC INFO TAB */}
@@ -2042,7 +2296,7 @@ export default function WorkforcePage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
                     <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Worker Category</label>
-                    <select className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" value={empWorkerCategory} onChange={(e) => setEmpWorkerCategory(e.target.value)}>
+                    <select className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" value={empEmployeeCategory} onChange={(e) => setEmpEmployeeCategory(e.target.value)}>
                       <option value="WHITE_COLLAR">White Collar (Staff)</option>
                       <option value="BLUE_COLLAR">Blue Collar (Laborer)</option>
                     </select>
@@ -2120,7 +2374,7 @@ export default function WorkforcePage() {
                   </div>
                 </div>
   
-                {empWorkerCategory === "BLUE_COLLAR" && (
+                {empEmployeeCategory === "BLUE_COLLAR" && (
                   <div className="p-4 bg-secondary/5 border border-secondary/10 rounded-xl space-y-3">
                     <p className="text-[10px] font-bold text-secondary uppercase tracking-wider">Blue Collar Core Settings</p>
                     <div className="grid grid-cols-2 gap-4">
@@ -2381,7 +2635,7 @@ export default function WorkforcePage() {
                       </select>
                     </div>
                   </div>
-                  {empWorkerCategory === 'BLUE_COLLAR' && (
+                  {empEmployeeCategory === 'BLUE_COLLAR' && (
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-1">
                         <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Project Supervisor</label>
@@ -2428,6 +2682,30 @@ export default function WorkforcePage() {
             {editTab === 'account' && isAdmin && (
               <div className="space-y-4">
                 <div className="p-4 bg-surface-container-lowest border border-outline-variant/50 rounded-xl space-y-4">
+                  <p className="text-[10px] font-bold text-primary uppercase tracking-wider">Access Permissions</p>
+                  <div className="flex gap-6">
+                    <label className="flex items-center gap-2 text-xs font-semibold text-on-surface cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={empWebAccessEnabled}
+                        onChange={(e) => setEmpWebAccessEnabled(e.target.checked)}
+                        className="w-4 h-4 rounded border-outline-variant text-primary focus:ring-0"
+                      />
+                      Allow Web Application Access
+                    </label>
+                    <label className="flex items-center gap-2 text-xs font-semibold text-on-surface cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={empMobileAccessEnabled}
+                        onChange={(e) => setEmpMobileAccessEnabled(e.target.checked)}
+                        className="w-4 h-4 rounded border-outline-variant text-primary focus:ring-0"
+                      />
+                      Allow Mobile Application Access
+                    </label>
+                  </div>
+                </div>
+
+                <div className="p-4 bg-surface-container-lowest border border-outline-variant/50 rounded-xl space-y-4">
                   <div className="flex justify-between items-start">
                     <p className="text-[10px] font-bold text-primary uppercase tracking-wider">Account Settings</p>
                     {empIsLocked && <Badge variant="error">ACCOUNT LOCKED</Badge>}
@@ -2435,9 +2713,37 @@ export default function WorkforcePage() {
                   
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1">
-                      <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Username</label>
-                      <Input value={empUsername} onChange={(e) => setEmpUsername(e.target.value)} placeholder="e.g. john.doe" />
+                      <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Username Generation</label>
+                      <select
+                        className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-2.5 py-2 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                        value={empUsernameStrategy}
+                        onChange={(e) => setEmpUsernameStrategy(e.target.value as any)}
+                      >
+                        <option value="EMPLOYEE_CODE">Auto (Employee Code)</option>
+                        <option value="EMAIL">Auto (Email)</option>
+                        <option value="MANUAL">Manual Entry</option>
+                      </select>
                     </div>
+                    
+                    <div className="space-y-1">
+                      <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Username Preview / Input</label>
+                      {empUsernameStrategy !== "MANUAL" ? (
+                        <div className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-xs font-mono text-on-surface-variant/80 select-all select-none">
+                          {empEmployeeCategory === "BLUE_COLLAR" 
+                            ? (selectedEmp.id) 
+                            : (empEmail || "(Enter Email in Basic Info)")}
+                        </div>
+                      ) : (
+                        <Input
+                          value={empUsername}
+                          onChange={(e) => setEmpUsername(e.target.value)}
+                          placeholder="e.g. john.doe"
+                        />
+                      )}
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1">
                       <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Auth Mode</label>
                       <select className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-2.5 py-2 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" value={empAuthMode} onChange={(e) => setEmpAuthMode(e.target.value)}>
@@ -2446,17 +2752,18 @@ export default function WorkforcePage() {
                         <option value="LOCAL_AND_SSO">Local & SSO</option>
                       </select>
                     </div>
-                  </div>
-                  
-                  <div className="flex gap-6 pt-2">
-                    <label className="flex items-center gap-2 text-xs font-semibold text-on-surface cursor-pointer">
-                      <input type="checkbox" checked={empIsLoginEnabled} onChange={(e) => setEmpIsLoginEnabled(e.target.checked)} className="w-4 h-4 rounded border-outline-variant text-primary focus:ring-0" />
-                      Login Enabled
-                    </label>
-                    <label className="flex items-center gap-2 text-xs font-semibold text-on-surface cursor-pointer">
-                      <input type="checkbox" checked={empMustChangePassword} onChange={(e) => setEmpMustChangePassword(e.target.checked)} className="w-4 h-4 rounded border-outline-variant text-primary focus:ring-0" />
-                      Must Change Password
-                    </label>
+                    <div className="flex gap-6 pt-6">
+                      <label className="flex items-center gap-2 text-xs font-semibold text-on-surface cursor-pointer">
+                        <input type="checkbox" checked={empIsLoginEnabled} onChange={(e) => setEmpIsLoginEnabled(e.target.checked)} className="w-4 h-4 rounded border-outline-variant text-primary focus:ring-0" />
+                        Login Enabled
+                      </label>
+                      {empAuthMode !== "SSO" && (
+                        <label className="flex items-center gap-2 text-xs font-semibold text-on-surface cursor-pointer">
+                          <input type="checkbox" checked={empMustChangePassword} onChange={(e) => setEmpMustChangePassword(e.target.checked)} className="w-4 h-4 rounded border-outline-variant text-primary focus:ring-0" />
+                          Must Change Password
+                        </label>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -2476,13 +2783,138 @@ export default function WorkforcePage() {
                 </div>
 
                 <div className="flex gap-2 pt-4 border-t border-border-subtle">
-                  <Button variant="secondary" type="button" onClick={() => setIsResetPasswordOpen(true)}>Reset Password</Button>
+                  {empAuthMode !== "SSO" && (
+                    <Button variant="secondary" type="button" onClick={() => setIsResetPasswordOpen(true)}>Reset Password</Button>
+                  )}
                   {empIsLocked ? (
                     <Button variant="success" type="button" onClick={() => handleLockAccount(selectedEmp.id, false)}>Unlock Account</Button>
                   ) : (
                     <Button variant="error" type="button" onClick={() => handleLockAccount(selectedEmp.id, true)}>Lock Account</Button>
                   )}
                 </div>
+              </div>
+            )}
+
+            {/* LEAVE BALANCES TAB */}
+            {editTab === 'leave-balances' && (
+              <div className="space-y-6">
+                <div className="flex justify-between items-center bg-surface-container-low p-4 rounded-xl border border-border-subtle">
+                  <div>
+                    <h3 className="text-xs font-bold text-on-surface">Leave Balances for Year {new Date().getFullYear()}</h3>
+                    <p className="text-[10px] text-on-surface-variant mt-0.5">Manage annual allotments, adjustments, and carry forward days.</p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="primary"
+                    onClick={() => {
+                      setBalLeaveTypeId("");
+                      setBalYear(new Date().getFullYear());
+                      setBalAllocatedDays(0);
+                      setBalCarriedForwardDays(0);
+                      setBalAdjustmentDays(0);
+                      setBalUsedDays(0);
+                      setBalPendingDays(0);
+                      setBalRemarks("");
+                      setBalError("");
+                      setIsAddBalanceOpen(true);
+                    }}
+                  >
+                    + Setup Leave Balance
+                  </Button>
+                </div>
+
+                {leaveBalances.length === 0 ? (
+                  <div className="py-12 text-center bg-surface border border-outline-variant/30 rounded-2xl">
+                    <span className="material-symbols-outlined text-[40px] text-on-surface-variant/40 mb-2">flight_takeoff</span>
+                    <p className="text-xs font-semibold text-on-surface">No Leave Balances Configured</p>
+                    <p className="text-[10px] text-on-surface-variant mt-1">Configure leave types and available days for this employee.</p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto border border-outline-variant/30 rounded-xl bg-surface">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="bg-surface-container-low text-on-surface-variant font-bold border-b border-outline-variant/30">
+                          <th className="p-3">Leave Type</th>
+                          <th className="p-3 text-center">Year</th>
+                          <th className="p-3 text-right">Allocated</th>
+                          <th className="p-3 text-right">Carried Fwd</th>
+                          <th className="p-3 text-right">Adjustment</th>
+                          <th className="p-3 text-right">Used</th>
+                          <th className="p-3 text-right">Pending</th>
+                          <th className="p-3 text-right font-black text-primary">Available</th>
+                          <th className="p-3">Remarks</th>
+                          <th className="p-3 text-center">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {leaveBalances.map((bal) => {
+                          const available = bal.availableDays !== undefined
+                            ? bal.availableDays
+                            : (Number(bal.allocatedDays || 0) + Number(bal.carriedForwardDays || 0) + Number(bal.adjustmentDays || 0) - Number(bal.usedDays || 0) - Number(bal.pendingDays || 0));
+                          
+                          return (
+                            <tr key={bal.id} className="border-b border-outline-variant/20 hover:bg-surface-container-lowest">
+                              <td className="p-3 font-semibold">{bal.leaveType?.name || bal.leaveTypeId}</td>
+                              <td className="p-3 text-center font-mono">{bal.year}</td>
+                              <td className="p-3 text-right font-mono">{bal.allocatedDays}</td>
+                              <td className="p-3 text-right font-mono">{bal.carriedForwardDays || 0}</td>
+                              <td className="p-3 text-right font-mono">{bal.adjustmentDays || 0}</td>
+                              <td className="p-3 text-right font-mono">{bal.usedDays || 0}</td>
+                              <td className="p-3 text-right font-mono">{bal.pendingDays || 0}</td>
+                              <td className="p-3 text-right font-mono font-black text-primary bg-primary/5">{available}</td>
+                              <td className="p-3 max-w-[150px] truncate text-on-surface-variant" title={bal.remarks}>{bal.remarks || "-"}</td>
+                              <td className="p-3 text-center">
+                                <div className="flex justify-center gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedBalance(bal);
+                                      setBalLeaveTypeId(bal.leaveTypeId);
+                                      setBalYear(bal.year);
+                                      setBalAllocatedDays(bal.allocatedDays);
+                                      setBalCarriedForwardDays(bal.carriedForwardDays || 0);
+                                      setBalAdjustmentDays(bal.adjustmentDays || 0);
+                                      setBalUsedDays(bal.usedDays || 0);
+                                      setBalPendingDays(bal.pendingDays || 0);
+                                      setBalRemarks(bal.remarks || "");
+                                      setBalError("");
+                                      setIsEditBalanceOpen(true);
+                                    }}
+                                    className="p-1 rounded text-primary hover:bg-primary/10 transition-colors"
+                                  >
+                                    <span className="material-symbols-outlined text-[16px]">edit</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={async () => {
+                                      if (confirm(`Are you sure you want to delete the ${bal.leaveType?.name || "leave"} balance for ${bal.year}?`)) {
+                                        try {
+                                          const deleteRes = await fetch(`/api/v1/employees/${selectedEmp.id}/leave-balances/${bal.id}`, {
+                                            method: "DELETE"
+                                          });
+                                          if (deleteRes.ok) {
+                                            // Refresh balances
+                                            const freshRes = await fetch(`/api/v1/employees/${selectedEmp.id}/leave-balances`);
+                                            if (freshRes.ok) setLeaveBalances(await freshRes.json());
+                                          }
+                                        } catch (err) {
+                                          console.error("Failed to delete balance", err);
+                                        }
+                                      }
+                                    }}
+                                    className="p-1 rounded text-status-error hover:bg-status-error/10 transition-colors"
+                                  >
+                                    <span className="material-symbols-outlined text-[16px]">delete</span>
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             )}
 
@@ -2604,6 +3036,250 @@ export default function WorkforcePage() {
             <Button variant="secondary" onClick={() => setIsDeptModalOpen(false)}>Close</Button>
           </div>
         </div>
+      </Modal>
+
+      {/* Setup Leave Balance Modal */}
+      <Modal isOpen={isAddBalanceOpen} onClose={() => setIsAddBalanceOpen(false)} title="Setup Leave Balance">
+        <form
+          onSubmit={async (e) => {
+            e.preventDefault();
+            setBalError("");
+            try {
+              const res = await fetch(`/api/v1/employees/${selectedEmp?.id}/leave-balances`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  leaveTypeId: balLeaveTypeId,
+                  year: Number(balYear),
+                  allocatedDays: Number(balAllocatedDays),
+                  carriedForwardDays: Number(balCarriedForwardDays),
+                  adjustmentDays: Number(balAdjustmentDays),
+                  remarks: balRemarks,
+                }),
+              });
+              if (res.ok) {
+                setIsAddBalanceOpen(false);
+                // Refresh leave balances list
+                const freshRes = await fetch(`/api/v1/employees/${selectedEmp?.id}/leave-balances`);
+                if (freshRes.ok) setLeaveBalances(await freshRes.json());
+              } else {
+                const err = await res.json();
+                setBalError(err.error || "Failed to create leave balance");
+              }
+            } catch (err) {
+              setBalError("Network error. Please try again.");
+            }
+          }}
+          className="space-y-4"
+        >
+          {balError && (
+            <div className="p-3 bg-status-error/10 border border-status-error/20 text-status-error text-xs font-semibold rounded-lg">
+              {balError}
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Leave Type *</label>
+              <select
+                className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                value={balLeaveTypeId}
+                onChange={(e) => setBalLeaveTypeId(e.target.value)}
+                required
+              >
+                <option value="">Select Leave Type</option>
+                {leaveTypes.filter(t => t.isActive).map((t) => (
+                  <option key={t.id} value={t.id}>{t.name} ({t.code})</option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Year *</label>
+              <input
+                type="number"
+                className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none"
+                value={balYear}
+                onChange={(e) => setBalYear(Number(e.target.value))}
+                required
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-4">
+            <div className="space-y-1">
+              <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider font-mono">Allocated Days *</label>
+              <input
+                type="number"
+                step="any"
+                className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none"
+                value={balAllocatedDays}
+                onChange={(e) => setBalAllocatedDays(Number(e.target.value))}
+                required
+                min="0"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider font-mono">Carried Forward</label>
+              <input
+                type="number"
+                step="any"
+                className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none"
+                value={balCarriedForwardDays}
+                onChange={(e) => setBalCarriedForwardDays(Number(e.target.value))}
+                min="0"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider font-mono">Adjustment Days</label>
+              <input
+                type="number"
+                step="any"
+                className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none"
+                value={balAdjustmentDays}
+                onChange={(e) => setBalAdjustmentDays(Number(e.target.value))}
+              />
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Remarks</label>
+            <textarea
+              className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary resize-none"
+              rows={2}
+              value={balRemarks}
+              onChange={(e) => setBalRemarks(e.target.value)}
+              placeholder="Allotment details, carried forward approvals, adjustments reason..."
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 border-t border-border-subtle pt-4">
+            <Button variant="secondary" type="button" onClick={() => setIsAddBalanceOpen(false)}>Cancel</Button>
+            <Button type="submit" variant="primary">Create Balance</Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Edit Leave Balance Modal */}
+      <Modal isOpen={isEditBalanceOpen} onClose={() => setIsEditBalanceOpen(false)} title="Modify Leave Balance">
+        <form
+          onSubmit={async (e) => {
+            e.preventDefault();
+            setBalError("");
+            try {
+              const res = await fetch(`/api/v1/employees/${selectedEmp?.id}/leave-balances/${selectedBalance?.id}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  leaveTypeId: balLeaveTypeId,
+                  year: Number(balYear),
+                  allocatedDays: Number(balAllocatedDays),
+                  carriedForwardDays: Number(balCarriedForwardDays),
+                  adjustmentDays: Number(balAdjustmentDays),
+                  remarks: balRemarks,
+                }),
+              });
+              if (res.ok) {
+                setIsEditBalanceOpen(false);
+                // Refresh leave balances list
+                const freshRes = await fetch(`/api/v1/employees/${selectedEmp?.id}/leave-balances`);
+                if (freshRes.ok) setLeaveBalances(await freshRes.json());
+              } else {
+                const err = await res.json();
+                setBalError(err.error || "Failed to update leave balance");
+              }
+            } catch (err) {
+              setBalError("Network error. Please try again.");
+            }
+          }}
+          className="space-y-4"
+        >
+          {balError && (
+            <div className="p-3 bg-status-error/10 border border-status-error/20 text-status-error text-xs font-semibold rounded-lg">
+              {balError}
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Leave Type *</label>
+              <select
+                className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                value={balLeaveTypeId}
+                onChange={(e) => setBalLeaveTypeId(e.target.value)}
+                required
+                disabled
+              >
+                <option value="">Select Leave Type</option>
+                {leaveTypes.map((t) => (
+                  <option key={t.id} value={t.id}>{t.name} ({t.code})</option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Year *</label>
+              <input
+                type="number"
+                className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none"
+                value={balYear}
+                onChange={(e) => setBalYear(Number(e.target.value))}
+                required
+                disabled
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-3 gap-4">
+            <div className="space-y-1">
+              <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider font-mono">Allocated Days *</label>
+              <input
+                type="number"
+                step="any"
+                className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none"
+                value={balAllocatedDays}
+                onChange={(e) => setBalAllocatedDays(Number(e.target.value))}
+                required
+                min="0"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider font-mono">Carried Forward</label>
+              <input
+                type="number"
+                step="any"
+                className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none"
+                value={balCarriedForwardDays}
+                onChange={(e) => setBalCarriedForwardDays(Number(e.target.value))}
+                min="0"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider font-mono">Adjustment Days</label>
+              <input
+                type="number"
+                step="any"
+                className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none"
+                value={balAdjustmentDays}
+                onChange={(e) => setBalAdjustmentDays(Number(e.target.value))}
+              />
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Remarks</label>
+            <textarea
+              className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary resize-none"
+              rows={2}
+              value={balRemarks}
+              onChange={(e) => setBalRemarks(e.target.value)}
+              placeholder="Allotment details, carried forward approvals, adjustments reason..."
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 border-t border-border-subtle pt-4">
+            <Button variant="secondary" type="button" onClick={() => setIsEditBalanceOpen(false)}>Cancel</Button>
+            <Button type="submit" variant="primary">Save Changes</Button>
+          </div>
+        </form>
       </Modal>
     </div>
   );

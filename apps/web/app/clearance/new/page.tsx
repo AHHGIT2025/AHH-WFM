@@ -102,7 +102,7 @@ export default function NewClearanceRequest() {
     const hasUsername = !!emp.username;
     const hasAuth = ["LOCAL", "SSO", "LOCAL_AND_SSO"].includes(emp.authMode) && emp.isLoginEnabled !== false;
     const hasEmail = emp.email && (emp.email.endsWith(".qa") || emp.email.endsWith("@alhattab.qa") || emp.email.includes("admin") || emp.email.includes("alhattab"));
-    const isWhiteCollar = emp.workerCategory === "WHITE_COLLAR" || emp.role === "ADMIN" || emp.role === "SUPERVISOR";
+    const isWhiteCollar = emp.employeeCategory === "WHITE_COLLAR" || emp.role === "ADMIN" || emp.role === "SUPERVISOR";
     const hasItAssets = emp.hasItAssets === true;
     
     return hasItAssets || hasLogin || hasUsername || hasAuth || hasEmail || isWhiteCollar;
@@ -758,7 +758,7 @@ export default function NewClearanceRequest() {
                   {selectedEmployee.hasItAssets && (
                     <span className="px-2 py-0.5 bg-purple-100 text-purple-800 text-[10px] font-bold rounded">Has IT Assets</span>
                   )}
-                  {selectedEmployee.workerCategory === "BLUE_COLLAR" ? (
+                  {selectedEmployee.employeeCategory === "BLUE_COLLAR" ? (
                     <span className="px-2 py-0.5 bg-orange-100 text-orange-800 text-[10px] font-bold rounded">Blue Collar</span>
                   ) : (
                     <span className="px-2 py-0.5 bg-[#800000]/10 text-[#800000] text-[10px] font-bold rounded">White Collar</span>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Building2, Users, Briefcase, MapPin, Map, Factory, Layers, Network, BookOpen, UserCheck, Key, LocateFixed, NetworkIcon, Globe, CircleDot } from "lucide-react";
+import { Building2, Users, Briefcase, MapPin, Map, Factory, Layers, BookOpen, UserCheck, Key, LocateFixed, NetworkIcon, Globe, CircleDot, CalendarCheck } from "lucide-react";
 import { MasterDataEntityTab } from "@/components/master-data/MasterDataEntityTab";
 
 const MASTER_TABS = [
@@ -16,7 +16,7 @@ const MASTER_TABS = [
   { id: "designations", label: "Designations", icon: Briefcase, apiPath: "/api/v1/masters/designations", columns: [
     { key: "code", label: "Code", required: true },
     { key: "name", label: "Title", required: true },
-    { key: "workerCategory", label: "Category", type: "select", options: [{id:"WHITE_COLLAR", label:"White Collar"}, {id:"BLUE_COLLAR", label:"Blue Collar"}, {id:"BOTH", label:"Both"}] },
+    { key: "employeeCategory", label: "Category", type: "select", options: [{id:"WHITE_COLLAR", label:"White Collar"}, {id:"BLUE_COLLAR", label:"Blue Collar"}, {id:"BOTH", label:"Both"}] },
     { key: "isSupervisorPosition", label: "Is Supervisor", type: "boolean" },
     { key: "isRelieverEligible", label: "Reliever Eligible", type: "boolean" }
   ]},
@@ -69,6 +69,21 @@ const MASTER_TABS = [
     { key: "standbyRequired", label: "Standby Reqd", type: "boolean" },
     { key: "relieverRequiredForLeave", label: "Reliever Reqd (Leave)", type: "boolean" },
     { key: "relieverRequiredForOff", label: "Reliever Reqd (Off)", type: "boolean" }
+  ]},
+  { id: "leave-types", label: "Leave Types", icon: CalendarCheck, apiPath: "/api/v1/masters/leave-types", columns: [
+    { key: "code", label: "Code", required: true },
+    { key: "name", label: "Leave Type Name", required: true },
+    { key: "description", label: "Description" },
+    { key: "isPaid", label: "Is Paid", type: "boolean" },
+    { key: "requiresDocument", label: "Requires Document", type: "boolean" },
+    { key: "workflowCode", label: "Workflow Code" },
+    { key: "defaultAnnualAllocation", label: "Default Allocation (Days)", type: "number" },
+    { key: "maxDaysPerRequest", label: "Max Days/Request", type: "number" },
+    { key: "allowHalfDay", label: "Allow Half Day", type: "boolean" },
+    { key: "allowCarryForward", label: "Allow Carry Forward", type: "boolean" },
+    { key: "carryForwardLimit", label: "Carry Forward Limit", type: "number" },
+    { key: "genderRestriction", label: "Gender Restriction", type: "select", options: [{id: "ALL", label: "All Genders"}, {id: "MALE", label: "Male Only"}, {id: "FEMALE", label: "Female Only"}] },
+    { key: "applicableAfterProbation", label: "Applies After Probation", type: "boolean" }
   ]}
 ];
 

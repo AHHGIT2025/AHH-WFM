@@ -1,0 +1,1392 @@
+{
+  "companies": [
+    {
+      "id": "COMP-001",
+      "companyCode": "AHH",
+      "companyName": "Al Hattab Holding",
+      "isActive": true,
+      "createdAt": "2026-06-16T06:07:32.167Z",
+      "updatedAt": "2026-06-16T06:07:32.168Z"
+    }
+  ],
+  "departments": [
+    {
+      "id": "DEPT-001",
+      "name": "Operations",
+      "companyId": "COMP-001",
+      "createdAt": "2026-06-16T06:07:32.168Z",
+      "updatedAt": "2026-06-16T06:07:32.168Z"
+    },
+    {
+      "id": "DEPT-002",
+      "name": "Engineering",
+      "companyId": "COMP-001",
+      "createdAt": "2026-06-16T06:07:32.168Z",
+      "updatedAt": "2026-06-16T06:07:32.168Z"
+    },
+    {
+      "id": "DEPT-003",
+      "name": "Logistics",
+      "companyId": "COMP-001",
+      "createdAt": "2026-06-16T06:07:32.168Z",
+      "updatedAt": "2026-06-16T06:07:32.168Z"
+    },
+    {
+      "id": "DEPT-004",
+      "name": "Sales",
+      "companyId": "COMP-001",
+      "createdAt": "2026-06-16T06:07:32.168Z",
+      "updatedAt": "2026-06-16T06:07:32.168Z"
+    },
+    {
+      "id": "DEPT-005",
+      "name": "IT",
+      "companyId": "COMP-001",
+      "createdAt": "2026-06-16T06:07:32.168Z",
+      "updatedAt": "2026-06-16T06:07:32.168Z"
+    }
+  ],
+  "employees": [
+    {
+      "id": "SK-90210",
+      "name": "Sarah Kim",
+      "department": "Operations",
+      "departmentId": "DEPT-001",
+      "companyId": "COMP-001",
+      "designationId": "DES-HRM",
+      "role": "SUPERVISOR",
+      "status": "On Break",
+      "email": "sarah.kim@alhattab.qa",
+      "phone": "+974 5555 1234",
+      "shiftId": "MOR-102",
+      "passwordHash": "$2b$10$MXGzuZY4UWcfONNiNUlgOeG1wc3Nob41g78P2ZCV9pKAKFyfuc6Zy",
+      "isActive": true,
+      "dateOfJoining": "2022-01-15T00:00:00Z",
+      "qidNumber": "28532400123",
+      "qidExpiryDate": "2027-05-20T00:00:00Z",
+      "passportNumber": "P-SK90210",
+      "passportIssueDate": "2022-01-15T00:00:00Z",
+      "passportExpiryDate": "2032-01-15T00:00:00Z",
+      "passportIssuingCountry": "South Korea",
+      "sponsor": "Al Hattab Holding",
+      "hasAccommodation": false,
+      "hasItAssets": true,
+      "employmentStatus": "ACTIVE",
+      "dutyStatus": "OFF_DUTY",
+      "webAccessEnabled": false,
+      "mobileAccessEnabled": false,
+      "authMode": "SSO",
+      "isLoginEnabled": false,
+      "usernameStrategy": "MANUAL",
+      "employeeCategory": "WHITE_COLLAR",
+      "username": "sarah.kim@alhattab.qa",
+      "deactivatedAt": "2026-06-16T06:07:48.848Z",
+      "mustChangePassword": false
+    },
+    {
+      "id": "AM-8821",
+      "name": "Alex Martinez",
+      "department": "Engineering",
+      "departmentId": "DEPT-002",
+      "companyId": "COMP-001",
+      "designationId": "DES-ACC",
+      "employeeCategory": "WHITE_COLLAR",
+      "role": "EMPLOYEE",
+      "status": "On Duty",
+      "email": "alex.m@alhattab.qa",
+      "phone": "+974 5555 5678",
+      "shiftId": "GEN-001",
+      "passwordHash": "$2b$10$3MyCvtpxN/clLy6768L3y.2DBEW37QUcCUuvwdRSmEYUfp.FD97PS",
+      "isActive": true,
+      "dateOfJoining": "2023-04-10T00:00:00Z",
+      "qidNumber": "28932400456",
+      "qidExpiryDate": "2026-12-15T00:00:00Z",
+      "passportNumber": "P-AM8821",
+      "passportIssueDate": "2023-04-10T00:00:00Z",
+      "passportExpiryDate": "2033-04-10T00:00:00Z",
+      "passportIssuingCountry": "Spain",
+      "sponsor": "Al Hattab Holding",
+      "hasAccommodation": false,
+      "hasItAssets": true,
+      "employmentStatus": "ACTIVE",
+      "dutyStatus": "OFF_DUTY",
+      "webAccessEnabled": true,
+      "mobileAccessEnabled": true,
+      "authMode": "LOCAL",
+      "isLoginEnabled": true,
+      "usernameStrategy": "MANUAL",
+      "username": "alex.m@alhattab.qa"
+    },
+    {
+      "id": "BR-8823",
+      "name": "Brandon Reed",
+      "department": "Logistics",
+      "departmentId": "DEPT-003",
+      "companyId": "COMP-001",
+      "designationId": "DES-001",
+      "employeeCategory": "BLUE_COLLAR",
+      "role": "EMPLOYEE",
+      "status": "On Duty",
+      "email": "brandon.r@alhattab.qa",
+      "phone": "+974 5555 9012",
+      "shiftId": "AFT-103",
+      "passwordHash": "$2b$10$3MyCvtpxN/clLy6768L3y.2DBEW37QUcCUuvwdRSmEYUfp.FD97PS",
+      "isActive": true,
+      "dateOfJoining": "2024-02-01T00:00:00Z",
+      "qidNumber": "29532400789",
+      "qidExpiryDate": "2025-08-30T00:00:00Z",
+      "passportNumber": "P-BR8823",
+      "passportIssueDate": "2024-02-01T00:00:00Z",
+      "passportExpiryDate": "2034-02-01T00:00:00Z",
+      "passportIssuingCountry": "United Kingdom",
+      "sponsor": "Al Hattab Logistics",
+      "hasAccommodation": true,
+      "hasItAssets": false,
+      "employmentStatus": "ACTIVE",
+      "dutyStatus": "OFF_DUTY",
+      "webAccessEnabled": true,
+      "mobileAccessEnabled": true,
+      "authMode": "LOCAL",
+      "isLoginEnabled": true,
+      "usernameStrategy": "MANUAL",
+      "username": "BR-8823"
+    },
+    {
+      "id": "JL-8824",
+      "name": "Jordan Lee",
+      "department": "Sales",
+      "departmentId": "DEPT-004",
+      "companyId": "COMP-001",
+      "role": "EMPLOYEE",
+      "status": "Offline",
+      "email": "jordan.lee@alhattab.qa",
+      "phone": "+974 5555 3456",
+      "shiftId": "ROT-A",
+      "passwordHash": "$2b$10$3MyCvtpxN/clLy6768L3y.2DBEW37QUcCUuvwdRSmEYUfp.FD97PS",
+      "isActive": true,
+      "dateOfJoining": "2023-09-01T00:00:00Z",
+      "qidNumber": "29132400111",
+      "qidExpiryDate": "2027-01-10T00:00:00Z",
+      "passportNumber": "P-JL8824",
+      "passportIssueDate": "2023-09-01T00:00:00Z",
+      "passportExpiryDate": "2033-09-01T00:00:00Z",
+      "passportIssuingCountry": "United States",
+      "sponsor": "Al Hattab Holding",
+      "hasAccommodation": false,
+      "hasItAssets": true,
+      "employmentStatus": "ACTIVE",
+      "dutyStatus": "OFF_DUTY",
+      "webAccessEnabled": true,
+      "mobileAccessEnabled": true,
+      "authMode": "LOCAL",
+      "isLoginEnabled": true,
+      "usernameStrategy": "MANUAL",
+      "employeeCategory": "WHITE_COLLAR",
+      "username": "jordan.lee@alhattab.qa"
+    },
+    {
+      "id": "AA-1001",
+      "name": "Ahmed Ali",
+      "department": "Operations",
+      "departmentId": "DEPT-001",
+      "companyId": "COMP-001",
+      "designationId": "DES-001",
+      "employeeCategory": "BLUE_COLLAR",
+      "role": "EMPLOYEE",
+      "status": "Offline",
+      "email": "ahmed.ali@alhattab.qa",
+      "phone": "+974 6666 1111",
+      "shiftId": "GEN-001",
+      "passwordHash": "$2b$10$3MyCvtpxN/clLy6768L3y.2DBEW37QUcCUuvwdRSmEYUfp.FD97PS",
+      "isActive": true,
+      "dateOfJoining": "2024-05-15T00:00:00Z",
+      "qidNumber": "29632400222",
+      "qidExpiryDate": "2026-06-25T00:00:00Z",
+      "passportNumber": "P-AA1001",
+      "passportIssueDate": "2024-05-15T00:00:00Z",
+      "passportExpiryDate": "2034-05-15T00:00:00Z",
+      "passportIssuingCountry": "Egypt",
+      "sponsor": "Al Hattab Contracting",
+      "hasAccommodation": true,
+      "hasItAssets": false,
+      "employmentStatus": "ACTIVE",
+      "dutyStatus": "OFF_DUTY",
+      "webAccessEnabled": true,
+      "mobileAccessEnabled": true,
+      "authMode": "LOCAL",
+      "isLoginEnabled": true,
+      "usernameStrategy": "MANUAL",
+      "username": "AA-1001"
+    },
+    {
+      "id": "AD-0001",
+      "name": "System Administrator",
+      "department": "IT",
+      "departmentId": "DEPT-005",
+      "companyId": "COMP-001",
+      "role": "ADMIN",
+      "status": "Offline",
+      "email": "admin@alhattab.qa",
+      "phone": "+974 0000 0000",
+      "shiftId": "GEN-001",
+      "passwordHash": "$2b$10$3MyCvtpxN/clLy6768L3y.2DBEW37QUcCUuvwdRSmEYUfp.FD97PS",
+      "isActive": true,
+      "dateOfJoining": "2020-01-01T00:00:00Z",
+      "qidNumber": "28032400000",
+      "qidExpiryDate": "2029-12-31T00:00:00Z",
+      "passportNumber": "P-AD0001",
+      "passportIssueDate": "2020-01-01T00:00:00Z",
+      "passportExpiryDate": "2030-01-01T00:00:00Z",
+      "passportIssuingCountry": "Qatar",
+      "sponsor": "Al Hattab Holding",
+      "hasAccommodation": false,
+      "hasItAssets": true,
+      "employmentStatus": "ACTIVE",
+      "dutyStatus": "OFF_DUTY",
+      "webAccessEnabled": true,
+      "mobileAccessEnabled": true,
+      "authMode": "LOCAL",
+      "isLoginEnabled": true,
+      "usernameStrategy": "MANUAL",
+      "employeeCategory": "WHITE_COLLAR",
+      "username": "admin@alhattab.qa"
+    }
+  ],
+  "attendance": [
+    {
+      "id": "ATT-001",
+      "employeeId": "AM-8821",
+      "employeeName": "Alex Martinez",
+      "checkIn": "2026-06-11T08:55:00Z",
+      "checkOut": "2026-06-11T18:02:00Z",
+      "originalCheckIn": "2026-06-11T08:55:00Z",
+      "originalCheckOut": "2026-06-11T18:02:00Z",
+      "lat": 25.2854,
+      "lng": 51.531,
+      "device": "Galaxy S23 · 5G · GPS Active",
+      "status": "ON_TIME",
+      "locationName": "Doha Headquarters",
+      "lateMinutes": 0
+    },
+    {
+      "id": "ATT-002",
+      "employeeId": "SK-90210",
+      "employeeName": "Sarah Kim",
+      "checkIn": "2026-06-11T09:15:00Z",
+      "originalCheckIn": "2026-06-11T09:15:00Z",
+      "lat": 25.2867,
+      "lng": 51.5325,
+      "device": "iPhone 15 Pro · Wi-Fi",
+      "status": "LATE",
+      "locationName": "West Bay Office",
+      "lateMinutes": 15
+    },
+    {
+      "id": "ATT-003",
+      "employeeId": "BR-8823",
+      "employeeName": "Brandon Reed",
+      "checkIn": "2026-06-11T13:58:00Z",
+      "originalCheckIn": "2026-06-11T13:58:00Z",
+      "lat": 25.2905,
+      "lng": 51.5201,
+      "device": "iPad Mini · 4G LTE",
+      "status": "ON_TIME",
+      "locationName": "Industrial Area Depot",
+      "lateMinutes": 0
+    }
+  ],
+  "shifts": [
+    {
+      "id": "GEN-001",
+      "name": "General Shift",
+      "code": "GEN-001",
+      "timeRange": "09:00 AM — 06:00 PM",
+      "breakDuration": "60 mins",
+      "status": "Active"
+    },
+    {
+      "id": "MOR-102",
+      "name": "Morning Shift",
+      "code": "MOR-102",
+      "timeRange": "06:00 AM — 02:00 PM",
+      "breakDuration": "45 mins",
+      "status": "Active"
+    },
+    {
+      "id": "AFT-103",
+      "name": "Afternoon Shift",
+      "code": "AFT-103",
+      "timeRange": "02:00 PM — 10:00 PM",
+      "breakDuration": "45 mins",
+      "status": "Active"
+    },
+    {
+      "id": "NGT-201",
+      "name": "Night Shift",
+      "code": "NGT-201",
+      "timeRange": "10:00 PM — 06:00 AM",
+      "breakDuration": "30 mins",
+      "status": "Active"
+    },
+    {
+      "id": "ROT-A",
+      "name": "Rotational A",
+      "code": "ROT-A",
+      "timeRange": "Variable",
+      "breakDuration": "Flexible",
+      "status": "Inactive"
+    }
+  ],
+  "leaves": [
+    {
+      "id": "LV-001",
+      "employeeId": "SK-90210",
+      "employeeName": "Sarah Kim",
+      "type": "Annual Leave",
+      "dateRange": "25 Jun - 28 Jun 2026",
+      "reason": "Family trip to Dubai",
+      "status": "Pending Approval"
+    },
+    {
+      "id": "LV-002",
+      "employeeId": "AM-8821",
+      "employeeName": "Alex Martinez",
+      "type": "Sick Leave",
+      "dateRange": "14 Jun - 15 Jun 2026",
+      "reason": "Medical Appointment",
+      "status": "Approved"
+    }
+  ],
+  "sapMappings": [
+    {
+      "id": "MAP-001",
+      "sourceField": "userId",
+      "targetField": "employeeId",
+      "transformationRule": "Direct string mapping",
+      "status": "Mapped"
+    },
+    {
+      "id": "MAP-002",
+      "sourceField": "jobTitle",
+      "targetField": "role",
+      "transformationRule": "Title case parsing",
+      "status": "Mapped"
+    },
+    {
+      "id": "MAP-003",
+      "sourceField": "custom_status",
+      "targetField": "status",
+      "transformationRule": "Value mapping list",
+      "status": "Mapped"
+    },
+    {
+      "id": "MAP-004",
+      "sourceField": "cost_center",
+      "targetField": "department",
+      "transformationRule": "Prefix removal and routing",
+      "status": "Mapped"
+    },
+    {
+      "id": "MAP-005",
+      "sourceField": "dept_code",
+      "targetField": "department_id",
+      "transformationRule": "Lookup code table",
+      "status": "Conflict"
+    }
+  ],
+  "syncLogs": [
+    {
+      "id": "LOG-001",
+      "timestamp": "2026-06-11 23:45:00",
+      "operation": "Data Push",
+      "subject": "Attendance_Feed",
+      "status": "Success",
+      "details": "Pushed 45 records to SuccessFactors endpoint"
+    },
+    {
+      "id": "LOG-002",
+      "timestamp": "2026-06-11 23:30:12",
+      "operation": "Schema Update",
+      "subject": "User_Object_Extension",
+      "status": "Failed",
+      "details": "SuccessFactors API rejected schema extension: Out of limits"
+    },
+    {
+      "id": "LOG-003",
+      "timestamp": "2026-06-11 23:10:55",
+      "operation": "Field Map",
+      "subject": "Employee_Dept_Code",
+      "status": "Warning",
+      "details": "Implicit mapping resolver used for code: QA_OPS"
+    }
+  ],
+  "announcements": [
+    {
+      "id": "ANN-001",
+      "title": "Summer Working Hours",
+      "content": "Following the national directives, summer working hours for outdoor sites will change starting next week. Please check in early.",
+      "timestamp": "2026-06-11T12:00:00Z",
+      "author": "HR Department",
+      "category": "Urgent"
+    },
+    {
+      "id": "ANN-002",
+      "title": "SuccessFactors Sync Upgrade",
+      "content": "The SAP SuccessFactors bridge integration will undergo a schema update this Friday night. System availability might be affected for 10 minutes.",
+      "timestamp": "2026-06-10T15:00:00Z",
+      "author": "IT Infrastructure",
+      "category": "System Update"
+    }
+  ],
+  "worksites": [
+    {
+      "id": "WORK-001",
+      "name": "Doha Headquarters (West Bay)",
+      "lat": 25.3186,
+      "lng": 51.5284,
+      "radiusMeters": 150,
+      "isActive": true,
+      "createdAt": "2026-06-16T06:07:32.168Z",
+      "updatedAt": "2026-06-16T06:07:32.168Z"
+    }
+  ],
+  "attendanceCorrections": [],
+  "leaveTypes": [
+    {
+      "id": "LTYPE-ANNUAL",
+      "name": "Annual Leave",
+      "code": "ANNUAL",
+      "isActive": true,
+      "accruable": true,
+      "carryForward": true,
+      "maxCarryOver": 5,
+      "expiryMonths": 12,
+      "colorCode": "#0058be"
+    },
+    {
+      "id": "LTYPE-SICK",
+      "name": "Sick Leave",
+      "code": "SICK",
+      "isActive": true,
+      "accruable": false,
+      "carryForward": false,
+      "maxCarryOver": 0,
+      "expiryMonths": 0,
+      "colorCode": "#ea4335"
+    },
+    {
+      "id": "LTYPE-EMERGENCY",
+      "name": "Emergency Leave",
+      "code": "EMERGENCY",
+      "isActive": true,
+      "accruable": false,
+      "carryForward": false,
+      "maxCarryOver": 0,
+      "expiryMonths": 0,
+      "colorCode": "#fbbc05"
+    },
+    {
+      "id": "LTYPE-UNPAID",
+      "name": "Unpaid Leave",
+      "code": "UNPAID",
+      "isActive": true,
+      "accruable": false,
+      "carryForward": false,
+      "maxCarryOver": 0,
+      "expiryMonths": 0,
+      "colorCode": "#70757a"
+    },
+    {
+      "id": "LTYPE-BUSINESS",
+      "name": "Business Travel",
+      "code": "BUSINESS_TRAVEL",
+      "isActive": true,
+      "accruable": false,
+      "carryForward": false,
+      "maxCarryOver": 0,
+      "expiryMonths": 0,
+      "colorCode": "#34a853"
+    }
+  ],
+  "holidays": [
+    {
+      "id": "HOL-001",
+      "name": "Qatar National Sports Day",
+      "date": "2026-02-10T00:00:00Z",
+      "isRecurring": true,
+      "scope": "NATIONAL"
+    },
+    {
+      "id": "HOL-002",
+      "name": "Qatar National Day",
+      "date": "2026-12-18T00:00:00Z",
+      "isRecurring": true,
+      "scope": "NATIONAL"
+    },
+    {
+      "id": "HOL-003",
+      "name": "Company Eid Al-Fitr Break",
+      "date": "2026-03-20T00:00:00Z",
+      "isRecurring": false,
+      "scope": "COMPANY"
+    },
+    {
+      "id": "HOL-004",
+      "name": "Company Eid Al-Adha Break",
+      "date": "2026-05-27T00:00:00Z",
+      "isRecurring": false,
+      "scope": "COMPANY"
+    }
+  ],
+  "leaveBalances": [
+    {
+      "id": "BAL-ANNUAL-SK-90210",
+      "employeeId": "SK-90210",
+      "leaveTypeId": "LTYPE-ANNUAL",
+      "allocatedDays": 22,
+      "usedDays": 0,
+      "pendingDays": 0,
+      "carriedOver": 0
+    },
+    {
+      "id": "BAL-SICK-SK-90210",
+      "employeeId": "SK-90210",
+      "leaveTypeId": "LTYPE-SICK",
+      "allocatedDays": 15,
+      "usedDays": 0,
+      "pendingDays": 0,
+      "carriedOver": 0
+    },
+    {
+      "id": "BAL-ANNUAL-AM-8821",
+      "employeeId": "AM-8821",
+      "leaveTypeId": "LTYPE-ANNUAL",
+      "allocatedDays": 22,
+      "usedDays": 0,
+      "pendingDays": 0,
+      "carriedOver": 0
+    },
+    {
+      "id": "BAL-SICK-AM-8821",
+      "employeeId": "AM-8821",
+      "leaveTypeId": "LTYPE-SICK",
+      "allocatedDays": 15,
+      "usedDays": 0,
+      "pendingDays": 0,
+      "carriedOver": 0
+    },
+    {
+      "id": "BAL-ANNUAL-BR-8823",
+      "employeeId": "BR-8823",
+      "leaveTypeId": "LTYPE-ANNUAL",
+      "allocatedDays": 22,
+      "usedDays": 0,
+      "pendingDays": 0,
+      "carriedOver": 0
+    },
+    {
+      "id": "BAL-SICK-BR-8823",
+      "employeeId": "BR-8823",
+      "leaveTypeId": "LTYPE-SICK",
+      "allocatedDays": 15,
+      "usedDays": 0,
+      "pendingDays": 0,
+      "carriedOver": 0
+    },
+    {
+      "id": "BAL-ANNUAL-JL-8824",
+      "employeeId": "JL-8824",
+      "leaveTypeId": "LTYPE-ANNUAL",
+      "allocatedDays": 22,
+      "usedDays": 0,
+      "pendingDays": 0,
+      "carriedOver": 0
+    },
+    {
+      "id": "BAL-SICK-JL-8824",
+      "employeeId": "JL-8824",
+      "leaveTypeId": "LTYPE-SICK",
+      "allocatedDays": 15,
+      "usedDays": 0,
+      "pendingDays": 0,
+      "carriedOver": 0
+    },
+    {
+      "id": "BAL-ANNUAL-AA-1001",
+      "employeeId": "AA-1001",
+      "leaveTypeId": "LTYPE-ANNUAL",
+      "allocatedDays": 22,
+      "usedDays": 0,
+      "pendingDays": 0,
+      "carriedOver": 0
+    },
+    {
+      "id": "BAL-SICK-AA-1001",
+      "employeeId": "AA-1001",
+      "leaveTypeId": "LTYPE-SICK",
+      "allocatedDays": 15,
+      "usedDays": 0,
+      "pendingDays": 0,
+      "carriedOver": 0
+    },
+    {
+      "id": "BAL-ANNUAL-AD-0001",
+      "employeeId": "AD-0001",
+      "leaveTypeId": "LTYPE-ANNUAL",
+      "allocatedDays": 22,
+      "usedDays": 0,
+      "pendingDays": 0,
+      "carriedOver": 0
+    },
+    {
+      "id": "BAL-SICK-AD-0001",
+      "employeeId": "AD-0001",
+      "leaveTypeId": "LTYPE-SICK",
+      "allocatedDays": 15,
+      "usedDays": 0,
+      "pendingDays": 0,
+      "carriedOver": 0
+    },
+    {
+      "id": "BAL-1781590052281",
+      "employeeId": "SK-90210",
+      "leaveTypeId": "LTYPE-ANNUAL",
+      "year": 2026,
+      "allocatedDays": 15,
+      "usedDays": 0,
+      "pendingDays": 0,
+      "carriedForwardDays": 0,
+      "carriedOver": 0,
+      "adjustmentDays": 0,
+      "remarks": "First balance",
+      "createdAt": "2026-06-16T06:07:32.281Z",
+      "updatedAt": "2026-06-16T06:07:32.281Z"
+    }
+  ],
+  "leaveBalanceLedgers": [
+    {
+      "id": "LEDG-ANNUAL-SK-90210-1781590052269",
+      "employeeId": "SK-90210",
+      "leaveTypeId": "LTYPE-ANNUAL",
+      "actionType": "INITIAL",
+      "amount": 22,
+      "balanceBefore": 0,
+      "balanceAfter": 22,
+      "remarks": "Initial seed allotment"
+    },
+    {
+      "id": "LEDG-SICK-SK-90210-1781590052269",
+      "employeeId": "SK-90210",
+      "leaveTypeId": "LTYPE-SICK",
+      "actionType": "INITIAL",
+      "amount": 15,
+      "balanceBefore": 0,
+      "balanceAfter": 15,
+      "remarks": "Initial seed allotment"
+    },
+    {
+      "id": "LEDG-ANNUAL-AM-8821-1781590052269",
+      "employeeId": "AM-8821",
+      "leaveTypeId": "LTYPE-ANNUAL",
+      "actionType": "INITIAL",
+      "amount": 22,
+      "balanceBefore": 0,
+      "balanceAfter": 22,
+      "remarks": "Initial seed allotment"
+    },
+    {
+      "id": "LEDG-SICK-AM-8821-1781590052269",
+      "employeeId": "AM-8821",
+      "leaveTypeId": "LTYPE-SICK",
+      "actionType": "INITIAL",
+      "amount": 15,
+      "balanceBefore": 0,
+      "balanceAfter": 15,
+      "remarks": "Initial seed allotment"
+    },
+    {
+      "id": "LEDG-ANNUAL-BR-8823-1781590052269",
+      "employeeId": "BR-8823",
+      "leaveTypeId": "LTYPE-ANNUAL",
+      "actionType": "INITIAL",
+      "amount": 22,
+      "balanceBefore": 0,
+      "balanceAfter": 22,
+      "remarks": "Initial seed allotment"
+    },
+    {
+      "id": "LEDG-SICK-BR-8823-1781590052269",
+      "employeeId": "BR-8823",
+      "leaveTypeId": "LTYPE-SICK",
+      "actionType": "INITIAL",
+      "amount": 15,
+      "balanceBefore": 0,
+      "balanceAfter": 15,
+      "remarks": "Initial seed allotment"
+    },
+    {
+      "id": "LEDG-ANNUAL-JL-8824-1781590052269",
+      "employeeId": "JL-8824",
+      "leaveTypeId": "LTYPE-ANNUAL",
+      "actionType": "INITIAL",
+      "amount": 22,
+      "balanceBefore": 0,
+      "balanceAfter": 22,
+      "remarks": "Initial seed allotment"
+    },
+    {
+      "id": "LEDG-SICK-JL-8824-1781590052269",
+      "employeeId": "JL-8824",
+      "leaveTypeId": "LTYPE-SICK",
+      "actionType": "INITIAL",
+      "amount": 15,
+      "balanceBefore": 0,
+      "balanceAfter": 15,
+      "remarks": "Initial seed allotment"
+    },
+    {
+      "id": "LEDG-ANNUAL-AA-1001-1781590052269",
+      "employeeId": "AA-1001",
+      "leaveTypeId": "LTYPE-ANNUAL",
+      "actionType": "INITIAL",
+      "amount": 22,
+      "balanceBefore": 0,
+      "balanceAfter": 22,
+      "remarks": "Initial seed allotment"
+    },
+    {
+      "id": "LEDG-SICK-AA-1001-1781590052269",
+      "employeeId": "AA-1001",
+      "leaveTypeId": "LTYPE-SICK",
+      "actionType": "INITIAL",
+      "amount": 15,
+      "balanceBefore": 0,
+      "balanceAfter": 15,
+      "remarks": "Initial seed allotment"
+    },
+    {
+      "id": "LEDG-ANNUAL-AD-0001-1781590052269",
+      "employeeId": "AD-0001",
+      "leaveTypeId": "LTYPE-ANNUAL",
+      "actionType": "INITIAL",
+      "amount": 22,
+      "balanceBefore": 0,
+      "balanceAfter": 22,
+      "remarks": "Initial seed allotment"
+    },
+    {
+      "id": "LEDG-SICK-AD-0001-1781590052269",
+      "employeeId": "AD-0001",
+      "leaveTypeId": "LTYPE-SICK",
+      "actionType": "INITIAL",
+      "amount": 15,
+      "balanceBefore": 0,
+      "balanceAfter": 15,
+      "remarks": "Initial seed allotment"
+    }
+  ],
+  "leaveApprovalWorkflows": [
+    {
+      "id": "WF-ANNUAL",
+      "name": "Standard Annual Leave Workflow",
+      "description": "Multi-level approval flow for annual vacations",
+      "isActive": true
+    },
+    {
+      "id": "WF-SICK",
+      "name": "Sick & Emergency Leave Workflow",
+      "description": "Shortened approval flow for health emergencies",
+      "isActive": true
+    },
+    {
+      "id": "WF-BUSINESS-AUTO",
+      "name": "Auto Approval for Short Business Travel",
+      "description": "Instant approval for business trips <= 1 day",
+      "isActive": true
+    }
+  ],
+  "leaveApprovalSteps": [
+    {
+      "id": "WFS-ANNUAL-1",
+      "workflowId": "WF-ANNUAL",
+      "stepNumber": 1,
+      "roleRequired": "SUPERVISOR",
+      "autoApprove": false
+    },
+    {
+      "id": "WFS-ANNUAL-2",
+      "workflowId": "WF-ANNUAL",
+      "stepNumber": 2,
+      "roleRequired": "MANAGER",
+      "autoApprove": false
+    },
+    {
+      "id": "WFS-ANNUAL-3",
+      "workflowId": "WF-ANNUAL",
+      "stepNumber": 3,
+      "roleRequired": "HR",
+      "autoApprove": false
+    },
+    {
+      "id": "WFS-SICK-1",
+      "workflowId": "WF-SICK",
+      "stepNumber": 1,
+      "roleRequired": "SUPERVISOR",
+      "autoApprove": false
+    },
+    {
+      "id": "WFS-SICK-2",
+      "workflowId": "WF-SICK",
+      "stepNumber": 2,
+      "roleRequired": "HR",
+      "autoApprove": false
+    },
+    {
+      "id": "WFS-BUSINESS-1",
+      "workflowId": "WF-BUSINESS-AUTO",
+      "stepNumber": 1,
+      "roleRequired": "HR",
+      "autoApprove": true,
+      "employeeGroupFilter": "all"
+    }
+  ],
+  "leaveApprovalHistories": [],
+  "leaveApprovalDelegations": [
+    {
+      "id": "DELEG-001",
+      "employeeId": "SK-90210",
+      "delegateApproverId": "AD-0001",
+      "validFrom": "2026-06-01T00:00:00Z",
+      "validTo": "2026-06-30T00:00:00Z",
+      "reason": "Annual leave coverage"
+    }
+  ],
+  "shiftTemplates": [
+    {
+      "id": "WF-SH-MORN",
+      "name": "Morning Shift",
+      "startTime": "06:00",
+      "endTime": "14:00",
+      "isSplit": false,
+      "isFlexible": false
+    },
+    {
+      "id": "WF-SH-EVE",
+      "name": "Evening Shift",
+      "startTime": "14:00",
+      "endTime": "22:00",
+      "isSplit": false,
+      "isFlexible": false
+    },
+    {
+      "id": "WF-SH-NIGHT",
+      "name": "Night Shift",
+      "startTime": "22:00",
+      "endTime": "06:00",
+      "isSplit": false,
+      "isFlexible": false
+    },
+    {
+      "id": "WF-SH-SPLIT",
+      "name": "Split Shift",
+      "startTime": "08:00",
+      "endTime": "12:00",
+      "isSplit": true,
+      "splitStart": "16:00",
+      "splitEnd": "20:00",
+      "isFlexible": false
+    },
+    {
+      "id": "WF-SH-FLEX",
+      "name": "Flexible Shift",
+      "startTime": "00:00",
+      "endTime": "24:00",
+      "isSplit": false,
+      "isFlexible": true,
+      "coreHours": 8
+    }
+  ],
+  "rotationTemplates": [
+    {
+      "id": "ROT-5X2",
+      "name": "5x2 Pattern",
+      "cycleDays": 7,
+      "patternJson": "[\"WF-SH-MORN\",\"WF-SH-MORN\",\"WF-SH-MORN\",\"WF-SH-MORN\",\"WF-SH-MORN\",\"REST\",\"REST\"]"
+    },
+    {
+      "id": "ROT-6X1",
+      "name": "6x1 Pattern",
+      "cycleDays": 7,
+      "patternJson": "[\"WF-SH-MORN\",\"WF-SH-MORN\",\"WF-SH-MORN\",\"WF-SH-MORN\",\"WF-SH-MORN\",\"WF-SH-MORN\",\"REST\"]"
+    },
+    {
+      "id": "ROT-4X4",
+      "name": "4 On / 4 Off",
+      "cycleDays": 8,
+      "patternJson": "[\"WF-SH-MORN\",\"WF-SH-MORN\",\"WF-SH-MORN\",\"WF-SH-MORN\",\"REST\",\"REST\",\"REST\",\"REST\"]"
+    }
+  ],
+  "shiftAssignments": [
+    {
+      "id": "ASSIGN-001",
+      "employeeId": "AA-1001",
+      "employeeName": "Ahmed Ali",
+      "shiftTemplateId": "WF-SH-MORN",
+      "date": "2026-06-12"
+    },
+    {
+      "id": "ASSIGN-002",
+      "employeeId": "AA-1001",
+      "employeeName": "Ahmed Ali",
+      "shiftTemplateId": "WF-SH-MORN",
+      "date": "2026-06-13"
+    },
+    {
+      "id": "ASSIGN-003",
+      "employeeId": "AA-1001",
+      "employeeName": "Ahmed Ali",
+      "shiftTemplateId": "WF-SH-MORN",
+      "date": "2026-06-14"
+    },
+    {
+      "id": "ASSIGN-004",
+      "employeeId": "AA-1001",
+      "employeeName": "Ahmed Ali",
+      "shiftTemplateId": "WF-SH-MORN",
+      "date": "2026-06-15"
+    }
+  ],
+  "shiftSwaps": [],
+  "overtimeRates": [
+    {
+      "id": "RATE-STD",
+      "name": "Standard Overtime Rate",
+      "overtimeType": "STANDARD_OT",
+      "multiplier": 1.25,
+      "currency": "QAR",
+      "appliesOnWeekend": false,
+      "appliesOnHoliday": false,
+      "appliesAfterMinutes": 0,
+      "isActive": true
+    },
+    {
+      "id": "RATE-WKD",
+      "name": "Weekend Overtime Rate",
+      "overtimeType": "WEEKEND_OT",
+      "multiplier": 1.5,
+      "currency": "QAR",
+      "appliesOnWeekend": true,
+      "appliesOnHoliday": false,
+      "appliesAfterMinutes": 0,
+      "isActive": true
+    },
+    {
+      "id": "RATE-HOL",
+      "name": "Holiday Overtime Rate",
+      "overtimeType": "HOLIDAY_OT",
+      "multiplier": 2,
+      "currency": "QAR",
+      "appliesOnWeekend": false,
+      "appliesOnHoliday": true,
+      "appliesAfterMinutes": 0,
+      "isActive": true
+    },
+    {
+      "id": "RATE-NGT",
+      "name": "Night Overtime Rate",
+      "overtimeType": "NIGHT_OT",
+      "multiplier": 1.25,
+      "currency": "QAR",
+      "appliesOnWeekend": false,
+      "appliesOnHoliday": false,
+      "appliesAfterMinutes": 0,
+      "isActive": true
+    },
+    {
+      "id": "RATE-SPC",
+      "name": "Special Event Overtime Rate",
+      "overtimeType": "SPECIAL_EVENT_OT",
+      "multiplier": 1.5,
+      "currency": "QAR",
+      "appliesOnWeekend": false,
+      "appliesOnHoliday": false,
+      "appliesAfterMinutes": 0,
+      "isActive": true
+    }
+  ],
+  "sapConnections": [
+    {
+      "id": "CONN-SF-SANDBOX",
+      "systemName": "SAP SuccessFactors Sandbox",
+      "odataUrl": "https://api.sandbox.successfactors.eu/odata/v2",
+      "clientId": "AHH_WFM_INTEGRATION_CLIENT",
+      "companyId": "AlHattabWFM",
+      "userId": "sf_sync_user",
+      "privateKeyVaultId": "VAULT_REF_SF_SANDBOX_KEY",
+      "isActive": true,
+      "createdAt": "2026-06-16T06:07:32.168Z",
+      "updatedAt": "2026-06-16T06:07:32.168Z"
+    }
+  ],
+  "sapFieldMappings": [
+    {
+      "id": "FMAP-001",
+      "module": "EMPLOYEE",
+      "sourceField": "personalInfo.firstName",
+      "targetField": "name",
+      "transformRule": "Direct",
+      "validationRules": "REQUIRED",
+      "isRequired": true,
+      "isActive": true
+    },
+    {
+      "id": "FMAP-002",
+      "module": "EMPLOYEE",
+      "sourceField": "personalInfo.email",
+      "targetField": "email",
+      "transformRule": "Lowercase",
+      "validationRules": "EMAIL",
+      "isRequired": true,
+      "isActive": true
+    },
+    {
+      "id": "FMAP-003",
+      "module": "EMPLOYEE",
+      "sourceField": "jobInfo.department",
+      "targetField": "department",
+      "transformRule": "Lookup",
+      "validationRules": "REQUIRED",
+      "isRequired": true,
+      "isActive": true
+    },
+    {
+      "id": "FMAP-004",
+      "module": "EMPLOYEE",
+      "sourceField": "jobInfo.status",
+      "targetField": "status",
+      "transformRule": "ValueMap",
+      "validationRules": "",
+      "isRequired": false,
+      "isActive": true
+    }
+  ],
+  "sapSyncJobs": [],
+  "sapSyncLogs": [],
+  "sapRetryQueues": [],
+  "sapExportQueue": [],
+  "sapPayrollStages": [],
+  "sapReconciliationLogs": [],
+  "sapPayrollPeriodLocks": [],
+  "savedReports": [],
+  "reportExportLogs": [],
+  "userActivityLogs": [],
+  "productionCheckLogs": [],
+  "backupJobs": [],
+  "backupAuditLogs": [],
+  "employeeBulkUploadJobs": [],
+  "systemRoles": [],
+  "systemPermissions": [],
+  "rolePermissions": [],
+  "userRoleAssignments": [],
+  "blueCollarPositionCategories": [
+    {
+      "id": "cat-1",
+      "code": "security_guard",
+      "name": "Security Guard",
+      "isActive": true
+    },
+    {
+      "id": "cat-2",
+      "code": "cleaning_staff",
+      "name": "Cleaning Staff",
+      "isActive": true
+    },
+    {
+      "id": "cat-3",
+      "code": "security_supervisor",
+      "name": "Security Supervisor",
+      "isActive": true
+    },
+    {
+      "id": "cat-4",
+      "code": "construction_labor",
+      "name": "Construction Labor",
+      "isActive": true
+    },
+    {
+      "id": "cat-5",
+      "code": "carpenter",
+      "name": "Carpenter",
+      "isActive": true
+    },
+    {
+      "id": "cat-6",
+      "code": "mason",
+      "name": "Mason",
+      "isActive": true
+    },
+    {
+      "id": "cat-7",
+      "code": "plumber",
+      "name": "Plumber",
+      "isActive": true
+    },
+    {
+      "id": "cat-8",
+      "code": "electrician",
+      "name": "Electrician",
+      "isActive": true
+    },
+    {
+      "id": "cat-9",
+      "code": "painter",
+      "name": "Painter",
+      "isActive": true
+    },
+    {
+      "id": "cat-10",
+      "code": "driver",
+      "name": "Driver",
+      "isActive": true
+    },
+    {
+      "id": "cat-11",
+      "code": "helper",
+      "name": "Helper",
+      "isActive": true
+    },
+    {
+      "id": "cat-12",
+      "code": "foreman",
+      "name": "Foreman",
+      "isActive": true
+    },
+    {
+      "id": "cat-13",
+      "code": "site_supervisor",
+      "name": "Site Supervisor",
+      "isActive": true
+    },
+    {
+      "id": "cat-14",
+      "code": "other",
+      "name": "Other",
+      "isActive": true
+    }
+  ],
+  "projects": [],
+  "projectSites": [],
+  "deployments": [],
+  "designations": [
+    {
+      "id": "DES-HRM",
+      "code": "HRM",
+      "name": "HR Manager",
+      "description": "Human Resources Manager",
+      "employeeCategory": "WHITE_COLLAR",
+      "isSupervisorPosition": true,
+      "isRelieverEligible": false,
+      "isActive": true,
+      "createdAt": "2026-06-16T06:07:32.168Z",
+      "updatedAt": "2026-06-16T06:07:32.168Z"
+    },
+    {
+      "id": "DES-ACC",
+      "code": "ACC",
+      "name": "Accountant",
+      "description": "Accountant",
+      "employeeCategory": "WHITE_COLLAR",
+      "isSupervisorPosition": false,
+      "isRelieverEligible": false,
+      "isActive": true,
+      "createdAt": "2026-06-16T06:07:32.168Z",
+      "updatedAt": "2026-06-16T06:07:32.168Z"
+    },
+    {
+      "id": "DES-001",
+      "code": "WKR",
+      "name": "General Worker",
+      "description": "Blue collar manual worker",
+      "employeeCategory": "BLUE_COLLAR",
+      "isSupervisorPosition": false,
+      "isRelieverEligible": true,
+      "isActive": true,
+      "createdAt": "2026-06-16T06:07:32.168Z",
+      "updatedAt": "2026-06-16T06:07:32.168Z"
+    },
+    {
+      "id": "DES-002",
+      "code": "SUP",
+      "name": "Operations Supervisor",
+      "description": "Supervisor of site operations",
+      "employeeCategory": "BOTH",
+      "isSupervisorPosition": true,
+      "isRelieverEligible": true,
+      "isActive": true,
+      "createdAt": "2026-06-16T06:07:32.168Z",
+      "updatedAt": "2026-06-16T06:07:32.168Z"
+    },
+    {
+      "id": "DES-003",
+      "code": "MGR",
+      "name": "Operations Manager",
+      "description": "Manager of operations",
+      "employeeCategory": "WHITE_COLLAR",
+      "isSupervisorPosition": true,
+      "isRelieverEligible": false,
+      "isActive": true,
+      "createdAt": "2026-06-16T06:07:32.168Z",
+      "updatedAt": "2026-06-16T06:07:32.168Z"
+    }
+  ],
+  "tradeClassifications": [
+    {
+      "id": "TRD-001",
+      "code": "MASON",
+      "name": "Masonry Work",
+      "description": "Masonry and bricklaying",
+      "linkedDesignationId": "DES-001",
+      "isActive": true,
+      "createdAt": "2026-06-16T06:07:32.168Z",
+      "updatedAt": "2026-06-16T06:07:32.168Z"
+    },
+    {
+      "id": "TRD-002",
+      "code": "CARP",
+      "name": "Carpentry",
+      "description": "Carpentry and woodwork",
+      "linkedDesignationId": "DES-001",
+      "isActive": true,
+      "createdAt": "2026-06-16T06:07:32.168Z",
+      "updatedAt": "2026-06-16T06:07:32.168Z"
+    },
+    {
+      "id": "TRD-003",
+      "code": "ELEC",
+      "name": "Electrical Work",
+      "description": "Electrical installations and repair",
+      "linkedDesignationId": "DES-001",
+      "isActive": true,
+      "createdAt": "2026-06-16T06:07:32.168Z",
+      "updatedAt": "2026-06-16T06:07:32.168Z"
+    }
+  ],
+  "locations": [
+    {
+      "id": "LOC-001",
+      "companyId": "COMP-001",
+      "locationCode": "DOHA-HQ",
+      "locationName": "Doha Headquarters",
+      "address": "West Bay, Doha, Qatar",
+      "latitude": 25.3186,
+      "longitude": 51.5284,
+      "defaultGeofenceRadiusMeters": 150,
+      "isActive": true,
+      "createdAt": "2026-06-16T06:07:32.168Z",
+      "updatedAt": "2026-06-16T06:07:32.168Z"
+    },
+    {
+      "id": "LOC-002",
+      "companyId": "COMP-001",
+      "locationCode": "IND-DEPOT",
+      "locationName": "Industrial Area Depot",
+      "address": "Street 24, Industrial Area, Doha",
+      "latitude": 25.2012,
+      "longitude": 51.4567,
+      "defaultGeofenceRadiusMeters": 200,
+      "isActive": true,
+      "createdAt": "2026-06-16T06:07:32.168Z",
+      "updatedAt": "2026-06-16T06:07:32.168Z"
+    }
+  ],
+  "costCenters": [
+    {
+      "id": "CC-001",
+      "companyId": "COMP-001",
+      "costCenterCode": "CC-OPS",
+      "costCenterName": "Operations Cost Center",
+      "description": "Cost center for Operations department",
+      "sapCostCenterCode": "SAP-CC-OPS",
+      "isActive": true,
+      "createdAt": "2026-06-16T06:07:32.168Z",
+      "updatedAt": "2026-06-16T06:07:32.168Z"
+    },
+    {
+      "id": "CC-002",
+      "companyId": "COMP-001",
+      "costCenterCode": "CC-ENG",
+      "costCenterName": "Engineering Cost Center",
+      "description": "Cost center for Engineering department",
+      "sapCostCenterCode": "SAP-CC-ENG",
+      "isActive": true,
+      "createdAt": "2026-06-16T06:07:32.168Z",
+      "updatedAt": "2026-06-16T06:07:32.168Z"
+    }
+  ],
+  "shiftRelieverAssignments": [],
+  "relieverStandbyRules": [
+    {
+      "id": "RULE-001",
+      "ruleName": "General Worker Standby Rule",
+      "designationId": "DES-001",
+      "standbyRequired": true,
+      "relieverRequiredForLeave": true,
+      "relieverRequiredForOff": false,
+      "relieverRequiredForVacation": true,
+      "isActive": true,
+      "createdAt": "2026-06-16T06:07:32.168Z",
+      "updatedAt": "2026-06-16T06:07:32.168Z"
+    },
+    {
+      "id": "RULE-002",
+      "ruleName": "Mason Standby Rule",
+      "tradeClassificationId": "TRD-001",
+      "standbyRequired": true,
+      "relieverRequiredForLeave": true,
+      "relieverRequiredForOff": true,
+      "relieverRequiredForVacation": true,
+      "isActive": true,
+      "createdAt": "2026-06-16T06:07:32.168Z",
+      "updatedAt": "2026-06-16T06:07:32.168Z"
+    }
+  ],
+  "allowedPunchLocations": [
+    {
+      "id": "APL-001",
+      "companyId": "COMP-001",
+      "name": "Doha Headquarters",
+      "locationType": "OFFICE",
+      "latitude": 25.2854,
+      "longitude": 51.531,
+      "radiusMeters": 150,
+      "isActive": true,
+      "createdAt": "2026-06-16T06:07:32.168Z",
+      "updatedAt": "2026-06-16T06:07:32.168Z"
+    },
+    {
+      "id": "APL-002",
+      "companyId": "COMP-001",
+      "name": "West Bay Office",
+      "locationType": "OFFICE",
+      "latitude": 25.2867,
+      "longitude": 51.5325,
+      "radiusMeters": 150,
+      "isActive": true,
+      "createdAt": "2026-06-16T06:07:32.168Z",
+      "updatedAt": "2026-06-16T06:07:32.168Z"
+    },
+    {
+      "id": "APL-003",
+      "companyId": "COMP-001",
+      "name": "Industrial Area Depot",
+      "locationType": "PROJECT_SITE",
+      "latitude": 25.2905,
+      "longitude": 51.5201,
+      "radiusMeters": 150,
+      "isActive": true,
+      "createdAt": "2026-06-16T06:07:32.168Z",
+      "updatedAt": "2026-06-16T06:07:32.168Z"
+    }
+  ],
+  "employeeAllowedPunchLocations": []
+}

@@ -1233,7 +1233,7 @@ export default function ShiftsPage() {
                   >
                     <option value="">Choose worker...</option>
                     {employees
-                      .filter(e => e.workerCategory === "BLUE_COLLAR" && (e.employmentStatus ? e.employmentStatus === "ACTIVE" : e.isActive !== false))
+                      .filter(e => e.employeeCategory === "BLUE_COLLAR" && (e.employmentStatus ? e.employmentStatus === "ACTIVE" : e.isActive !== false))
                       .map(emp => (
                         <option key={emp.id} value={emp.id}>{emp.name} ({emp.id})</option>
                       ))

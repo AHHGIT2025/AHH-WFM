@@ -10,7 +10,7 @@ export interface ProfileData {
   email: string;
   phone?: string;
   role: string;
-  workerCategory?: string;
+  employeeCategory?: string;
   profilePhotoUrl?: string;
   profilePhotoUpdatedAt?: string;
   company?: { id: string; name: string; code: string };

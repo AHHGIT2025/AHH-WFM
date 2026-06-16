@@ -96,7 +96,7 @@ function maskNumber(num: string | null | undefined): string | null {
 }
 
 export async function GET() {
-  const auth = await checkApiAuth(["ADMIN", "SUPERVISOR"]);
+  const auth = await checkApiAuth(); // Any authenticated session may read the directory
   if (auth.error) return auth.error;
 
   try {
@@ -126,13 +126,14 @@ export async function POST(request: Request) {
   try {
     const payload = await request.json();
     const { 
-      id, name, email, role, departmentId, phone, shiftId, password, 
-      employmentStatus, dutyStatus, workerCategory, positionCategoryId, 
+      id, name, email, role, departmentId, phone, shiftId, password, defaultPassword,
+      employmentStatus, dutyStatus, employeeCategory, positionCategoryId, 
       defaultProjectId, defaultSiteId, designationId, tradeClassificationId, 
       costCenterId, defaultLocationId, isRelieverEligible, isStandbyEligible,
       immediateSupervisorId, reportingManagerId, projectSupervisorId, siteSupervisorId,
       isSupervisor, supervisorScopeType,
       username, authMode, ssoProvider, ssoSubject, isLoginEnabled, mustChangePassword, isLocked,
+      webAccessEnabled, mobileAccessEnabled, usernameStrategy,
       companyId, qidNumber, qidExpiryDate, passportNumber, passportExpiryDate, passportIssueDate, passportIssuingCountry, dateOfJoining, sponsor
     } = payload;
 
@@ -209,10 +210,10 @@ export async function POST(request: Request) {
       status: dutyStatus || "Offline",
       phone: phone ? phone.trim() : undefined,
       shiftId: shiftId || undefined,
-      password: password || undefined,
+      password: password || defaultPassword || undefined,
       employmentStatus: employmentStatus || "ACTIVE",
       dutyStatus: dutyStatus || "OFF_DUTY",
-      workerCategory: workerCategory || "WHITE_COLLAR",
+      employeeCategory: employeeCategory || "WHITE_COLLAR",
       isActive: employmentStatus ? (employmentStatus === "ACTIVE") : true,
       positionCategoryId: positionCategoryId || undefined,
       defaultProjectId: defaultProjectId || undefined,
@@ -236,6 +237,9 @@ export async function POST(request: Request) {
       isLoginEnabled: isLoginEnabled !== undefined ? isLoginEnabled : true,
       mustChangePassword: mustChangePassword || false,
       isLocked: isLocked || false,
+      webAccessEnabled: webAccessEnabled !== undefined ? webAccessEnabled : true,
+      mobileAccessEnabled: mobileAccessEnabled !== undefined ? mobileAccessEnabled : true,
+      usernameStrategy: usernameStrategy || "MANUAL",
       failedLoginAttempts: 0,
       
       // New company & identity fields

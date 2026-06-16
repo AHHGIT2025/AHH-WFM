@@ -119,7 +119,7 @@ export async function GET() {
 
     return NextResponse.json({
       employeeName: employee.name,
-      workerCategory: employee.workerCategory,
+      employeeCategory: employee.employeeCategory,
       designation: employee.designation?.name,
       dutyStatus: employee.dutyStatus,
       currentAssignment,

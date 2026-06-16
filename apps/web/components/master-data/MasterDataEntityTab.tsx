@@ -72,7 +72,17 @@ export function MasterDataEntityTab({ config }: { config: TabConfig }) {
   const handleOpenModal = (item?: any) => {
     if (item) {
       setEditId(item.id);
-      setFormData({ ...item });
+      
+      // Initialize with fallbacks for scalar relation IDs
+      const initialForm = { ...item };
+      initialForm.companyId = item.companyId || item.company?.id || "";
+      initialForm.projectId = item.projectId || item.project?.id || "";
+      initialForm.locationId = item.locationId || item.location?.id || "";
+      initialForm.departmentId = item.departmentId || item.department?.id || "";
+      initialForm.costCenterId = item.costCenterId || item.costCenter?.id || "";
+      initialForm.siteId = item.siteId || item.site?.id || "";
+
+      setFormData(initialForm);
     } else {
       setEditId(null);
       const defaultState: Record<string, any> = { isActive: true };
@@ -91,12 +101,23 @@ export function MasterDataEntityTab({ config }: { config: TabConfig }) {
     const url = editId ? `${config.apiPath}/${editId}` : config.apiPath;
     const method = editId ? "PATCH" : "POST";
 
-    // Transform data based on types
+    // Clean payload before sending
     const payload = { ...formData };
+    
+    // Remove nested relation objects
+    const relationsToClean = ["company", "project", "location", "department", "costCenter", "site"];
+    for (const rel of relationsToClean) {
+      delete payload[rel];
+    }
+
     config.columns.forEach(col => {
-        if (col.type === "number" && payload[col.key]) {
-            payload[col.key] = Number(payload[col.key]);
-        }
+      if (col.type === "number" && payload[col.key] !== undefined && payload[col.key] !== null && payload[col.key] !== "") {
+        payload[col.key] = Number(payload[col.key]);
+      }
+      // Convert select empty string values to null
+      if (col.type === "select" && payload[col.key] === "") {
+        payload[col.key] = null;
+      }
     });
 
     try {

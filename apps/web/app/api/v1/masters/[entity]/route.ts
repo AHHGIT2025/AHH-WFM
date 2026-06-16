@@ -13,6 +13,7 @@ const entityMap: Record<string, keyof typeof prisma> = {
   "project-sites": "projectSite",
   "allowed-punch-locations": "allowedPunchLocation",
   "standby-rules": "relieverStandbyRule",
+  "leave-types": "leaveType",
 };
 
 const memoryKeyMap: Record<string, string> = {
@@ -26,7 +27,83 @@ const memoryKeyMap: Record<string, string> = {
   "project-sites": "projectSites",
   "allowed-punch-locations": "allowedPunchLocations",
   "standby-rules": "relieverStandbyRules",
+  "leave-types": "leaveTypes",
 };
+
+function normalizeMasterPayload(entity: string, payload: any, isUpdate = false) {
+  if (!payload) return payload;
+  const copy = { ...payload };
+
+  // 1. Remove nested relation objects
+  const relationFields = [
+    "company",
+    "department",
+    "costCenter",
+    "project",
+    "site",
+    "location",
+    "allowedPunchLocation"
+  ];
+  for (const field of relationFields) {
+    delete copy[field];
+  }
+
+  // 2. Convert empty relation IDs from "" to null
+  const relationIdFields = [
+    "companyId",
+    "departmentId",
+    "costCenterId",
+    "projectId",
+    "siteId",
+    "locationId"
+  ];
+  for (const field of relationIdFields) {
+    if (copy[field] === "") {
+      copy[field] = null;
+    }
+  }
+
+  // 3. Remove read-only fields
+  if (isUpdate) {
+    delete copy.id;
+  }
+  delete copy.createdAt;
+  delete copy.updatedAt;
+
+  // 4. Map display fields (code/name) to DB specific fields only where needed
+  if (entity === "companies") {
+    if (copy.code !== undefined && copy.companyCode === undefined) copy.companyCode = copy.code;
+    if (copy.name !== undefined && copy.companyName === undefined) copy.companyName = copy.name;
+    delete copy.code;
+    delete copy.name;
+  }
+  else if (entity === "locations") {
+    if (copy.code !== undefined && copy.locationCode === undefined) copy.locationCode = copy.code;
+    if (copy.name !== undefined && copy.locationName === undefined) copy.locationName = copy.name;
+    delete copy.code;
+    delete copy.name;
+  }
+  else if (entity === "cost-centers") {
+    if (copy.code !== undefined && copy.costCenterCode === undefined) copy.costCenterCode = copy.code;
+    if (copy.name !== undefined && copy.costCenterName === undefined) copy.costCenterName = copy.name;
+    delete copy.code;
+    delete copy.name;
+  }
+  else if (entity === "projects") {
+    if (copy.code !== undefined && copy.projectCode === undefined) copy.projectCode = copy.code;
+    if (copy.name !== undefined && copy.projectName === undefined) copy.projectName = copy.name;
+    delete copy.code;
+    delete copy.name;
+  }
+  else if (entity === "project-sites") {
+    if (copy.code !== undefined && copy.siteCode === undefined) copy.siteCode = copy.code;
+    if (copy.name !== undefined && copy.siteName === undefined) copy.siteName = copy.name;
+    delete copy.code;
+    delete copy.name;
+  }
+
+  return copy;
+}
 
 function normalizeRecord(entity: string, record: any) {
   if (!record) return record;
@@ -155,9 +232,35 @@ export async function GET(request: Request, { params }: { params: { entity: stri
 }
 
 export async function POST(request: Request, { params }: { params: { entity: string } }) {
+  let body: any = {};
+  let normalizedBody: any = {};
+  const { entity } = params;
+
   try {
-    const { entity } = params;
-    const body = await request.json();
+    body = await request.json();
+
+    if (entity === "projects" && body.costCenter === undefined) {
+      body.costCenter = "";
+    }
+
+    // Leave type validation
+    if (entity === "leave-types") {
+      if (!body.code || body.code.trim() === "") {
+        return NextResponse.json({ error: "Leave type code is required" }, { status: 400 });
+      }
+      if (!body.name || body.name.trim() === "") {
+        return NextResponse.json({ error: "Leave type name is required" }, { status: 400 });
+      }
+    }
+
+    // Normalize payload
+    normalizedBody = normalizeMasterPayload(entity, body, false);
+
+    // Validate companyId requirements
+    const requiredCompanyEntities = ["allowed-punch-locations"];
+    if (requiredCompanyEntities.includes(entity) && !normalizedBody.companyId) {
+      return NextResponse.json({ error: "Company is required" }, { status: 400 });
+    }
 
     if (!isDbConnected()) {
       const memoryKey = memoryKeyMap[entity];
@@ -166,10 +269,25 @@ export async function POST(request: Request, { params }: { params: { entity: str
       }
 
       const db = readDb();
+      if (entity === "leave-types") {
+        const existing = db.leaveTypes?.find((t: any) => t.code.toLowerCase() === normalizedBody.code.trim().toLowerCase());
+        if (existing) {
+          return NextResponse.json({ error: "Leave type code must be unique" }, { status: 400 });
+        }
+      }
+
+      // Verify company exists if provided in mock mode
+      if (normalizedBody.companyId) {
+        const company = db.companies.find((c: any) => c.id === normalizedBody.companyId);
+        if (!company) {
+          return NextResponse.json({ error: "Invalid company selected" }, { status: 400 });
+        }
+      }
+
       const newRecord = {
         id: body.id || `${entity.substring(0, 3).toUpperCase()}-${Date.now()}`,
-        ...body,
-        isActive: body.isActive !== undefined ? body.isActive : true,
+        ...normalizedBody,
+        isActive: normalizedBody.isActive !== undefined ? normalizedBody.isActive : true,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
@@ -197,17 +315,43 @@ export async function POST(request: Request, { params }: { params: { entity: str
       return NextResponse.json({ error: "Invalid master entity" }, { status: 400 });
     }
 
+    // Verify company exists if provided in DB mode
+    if (normalizedBody.companyId) {
+      const company = await prisma.company.findUnique({ where: { id: normalizedBody.companyId } });
+      if (!company) {
+        return NextResponse.json({ error: "Invalid company selected" }, { status: 400 });
+      }
+    }
+
     const dbModel: any = prisma[modelName];
     const newRecord = await dbModel.create({
-      data: body,
+      data: normalizedBody,
     });
 
-    return NextResponse.json(normalizeRecord(entity, newRecord), { status: 201 });
+    // Populate company/project relation if needed for UI list displays
+    let populatedRecord = { ...newRecord };
+    if (populatedRecord.companyId) {
+      populatedRecord.company = await prisma.company.findUnique({ where: { id: populatedRecord.companyId } });
+    }
+    if (entity === "project-sites" && populatedRecord.projectId) {
+      populatedRecord.project = await prisma.project.findUnique({ where: { id: populatedRecord.projectId } });
+    }
+
+    return NextResponse.json(normalizeRecord(entity, populatedRecord), { status: 201 });
   } catch (error: any) {
-    console.error(`Error creating ${params.entity}:`, error);
+    console.error(`[API ERROR] Failed to create ${entity}:`, {
+      entity,
+      action: "create",
+      incomingPayload: body,
+      normalizedPayload: normalizedBody,
+      prismaData: normalizedBody,
+      errorCode: error.code || undefined,
+      errorMessage: error.message,
+    });
+
     if (error.code === "P2002") {
       return NextResponse.json({ error: "A unique constraint violation occurred" }, { status: 400 });
     }
-    return NextResponse.json({ error: `Failed to create ${params.entity}` }, { status: 500 });
+    return NextResponse.json({ error: `Failed to create ${entity}` }, { status: 500 });
   }
 }

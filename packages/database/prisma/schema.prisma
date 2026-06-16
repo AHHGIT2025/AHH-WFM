@@ -5,6 +5,7 @@ datasource db {
 
 generator client {
   provider = "prisma-client-js"
+  output   = "../src/generated/client"
 }
 
 model Employee {
@@ -26,7 +27,7 @@ model Employee {
   isActive      Boolean              @default(true)
   employmentStatus String            @default("ACTIVE")
   dutyStatus    String               @default("OFF_DUTY")
-  workerCategory String              @default("WHITE_COLLAR")
+  employeeCategory String            @default("WHITE_COLLAR")
   workAssignmentType String          @default("OFFICE_BASED")
   dateOfJoining      DateTime?
   qidNumber          String?
@@ -99,6 +100,12 @@ model Employee {
   failedLoginAttempts   Int        @default(0)
   lastLoginAt           DateTime?
   passwordUpdatedAt     DateTime?
+
+
+  webAccessEnabled      Boolean    @default(true)
+  mobileAccessEnabled   Boolean    @default(true)
+  usernameStrategy      String     @default("MANUAL")
+  deactivatedAt         DateTime?
 
   clearanceRequests     ClearanceRequest[] @relation("EmployeeClearance")
   clearanceApprovals    ClearanceApprovalStep[] @relation("Approver")
@@ -193,38 +200,57 @@ model Shift {
 }
 
 model LeaveType {
-  id            String         @id @default(uuid())
-  name          String         @unique // e.g. "Annual Leave"
-  code          String         @unique // e.g. "ANNUAL"
-  isActive      Boolean        @default(true)
-  accruable     Boolean        @default(true)
-  carryForward  Boolean        @default(true)
-  maxCarryOver  Float          @default(0.0)
-  expiryMonths  Int            @default(12)
-  colorCode     String         @default("#0058be")
-  sapExternalId String?        @unique
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-  balances      LeaveBalance[]
-  requests      LeaveRequest[]
-  ledgers       LeaveBalanceLedger[]
+  id                      String         @id @default(uuid())
+  name                    String         @unique // e.g. "Annual Leave"
+  code                    String         @unique // e.g. "ANNUAL"
+  isActive                Boolean        @default(true)
+  accruable               Boolean        @default(true)
+  carryForward            Boolean        @default(true)
+  maxCarryOver            Float          @default(0.0)
+  expiryMonths            Int            @default(12)
+  colorCode               String         @default("#0058be")
+  sapExternalId           String?        @unique
+  createdAt               DateTime       @default(now())
+  updatedAt               DateTime       @updatedAt
+  balances                LeaveBalance[]
+  requests                LeaveRequest[]
+  ledgers                 LeaveBalanceLedger[]
+
+  // v0.18.4 fields
+  description             String?
+  isPaid                  Boolean        @default(true)
+  requiresDocument        Boolean        @default(false)
+  workflowCode            String?
+  defaultAnnualAllocation Float?
+  maxDaysPerRequest       Float?
+  allowHalfDay            Boolean        @default(true)
+  allowCarryForward       Boolean        @default(true)
+  carryForwardLimit       Float?
+  genderRestriction       String         @default("ALL")
+  applicableAfterProbation Boolean       @default(true)
 }
 
 model LeaveBalance {
-  id            String       @id @default(uuid())
-  employeeId    String
-  employee      Employee     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  leaveTypeId   String
-  leaveType     LeaveType    @relation(fields: [leaveTypeId], references: [id], onDelete: Restrict)
-  allocatedDays Float        @default(0.0)
-  usedDays      Float        @default(0.0)
-  pendingDays   Float        @default(0.0)
-  carriedOver   Float        @default(0.0)
-  sapExternalId String?      @unique
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
+  id                 String       @id @default(uuid())
+  employeeId         String
+  employee           Employee     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  leaveTypeId        String
+  leaveType          LeaveType    @relation(fields: [leaveTypeId], references: [id], onDelete: Restrict)
+  allocatedDays      Float        @default(0.0)
+  usedDays           Float        @default(0.0)
+  pendingDays        Float        @default(0.0)
+  carriedOver        Float        @default(0.0)
+  sapExternalId      String?      @unique
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
 
-  @@unique([employeeId, leaveTypeId])
+  // v0.18.4 fields
+  year               Int          @default(2026) // Runtime uses new Date().getFullYear(); default is for DDL safety
+  carriedForwardDays Float        @default(0.0)
+  adjustmentDays     Float        @default(0.0)
+  remarks            String?
+
+  @@unique([employeeId, leaveTypeId, year])
 }
 
 model LeaveBalanceLedger {
@@ -779,7 +805,7 @@ model Designation {
   code                 String     @unique
   name                 String
   description          String?    @db.Text
-  workerCategory       String     @default("BOTH") // WHITE_COLLAR, BLUE_COLLAR, BOTH
+  employeeCategory     String     @default("BOTH") // WHITE_COLLAR, BLUE_COLLAR, BOTH
   isSupervisorPosition Boolean    @default(false)
   isRelieverEligible   Boolean    @default(false)
   isActive             Boolean    @default(true)

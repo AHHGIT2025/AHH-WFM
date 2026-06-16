@@ -133,13 +133,15 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     const payload = await request.json();
     const { 
       name, email, role, departmentId, status, phone, shiftId, 
-      employmentStatus, dutyStatus, workerCategory, 
+      employmentStatus, dutyStatus, employeeCategory,
       positionCategoryId, defaultProjectId, defaultSiteId,
       designationId, tradeClassificationId, costCenterId, defaultLocationId,
       isRelieverEligible, isStandbyEligible,
       immediateSupervisorId, reportingManagerId, projectSupervisorId, siteSupervisorId,
       isSupervisor, supervisorScopeType,
       username, authMode, ssoProvider, ssoSubject, isLoginEnabled, mustChangePassword, isLocked,
+      webAccessEnabled, mobileAccessEnabled, usernameStrategy,
+      defaultPassword, confirmDefaultPassword, mustChangePasswordOnFirstLogin,
       profilePhotoUrl,
       companyId, qidNumber, qidExpiryDate, passportNumber, passportExpiryDate, passportIssueDate, passportIssuingCountry, dateOfJoining, sponsor
     } = payload;
@@ -214,7 +216,7 @@ export async function PATCH(request: Request, { params }: RouteParams) {
       ...(shiftId !== undefined ? { shiftId: shiftId || null } : {}),
       ...(employmentStatus !== undefined ? { employmentStatus, isActive: employmentStatus === "ACTIVE" } : {}),
       ...(dutyStatus !== undefined ? { dutyStatus, status: dutyStatus } : {}),
-      ...(workerCategory !== undefined ? { workerCategory } : {}),
+      ...(employeeCategory !== undefined ? { employeeCategory } : {}),
       ...(positionCategoryId !== undefined ? { positionCategoryId: positionCategoryId || null } : {}),
       ...(defaultProjectId !== undefined ? { defaultProjectId: defaultProjectId || null } : {}),
       ...(defaultSiteId !== undefined ? { defaultSiteId: defaultSiteId || null } : {}),
@@ -237,6 +239,12 @@ export async function PATCH(request: Request, { params }: RouteParams) {
       ...(isLoginEnabled !== undefined ? { isLoginEnabled } : {}),
       ...(mustChangePassword !== undefined ? { mustChangePassword } : {}),
       ...(isLocked !== undefined ? { isLocked } : {}),
+      ...(webAccessEnabled !== undefined ? { webAccessEnabled } : {}),
+      ...(mobileAccessEnabled !== undefined ? { mobileAccessEnabled } : {}),
+      ...(usernameStrategy !== undefined ? { usernameStrategy } : {}),
+      ...(defaultPassword !== undefined ? { defaultPassword } : {}),
+      ...(confirmDefaultPassword !== undefined ? { confirmDefaultPassword } : {}),
+      ...(mustChangePasswordOnFirstLogin !== undefined ? { mustChangePasswordOnFirstLogin } : {}),
       ...(profilePhotoUrl !== undefined ? { profilePhotoUrl: profilePhotoUrl ? profilePhotoUrl.trim() : null } : {}),
       
       // New company & identity fields

@@ -6,6 +6,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 
 function MobileLoginForm() {
   const searchParams = useSearchParams();
+  const error = searchParams.get("error");
   const router = useRouter();
 
   const [email, setEmail] = useState("");
@@ -26,7 +27,11 @@ function MobileLoginForm() {
       });
 
       if (res?.error) {
-        setLoginError("Invalid email or password.");
+        if (res.error === "CredentialsSignin") {
+          setLoginError("Invalid email/username or password. Please try again.");
+        } else {
+          setLoginError(res.error);
+        }
       } else {
         router.push("/");
         router.refresh();
@@ -54,6 +59,13 @@ function MobileLoginForm() {
       </div>
 
       {/* Error Notification */}
+      {error && error !== "CredentialsSignin" && (
+        <div className="mb-4 p-3 bg-status-error/10 border border-status-error/30 rounded-xl flex gap-2 text-[10px] font-semibold text-status-error">
+          <span className="material-symbols-outlined text-[16px] shrink-0">error</span>
+          <span>{decodeURIComponent(error)}</span>
+        </div>
+      )}
+
       {loginError && (
         <div className="mb-4 p-3 bg-status-error/10 border border-status-error/30 rounded-xl flex gap-2 text-[10px] font-semibold text-status-error">
           <span className="material-symbols-outlined text-[16px] shrink-0">error</span>

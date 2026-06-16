@@ -71,7 +71,7 @@ export async function GET() {
         name: employee.immediateSupervisor.name
       } : null,
       reportingManagerId: employee.reportingManagerId, // Just keeping ID if needed
-      workerCategory: employee.workerCategory,
+      employeeCategory: employee.employeeCategory,
       dutyStatus: employee.dutyStatus,
       defaultLocation: employee.defaultLocation ? {
         id: employee.defaultLocation.id,

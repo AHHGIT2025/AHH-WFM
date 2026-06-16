@@ -34,7 +34,11 @@ function LoginForm() {
       });
 
       if (res?.error) {
-        setLoginError("Invalid email or password. Please try again.");
+        if (res.error === "CredentialsSignin") {
+          setLoginError("Invalid email/username or password. Please try again.");
+        } else {
+          setLoginError(res.error);
+        }
       } else {
         router.push("/");
         router.refresh();
@@ -62,10 +66,10 @@ function LoginForm() {
       </div>
 
       {/* Error Banners */}
-      {error === "UnauthorizedAccess" && (
+      {error && error !== "CredentialsSignin" && (
         <div className="mb-6 p-4.5 bg-red-950/45 border border-red-800/60 rounded-xl flex gap-3 text-xs font-semibold text-red-400">
           <span className="material-symbols-outlined shrink-0 text-[18px]">error</span>
-          <span>Access denied. Only Supervisors and Administrators are permitted to enter this console.</span>
+          <span>{error === "UnauthorizedAccess" ? "Access denied. Only Supervisors and Administrators are permitted to enter this console." : decodeURIComponent(error)}</span>
         </div>
       )}
 

@@ -1,10 +1,19 @@
 import { withAuth } from "next-auth/middleware";
+import { NextResponse } from "next/server";
 
-export default withAuth({
-  callbacks: {
-    authorized: ({ token }) => !!token,
+export default withAuth(
+  function middleware(req) {
+    const token = req.nextauth.token;
+    if (token && token.mustChangePassword === true && req.nextUrl.pathname !== "/change-password") {
+      return NextResponse.redirect(new URL("/change-password", req.url));
+    }
   },
-});
+  {
+    callbacks: {
+      authorized: ({ token }) => !!token,
+    },
+  }
+);
 
 export const config = {
   matcher: [

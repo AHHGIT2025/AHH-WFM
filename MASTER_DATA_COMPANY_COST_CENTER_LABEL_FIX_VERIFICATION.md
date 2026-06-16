@@ -29,6 +29,8 @@ We updated the Company filter dropdown in `/clearance/new` to render in `CODE â€
 When the selected Company is changed in the Add or Edit modals:
 - Mismatched fields (Department, Cost Center, Location, Project, Site) that do not belong to the newly selected company are reset to empty values.
 - A warning notification is dynamically shown at the top of the modal listing the fields that were reset (e.g., `Company changed. The following mismatched selections were cleared: Department, Cost Center`).
+### v0.18.3 Stabilization Update
+We resolved save and update failures in the Master Data Hub when assigning or clearing companies for Locations, Departments, Cost Centers, and other entities. Incoming payloads are sanitized (nested relations, read-only fields, and display-only fields are stripped, and empty select fields are mapped to null) before database writes, and company existence is validated.
 
 ### Build Status
 All workspaces build successfully:

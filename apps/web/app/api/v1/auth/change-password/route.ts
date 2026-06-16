@@ -12,10 +12,30 @@ export async function POST(request: Request) {
 
   try {
     const payload = await request.json();
-    const { currentPassword, newPassword } = payload;
+    const { currentPassword, newPassword, confirmPassword } = payload;
 
     if (!newPassword || newPassword.trim().length < 8) {
       return NextResponse.json({ error: "Password must be at least 8 characters long" }, { status: 400 });
+    }
+
+    if (newPassword !== confirmPassword) {
+      return NextResponse.json({ error: "New password and confirmation password do not match" }, { status: 400 });
+    }
+
+    if (currentPassword === newPassword) {
+      return NextResponse.json({ error: "New password cannot be the same as the current password" }, { status: 400 });
+    }
+
+    // Complexity checks
+    const hasUppercase = /[A-Z]/.test(newPassword);
+    const hasLowercase = /[a-z]/.test(newPassword);
+    const hasNumber = /[0-9]/.test(newPassword);
+    const hasSpecial = /[^a-zA-Z0-9]/.test(newPassword);
+
+    if (!hasUppercase || !hasLowercase || !hasNumber || !hasSpecial) {
+      return NextResponse.json({
+        error: "Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character"
+      }, { status: 400 });
     }
 
     const employees = await mockDb.getEmployees();
@@ -36,7 +56,7 @@ export async function POST(request: Request) {
     const updated = await mockDb.updateEmployee(employee.id, { 
       passwordHash: newPasswordHash,
       mustChangePassword: false,
-      passwordUpdatedAt: new Date()
+      passwordUpdatedAt: new Date().toISOString()
     } as any);
 
     if (!updated) return NextResponse.json({ error: "User update failed" }, { status: 500 });

@@ -127,11 +127,20 @@ export default function LeavePage() {
                 onChange={e => setLeaveTypeId(e.target.value)}
               >
                 <option value="">-- Select Leave Type --</option>
-                {balances.map(b => (
-                  <option key={b.leaveTypeId || b.id} value={b.leaveTypeId || b.id}>
-                    {b.leaveType?.name || b.type} ({Math.max(0, (b.allocatedDays ?? 0) - (b.usedDays ?? 0) - (b.pendingDays ?? 0))} days remaining)
-                  </option>
-                ))}
+                {balances
+                  .filter(b => {
+                    const available = (b.allocatedDays || 0) + (b.carriedForwardDays || 0) + (b.adjustmentDays || 0) - (b.usedDays || 0) - (b.pendingDays || 0);
+                    return b.leaveType?.isActive === true && available > 0;
+                  })
+                  .map(b => {
+                    const available = (b.allocatedDays || 0) + (b.carriedForwardDays || 0) + (b.adjustmentDays || 0) - (b.usedDays || 0) - (b.pendingDays || 0);
+                    return (
+                      <option key={b.leaveTypeId || b.id} value={b.leaveTypeId || b.id}>
+                        {b.leaveType?.name || b.type} ({available} days remaining)
+                      </option>
+                    );
+                  })
+                }
               </select>
             </div>
 

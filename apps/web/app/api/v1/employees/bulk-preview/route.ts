@@ -107,9 +107,10 @@ export async function POST(request: Request) {
         }
       }
 
-      // 4. Validate workerCategory
-      if (row.workerCategory && !["WHITE_COLLAR", "BLUE_COLLAR"].includes(row.workerCategory)) {
-        errors.push("workerCategory must be WHITE_COLLAR or BLUE_COLLAR");
+      // 4. Validate employeeCategory
+      const resolvedCategory = row.employeeCategory || row.workerCategory;
+      if (resolvedCategory && !["WHITE_COLLAR", "BLUE_COLLAR"].includes(resolvedCategory)) {
+        errors.push("employeeCategory must be WHITE_COLLAR or BLUE_COLLAR");
       }
 
       // 5. Validate Role
@@ -118,7 +119,7 @@ export async function POST(request: Request) {
       }
 
       // 6. Validate positionCategory, defaultProjectCode, defaultSiteCode
-      if (row.workerCategory === "BLUE_COLLAR" || row.positionCategory || row.defaultProjectCode || row.defaultSiteCode) {
+      if (resolvedCategory === "BLUE_COLLAR" || row.positionCategory || row.defaultProjectCode || row.defaultSiteCode) {
         if (row.positionCategory) {
           const matchCat = categories.find(c => c.code.toLowerCase() === row.positionCategory.toLowerCase() || c.name.toLowerCase() === row.positionCategory.toLowerCase());
           if (!matchCat) {

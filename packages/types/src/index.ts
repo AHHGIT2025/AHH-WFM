@@ -32,7 +32,7 @@ export interface Employee {
   isActive?: boolean;
   employmentStatus?: string;
   dutyStatus?: string;
-  workerCategory?: string;
+  employeeCategory?: EmployeeCategory;
   positionCategoryId?: string;
   defaultProjectId?: string;
   defaultSiteId?: string;
@@ -79,6 +79,16 @@ export interface Employee {
   immediateSupervisor?: Employee;
   costCenterRef?: CostCenter;
   defaultLocation?: LocationMaster;
+  
+  // v0.18.4 patches
+
+  userId?: string;
+  user?: any;
+  userAccess?: UserAccessSettings;
+  webAccessEnabled?: boolean;
+  mobileAccessEnabled?: boolean;
+  usernameStrategy?: UsernameStrategy;
+  deactivatedAt?: string | null;
 }
 
 export interface Worksite {
@@ -228,6 +238,19 @@ export interface LeaveType {
   sapExternalId?: string;
   createdAt?: string;
   updatedAt?: string;
+
+  // v0.18.4 fields
+  description?: string;
+  isPaid?: boolean;
+  requiresDocument?: boolean;
+  workflowCode?: string;
+  defaultAnnualAllocation?: number;
+  maxDaysPerRequest?: number;
+  allowHalfDay?: boolean;
+  allowCarryForward?: boolean;
+  carryForwardLimit?: number;
+  genderRestriction?: 'ALL' | 'MALE' | 'FEMALE';
+  applicableAfterProbation?: boolean;
 }
 
 export interface LeaveBalance {
@@ -242,6 +265,13 @@ export interface LeaveBalance {
   sapExternalId?: string;
   createdAt?: string;
   updatedAt?: string;
+
+  // v0.18.4 fields
+  year: number;
+  carriedForwardDays?: number;
+  adjustmentDays?: number;
+  availableDays?: number;
+  remarks?: string;
 }
 
 export interface LeaveBalanceLedger {
@@ -690,7 +720,7 @@ export interface Designation {
   code: string;
   name: string;
   description?: string;
-  workerCategory: "WHITE_COLLAR" | "BLUE_COLLAR" | "BOTH" | string;
+  employeeCategory: "WHITE_COLLAR" | "BLUE_COLLAR" | "BOTH" | string;
   isSupervisorPosition: boolean;
   isRelieverEligible: boolean;
   isActive: boolean;
@@ -805,7 +835,19 @@ export interface RelieverStandbyRule {
   updatedAt?: string;
 }
 
+export type EmployeeCategory = 'BLUE_COLLAR' | 'WHITE_COLLAR';
+export type AuthMode = 'LOCAL' | 'SSO' | 'LOCAL_AND_SSO';
+export type UsernameStrategy = 'EMPLOYEE_CODE' | 'EMAIL' | 'MANUAL';
 
-
-
+export interface UserAccessSettings {
+  username: string;
+  usernameStrategy: UsernameStrategy;
+  authMode: AuthMode;
+  ssoRequired: boolean;
+  webAccessEnabled: boolean;
+  mobileAccessEnabled: boolean;
+  mustChangePassword: boolean;
+  isActive: boolean;
+  deactivatedAt?: string;
+}
 

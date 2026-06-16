@@ -68,7 +68,7 @@ async function main() {
       department: "Verification Dept",
       status: "Offline",
       role: "EMPLOYEE",
-      workerCategory: "BLUE_COLLAR",
+      employeeCategory: "BLUE_COLLAR",
     }
   });
   console.log(`[OK] Created Employee: ${employee.name}`);

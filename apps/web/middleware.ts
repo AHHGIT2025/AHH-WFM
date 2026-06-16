@@ -5,6 +5,10 @@ export default withAuth(
   function middleware(req) {
     const token = req.nextauth.token;
     
+    if (token && token.mustChangePassword === true && req.nextUrl.pathname !== "/change-password") {
+      return NextResponse.redirect(new URL("/change-password", req.url));
+    }
+
     // Block standard employees from accessing Web Admin dashboards
     if (token && token.role !== "ADMIN" && token.role !== "SUPERVISOR") {
       return NextResponse.redirect(new URL("/login?error=UnauthorizedAccess", req.url));

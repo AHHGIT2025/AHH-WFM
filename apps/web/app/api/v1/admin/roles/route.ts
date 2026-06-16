@@ -122,21 +122,59 @@ export async function GET() {
   if (auth.error) return auth.error;
 
   try {
-    await seedPermissionsIfEmpty();
+    try {
+      await seedPermissionsIfEmpty();
+    } catch (seedErr) {
+      console.warn("Seeding default roles/permissions failed, proceeding with fallback check:", seedErr);
+    }
 
-    const roles = await mockDb.getSystemRoles();
-    const permissions = await mockDb.getSystemPermissions();
-    const rolePermissions = await mockDb.getRolePermissions();
-    const assignments = await mockDb.getUserRoleAssignments();
+    let roles: any[] = [];
+    let permissions: any[] = [];
+    let rolePermissions: any[] = [];
+    let assignments: any[] = [];
+
+    try {
+      roles = await mockDb.getSystemRoles();
+      permissions = await mockDb.getSystemPermissions();
+      rolePermissions = await mockDb.getRolePermissions();
+      assignments = await mockDb.getUserRoleAssignments();
+    } catch (dbErr) {
+      console.error("Failed to load settings data from DB, using fallback defaults:", dbErr);
+      roles = DEFAULT_SYSTEM_ROLES.map((r, i) => ({
+        id: `ROLE-${i}`,
+        ...r,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }));
+      permissions = DEFAULT_PERMISSIONS.map((p, i) => ({
+        id: `PERM-${i}`,
+        ...p,
+        createdAt: new Date().toISOString()
+      }));
+    }
 
     return NextResponse.json({
-      roles,
-      permissions,
-      rolePermissions,
-      assignments
+      roles: roles || [],
+      permissions: permissions || [],
+      rolePermissions: rolePermissions || [],
+      assignments: assignments || []
     });
   } catch (e: any) {
-    return NextResponse.json({ error: e.message || "Failed to fetch settings permissions mapping" }, { status: 500 });
+    return NextResponse.json({
+      roles: DEFAULT_SYSTEM_ROLES.map((r, i) => ({
+        id: `ROLE-${i}`,
+        ...r,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      })),
+      permissions: DEFAULT_PERMISSIONS.map((p, i) => ({
+        id: `PERM-${i}`,
+        ...p,
+        createdAt: new Date().toISOString()
+      })),
+      rolePermissions: [],
+      assignments: []
+    });
   }
 }
 

@@ -36,9 +36,19 @@ export const authOptions: NextAuthOptions = {
           );
 
           if (employee) {
+            // Check if active
+            if (employee.isActive === false) {
+              throw new Error("Your account is inactive. Please contact HR/Admin.");
+            }
+
             // Check if login is enabled
             if (employee.isLoginEnabled === false) {
               throw new Error("Account is disabled. Contact administrator.");
+            }
+
+            // Check webAccessEnabled
+            if (employee.webAccessEnabled === false) {
+              throw new Error("Your web access is disabled. Please contact HR/Admin.");
             }
             
             // Check if locked
@@ -93,28 +103,53 @@ export const authOptions: NextAuthOptions = {
     })
   ],
   callbacks: {
+    async signIn({ user, account }) {
+      if (account?.provider === "azure-ad") {
+        try {
+          const employees = await mockDb.getEmployees();
+          const employee = employees.find(
+            (e) => e.email.toLowerCase() === user.email?.toLowerCase()
+          );
+          if (!employee) {
+            return "/login?error=Your account is not registered. Please contact HR/Admin.";
+          }
+          if (employee.isActive === false) {
+            return "/login?error=Your account is inactive. Please contact HR/Admin.";
+          }
+          if (employee.webAccessEnabled === false) {
+            return "/login?error=Your web access is disabled. Please contact HR/Admin.";
+          }
+          if (employee.authMode === "LOCAL") {
+            return "/login?error=SSO login is disabled for this account. Please use your credentials.";
+          }
+        } catch (e) {
+          return "/login?error=Authentication failed";
+        }
+      }
+      return true;
+    },
     async jwt({ token, user }) {
       if (user) {
         token.role = (user as any).role || "EMPLOYEE";
         token.id = user.id;
         token.mustChangePassword = (user as any).mustChangePassword || false;
-      } else if (token.email && !token.role) {
+      }
+
+      // Sync latest values from database on subsequent requests
+      const userId = token.id as string;
+      if (userId) {
         try {
           const employees = await mockDb.getEmployees();
-          const employee = employees.find(
-            (e) => e.email.toLowerCase() === token.email!.toLowerCase()
-          );
+          const employee = employees.find((e) => e.id === userId);
           if (employee) {
             token.role = employee.role;
-            token.id = employee.id;
             token.mustChangePassword = employee.mustChangePassword || false;
-          } else {
-            token.role = "EMPLOYEE";
           }
         } catch (e) {
-          token.role = "EMPLOYEE";
+          console.error("Error updating JWT token from DB:", e);
         }
       }
+
       return token;
     },
     async session({ session, token }) {

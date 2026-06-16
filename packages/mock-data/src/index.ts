@@ -144,10 +144,10 @@ let memoryDb: {
   ],
   employees: [
     { id: "SK-90210", name: "Sarah Kim", department: "Operations", departmentId: "DEPT-001", companyId: "COMP-001", designationId: "DES-HRM", role: "SUPERVISOR", status: "On Break", email: "sarah.kim@alhattab.qa", phone: "+974 5555 1234", shiftId: "MOR-102", passwordHash: defaultHash, isActive: true, dateOfJoining: "2022-01-15T00:00:00Z", qidNumber: "28532400123", qidExpiryDate: "2027-05-20T00:00:00Z", passportNumber: "P-SK90210", passportIssueDate: "2022-01-15T00:00:00Z", passportExpiryDate: "2032-01-15T00:00:00Z", passportIssuingCountry: "South Korea", sponsor: "Al Hattab Holding", hasAccommodation: false, hasItAssets: true },
-    { id: "AM-8821", name: "Alex Martinez", department: "Engineering", departmentId: "DEPT-002", companyId: "COMP-001", designationId: "DES-ACC", workerCategory: "WHITE_COLLAR", role: "EMPLOYEE", status: "On Duty", email: "alex.m@alhattab.qa", phone: "+974 5555 5678", shiftId: "GEN-001", passwordHash: defaultHash, isActive: true, dateOfJoining: "2023-04-10T00:00:00Z", qidNumber: "28932400456", qidExpiryDate: "2026-12-15T00:00:00Z", passportNumber: "P-AM8821", passportIssueDate: "2023-04-10T00:00:00Z", passportExpiryDate: "2033-04-10T00:00:00Z", passportIssuingCountry: "Spain", sponsor: "Al Hattab Holding", hasAccommodation: false, hasItAssets: true },
-    { id: "BR-8823", name: "Brandon Reed", department: "Logistics", departmentId: "DEPT-003", companyId: "COMP-001", designationId: "DES-001", workerCategory: "BLUE_COLLAR", role: "EMPLOYEE", status: "On Duty", email: "brandon.r@alhattab.qa", phone: "+974 5555 9012", shiftId: "AFT-103", passwordHash: defaultHash, isActive: true, dateOfJoining: "2024-02-01T00:00:00Z", qidNumber: "29532400789", qidExpiryDate: "2025-08-30T00:00:00Z", passportNumber: "P-BR8823", passportIssueDate: "2024-02-01T00:00:00Z", passportExpiryDate: "2034-02-01T00:00:00Z", passportIssuingCountry: "United Kingdom", sponsor: "Al Hattab Logistics", hasAccommodation: true, hasItAssets: false },
+    { id: "AM-8821", name: "Alex Martinez", department: "Engineering", departmentId: "DEPT-002", companyId: "COMP-001", designationId: "DES-ACC", employeeCategory: "WHITE_COLLAR", role: "EMPLOYEE", status: "On Duty", email: "alex.m@alhattab.qa", phone: "+974 5555 5678", shiftId: "GEN-001", passwordHash: defaultHash, isActive: true, dateOfJoining: "2023-04-10T00:00:00Z", qidNumber: "28932400456", qidExpiryDate: "2026-12-15T00:00:00Z", passportNumber: "P-AM8821", passportIssueDate: "2023-04-10T00:00:00Z", passportExpiryDate: "2033-04-10T00:00:00Z", passportIssuingCountry: "Spain", sponsor: "Al Hattab Holding", hasAccommodation: false, hasItAssets: true },
+    { id: "BR-8823", name: "Brandon Reed", department: "Logistics", departmentId: "DEPT-003", companyId: "COMP-001", designationId: "DES-001", employeeCategory: "BLUE_COLLAR", role: "EMPLOYEE", status: "On Duty", email: "brandon.r@alhattab.qa", phone: "+974 5555 9012", shiftId: "AFT-103", passwordHash: defaultHash, isActive: true, dateOfJoining: "2024-02-01T00:00:00Z", qidNumber: "29532400789", qidExpiryDate: "2025-08-30T00:00:00Z", passportNumber: "P-BR8823", passportIssueDate: "2024-02-01T00:00:00Z", passportExpiryDate: "2034-02-01T00:00:00Z", passportIssuingCountry: "United Kingdom", sponsor: "Al Hattab Logistics", hasAccommodation: true, hasItAssets: false },
     { id: "JL-8824", name: "Jordan Lee", department: "Sales", departmentId: "DEPT-004", companyId: "COMP-001", role: "EMPLOYEE", status: "Offline", email: "jordan.lee@alhattab.qa", phone: "+974 5555 3456", shiftId: "ROT-A", passwordHash: defaultHash, isActive: true, dateOfJoining: "2023-09-01T00:00:00Z", qidNumber: "29132400111", qidExpiryDate: "2027-01-10T00:00:00Z", passportNumber: "P-JL8824", passportIssueDate: "2023-09-01T00:00:00Z", passportExpiryDate: "2033-09-01T00:00:00Z", passportIssuingCountry: "United States", sponsor: "Al Hattab Holding", hasAccommodation: false, hasItAssets: true },
-    { id: "AA-1001", name: "Ahmed Ali", department: "Operations", departmentId: "DEPT-001", companyId: "COMP-001", designationId: "DES-001", workerCategory: "BLUE_COLLAR", role: "EMPLOYEE", status: "Offline", email: "ahmed.ali@alhattab.qa", phone: "+974 6666 1111", shiftId: "GEN-001", passwordHash: defaultHash, isActive: true, dateOfJoining: "2024-05-15T00:00:00Z", qidNumber: "29632400222", qidExpiryDate: "2026-06-25T00:00:00Z", passportNumber: "P-AA1001", passportIssueDate: "2024-05-15T00:00:00Z", passportExpiryDate: "2034-05-15T00:00:00Z", passportIssuingCountry: "Egypt", sponsor: "Al Hattab Contracting", hasAccommodation: true, hasItAssets: false },
+    { id: "AA-1001", name: "Ahmed Ali", department: "Operations", departmentId: "DEPT-001", companyId: "COMP-001", designationId: "DES-001", employeeCategory: "BLUE_COLLAR", role: "EMPLOYEE", status: "Offline", email: "ahmed.ali@alhattab.qa", phone: "+974 6666 1111", shiftId: "GEN-001", passwordHash: defaultHash, isActive: true, dateOfJoining: "2024-05-15T00:00:00Z", qidNumber: "29632400222", qidExpiryDate: "2026-06-25T00:00:00Z", passportNumber: "P-AA1001", passportIssueDate: "2024-05-15T00:00:00Z", passportExpiryDate: "2034-05-15T00:00:00Z", passportIssuingCountry: "Egypt", sponsor: "Al Hattab Contracting", hasAccommodation: true, hasItAssets: false },
     { id: "AD-0001", name: "System Administrator", department: "IT", departmentId: "DEPT-005", companyId: "COMP-001", role: "ADMIN", status: "Offline", email: "admin@alhattab.qa", phone: "+974 0000 0000", shiftId: "GEN-001", passwordHash: defaultHash, isActive: true, dateOfJoining: "2020-01-01T00:00:00Z", qidNumber: "28032400000", qidExpiryDate: "2029-12-31T00:00:00Z", passportNumber: "P-AD0001", passportIssueDate: "2020-01-01T00:00:00Z", passportExpiryDate: "2030-01-01T00:00:00Z", passportIssuingCountry: "Qatar", sponsor: "Al Hattab Holding", hasAccommodation: false, hasItAssets: true }
   ],
   attendance: [
@@ -302,11 +302,11 @@ let memoryDb: {
   projectSites: [],
   deployments: [],
   designations: [
-    { id: "DES-HRM", code: "HRM", name: "HR Manager", description: "Human Resources Manager", workerCategory: "WHITE_COLLAR", isSupervisorPosition: true, isRelieverEligible: false, isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-    { id: "DES-ACC", code: "ACC", name: "Accountant", description: "Accountant", workerCategory: "WHITE_COLLAR", isSupervisorPosition: false, isRelieverEligible: false, isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-    { id: "DES-001", code: "WKR", name: "General Worker", description: "Blue collar manual worker", workerCategory: "BLUE_COLLAR", isSupervisorPosition: false, isRelieverEligible: true, isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-    { id: "DES-002", code: "SUP", name: "Operations Supervisor", description: "Supervisor of site operations", workerCategory: "BOTH", isSupervisorPosition: true, isRelieverEligible: true, isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-    { id: "DES-003", code: "MGR", name: "Operations Manager", description: "Manager of operations", workerCategory: "WHITE_COLLAR", isSupervisorPosition: true, isRelieverEligible: false, isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
+    { id: "DES-HRM", code: "HRM", name: "HR Manager", description: "Human Resources Manager", employeeCategory: "WHITE_COLLAR", isSupervisorPosition: true, isRelieverEligible: false, isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+    { id: "DES-ACC", code: "ACC", name: "Accountant", description: "Accountant", employeeCategory: "WHITE_COLLAR", isSupervisorPosition: false, isRelieverEligible: false, isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+    { id: "DES-001", code: "WKR", name: "General Worker", description: "Blue collar manual worker", employeeCategory: "BLUE_COLLAR", isSupervisorPosition: false, isRelieverEligible: true, isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+    { id: "DES-002", code: "SUP", name: "Operations Supervisor", description: "Supervisor of site operations", employeeCategory: "BOTH", isSupervisorPosition: true, isRelieverEligible: true, isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+    { id: "DES-003", code: "MGR", name: "Operations Manager", description: "Manager of operations", employeeCategory: "WHITE_COLLAR", isSupervisorPosition: true, isRelieverEligible: false, isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
   ],
   tradeClassifications: [
     { id: "TRD-001", code: "MASON", name: "Masonry Work", description: "Masonry and bricklaying", linkedDesignationId: "DES-001", isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
@@ -366,7 +366,7 @@ const seedMySQL = async () => {
             code: des.code,
             name: des.name,
             description: des.description,
-            workerCategory: des.workerCategory,
+            employeeCategory: des.employeeCategory,
             isSupervisorPosition: des.isSupervisorPosition,
             isRelieverEligible: des.isRelieverEligible,
             isActive: des.isActive
@@ -786,8 +786,13 @@ const getDbPath = () => {
   if (typeof window !== "undefined") return "";
   
   try {
-    const rootPath = "D:\\AI Projects\\AHH WFM\app";
-    const dbDir = path.join(rootPath, "packages", "mock-data");
+    // Try package relative path first
+    let dbDir = path.join(__dirname, "..");
+    if (fs.existsSync(path.join(dbDir, "package.json"))) {
+      return path.join(dbDir, "db.json");
+    }
+    // Fallback to process.cwd() base directory
+    dbDir = path.join(process.cwd(), "packages", "mock-data");
     if (!fs.existsSync(dbDir)) {
       fs.mkdirSync(dbDir, { recursive: true });
     }
@@ -813,6 +818,60 @@ export const readDb = (): typeof memoryDb & {
     }
     const data = fs.readFileSync(dbPath, "utf-8");
     const parsed = JSON.parse(data);
+    let needsWrite = false;
+
+    if (parsed.employees) {
+      for (const emp of parsed.employees) {
+        if (emp.webAccessEnabled === undefined || emp.webAccessEnabled === null) {
+          emp.webAccessEnabled = true;
+          needsWrite = true;
+        }
+        if (emp.mobileAccessEnabled === undefined || emp.mobileAccessEnabled === null) {
+          emp.mobileAccessEnabled = true;
+          needsWrite = true;
+        }
+        if (emp.authMode === undefined || emp.authMode === null) {
+          emp.authMode = "LOCAL";
+          needsWrite = true;
+        }
+        if (emp.ssoRequired === undefined || emp.ssoRequired === null) {
+          emp.ssoRequired = false;
+          needsWrite = true;
+        }
+        if (emp.mustChangePassword === undefined || emp.mustChangePassword === null) {
+          emp.mustChangePassword = false;
+          needsWrite = true;
+        }
+        if (emp.isLoginEnabled === undefined || emp.isLoginEnabled === null) {
+          emp.isLoginEnabled = true;
+          needsWrite = true;
+        }
+        if (emp.isActive === undefined || emp.isActive === null) {
+          emp.isActive = true;
+          needsWrite = true;
+        }
+        if (emp.employeeCategory === undefined || emp.employeeCategory === null) {
+          const raw = emp.workerCategory || emp.employeeType || emp.category || emp.designationType || emp.employmentType || "";
+          const upper = String(raw).toUpperCase();
+          if (upper.includes("BLUE") || upper.includes("FIELD") || upper.includes("LABOR") || upper.includes("STAFF")) {
+            emp.employeeCategory = "BLUE_COLLAR";
+          } else if (upper.includes("WHITE") || upper.includes("OFFICE") || upper.includes("ADMIN") || upper.includes("MANAG")) {
+            emp.employeeCategory = "WHITE_COLLAR";
+          } else {
+            emp.employeeCategory = "WHITE_COLLAR";
+          }
+          needsWrite = true;
+        }
+        if (emp.usernameStrategy === undefined || emp.usernameStrategy === null) {
+          emp.usernameStrategy = emp.employeeCategory === "BLUE_COLLAR" ? "EMPLOYEE_CODE" : "EMAIL";
+          needsWrite = true;
+        }
+        if (!emp.username) {
+          emp.username = emp.usernameStrategy === "EMPLOYEE_CODE" ? (emp.id || "CODE") : (emp.email || "email@example.com");
+          needsWrite = true;
+        }
+      }
+    }
     if (!parsed.worksites) {
       parsed.worksites = memoryDb.worksites;
     }
@@ -934,8 +993,38 @@ export const readDb = (): typeof memoryDb & {
       parsed.allowedPunchLocations = memoryDb.allowedPunchLocations;
     }
     if (!parsed.employeeAllowedPunchLocations) {
-      parsed.employeeAllowedPunchLocations = memoryDb.employeeAllowedPunchLocations || [];
+      parsed.employeeAllowedPunchLocations = parsed.employeeAllowedPunchLocations || [];
     }
+
+    // Dynamic, safe in-place normalization for Leave Types & Leave Balances
+    if (parsed.leaveTypes) {
+      for (const lt of parsed.leaveTypes) {
+        if (lt.description === undefined || lt.description === null) { lt.description = ""; needsWrite = true; }
+        if (lt.isPaid === undefined || lt.isPaid === null) { lt.isPaid = true; needsWrite = true; }
+        if (lt.requiresDocument === undefined || lt.requiresDocument === null) { lt.requiresDocument = false; needsWrite = true; }
+        if (lt.isActive === undefined || lt.isActive === null) { lt.isActive = true; needsWrite = true; }
+        if (lt.genderRestriction === undefined || lt.genderRestriction === null) { lt.genderRestriction = "ALL"; needsWrite = true; }
+      }
+    }
+
+    if (parsed.leaveBalances) {
+      const currentYear = new Date().getFullYear();
+      for (const lb of parsed.leaveBalances) {
+        if (lb.year === undefined || lb.year === null) { lb.year = currentYear; needsWrite = true; }
+        if (lb.carriedForwardDays === undefined || lb.carriedForwardDays === null) {
+          lb.carriedForwardDays = lb.carriedOver !== undefined ? lb.carriedOver : 0;
+          needsWrite = true;
+        }
+        if (lb.adjustmentDays === undefined || lb.adjustmentDays === null) { lb.adjustmentDays = 0; needsWrite = true; }
+        if (lb.usedDays === undefined || lb.usedDays === null) { lb.usedDays = 0; needsWrite = true; }
+        if (lb.pendingDays === undefined || lb.pendingDays === null) { lb.pendingDays = 0; needsWrite = true; }
+      }
+    }
+
+    if (needsWrite) {
+      writeDb(parsed);
+    }
+
     return parsed;
   } catch (e) {
     console.error("Failed to read JSON DB, using memory fallback", e);
@@ -1169,6 +1258,17 @@ export const mockDb = {
       if (modified) {
         emps = await prismaClient.employee.findMany({ include: includeOptions });
       }
+      for (const emp of emps) {
+        if (emp.webAccessEnabled === undefined || emp.webAccessEnabled === null) emp.webAccessEnabled = true;
+        if (emp.mobileAccessEnabled === undefined || emp.mobileAccessEnabled === null) emp.mobileAccessEnabled = true;
+        if (emp.authMode === undefined || emp.authMode === null) emp.authMode = "LOCAL";
+        if (emp.isLoginEnabled === undefined || emp.isLoginEnabled === null) emp.isLoginEnabled = true;
+        if (emp.usernameStrategy === undefined || emp.usernameStrategy === null) emp.usernameStrategy = "MANUAL";
+        if (emp.employeeCategory === undefined || emp.employeeCategory === null) emp.employeeCategory = emp.employeeCategory || "WHITE_COLLAR";
+        if (!emp.username) {
+          emp.username = emp.employeeCategory === "BLUE_COLLAR" ? emp.id : emp.email;
+        }
+      }
       return emps;
     } else {
       const db = readDb();
@@ -1208,6 +1308,16 @@ export const mockDb = {
         emp.immediateSupervisor = db.employees.find(e => e.id === emp.immediateSupervisorId);
         emp.costCenterRef = db.costCenters?.find((cc: any) => cc.id === emp.costCenterId);
         emp.defaultLocation = db.locations?.find((l: any) => l.id === emp.defaultLocationId);
+
+        if (emp.webAccessEnabled === undefined || emp.webAccessEnabled === null) emp.webAccessEnabled = true;
+        if (emp.mobileAccessEnabled === undefined || emp.mobileAccessEnabled === null) emp.mobileAccessEnabled = true;
+        if (emp.authMode === undefined || emp.authMode === null) emp.authMode = "LOCAL";
+        if (emp.isLoginEnabled === undefined || emp.isLoginEnabled === null) emp.isLoginEnabled = true;
+        if (emp.usernameStrategy === undefined || emp.usernameStrategy === null) emp.usernameStrategy = "MANUAL";
+        if (emp.employeeCategory === undefined || emp.employeeCategory === null) emp.employeeCategory = emp.employeeCategory || "WHITE_COLLAR";
+        if (!emp.username) {
+          emp.username = emp.employeeCategory === "BLUE_COLLAR" ? emp.id : emp.email;
+        }
       }
       return emps;
     }
@@ -1304,7 +1414,7 @@ export const mockDb = {
       let isOutOfZone = true;
       let status = "ON_TIME";
 
-      if (employee.workerCategory === "BLUE_COLLAR") {
+      if (employee.employeeCategory === "BLUE_COLLAR") {
         if (activeDeployment) {
           projectId = activeDeployment.projectId;
           siteId = activeDeployment.siteId;
@@ -1468,7 +1578,7 @@ export const mockDb = {
     let isOutOfZone = true;
     let status = "ON_TIME";
 
-    if (employee.workerCategory === "BLUE_COLLAR") {
+    if (employee.employeeCategory === "BLUE_COLLAR") {
       if (activeDeployment) {
         projectId = activeDeployment.projectId;
         siteId = activeDeployment.siteId;
@@ -2275,6 +2385,184 @@ export const mockDb = {
     return readDb().leaveTypes;
   },
 
+  getLeaveType: async (id: string): Promise<LeaveType | null> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      return await prismaClient.leaveType.findUnique({
+        where: { id }
+      });
+    }
+    const db = readDb();
+    return db.leaveTypes.find(t => t.id === id) || null;
+  },
+
+  createLeaveType: async (data: Partial<LeaveType>): Promise<LeaveType> => {
+    if (!data.code || !data.name) {
+      throw new Error("Code and name are required");
+    }
+    
+    if (isDbConnected()) {
+      await seedMySQL();
+      const existing = await prismaClient.leaveType.findUnique({
+        where: { code: data.code }
+      });
+      if (existing) {
+        throw new Error("Leave type code must be unique");
+      }
+      return await prismaClient.leaveType.create({
+        data: {
+          code: data.code,
+          name: data.name,
+          description: data.description || null,
+          isPaid: data.isPaid !== undefined ? data.isPaid : true,
+          requiresDocument: data.requiresDocument !== undefined ? data.requiresDocument : false,
+          workflowCode: data.workflowCode || null,
+          defaultAnnualAllocation: data.defaultAnnualAllocation !== undefined ? Number(data.defaultAnnualAllocation) : null,
+          maxDaysPerRequest: data.maxDaysPerRequest !== undefined ? Number(data.maxDaysPerRequest) : null,
+          allowHalfDay: data.allowHalfDay !== undefined ? data.allowHalfDay : true,
+          allowCarryForward: data.allowCarryForward !== undefined ? data.allowCarryForward : true,
+          carryForwardLimit: data.carryForwardLimit !== undefined ? Number(data.carryForwardLimit) : null,
+          genderRestriction: data.genderRestriction || "ALL",
+          applicableAfterProbation: data.applicableAfterProbation !== undefined ? data.applicableAfterProbation : true,
+          isActive: data.isActive !== undefined ? data.isActive : true
+        }
+      });
+    }
+
+    const db = readDb();
+    db.leaveTypes = db.leaveTypes || [];
+    if (db.leaveTypes.some(t => t.code.toLowerCase() === data.code!.toLowerCase())) {
+      throw new Error("Leave type code must be unique");
+    }
+
+    const newType: LeaveType = {
+      id: data.id || `LTYPE-${Date.now()}`,
+      code: data.code,
+      name: data.name,
+      description: data.description,
+      isPaid: data.isPaid !== undefined ? data.isPaid : true,
+      requiresDocument: data.requiresDocument !== undefined ? data.requiresDocument : false,
+      workflowCode: data.workflowCode,
+      defaultAnnualAllocation: data.defaultAnnualAllocation !== undefined ? Number(data.defaultAnnualAllocation) : undefined,
+      maxDaysPerRequest: data.maxDaysPerRequest !== undefined ? Number(data.maxDaysPerRequest) : undefined,
+      allowHalfDay: data.allowHalfDay !== undefined ? data.allowHalfDay : true,
+      allowCarryForward: data.allowCarryForward !== undefined ? data.allowCarryForward : true,
+      carryForwardLimit: data.carryForwardLimit !== undefined ? Number(data.carryForwardLimit) : undefined,
+      genderRestriction: (data.genderRestriction as any) || "ALL",
+      applicableAfterProbation: data.applicableAfterProbation !== undefined ? data.applicableAfterProbation : true,
+      isActive: data.isActive !== undefined ? data.isActive : true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    } as any;
+
+    db.leaveTypes.push(newType);
+    writeDb(db);
+    return newType;
+  },
+
+  updateLeaveType: async (id: string, data: Partial<LeaveType>): Promise<LeaveType | null> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      try {
+        if (data.code) {
+          const existing = await prismaClient.leaveType.findFirst({
+            where: { code: data.code, NOT: { id } }
+          });
+          if (existing) {
+            throw new Error("Leave type code must be unique");
+          }
+        }
+        return await prismaClient.leaveType.update({
+          where: { id },
+          data: {
+            code: data.code,
+            name: data.name,
+            description: data.description,
+            isPaid: data.isPaid,
+            requiresDocument: data.requiresDocument,
+            workflowCode: data.workflowCode,
+            defaultAnnualAllocation: data.defaultAnnualAllocation !== undefined && data.defaultAnnualAllocation !== null ? Number(data.defaultAnnualAllocation) : undefined,
+            maxDaysPerRequest: data.maxDaysPerRequest !== undefined && data.maxDaysPerRequest !== null ? Number(data.maxDaysPerRequest) : undefined,
+            allowHalfDay: data.allowHalfDay,
+            allowCarryForward: data.allowCarryForward,
+            carryForwardLimit: data.carryForwardLimit !== undefined && data.carryForwardLimit !== null ? Number(data.carryForwardLimit) : undefined,
+            genderRestriction: data.genderRestriction,
+            applicableAfterProbation: data.applicableAfterProbation,
+            isActive: data.isActive
+          }
+        });
+      } catch (e: any) {
+        throw new Error(e.message || "Failed to update leave type");
+      }
+    }
+
+    const db = readDb();
+    const type = db.leaveTypes.find(t => t.id === id);
+    if (!type) return null;
+
+    if (data.code && data.code.toLowerCase() !== type.code.toLowerCase()) {
+      if (db.leaveTypes.some(t => t.id !== id && t.code.toLowerCase() === data.code!.toLowerCase())) {
+        throw new Error("Leave type code must be unique");
+      }
+    }
+
+    Object.assign(type, {
+      ...data,
+      defaultAnnualAllocation: data.defaultAnnualAllocation !== undefined ? (data.defaultAnnualAllocation !== null ? Number(data.defaultAnnualAllocation) : undefined) : type.defaultAnnualAllocation,
+      maxDaysPerRequest: data.maxDaysPerRequest !== undefined ? (data.maxDaysPerRequest !== null ? Number(data.maxDaysPerRequest) : undefined) : type.maxDaysPerRequest,
+      carryForwardLimit: data.carryForwardLimit !== undefined ? (data.carryForwardLimit !== null ? Number(data.carryForwardLimit) : undefined) : type.carryForwardLimit,
+      updatedAt: new Date().toISOString()
+    });
+
+    writeDb(db);
+    return type;
+  },
+
+  deleteLeaveType: async (id: string): Promise<{ success: boolean; softDeleted: boolean }> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      const requestsCount = await prismaClient.leaveRequest.count({
+        where: { leaveTypeId: id }
+      });
+      const balancesCount = await prismaClient.leaveBalance.count({
+        where: { leaveTypeId: id }
+      });
+
+      if (requestsCount > 0 || balancesCount > 0) {
+        await prismaClient.leaveType.update({
+          where: { id },
+          data: { isActive: false }
+        });
+        return { success: true, softDeleted: true };
+      }
+
+      await prismaClient.leaveType.delete({
+        where: { id }
+      });
+      return { success: true, softDeleted: false };
+    }
+
+    const db = readDb();
+    const index = db.leaveTypes.findIndex(t => t.id === id);
+    if (index === -1) {
+      throw new Error("Leave type not found");
+    }
+
+    const requestsCount = (db.leaves || []).filter(l => l.leaveTypeId === id).length;
+    const balancesCount = (db.leaveBalances || []).filter(b => b.leaveTypeId === id).length;
+
+    if (requestsCount > 0 || balancesCount > 0) {
+      db.leaveTypes[index].isActive = false;
+      db.leaveTypes[index].updatedAt = new Date().toISOString();
+      writeDb(db);
+      return { success: true, softDeleted: true };
+    }
+
+    db.leaveTypes.splice(index, 1);
+    writeDb(db);
+    return { success: true, softDeleted: false };
+  },
+
   // Holidays
   getHolidays: async (): Promise<Holiday[]> => {
     if (isDbConnected()) {
@@ -2324,41 +2612,299 @@ export const mockDb = {
 
   // Leave Balances
   getLeaveBalances: async (employeeId?: string): Promise<LeaveBalance[]> => {
+    const currentYear = new Date().getFullYear();
     if (isDbConnected()) {
       await seedMySQL();
       const balances = await prismaClient.leaveBalance.findMany({
         where: employeeId ? { employeeId } : undefined,
         include: { leaveType: true }
       });
-      return balances.map((b: any) => ({
-        id: b.id,
-        employeeId: b.employeeId,
-        leaveTypeId: b.leaveTypeId,
-        leaveType: b.leaveType,
-        allocatedDays: b.allocatedDays,
-        usedDays: b.usedDays,
-        pendingDays: b.pendingDays,
-        carriedOver: b.carriedOver,
-        sapExternalId: b.sapExternalId || undefined
-      }));
+      return balances.map((b: any) => {
+        const year = b.year || currentYear;
+        const carriedForwardDays = b.carriedForwardDays !== null && b.carriedForwardDays !== undefined ? b.carriedForwardDays : b.carriedOver;
+        const adjustmentDays = b.adjustmentDays || 0;
+        return {
+          id: b.id,
+          employeeId: b.employeeId,
+          leaveTypeId: b.leaveTypeId,
+          leaveType: b.leaveType,
+          year,
+          allocatedDays: b.allocatedDays,
+          usedDays: b.usedDays,
+          pendingDays: b.pendingDays,
+          carriedForwardDays,
+          carriedOver: b.carriedOver,
+          adjustmentDays,
+          availableDays: b.allocatedDays + carriedForwardDays + adjustmentDays - b.usedDays - b.pendingDays,
+          remarks: b.remarks || undefined,
+          sapExternalId: b.sapExternalId || undefined,
+          createdAt: b.createdAt.toISOString(),
+          updatedAt: b.updatedAt.toISOString()
+        };
+      });
     }
     const db = readDb();
-    let balances = db.leaveBalances;
+    let balances = db.leaveBalances || [];
     if (employeeId) {
       balances = balances.filter(b => b.employeeId === employeeId);
     }
-    return balances.map(b => ({
-      ...b,
-      leaveType: db.leaveTypes.find(t => t.id === b.leaveTypeId)
-    }));
+    return balances.map(b => {
+      const year = b.year || currentYear;
+      const carriedForwardDays = b.carriedForwardDays !== undefined ? b.carriedForwardDays : (b.carriedOver || 0);
+      const adjustmentDays = b.adjustmentDays || 0;
+      const allocatedDays = b.allocatedDays || 0;
+      const usedDays = b.usedDays || 0;
+      const pendingDays = b.pendingDays || 0;
+      return {
+        ...b,
+        year,
+        carriedForwardDays,
+        carriedOver: b.carriedOver || 0,
+        adjustmentDays,
+        availableDays: allocatedDays + carriedForwardDays + adjustmentDays - usedDays - pendingDays,
+        leaveType: db.leaveTypes.find(t => t.id === b.leaveTypeId)
+      };
+    });
   },
-  
-  adjustLeaveBalance: async (employeeId: string, leaveTypeId: string, amount: number, reason: string, adjustedById: string): Promise<LeaveBalance | null> => {
+
+  getEmployeeLeaveBalances: async (employeeId: string): Promise<LeaveBalance[]> => {
+    return mockDb.getLeaveBalances(employeeId);
+  },
+
+  createEmployeeLeaveBalance: async (employeeId: string, data: Partial<LeaveBalance>): Promise<LeaveBalance> => {
+    const year = data.year || new Date().getFullYear();
+    const leaveTypeId = data.leaveTypeId;
+
+    if (!leaveTypeId) {
+      throw new Error("Leave Type ID is required");
+    }
+
+    const allocatedDays = data.allocatedDays !== undefined ? Number(data.allocatedDays) : 0;
+    const usedDays = data.usedDays !== undefined ? Number(data.usedDays) : 0;
+    const pendingDays = data.pendingDays !== undefined ? Number(data.pendingDays) : 0;
+    const carriedForwardDays = data.carriedForwardDays !== undefined ? Number(data.carriedForwardDays) : 0;
+    const adjustmentDays = data.adjustmentDays !== undefined ? Number(data.adjustmentDays) : 0;
+
+    if (allocatedDays < 0 || usedDays < 0 || pendingDays < 0 || carriedForwardDays < 0 || adjustmentDays < 0) {
+      throw new Error("Days values cannot be negative");
+    }
+
+    const leaveTypes = await mockDb.getLeaveTypes();
+    const leaveType = leaveTypes.find(t => t.id === leaveTypeId);
+    if (!leaveType) {
+      throw new Error("Leave Type not found");
+    }
+    if (!leaveType.isActive) {
+      throw new Error("Cannot assign an inactive leave type to a new balance");
+    }
+
+    if (isDbConnected()) {
+      await seedMySQL();
+      const existing = await prismaClient.leaveBalance.findFirst({
+        where: { employeeId, leaveTypeId, year }
+      });
+      if (existing) {
+        throw new Error("A leave balance already exists for this leave type and year");
+      }
+
+      const bal = await prismaClient.leaveBalance.create({
+        data: {
+          employeeId,
+          leaveTypeId,
+          year,
+          allocatedDays,
+          usedDays,
+          pendingDays,
+          carriedOver: carriedForwardDays,
+          carriedForwardDays,
+          adjustmentDays,
+          remarks: data.remarks || null
+        },
+        include: { leaveType: true }
+      });
+
+      return {
+        id: bal.id,
+        employeeId: bal.employeeId,
+        leaveTypeId: bal.leaveTypeId,
+        leaveType: bal.leaveType,
+        year: bal.year,
+        allocatedDays: bal.allocatedDays,
+        usedDays: bal.usedDays,
+        pendingDays: bal.pendingDays,
+        carriedForwardDays: bal.carriedForwardDays,
+        carriedOver: bal.carriedOver,
+        adjustmentDays: bal.adjustmentDays,
+        availableDays: bal.allocatedDays + bal.carriedForwardDays + bal.adjustmentDays - bal.usedDays - bal.pendingDays,
+        remarks: bal.remarks || undefined,
+        createdAt: bal.createdAt.toISOString(),
+        updatedAt: bal.updatedAt.toISOString()
+      };
+    }
+
+    const db = readDb();
+    db.leaveBalances = db.leaveBalances || [];
+    const existing = db.leaveBalances.find(b => b.employeeId === employeeId && b.leaveTypeId === leaveTypeId && b.year === year);
+    if (existing) {
+      throw new Error("A leave balance already exists for this leave type and year");
+    }
+
+    const newBalance: LeaveBalance = {
+      id: data.id || `BAL-${Date.now()}`,
+      employeeId,
+      leaveTypeId,
+      year,
+      allocatedDays,
+      usedDays,
+      pendingDays,
+      carriedForwardDays,
+      carriedOver: carriedForwardDays,
+      adjustmentDays,
+      remarks: data.remarks,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    } as any;
+
+    db.leaveBalances.push(newBalance);
+    writeDb(db);
+
+    return {
+      ...newBalance,
+      leaveType,
+      availableDays: allocatedDays + carriedForwardDays + adjustmentDays - usedDays - pendingDays
+    };
+  },
+
+  updateEmployeeLeaveBalance: async (employeeId: string, balanceId: string, data: Partial<LeaveBalance>): Promise<LeaveBalance | null> => {
+    const allocatedDays = data.allocatedDays !== undefined ? Number(data.allocatedDays) : undefined;
+    const usedDays = data.usedDays !== undefined ? Number(data.usedDays) : undefined;
+    const pendingDays = data.pendingDays !== undefined ? Number(data.pendingDays) : undefined;
+    const carriedForwardDays = data.carriedForwardDays !== undefined ? Number(data.carriedForwardDays) : undefined;
+    const adjustmentDays = data.adjustmentDays !== undefined ? Number(data.adjustmentDays) : undefined;
+
+    if (
+      (allocatedDays !== undefined && allocatedDays < 0) ||
+      (usedDays !== undefined && usedDays < 0) ||
+      (pendingDays !== undefined && pendingDays < 0) ||
+      (carriedForwardDays !== undefined && carriedForwardDays < 0) ||
+      (adjustmentDays !== undefined && adjustmentDays < 0)
+    ) {
+      throw new Error("Days values cannot be negative");
+    }
+
+    if (isDbConnected()) {
+      await seedMySQL();
+      const current = await prismaClient.leaveBalance.findUnique({ where: { id: balanceId } });
+      if (!current) return null;
+
+      const year = data.year !== undefined ? data.year : current.year;
+      const leaveTypeId = data.leaveTypeId !== undefined ? data.leaveTypeId : current.leaveTypeId;
+      if (year !== current.year || leaveTypeId !== current.leaveTypeId) {
+        const duplicate = await prismaClient.leaveBalance.findFirst({
+          where: { employeeId, leaveTypeId, year, NOT: { id: balanceId } }
+        });
+        if (duplicate) {
+          throw new Error("A leave balance already exists for this leave type and year");
+        }
+      }
+
+      const bal = await prismaClient.leaveBalance.update({
+        where: { id: balanceId },
+        data: {
+          year: data.year,
+          allocatedDays: allocatedDays,
+          usedDays: usedDays,
+          pendingDays: pendingDays,
+          carriedOver: carriedForwardDays !== undefined ? carriedForwardDays : undefined,
+          carriedForwardDays: carriedForwardDays,
+          adjustmentDays: adjustmentDays,
+          remarks: data.remarks
+        },
+        include: { leaveType: true }
+      });
+
+      return {
+        id: bal.id,
+        employeeId: bal.employeeId,
+        leaveTypeId: bal.leaveTypeId,
+        leaveType: bal.leaveType,
+        year: bal.year,
+        allocatedDays: bal.allocatedDays,
+        usedDays: bal.usedDays,
+        pendingDays: bal.pendingDays,
+        carriedForwardDays: bal.carriedForwardDays,
+        carriedOver: bal.carriedOver,
+        adjustmentDays: bal.adjustmentDays,
+        availableDays: bal.allocatedDays + bal.carriedForwardDays + bal.adjustmentDays - bal.usedDays - bal.pendingDays,
+        remarks: bal.remarks || undefined,
+        createdAt: bal.createdAt.toISOString(),
+        updatedAt: bal.updatedAt.toISOString()
+      };
+    }
+
+    const db = readDb();
+    const bal = db.leaveBalances.find(b => b.id === balanceId);
+    if (!bal) return null;
+
+    const year = data.year !== undefined ? data.year : bal.year;
+    const leaveTypeId = data.leaveTypeId !== undefined ? data.leaveTypeId : bal.leaveTypeId;
+    if (year !== bal.year || leaveTypeId !== bal.leaveTypeId) {
+      const duplicate = db.leaveBalances.find(b => b.employeeId === employeeId && b.leaveTypeId === leaveTypeId && b.year === year && b.id !== balanceId);
+      if (duplicate) {
+        throw new Error("A leave balance already exists for this leave type and year");
+      }
+    }
+
+    Object.assign(bal, {
+      ...data,
+      allocatedDays: allocatedDays !== undefined ? allocatedDays : bal.allocatedDays,
+      usedDays: usedDays !== undefined ? usedDays : bal.usedDays,
+      pendingDays: pendingDays !== undefined ? pendingDays : bal.pendingDays,
+      carriedForwardDays: carriedForwardDays !== undefined ? carriedForwardDays : bal.carriedForwardDays,
+      carriedOver: carriedForwardDays !== undefined ? carriedForwardDays : bal.carriedOver,
+      adjustmentDays: adjustmentDays !== undefined ? adjustmentDays : bal.adjustmentDays,
+      updatedAt: new Date().toISOString()
+    });
+
+    writeDb(db);
+
+    const leaveType = db.leaveTypes.find(t => t.id === bal.leaveTypeId);
+    return {
+      ...bal,
+      leaveType,
+      availableDays: bal.allocatedDays + (bal.carriedForwardDays || 0) + (bal.adjustmentDays || 0) - bal.usedDays - bal.pendingDays
+    };
+  },
+
+  deleteEmployeeLeaveBalance: async (employeeId: string, balanceId: string): Promise<boolean> => {
     if (isDbConnected()) {
       await seedMySQL();
       try {
-        const bal = await prismaClient.leaveBalance.findUnique({
-          where: { employeeId_leaveTypeId: { employeeId, leaveTypeId } }
+        await prismaClient.leaveBalance.delete({
+          where: { id: balanceId }
+        });
+        return true;
+      } catch (e) {
+        return false;
+      }
+    }
+
+    const db = readDb();
+    const index = db.leaveBalances.findIndex(b => b.id === balanceId);
+    if (index === -1) return false;
+
+    db.leaveBalances.splice(index, 1);
+    writeDb(db);
+    return true;
+  },
+
+  adjustLeaveBalance: async (employeeId: string, leaveTypeId: string, amount: number, reason: string, adjustedById: string): Promise<LeaveBalance | null> => {
+    const currentYear = new Date().getFullYear();
+    if (isDbConnected()) {
+      await seedMySQL();
+      try {
+        const bal = await prismaClient.leaveBalance.findFirst({
+          where: { employeeId, leaveTypeId, year: currentYear }
         });
         if (!bal) return null;
 
@@ -2390,7 +2936,7 @@ export const mockDb = {
           pendingDays: updated.pendingDays,
           carriedOver: updated.carriedOver,
           sapExternalId: updated.sapExternalId || undefined
-        };
+        } as any;
       } catch (e) {
         console.error(e);
         return null;
@@ -2398,7 +2944,7 @@ export const mockDb = {
     }
 
     const db = readDb();
-    const bal = db.leaveBalances.find(b => b.employeeId === employeeId && b.leaveTypeId === leaveTypeId);
+    const bal = db.leaveBalances.find(b => b.employeeId === employeeId && b.leaveTypeId === leaveTypeId && b.year === currentYear);
     if (!bal) return null;
 
     const balanceBefore = bal.allocatedDays;
@@ -3241,6 +3787,24 @@ export const mockDb = {
       }
     }
 
+    const category = empData.employeeCategory || "WHITE_COLLAR";
+    const strategy = empData.usernameStrategy || (category === "BLUE_COLLAR" ? "EMPLOYEE_CODE" : "EMAIL");
+    let generatedUsername = empData.username;
+    if (!generatedUsername && strategy !== "MANUAL") {
+      generatedUsername = strategy === "EMPLOYEE_CODE" ? empData.id : empData.email;
+    }
+
+    const employees = await mockDb.getEmployees();
+    if (employees.some(e => e.id.toLowerCase() === empData.id.toLowerCase())) {
+      throw new Error("Employee ID already exists");
+    }
+    if (empData.email && employees.some(e => e.email.toLowerCase() === empData.email.toLowerCase())) {
+      throw new Error("Employee email already exists");
+    }
+    if (generatedUsername && employees.some(e => e.username && e.username.toLowerCase() === generatedUsername.toLowerCase())) {
+      throw new Error("Username already exists");
+    }
+
     const payload = {
       ...empData,
       department: departmentName,
@@ -3248,12 +3812,17 @@ export const mockDb = {
       isActive: empData.isActive !== undefined ? empData.isActive : true,
       employmentStatus: empData.employmentStatus || "ACTIVE",
       dutyStatus: empData.dutyStatus || "OFF_DUTY",
-      workerCategory: empData.workerCategory || "WHITE_COLLAR",
+      employeeCategory: category,
       authMode: empData.authMode || "LOCAL",
       isLoginEnabled: empData.isLoginEnabled !== undefined ? empData.isLoginEnabled : true,
-      mustChangePassword: empData.mustChangePassword || false,
+      mustChangePassword: data.password ? (empData.mustChangePassword !== undefined ? empData.mustChangePassword : true) : (empData.mustChangePassword || false),
       isLocked: empData.isLocked || false,
-      failedLoginAttempts: empData.failedLoginAttempts || 0
+      failedLoginAttempts: empData.failedLoginAttempts || 0,
+      webAccessEnabled: empData.webAccessEnabled !== undefined ? empData.webAccessEnabled : true,
+      mobileAccessEnabled: empData.mobileAccessEnabled !== undefined ? empData.mobileAccessEnabled : true,
+      usernameStrategy: strategy,
+      username: generatedUsername,
+      deactivatedAt: empData.deactivatedAt || null
     };
 
     if (isDbConnected()) {
@@ -3279,10 +3848,56 @@ export const mockDb = {
       }
     }
 
-    const payload = {
+    const employees = await mockDb.getEmployees();
+    const currentEmp = employees.find(e => e.id === id);
+    if (!currentEmp) return null;
+
+    const newCategory = data.employeeCategory || currentEmp.employeeCategory || "WHITE_COLLAR";
+    const newStrategy = data.usernameStrategy || currentEmp.usernameStrategy || "MANUAL";
+    let newUsername = data.username || currentEmp.username;
+
+    if (newStrategy !== "MANUAL" && (data.employeeCategory || data.usernameStrategy || data.email || data.id)) {
+      const tempEmp = {
+        ...currentEmp,
+        ...data,
+        employeeCategory: newCategory as any
+      };
+      newUsername = mockDb.generateUsernameForEmployee(tempEmp);
+    }
+
+    if (newUsername && newUsername.toLowerCase() !== (currentEmp.username || "").toLowerCase()) {
+      if (employees.some(e => e.id !== id && e.username && e.username.toLowerCase() === newUsername.toLowerCase())) {
+        throw new Error("Username already exists");
+      }
+    }
+
+    const isDeactivating = data.isActive === false || data.employmentStatus === "INACTIVE" || data.employmentStatus === "DEACTIVATED";
+
+    const payload: any = {
       ...data,
-      ...(departmentName ? { department: departmentName } : {})
+      ...(departmentName ? { department: departmentName } : {}),
+      employeeCategory: newCategory,
+      usernameStrategy: newStrategy,
+      username: newUsername
     };
+
+    if ((data as any).defaultPassword) {
+      payload.passwordHash = bcrypt.hashSync((data as any).defaultPassword, 10);
+      payload.mustChangePassword = (data as any).mustChangePasswordOnFirstLogin !== undefined ? (data as any).mustChangePasswordOnFirstLogin : true;
+      payload.passwordUpdatedAt = new Date().toISOString();
+      delete payload.defaultPassword;
+      delete payload.confirmDefaultPassword;
+      delete payload.mustChangePasswordOnFirstLogin;
+    }
+
+    if (isDeactivating) {
+      payload.isActive = false;
+      payload.isLoginEnabled = false;
+      payload.webAccessEnabled = false;
+      payload.mobileAccessEnabled = false;
+      payload.deactivatedAt = new Date().toISOString();
+      payload.employmentStatus = "INACTIVE";
+    }
 
     if (isDbConnected()) {
       await seedMySQL();
@@ -3305,26 +3920,7 @@ export const mockDb = {
     return employee;
   },
   deactivateEmployee: async (id: string): Promise<Employee | null> => {
-    if (isDbConnected()) {
-      await seedMySQL();
-      try {
-        const emp = await prismaClient.employee.update({
-          where: { id },
-          data: { isActive: false, employmentStatus: "INACTIVE" }
-        });
-        return emp;
-      } catch (e) {
-        return null;
-      }
-    }
-
-    const db = readDb();
-    const employee = db.employees.find(e => e.id === id);
-    if (!employee) return null;
-    employee.isActive = false;
-    employee.employmentStatus = "INACTIVE";
-    writeDb(db);
-    return employee;
+    return await mockDb.deactivateUserForEmployee(id);
   },
 
   // Worksites CRUD
@@ -6594,7 +7190,7 @@ export const mockDb = {
     }
 
     // 9. Validate Blue Collar employees have position category.
-    if (employee.workerCategory === "BLUE_COLLAR" && !employee.positionCategoryId && !deployment.positionCategoryId) {
+    if (employee.employeeCategory === "BLUE_COLLAR" && !employee.positionCategoryId && !deployment.positionCategoryId) {
       throw new Error("Blue Collar employees must have a position category");
     }
 
@@ -7426,6 +8022,77 @@ export const mockDb = {
     db.employeeAllowedPunchLocations = db.employeeAllowedPunchLocations.filter((x: any) => x.id !== assignmentId);
     writeDb(db);
     return true;
+  },
+
+  generateUsernameForEmployee: (employee: Partial<Employee>): string => {
+    const category = employee.employeeCategory || "WHITE_COLLAR";
+    const email = employee.email;
+    const code = employee.id;
+
+    if (category === "BLUE_COLLAR") {
+      if (!code) {
+        throw new Error("Employee Code (ID) is required for blue-collar username generation");
+      }
+      return code.trim();
+    } else {
+      if (!email) {
+        throw new Error("Email address is required for white-collar username generation");
+      }
+      return email.trim().toLowerCase();
+    }
+  },
+
+  deactivateUserForEmployee: async (employeeId: string): Promise<Employee | null> => {
+    const deactivatedAt = new Date().toISOString();
+    if (isDbConnected()) {
+      await seedMySQL();
+      try {
+        return await prismaClient.employee.update({
+          where: { id: employeeId },
+          data: {
+            isActive: false,
+            isLoginEnabled: false,
+            webAccessEnabled: false,
+            mobileAccessEnabled: false,
+            deactivatedAt: new Date(deactivatedAt),
+            employmentStatus: "INACTIVE"
+          }
+        });
+      } catch (e) {
+        console.error("Failed to deactivate user in DB", e);
+        return null;
+      }
+    }
+
+    const db = readDb();
+    const employee = db.employees.find(e => e.id === employeeId);
+    if (!employee) return null;
+    employee.isActive = false;
+    employee.isLoginEnabled = false;
+    employee.webAccessEnabled = false;
+    employee.mobileAccessEnabled = false;
+    employee.deactivatedAt = deactivatedAt;
+    employee.employmentStatus = "INACTIVE";
+    writeDb(db);
+    return employee;
+  },
+
+  updateEmployeeAccess: async (employeeId: string, data: any): Promise<Employee | null> => {
+    const updateData: any = { ...data };
+    if (data.defaultPassword) {
+      updateData.passwordHash = bcrypt.hashSync(data.defaultPassword, 10);
+      updateData.mustChangePassword = data.mustChangePasswordOnFirstLogin !== undefined ? data.mustChangePasswordOnFirstLogin : true;
+      updateData.passwordUpdatedAt = new Date().toISOString();
+      delete updateData.defaultPassword;
+      delete updateData.confirmDefaultPassword;
+      delete updateData.mustChangePasswordOnFirstLogin;
+    }
+
+    return await mockDb.updateEmployee(employeeId, updateData);
+  },
+
+  createOrUpdateEmployeeUser: async (employeeId: string, data: any): Promise<Employee | null> => {
+    return await mockDb.updateEmployeeAccess(employeeId, data);
   }
 };
 
