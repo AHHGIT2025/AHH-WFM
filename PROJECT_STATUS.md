@@ -39,6 +39,8 @@ AHH WFM is a full-stack, enterprise-grade workforce management application built
 | **v0.18.1** | Completed | `v0.18.1-clearance-management-workflow` | Dynamic 15-step clearance requests, cascading filters, details snapshot, auto-applicability skipping, and template configuration builder. |
 | **v0.18.2** | Completed | `v0.18.2-employee-company-identity-integration` | Company assignment, Qatar ID (QID), and Passport integration across workforce directory, REST APIs (with role masking), bulk import, clearance snapshots, and mobile profile. Also includes Company and Cost Center dropdown labels and population fixes. |
 | **v0.18.3** | Completed | `v0.18.3-master-data-company-relation-save-fix` | Master Data Hub company relation save mapping stabilization, payload normalization, and required validation. |
+| **v0.18.4** | Completed | `v0.18.4-employee-relation-update-mapping-fix` | Employee profile relation update mapping stabilization, connect/disconnect helpers, and payload normalization. |
+
 
 
 ---
