@@ -64,7 +64,7 @@ function normalizeMasterPayload(entity: string, payload: any, isUpdate = false) 
   }
 
   // 3. Remove read-only fields
-  if (isUpdate) {
+  if (isUpdate || copy.id === "") {
     delete copy.id;
   }
   delete copy.createdAt;
@@ -100,6 +100,18 @@ function normalizeMasterPayload(entity: string, payload: any, isUpdate = false) 
     if (copy.name !== undefined && copy.siteName === undefined) copy.siteName = copy.name;
     delete copy.code;
     delete copy.name;
+  }
+  else if (entity === "departments") {
+    delete copy.code;
+    const allowed = ["name", "companyId", "isActive"];
+    for (const key of Object.keys(copy)) {
+      if (!allowed.includes(key)) {
+        delete copy[key];
+      }
+    }
+  }
+  else if (entity === "allowed-punch-locations") {
+    delete copy.code;
   }
 
   return copy;

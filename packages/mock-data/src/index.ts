@@ -1148,6 +1148,143 @@ const mapAnnouncement = (ann: any): Announcement => ({
   category: ann.category
 });
 
+const employeeInclude = {
+  company: true,
+  designation: true,
+  departmentRef: true,
+  defaultProject: true,
+  defaultSite: true,
+  immediateSupervisor: true,
+  costCenterRef: true,
+  defaultLocation: true,
+  positionCategory: true,
+  tradeClassification: true,
+  defaultPunchLocation: true,
+  reportingManager: true,
+  projectSupervisor: true,
+  siteSupervisor: true
+};
+
+function buildEmployeePrismaData(input: any, isUpdate: boolean) {
+  const scalarFields = [
+    "id",
+    "name",
+    "department",
+    "role",
+    "status",
+    "email",
+    "phone",
+    "shiftId",
+    "passwordHash",
+    "profilePhotoUrl",
+    "isActive",
+    "employmentStatus",
+    "dutyStatus",
+    "employeeCategory",
+    "workAssignmentType",
+    "qidNumber",
+    "passportNumber",
+    "passportIssuingCountry",
+    "sponsor",
+    "hasAccommodation",
+    "hasItAssets",
+    "isRelieverEligible",
+    "isStandbyEligible",
+    "allowMultiplePunchLocations",
+    "allowOfficePunch",
+    "allowProjectSitePunch",
+    "allowOnCallPunch",
+    "allowOutOfZonePunch",
+    "requireOutOfZoneReview",
+    "isSupervisor",
+    "supervisorScopeType",
+    "username",
+    "authMode",
+    "ssoProvider",
+    "ssoSubject",
+    "isLoginEnabled",
+    "mustChangePassword",
+    "isLocked",
+    "failedLoginAttempts",
+    "usernameStrategy"
+  ];
+
+  const dateFields = [
+    "profilePhotoUpdatedAt",
+    "dateOfJoining",
+    "qidExpiryDate",
+    "passportExpiryDate",
+    "passportIssueDate",
+    "lastLoginAt",
+    "passwordUpdatedAt",
+    "deactivatedAt"
+  ];
+
+  const result: any = {};
+
+  // Map standard scalar fields
+  for (const field of scalarFields) {
+    if (input[field] !== undefined) {
+      result[field] = input[field];
+    }
+  }
+
+  // Map dates
+  for (const field of dateFields) {
+    if (input[field] !== undefined) {
+      if (input[field] === null || input[field] === "") {
+        result[field] = null;
+      } else {
+        const d = new Date(input[field]);
+        result[field] = isNaN(d.getTime()) ? null : d;
+      }
+    }
+  }
+
+  // Map geofenceRadiusOverrideMeters
+  if (input.geofenceRadiusOverrideMeters !== undefined) {
+    if (input.geofenceRadiusOverrideMeters === null || input.geofenceRadiusOverrideMeters === "") {
+      result.geofenceRadiusOverrideMeters = null;
+    } else {
+      const parsed = parseFloat(input.geofenceRadiusOverrideMeters);
+      result.geofenceRadiusOverrideMeters = isNaN(parsed) ? null : parsed;
+    }
+  }
+
+  // Map relations
+  const relations = [
+    { key: "companyId", relationName: "company" },
+    { key: "departmentId", relationName: "departmentRef" },
+    { key: "costCenterId", relationName: "costCenterRef" },
+    { key: "defaultLocationId", relationName: "defaultLocation" },
+    { key: "designationId", relationName: "designation" },
+    { key: "tradeClassificationId", relationName: "tradeClassification" },
+    { key: "defaultPunchLocationId", relationName: "defaultPunchLocation" },
+    { key: "positionCategoryId", relationName: "positionCategory" },
+    { key: "defaultProjectId", relationName: "defaultProject" },
+    { key: "defaultSiteId", relationName: "defaultSite" },
+    { key: "immediateSupervisorId", relationName: "immediateSupervisor" },
+    { key: "reportingManagerId", relationName: "reportingManager" },
+    { key: "projectSupervisorId", relationName: "projectSupervisor" },
+    { key: "siteSupervisorId", relationName: "siteSupervisor" }
+  ];
+
+  for (const rel of relations) {
+    const val = input[rel.key];
+    if (val !== undefined) {
+      if (val !== null && val !== "") {
+        result[rel.relationName] = { connect: { id: val } };
+      } else {
+        if (isUpdate) {
+          result[rel.relationName] = { disconnect: true };
+        }
+      }
+    }
+  }
+
+  return result;
+}
+
 // Database CRUD Actions API (All Async to support DB connection)
 export const mockDb = {
   // Employees
@@ -3773,6 +3910,7 @@ export const mockDb = {
   },
 
   // Employees Extended CRUD
+
   createEmployee: async (data: Omit<Employee, "passwordHash"> & { password?: string }): Promise<Employee> => {
     const passwordHash = data.password ? bcrypt.hashSync(data.password, 10) : defaultHash;
     const { password, ...empData } = data;
@@ -3827,8 +3965,10 @@ export const mockDb = {
 
     if (isDbConnected()) {
       await seedMySQL();
+      const prismaData = buildEmployeePrismaData(payload, false);
       const emp = await prismaClient.employee.create({
-        data: payload
+        data: prismaData,
+        include: employeeInclude
       });
       return emp;
     }
@@ -3849,7 +3989,10 @@ export const mockDb = {
     }
 
     const employees = await mockDb.getEmployees();
-    const currentEmp = employees.find(e => e.id === id);
+    let currentEmp = employees.find(e => e.id === id);
+    if (!currentEmp) {
+      currentEmp = employees.find(e => (e as any).employeeCode === id);
+    }
     if (!currentEmp) return null;
 
     const newCategory = data.employeeCategory || currentEmp.employeeCategory || "WHITE_COLLAR";
@@ -3866,7 +4009,7 @@ export const mockDb = {
     }
 
     if (newUsername && newUsername.toLowerCase() !== (currentEmp.username || "").toLowerCase()) {
-      if (employees.some(e => e.id !== id && e.username && e.username.toLowerCase() === newUsername.toLowerCase())) {
+      if (employees.some(e => e.id !== currentEmp.id && e.username && e.username.toLowerCase() === newUsername.toLowerCase())) {
         throw new Error("Username already exists");
       }
     }
@@ -3902,18 +4045,21 @@ export const mockDb = {
     if (isDbConnected()) {
       await seedMySQL();
       try {
+        const prismaData = buildEmployeePrismaData(payload, true);
         const emp = await prismaClient.employee.update({
-          where: { id },
-          data: payload as any
+          where: { id: currentEmp.id },
+          data: prismaData,
+          include: employeeInclude
         });
         return emp;
       } catch (e) {
+        console.error(`[mockDb] Failed to update employee ${currentEmp.id} in MySQL:`, e);
         return null;
       }
     }
 
     const db = readDb();
-    const employee = db.employees.find(e => e.id === id);
+    const employee = db.employees.find(e => e.id === currentEmp.id);
     if (!employee) return null;
     Object.assign(employee, payload);
     writeDb(db);

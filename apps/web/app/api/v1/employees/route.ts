@@ -6,6 +6,7 @@ import { hasPermission } from "@/lib/permissions";
 function normalizeEmployee(emp: any) {
   if (!emp) return emp;
   const copy = { ...emp };
+  copy.employeeCode = emp.id;
 
   // Normalize Company
   if (emp.company) {

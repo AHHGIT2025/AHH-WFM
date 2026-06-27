@@ -17,6 +17,7 @@
     "db:push": "npm run db:push --workspace=packages/database"
   },
   "devDependencies": {
-    "@types/bcryptjs": "^2.4.6"
+    "@types/bcryptjs": "^2.4.6",
+    "ts-node": "^10.9.2"
   }
 }

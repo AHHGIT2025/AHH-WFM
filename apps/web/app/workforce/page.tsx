@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { Employee, Department } from "@ahh-wfm/types";
 import { Card, Badge, Input, Button, Modal } from "@ahh-wfm/ui/src";
 import Link from "next/link";
+import { useSession } from "next-auth/react";
 
 function formatCompanyLabel(company: any) {
   if (!company) return "Unnamed Company";
@@ -260,6 +261,16 @@ export default function WorkforcePage() {
   // Validation errors state
   const [validationError, setValidationError] = useState<string | null>(null);
 
+  const { data: session } = useSession();
+  const sessionRole = (session?.user as any)?.role;
+  const isSessionAdminOrHR = sessionRole === "ADMIN" || sessionRole === "HR" || sessionRole === "HR_MANAGER";
+
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [profileLoadFailed, setProfileLoadFailed] = useState(false);
+  const [isEditLoading, setIsEditLoading] = useState(false);
+
+  const showAdminTabs = isSessionAdminOrHR || isAdmin;
+
   const formatSupervisorLabel = (emp: any) => {
     let designationName = "";
     if (emp.designation?.name) {
@@ -373,12 +384,22 @@ export default function WorkforcePage() {
   };
 
   
-  const [isAdmin, setIsAdmin] = useState(false);
-
   useEffect(() => {
-    fetch('/api/v1/employees/me').then(res => {
-      if (res.ok) res.json().then(data => setIsAdmin(data.role === 'ADMIN'));
-    });
+    fetch('/api/v1/employees/me')
+      .then(res => {
+        if (res.ok) {
+          res.json().then(data => {
+            const role = data.role?.toUpperCase();
+            setIsAdmin(role === 'ADMIN' || role === 'HR' || role === 'HR_MANAGER');
+            setProfileLoadFailed(false);
+          });
+        } else {
+          setProfileLoadFailed(true);
+        }
+      })
+      .catch(() => {
+        setProfileLoadFailed(true);
+      });
   }, []);
 
   const fetchDb = async () => {
@@ -936,12 +957,11 @@ export default function WorkforcePage() {
     }
   };
 
-  const openEditModal = async (emp: Employee) => {
-    setSelectedEmp(emp);
-    setEmpName(emp.name);
-    setEmpEmail(emp.email);
+  const populateEmpForm = (emp: any) => {
+    setEmpName(emp.name || "");
+    setEmpEmail(emp.email || "");
     setEmpPhone(emp.phone || "");
-    setEmpRole(emp.role);
+    setEmpRole(emp.role || "EMPLOYEE");
     setEmpDeptId(emp.departmentId || "");
     setEmpShiftId(emp.shiftId || "GEN-001");
     setEmpEmploymentStatus(emp.employmentStatus || (emp.isActive !== false ? "ACTIVE" : "INACTIVE"));
@@ -999,13 +1019,33 @@ export default function WorkforcePage() {
     setEmpMobileAccessEnabled((emp as any).mobileAccessEnabled !== false);
     const strategy = (emp as any).usernameStrategy || "MANUAL";
     setEmpUsernameStrategy(strategy as any);
+  };
 
+  const openEditModal = async (emp: Employee) => {
+    setValidationError(null);
+    setSelectedEmp(emp);
+    populateEmpForm(emp); // Hydrate immediately with local fallback
     setEditTab("basic");
+    setIsEditEmpOpen(true);
+    setIsEditLoading(true);
+
     try {
-      const [aplRes, balRes] = await Promise.all([
+      const [empRes, aplRes, balRes] = await Promise.all([
+        fetch(`/api/v1/employees/${emp.id}`),
         fetch(`/api/v1/employees/${emp.id}/allowed-locations`),
         fetch(`/api/v1/employees/${emp.id}/leave-balances`)
       ]);
+
+      if (empRes.ok) {
+        const freshEmp = await empRes.json();
+        if (freshEmp && freshEmp.id) {
+          setSelectedEmp(freshEmp);
+          populateEmpForm(freshEmp); // Hydrate with fresh DB data
+        }
+      } else {
+        console.warn(`[Workforce] Failed to fetch latest employee details for ${emp.id}:`, empRes.statusText);
+      }
+
       if (aplRes.ok) {
         setEmpAllowedPunchLocationAssignments(await aplRes.json());
       } else {
@@ -1017,11 +1057,12 @@ export default function WorkforcePage() {
         setLeaveBalances([]);
       }
     } catch (e) {
+      console.error("[Workforce] Error hydrating employee edit modal:", e);
       setEmpAllowedPunchLocationAssignments([]);
       setLeaveBalances([]);
+    } finally {
+      setIsEditLoading(false);
     }
-    setValidationError(null);
-    setIsEditEmpOpen(true);
   };
 
   // CSV parsing & upload preview
@@ -2251,11 +2292,25 @@ export default function WorkforcePage() {
 
       {/* Edit Employee Modal */}
       <Modal isOpen={isEditEmpOpen} onClose={() => setIsEditEmpOpen(false)} title="Edit Employee Profile">
-        {selectedEmp && (
+        {selectedEmp ? (
           <form onSubmit={handleEditEmployee} className="space-y-4">
             {validationError && (
               <div className="p-3 bg-status-error/10 border border-status-error/20 text-status-error text-xs font-semibold rounded-lg">
                 {validationError}
+              </div>
+            )}
+
+            {isEditLoading && (
+              <div className="p-3 bg-primary/10 border border-primary/20 text-primary text-xs font-semibold rounded-lg flex items-center gap-2">
+                <div className="animate-spin rounded-full h-3.5 w-3.5 border-2 border-primary border-t-transparent"></div>
+                Syncing latest profile details from database...
+              </div>
+            )}
+
+            {profileLoadFailed && isSessionAdminOrHR && (
+              <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 text-yellow-600 text-xs font-semibold rounded-lg flex items-center gap-2">
+                <span className="material-symbols-outlined text-sm">warning</span>
+                Could not load current employee profile, using session permissions.
               </div>
             )}
             
@@ -2265,10 +2320,10 @@ export default function WorkforcePage() {
               <button type="button" className={`px-4 py-2 text-xs font-bold border-b-2 whitespace-nowrap ${editTab === 'identity' ? 'border-primary text-primary' : 'border-transparent text-on-surface-variant hover:text-on-surface'}`} onClick={() => setEditTab('identity')}>Identity Documents</button>
               <button type="button" className={`px-4 py-2 text-xs font-bold border-b-2 whitespace-nowrap ${editTab === 'punch' ? 'border-primary text-primary' : 'border-transparent text-on-surface-variant hover:text-on-surface'}`} onClick={() => setEditTab('punch')}>Punch Settings</button>
               <button type="button" className={`px-4 py-2 text-xs font-bold border-b-2 whitespace-nowrap ${editTab === 'supervisor' ? 'border-primary text-primary' : 'border-transparent text-on-surface-variant hover:text-on-surface'}`} onClick={() => setEditTab('supervisor')}>Supervisor & Reporting</button>
-              {isAdmin && (
+              {showAdminTabs && (
                 <button type="button" className={`px-4 py-2 text-xs font-bold border-b-2 whitespace-nowrap ${editTab === 'account' ? 'border-primary text-primary' : 'border-transparent text-on-surface-variant hover:text-on-surface'}`} onClick={() => setEditTab('account')}>Login & Account Access</button>
               )}
-              {isAdmin && (
+              {showAdminTabs && (
                 <button type="button" className={`px-4 py-2 text-xs font-bold border-b-2 whitespace-nowrap ${editTab === 'leave-balances' ? 'border-primary text-primary' : 'border-transparent text-on-surface-variant hover:text-on-surface'}`} onClick={() => setEditTab('leave-balances')}>Leave Balances</button>
               )}
             </div>
@@ -2679,7 +2734,7 @@ export default function WorkforcePage() {
             )}
 
             {/* LOGIN & ACCOUNT ACCESS TAB */}
-            {editTab === 'account' && isAdmin && (
+            {editTab === 'account' && showAdminTabs && (
               <div className="space-y-4">
                 <div className="p-4 bg-surface-container-lowest border border-outline-variant/50 rounded-xl space-y-4">
                   <p className="text-[10px] font-bold text-primary uppercase tracking-wider">Access Permissions</p>
@@ -2930,7 +2985,7 @@ export default function WorkforcePage() {
               </div>
             </div>
           </form>
-        )}
+        ) : null}
       </Modal>
 
       {/* Reset Password Modal */}

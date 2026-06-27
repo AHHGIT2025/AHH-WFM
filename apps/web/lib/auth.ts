@@ -128,11 +128,36 @@ export const authOptions: NextAuthOptions = {
       }
       return true;
     },
-    async jwt({ token, user }) {
+    async jwt({ token, user, account }) {
       if (user) {
         token.role = (user as any).role || "EMPLOYEE";
         token.id = user.id;
         token.mustChangePassword = (user as any).mustChangePassword || false;
+
+        const email = user.email;
+        if (email) {
+          try {
+            const employees = await mockDb.getEmployees();
+            const employee = employees.find(
+              (e) => e.email.toLowerCase() === email.toLowerCase()
+            );
+            if (employee) {
+              token.id = employee.id;
+              token.role = employee.role;
+              token.email = employee.email;
+              if ((employee as any).employeeCode) {
+                token.employeeCode = (employee as any).employeeCode;
+              }
+              token.mustChangePassword = employee.mustChangePassword || false;
+            } else {
+              if (process.env.NODE_ENV === "development") {
+                console.warn(`[Auth Warning] No Employee matched for signed-in email: ${email}`);
+              }
+            }
+          } catch (e) {
+            console.error("Error aligning auth session to employee:", e);
+          }
+        }
       }
 
       // Sync latest values from database on subsequent requests
@@ -144,6 +169,10 @@ export const authOptions: NextAuthOptions = {
           if (employee) {
             token.role = employee.role;
             token.mustChangePassword = employee.mustChangePassword || false;
+            token.email = employee.email;
+            if ((employee as any).employeeCode) {
+              token.employeeCode = (employee as any).employeeCode;
+            }
           }
         } catch (e) {
           console.error("Error updating JWT token from DB:", e);
@@ -157,6 +186,9 @@ export const authOptions: NextAuthOptions = {
         (session.user as any).role = token.role;
         (session.user as any).id = token.id;
         (session.user as any).mustChangePassword = token.mustChangePassword;
+        if (token.employeeCode) {
+          (session.user as any).employeeCode = token.employeeCode;
+        }
       }
       return session;
     }

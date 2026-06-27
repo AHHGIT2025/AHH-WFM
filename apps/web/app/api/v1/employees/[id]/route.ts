@@ -6,6 +6,7 @@ import { hasPermission } from "@/lib/permissions";
 function normalizeEmployee(emp: any) {
   if (!emp) return emp;
   const copy = { ...emp };
+  copy.employeeCode = emp.id;
 
   // Normalize Company
   if (emp.company) {
@@ -100,17 +101,38 @@ function maskNumber(num: string | null | undefined): string | null {
   if (clean.length <= 4) return clean;
   return "*".repeat(clean.length - 4) + clean.substring(clean.length - 4);
 }
+function resolveEmployee(paramsId: string, authSession: any, employees: any[]) {
+  if (paramsId === "me") {
+    const userId = (authSession?.user as any)?.id;
+    let employee = userId ? employees.find(e => e.id === userId) : null;
+    if (!employee && authSession?.user?.email) {
+      const email = authSession.user.email;
+      employee = employees.find(e => e.email.toLowerCase() === email.toLowerCase());
+    }
+    if (!employee) {
+      return { error: "Employee profile not linked to logged-in account", status: 404 };
+    }
+    return { employee, targetId: employee.id };
+  } else {
+    const employee = employees.find(e => e.id === paramsId);
+    if (!employee) {
+      return { error: "Employee not found", status: 404 };
+    }
+    return { employee, targetId: employee.id };
+  }
+}
+
 export async function GET(request: Request, { params }: RouteParams) {
   const auth = await checkApiAuth(["ADMIN", "SUPERVISOR"]);
   if (auth.error) return auth.error;
 
   try {
     const employees = await mockDb.getEmployees();
-    const targetId = params.id === "me" ? (auth.session?.user as any)?.id : params.id;
-    const employee = employees.find(e => e.id === targetId);
-    if (!employee) {
-      return NextResponse.json({ error: "Employee not found" }, { status: 404 });
+    const resolution = resolveEmployee(params.id, auth.session, employees);
+    if ("error" in resolution) {
+      return NextResponse.json({ error: resolution.error }, { status: resolution.status });
     }
+    const { employee } = resolution;
 
     const normalized = normalizeEmployee(employee);
     delete (normalized as any).passwordHash;
@@ -150,6 +172,14 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     if (name !== undefined && name.trim() === "") {
       return NextResponse.json({ error: "Employee name is required" }, { status: 400 });
     }
+
+    const employees = await mockDb.getEmployees();
+    const resolution = resolveEmployee(params.id, auth.session, employees);
+    if ("error" in resolution) {
+      return NextResponse.json({ error: resolution.error }, { status: resolution.status });
+    }
+    const { employee: currentEmp, targetId } = resolution;
+
     if (email !== undefined) {
       if (email.trim() === "") {
         return NextResponse.json({ error: "Email is required" }, { status: 400 });
@@ -159,8 +189,7 @@ export async function PATCH(request: Request, { params }: RouteParams) {
         return NextResponse.json({ error: "Invalid email format" }, { status: 400 });
       }
 
-      const employees = await mockDb.getEmployees();
-      if (employees.some(e => e.id !== params.id && e.email.toLowerCase() === email.trim().toLowerCase())) {
+      if (employees.some(e => e.id !== targetId && e.email.toLowerCase() === email.trim().toLowerCase())) {
         return NextResponse.json({ error: "Employee email already exists" }, { status: 400 });
       }
     }
@@ -171,20 +200,14 @@ export async function PATCH(request: Request, { params }: RouteParams) {
       return NextResponse.json({ error: "Only admins can update profile photo from Web UI" }, { status: 403 });
     }
 
-    const employees = await mockDb.getEmployees();
-    const currentEmp = employees.find(e => e.id === params.id);
-    if (!currentEmp) {
-      return NextResponse.json({ error: "Employee not found" }, { status: 404 });
-    }
-
     // Prevent duplicate QID / Passport
     if (qidNumber !== undefined && qidNumber !== null && qidNumber.trim() !== "") {
-      if (employees.some(e => e.id !== params.id && e.qidNumber && e.qidNumber.trim() === qidNumber.trim())) {
+      if (employees.some(e => e.id !== targetId && e.qidNumber && e.qidNumber.trim() === qidNumber.trim())) {
         return NextResponse.json({ error: "Qatar ID number already exists" }, { status: 400 });
       }
     }
     if (passportNumber !== undefined && passportNumber !== null && passportNumber.trim() !== "") {
-      if (employees.some(e => e.id !== params.id && e.passportNumber && e.passportNumber.trim().toUpperCase() === passportNumber.trim().toUpperCase())) {
+      if (employees.some(e => e.id !== targetId && e.passportNumber && e.passportNumber.trim().toUpperCase() === passportNumber.trim().toUpperCase())) {
         return NextResponse.json({ error: "Passport number already exists" }, { status: 400 });
       }
     }
@@ -206,7 +229,7 @@ export async function PATCH(request: Request, { params }: RouteParams) {
       }
     }
 
-    const updated = await mockDb.updateEmployee(params.id, {
+    const updated = await mockDb.updateEmployee(targetId, {
       ...(name !== undefined ? { name: name.trim() } : {}),
       ...(email !== undefined ? { email: email.trim().toLowerCase() } : {}),
       ...(role !== undefined ? { role: role.trim() } : {}),
@@ -264,7 +287,7 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     }
 
     const employeesList = await mockDb.getEmployees();
-    const resolvedEmp = employeesList.find(e => e.id === params.id) || updated;
+    const resolvedEmp = employeesList.find(e => e.id === targetId) || updated;
     const normalized = normalizeEmployee(resolvedEmp);
     delete (normalized as any).passwordHash;
     if (!canViewIdentity(auth.session?.user)) {
@@ -283,7 +306,14 @@ export async function DELETE(request: Request, { params }: RouteParams) {
   if (auth.error) return auth.error;
 
   try {
-    const result = await mockDb.deactivateEmployee(params.id);
+    const employees = await mockDb.getEmployees();
+    const resolution = resolveEmployee(params.id, auth.session, employees);
+    if ("error" in resolution) {
+      return NextResponse.json({ error: resolution.error }, { status: resolution.status });
+    }
+    const { targetId } = resolution;
+
+    const result = await mockDb.deactivateEmployee(targetId);
     if (!result) {
       return NextResponse.json({ error: "Employee not found" }, { status: 404 });
     }
