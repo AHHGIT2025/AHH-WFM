@@ -30,6 +30,20 @@ const memoryKeyMap: Record<string, string> = {
   "leave-types": "leaveTypes",
 };
 
+const entityWhitelists: Record<string, string[]> = {
+  companies: ["companyCode", "companyName", "isActive"],
+  departments: ["name", "companyId"],
+  designations: ["code", "name", "description", "employeeCategory", "isSupervisorPosition", "isRelieverEligible", "isActive"],
+  "trade-classifications": ["code", "name", "description", "linkedDesignationId", "isActive"],
+  locations: ["companyId", "locationCode", "locationName", "address", "latitude", "longitude", "defaultGeofenceRadiusMeters", "isActive"],
+  "cost-centers": ["companyId", "costCenterCode", "costCenterName", "description", "sapCostCenterCode", "isActive"],
+  projects: ["companyId", "projectCode", "projectName", "projectType", "locationId", "costCenter", "isOnCallProject", "clientName", "clientCode", "contractNumber", "sapProjectCode", "sapCostCenterCode", "startDate", "endDate", "status"],
+  "project-sites": ["companyId", "projectId", "siteCode", "siteName", "address", "latitude", "longitude", "geofenceRadiusMeters", "isActive"],
+  "allowed-punch-locations": ["companyId", "name", "locationType", "latitude", "longitude", "radiusMeters", "isActive"],
+  "standby-rules": ["ruleName", "designationId", "tradeClassificationId", "standbyRequired", "relieverRequiredForLeave", "relieverRequiredForOff", "isActive"],
+  "leave-types": ["code", "name", "description", "isPaid", "requiresDocument", "workflowCode", "defaultAnnualAllocation", "maxDaysPerRequest", "allowHalfDay", "allowCarryForward", "carryForwardLimit", "genderRestriction", "applicableAfterProbation", "isActive"]
+};
+
 function normalizeMasterPayload(entity: string, payload: any, isUpdate = false) {
   if (!payload) return payload;
   const copy = { ...payload };
@@ -61,56 +75,57 @@ function normalizeMasterPayload(entity: string, payload: any, isUpdate = false) 
     }
   }
 
-  // 3. Remove read-only fields
+  // 3. Map display fields (code/name/type) to DB specific fields only where needed
+  if (entity === "companies") {
+    if (copy.code !== undefined && copy.companyCode === undefined) copy.companyCode = copy.code;
+    if (copy.name !== undefined && copy.companyName === undefined) copy.companyName = copy.name;
+  }
+  else if (entity === "locations") {
+    if (copy.code !== undefined && copy.locationCode === undefined) copy.locationCode = copy.code;
+    if (copy.name !== undefined && copy.locationName === undefined) copy.locationName = copy.name;
+  }
+  else if (entity === "cost-centers") {
+    if (copy.code !== undefined && copy.costCenterCode === undefined) copy.costCenterCode = copy.code;
+    if (copy.name !== undefined && copy.costCenterName === undefined) copy.costCenterName = copy.name;
+  }
+  else if (entity === "projects") {
+    if (copy.code !== undefined && copy.projectCode === undefined) copy.projectCode = copy.code;
+    if (copy.name !== undefined && copy.projectName === undefined) copy.projectName = copy.name;
+    if (copy.type !== undefined && copy.projectType === undefined) copy.projectType = copy.type;
+
+    if (copy.costCenter === undefined || copy.costCenter === null) {
+      copy.costCenter = "";
+    }
+    // Map isActive to status for projects
+    if (copy.isActive !== undefined) {
+      copy.status = copy.isActive ? "ACTIVE" : "INACTIVE";
+    }
+    if (!copy.status) {
+      copy.status = "ACTIVE";
+    }
+  }
+  else if (entity === "project-sites") {
+    if (copy.code !== undefined && copy.siteCode === undefined) copy.siteCode = copy.code;
+    if (copy.name !== undefined && copy.siteName === undefined) copy.siteName = copy.name;
+  }
+
+  // 4. Filter copy payload using whitelist to prevent database unknown field errors
+  const whitelist = entityWhitelists[entity];
+  if (whitelist) {
+    for (const key of Object.keys(copy)) {
+      if (!whitelist.includes(key)) {
+        console.log(`[normalizeMasterPayload] Stripping unsupported field "${key}" for entity "${entity}"`);
+        delete copy[key];
+      }
+    }
+  }
+
+  // 5. Remove read-only fields
   if (isUpdate || copy.id === "") {
     delete copy.id;
   }
   delete copy.createdAt;
   delete copy.updatedAt;
-
-  // 4. Map display fields (code/name) to DB specific fields only where needed
-  if (entity === "companies") {
-    if (copy.code !== undefined && copy.companyCode === undefined) copy.companyCode = copy.code;
-    if (copy.name !== undefined && copy.companyName === undefined) copy.companyName = copy.name;
-    delete copy.code;
-    delete copy.name;
-  }
-  else if (entity === "locations") {
-    if (copy.code !== undefined && copy.locationCode === undefined) copy.locationCode = copy.code;
-    if (copy.name !== undefined && copy.locationName === undefined) copy.locationName = copy.name;
-    delete copy.code;
-    delete copy.name;
-  }
-  else if (entity === "cost-centers") {
-    if (copy.code !== undefined && copy.costCenterCode === undefined) copy.costCenterCode = copy.code;
-    if (copy.name !== undefined && copy.costCenterName === undefined) copy.costCenterName = copy.name;
-    delete copy.code;
-    delete copy.name;
-  }
-  else if (entity === "projects") {
-    if (copy.code !== undefined && copy.projectCode === undefined) copy.projectCode = copy.code;
-    if (copy.name !== undefined && copy.projectName === undefined) copy.projectName = copy.name;
-    delete copy.code;
-    delete copy.name;
-  }
-  else if (entity === "project-sites") {
-    if (copy.code !== undefined && copy.siteCode === undefined) copy.siteCode = copy.code;
-    if (copy.name !== undefined && copy.siteName === undefined) copy.siteName = copy.name;
-    delete copy.code;
-    delete copy.name;
-  }
-  else if (entity === "departments") {
-    delete copy.code;
-    const allowed = ["name", "companyId", "isActive"];
-    for (const key of Object.keys(copy)) {
-      if (!allowed.includes(key)) {
-        delete copy[key];
-      }
-    }
-  }
-  else if (entity === "allowed-punch-locations") {
-    delete copy.code;
-  }
 
   return copy;
 }
