@@ -1160,9 +1160,6 @@ const employeeInclude = {
   positionCategory: true,
   tradeClassification: true,
   defaultPunchLocation: true,
-  reportingManager: true,
-  projectSupervisor: true,
-  siteSupervisor: true
 };
 
 function buildEmployeePrismaData(input: any, isUpdate: boolean) {
@@ -1207,7 +1204,10 @@ function buildEmployeePrismaData(input: any, isUpdate: boolean) {
     "isLocked",
     "usernameStrategy",
     "webAccessEnabled",
-    "mobileAccessEnabled"
+    "mobileAccessEnabled",
+    "reportingManagerId",
+    "projectSupervisorId",
+    "siteSupervisorId"
   ];
 
   const dateFields = [
@@ -1264,10 +1264,7 @@ function buildEmployeePrismaData(input: any, isUpdate: boolean) {
     { key: "positionCategoryId", relationName: "positionCategory" },
     { key: "defaultProjectId", relationName: "defaultProject" },
     { key: "defaultSiteId", relationName: "defaultSite" },
-    { key: "immediateSupervisorId", relationName: "immediateSupervisor" },
-    { key: "reportingManagerId", relationName: "reportingManager" },
-    { key: "projectSupervisorId", relationName: "projectSupervisor" },
-    { key: "siteSupervisorId", relationName: "siteSupervisor" }
+    { key: "immediateSupervisorId", relationName: "immediateSupervisor" }
   ];
 
   for (const rel of relations) {
