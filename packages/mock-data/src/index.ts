@@ -3987,7 +3987,7 @@ export const mockDb = {
 
         if (payload.username) {
           const existingUsername = await tx.employee.findFirst({
-            where: { username: { equals: payload.username, mode: 'insensitive' } }
+            where: { username: { equals: payload.username } }
           });
           if (existingUsername) throw new Error("Username already exists");
         }
@@ -3999,7 +3999,7 @@ export const mockDb = {
 
         if (payload.passportNumber) {
           const existingPassport = await tx.employee.findFirst({
-            where: { passportNumber: { equals: payload.passportNumber, mode: 'insensitive' } }
+            where: { passportNumber: { equals: payload.passportNumber } }
           });
           if (existingPassport) throw new Error("Passport number already exists");
         }
@@ -4010,7 +4010,7 @@ export const mockDb = {
         });
 
         const systemRole = await tx.systemRole.findFirst({
-          where: { name: { equals: payload.role, mode: 'insensitive' } }
+          where: { name: { equals: payload.role } }
         });
 
         if (systemRole) {
