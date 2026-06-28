@@ -38,7 +38,7 @@ const entityWhitelists: Record<string, string[]> = {
   locations: ["companyId", "locationCode", "locationName", "address", "latitude", "longitude", "defaultGeofenceRadiusMeters", "isActive"],
   "cost-centers": ["companyId", "costCenterCode", "costCenterName", "description", "sapCostCenterCode", "isActive"],
   projects: ["companyId", "projectCode", "projectName", "projectType", "locationId", "costCenter", "isOnCallProject", "clientName", "clientCode", "contractNumber", "sapProjectCode", "sapCostCenterCode", "startDate", "endDate", "status"],
-  "project-sites": ["companyId", "projectId", "siteCode", "siteName", "address", "latitude", "longitude", "geofenceRadiusMeters", "isActive"],
+  "project-sites": ["companyId", "projectId", "siteCode", "siteName", "address", "latitude", "longitude", "geofenceRadiusMeters", "sapSiteCode", "status", "locationId"],
   "allowed-punch-locations": ["companyId", "name", "locationType", "latitude", "longitude", "radiusMeters", "isActive"],
   "standby-rules": ["ruleName", "designationId", "tradeClassificationId", "standbyRequired", "relieverRequiredForLeave", "relieverRequiredForOff", "isActive"],
   "leave-types": ["code", "name", "description", "isPaid", "requiresDocument", "workflowCode", "defaultAnnualAllocation", "maxDaysPerRequest", "allowHalfDay", "allowCarryForward", "carryForwardLimit", "genderRestriction", "applicableAfterProbation", "isActive"]
@@ -107,6 +107,14 @@ function normalizeMasterPayload(entity: string, payload: any, isUpdate = false) 
   else if (entity === "project-sites") {
     if (copy.code !== undefined && copy.siteCode === undefined) copy.siteCode = copy.code;
     if (copy.name !== undefined && copy.siteName === undefined) copy.siteName = copy.name;
+
+    // Map isActive to status for project-sites
+    if (copy.isActive !== undefined) {
+      copy.status = copy.isActive ? "ACTIVE" : "INACTIVE";
+    }
+    if (!copy.status) {
+      copy.status = "ACTIVE";
+    }
   }
 
   // 4. Filter copy payload using whitelist to prevent database unknown field errors
@@ -126,6 +134,10 @@ function normalizeMasterPayload(entity: string, payload: any, isUpdate = false) 
   }
   delete copy.createdAt;
   delete copy.updatedAt;
+
+  if (entity === "project-sites") {
+    console.log(`[DEVELOPMENT] Normalized payload for project-sites:`, JSON.stringify(copy, null, 2));
+  }
 
   return copy;
 }
