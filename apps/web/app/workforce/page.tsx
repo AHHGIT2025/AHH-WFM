@@ -6,6 +6,29 @@ import { Card, Badge, Input, Button, Modal } from "@ahh-wfm/ui/src";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 
+const countriesList = [
+  "Qatar",
+  "India",
+  "Nepal",
+  "Bangladesh",
+  "Sri Lanka",
+  "Philippines",
+  "Pakistan",
+  "Egypt",
+  "Jordan",
+  "Syria",
+  "Lebanon",
+  "Yemen",
+  "Sudan",
+  "Kenya",
+  "Uganda",
+  "Ghana",
+  "Nigeria",
+  "Indonesia",
+  "Morocco",
+  "Tunisia"
+];
+
 function formatCompanyLabel(company: any) {
   if (!company) return "Unnamed Company";
   const code = company.code || company.companyCode || "";
@@ -172,6 +195,7 @@ export default function WorkforcePage() {
   const [empDateOfJoining, setEmpDateOfJoining] = useState("");
   const [empSponsor, setEmpSponsor] = useState("");
   const [sponsorMode, setSponsorMode] = useState<"select" | "manual">("select");
+  const [countryMode, setCountryMode] = useState<"select" | "manual">("select");
   const [companyFilter, setCompanyFilter] = useState("all");
   const [addTab, setAddTab] = useState("basic");
   const [prevCompanyId, setPrevCompanyId] = useState("");
@@ -715,6 +739,7 @@ export default function WorkforcePage() {
         setEmpDateOfJoining("");
         setEmpSponsor("");
         setSponsorMode("select");
+        setCountryMode("select");
         setAddTab("basic");
         fetchDb();
       } else {
@@ -998,6 +1023,11 @@ export default function WorkforcePage() {
     setEmpPassportExpiryDate(emp.passportExpiryDate ? new Date(emp.passportExpiryDate).toISOString().split("T")[0] : "");
     setEmpPassportIssueDate(emp.passportIssueDate ? new Date(emp.passportIssueDate).toISOString().split("T")[0] : "");
     setEmpPassportIssuingCountry(emp.passportIssuingCountry || "");
+    if (emp.passportIssuingCountry && !countriesList.includes(emp.passportIssuingCountry)) {
+      setCountryMode("manual");
+    } else {
+      setCountryMode("select");
+    }
     setEmpDateOfJoining(emp.dateOfJoining ? new Date(emp.dateOfJoining).toISOString().split("T")[0] : "");
     setEmpSponsor(emp.sponsor || "");
     const matchesCompany = companies.some(c => (c.name || c.companyName || "").toLowerCase() === (emp.sponsor || "").toLowerCase());
@@ -1265,6 +1295,7 @@ export default function WorkforcePage() {
               setEmpUsername("");
               setEmpWebAccessEnabled(true);
               setEmpMobileAccessEnabled(true);
+              setCountryMode("select");
               setAddTab("basic");
               setIsAddEmpOpen(true);
             }}
@@ -1439,14 +1470,21 @@ export default function WorkforcePage() {
                       variant={
                         emp.status === "On Duty" || emp.dutyStatus === "ON_DUTY"
                           ? "success"
-                          : emp.status === "On Break"
+                          : emp.status === "On Break" || emp.dutyStatus === "ON_BREAK"
                           ? "warning"
-                          : emp.status === "On Leave"
+                          : emp.status === "On Leave" || emp.dutyStatus === "ON_LEAVE"
                           ? "pending"
+                          : emp.status === "Suspended" || emp.dutyStatus === "SUSPENDED"
+                          ? "error"
                           : "neutral"
                       }
                     >
-                      {emp.status || "Offline"}
+                      {emp.dutyStatus === "ON_DUTY" ? "On Duty" :
+                       emp.dutyStatus === "OFF_DUTY" ? "Offline" :
+                       emp.dutyStatus === "ON_BREAK" ? "On Break" :
+                       emp.dutyStatus === "ON_LEAVE" ? "On Leave" :
+                       emp.dutyStatus === "SUSPENDED" ? "Suspended" :
+                       emp.status || "Offline"}
                     </Badge>
                   )}
                 </div>
@@ -1745,6 +1783,7 @@ export default function WorkforcePage() {
                     <option value="ON_DUTY">On Duty</option>
                     <option value="ON_BREAK">On Break</option>
                     <option value="ON_LEAVE">On Leave</option>
+                    <option value="SUSPENDED">Suspended</option>
                   </select>
                 </div>
               </div>
@@ -1779,7 +1818,7 @@ export default function WorkforcePage() {
                       onChange={(e) => setEmpDeptId(e.target.value)}
                     >
                       <option value="">Select Department (Optional)</option>
-                      {departments.filter(d => !empCompanyId || d.companyId === empCompanyId).map((d) => (
+                      {departments.filter(d => !empCompanyId || !d.companyId || d.companyId === empCompanyId).map((d) => (
                         <option key={d.id} value={d.id}>{formatDepartmentLabel(d)}</option>
                       ))}
                     </select>
@@ -1884,11 +1923,12 @@ export default function WorkforcePage() {
                 <p className="text-[10px] font-bold text-primary uppercase tracking-wider">Location & Allocation Settings</p>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
-                    <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Default Location</label>
+                    <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Default Location *</label>
                     <select
                       className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
                       value={empDefaultLocationId}
                       onChange={(e) => setEmpDefaultLocationId(e.target.value)}
+                      required={empEmploymentStatus === 'ACTIVE'}
                     >
                       <option value="">Select Location</option>
                       {locations.filter(l => !empCompanyId || !l.companyId || l.companyId === empCompanyId).length === 0 ? (
@@ -1966,12 +2006,48 @@ export default function WorkforcePage() {
                   onChange={(e) => setEmpPassportNumber(e.target.value)}
                   placeholder="e.g. EP123456"
                 />
-                <Input
-                  label="Passport Issue Country"
-                  value={empPassportIssuingCountry}
-                  onChange={(e) => setEmpPassportIssuingCountry(e.target.value)}
-                  placeholder="e.g. India"
-                />
+                {countryMode === "select" ? (
+                  <div className="space-y-1">
+                    <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Passport Issue Country</label>
+                    <select
+                      className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-2.5 py-2 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                      value={empPassportIssuingCountry}
+                      onChange={(e) => {
+                        if (e.target.value === "manual") {
+                          setCountryMode("manual");
+                          setEmpPassportIssuingCountry("");
+                        } else {
+                          setEmpPassportIssuingCountry(e.target.value);
+                        }
+                      }}
+                    >
+                      <option value="">Select Country</option>
+                      {countriesList.map(c => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                      <option value="manual">Other / Manual Entry</option>
+                    </select>
+                  </div>
+                ) : (
+                  <div className="space-y-1 relative">
+                    <Input
+                      label="Passport Issue Country"
+                      value={empPassportIssuingCountry}
+                      onChange={(e) => setEmpPassportIssuingCountry(e.target.value)}
+                      placeholder="Enter country name"
+                    />
+                    <button
+                      type="button"
+                      className="absolute right-2 top-8 text-[10px] font-bold text-primary hover:underline"
+                      onClick={() => {
+                        setCountryMode("select");
+                        setEmpPassportIssuingCountry("");
+                      }}
+                    >
+                      Use Dropdown
+                    </button>
+                  </div>
+                )}
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <Input
@@ -2060,9 +2136,13 @@ export default function WorkforcePage() {
                       onChange={(e) => setEmpDefaultPunchLocationId(e.target.value)}
                     >
                       <option value="">-- Let System Decide Automatically --</option>
-                      {allowedPunchLocations.map((l) => (
-                        <option key={l.id} value={l.id}>{l.name} ({l.locationType})</option>
-                      ))}
+                      {allowedPunchLocations.length === 0 ? (
+                        <option value="" disabled>No punch locations configured. Please create punch locations in Master Data first.</option>
+                      ) : (
+                        allowedPunchLocations.map((l) => (
+                          <option key={l.id} value={l.id}>{l.name} ({l.locationType})</option>
+                        ))
+                      )}
                     </select>
                   </div>
                   <div className="space-y-1">
@@ -2385,6 +2465,7 @@ export default function WorkforcePage() {
                       <option value="ON_DUTY">On Duty</option>
                       <option value="ON_BREAK">On Break</option>
                       <option value="ON_LEAVE">On Leave</option>
+                      <option value="SUSPENDED">Suspended</option>
                     </select>
                   </div>
                 </div>
@@ -2431,7 +2512,7 @@ export default function WorkforcePage() {
                       <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Department</label>
                       <select className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" value={empDeptId} onChange={(e) => setEmpDeptId(e.target.value)}>
                         <option value="">Select Department (Optional)</option>
-                        {departments.filter(d => !empCompanyId || d.companyId === empCompanyId).map((d) => <option key={d.id} value={d.id}>{formatDepartmentLabel(d)}</option>)}
+                        {departments.filter(d => !empCompanyId || !d.companyId || d.companyId === empCompanyId).map((d) => <option key={d.id} value={d.id}>{formatDepartmentLabel(d)}</option>)}
                       </select>
                     </div>
                   </div>
@@ -2510,8 +2591,8 @@ export default function WorkforcePage() {
                   <p className="text-[10px] font-bold text-primary uppercase tracking-wider">Location & Allocation Settings</p>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1">
-                      <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Default Location</label>
-                      <select className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" value={empDefaultLocationId} onChange={(e) => setEmpDefaultLocationId(e.target.value)}>
+                      <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Default Location *</label>
+                      <select className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" value={empDefaultLocationId} onChange={(e) => setEmpDefaultLocationId(e.target.value)} required={empEmploymentStatus === 'ACTIVE'}>
                         <option value="">Select Location</option>
                         {locations.filter(l => !empCompanyId || !l.companyId || l.companyId === empCompanyId).length === 0 ? (
                           <option value="" disabled>No locations found for selected company</option>
@@ -2559,7 +2640,48 @@ export default function WorkforcePage() {
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <Input label="Passport Number" value={empPassportNumber} onChange={(e) => setEmpPassportNumber(e.target.value)} placeholder="e.g. EP123456" />
-                  <Input label="Passport Issue Country" value={empPassportIssuingCountry} onChange={(e) => setEmpPassportIssuingCountry(e.target.value)} placeholder="e.g. India" />
+                  {countryMode === "select" ? (
+                    <div className="space-y-1">
+                      <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Passport Issue Country</label>
+                      <select
+                        className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-2.5 py-2 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                        value={empPassportIssuingCountry}
+                        onChange={(e) => {
+                          if (e.target.value === "manual") {
+                            setCountryMode("manual");
+                            setEmpPassportIssuingCountry("");
+                          } else {
+                            setEmpPassportIssuingCountry(e.target.value);
+                          }
+                        }}
+                      >
+                        <option value="">Select Country</option>
+                        {countriesList.map(c => (
+                          <option key={c} value={c}>{c}</option>
+                        ))}
+                        <option value="manual">Other / Manual Entry</option>
+                      </select>
+                    </div>
+                  ) : (
+                    <div className="space-y-1 relative">
+                      <Input
+                        label="Passport Issue Country"
+                        value={empPassportIssuingCountry}
+                        onChange={(e) => setEmpPassportIssuingCountry(e.target.value)}
+                        placeholder="Enter country name"
+                      />
+                      <button
+                        type="button"
+                        className="absolute right-2 top-8 text-[10px] font-bold text-primary hover:underline"
+                        onClick={() => {
+                          setCountryMode("select");
+                          setEmpPassportIssuingCountry("");
+                        }}
+                      >
+                        Use Dropdown
+                      </button>
+                    </div>
+                  )}
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <Input label="Passport Issue Date" type="date" value={empPassportIssueDate} onChange={(e) => setEmpPassportIssueDate(e.target.value)} />
@@ -2629,7 +2751,11 @@ export default function WorkforcePage() {
                       <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Default Mobile Punch Location</label>
                       <select className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-2.5 py-2 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" value={empDefaultPunchLocationId} onChange={(e) => setEmpDefaultPunchLocationId(e.target.value)}>
                         <option value="">-- Let System Decide Automatically --</option>
-                        {allowedPunchLocations.map((l) => <option key={l.id} value={l.id}>{l.name} ({l.locationType})</option>)}
+                        {allowedPunchLocations.length === 0 ? (
+                          <option value="" disabled>No punch locations configured. Please create punch locations in Master Data first.</option>
+                        ) : (
+                          allowedPunchLocations.map((l) => <option key={l.id} value={l.id}>{l.name} ({l.locationType})</option>)
+                        )}
                       </select>
                     </div>
                     <div className="space-y-1">
@@ -2649,7 +2775,12 @@ export default function WorkforcePage() {
 
                 <div className="p-4 bg-primary/5 border border-primary/10 rounded-xl space-y-3 mt-4">
                   <p className="text-[10px] font-bold text-primary uppercase tracking-wider font-mono">Additional Punch Locations Management</p>
-                  {empAllowMultiplePunchLocations && (
+                  {allowedPunchLocations.length === 0 ? (
+                    <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 text-yellow-600 text-xs font-semibold rounded-lg flex items-center gap-2">
+                      <span className="material-symbols-outlined text-sm">warning</span>
+                      <span>No punch locations configured. Please create punch locations in Master Data first.</span>
+                    </div>
+                  ) : empAllowMultiplePunchLocations && (
                     <div className="space-y-2">
                       <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Additional Allowed Locations</label>
                       <div className="flex gap-2 mb-2 flex-wrap">

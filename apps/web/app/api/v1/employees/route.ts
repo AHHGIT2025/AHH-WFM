@@ -173,8 +173,21 @@ export async function POST(request: Request) {
     }
 
     // New business validation: Company is required for new active employees
-    if ((employmentStatus === "ACTIVE" || !employmentStatus) && (!companyId || companyId.trim() === "")) {
-      return NextResponse.json({ error: "Company is required" }, { status: 400 });
+    if (employmentStatus === "ACTIVE") {
+      if (!companyId || companyId.trim() === "") {
+        return NextResponse.json({ error: "Company is required" }, { status: 400 });
+      }
+      if (!defaultLocationId || defaultLocationId.trim() === "") {
+        return NextResponse.json({ error: "Default Location is required" }, { status: 400 });
+      }
+    }
+
+    if (passportIssueDate && new Date(passportIssueDate) > new Date()) {
+      return NextResponse.json({ error: "Passport issue date cannot be in the future" }, { status: 400 });
+    }
+
+    if (passportNumber && passportNumber.trim() !== "" && (!passportIssuingCountry || passportIssuingCountry.trim() === "")) {
+      return NextResponse.json({ error: "Passport issue country is required when passport number is provided" }, { status: 400 });
     }
 
     const employees = await mockDb.getEmployees();

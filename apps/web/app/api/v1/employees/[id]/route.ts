@@ -217,6 +217,20 @@ export async function PATCH(request: Request, { params }: RouteParams) {
       }
     }
 
+    // New business validation: Company & Default Location required for active employees
+    const targetStatus = employmentStatus !== undefined ? employmentStatus : currentEmp.employmentStatus;
+    const targetCompanyId = companyId !== undefined ? companyId : currentEmp.companyId;
+    const targetDefaultLocationId = defaultLocationId !== undefined ? defaultLocationId : currentEmp.defaultLocationId;
+
+    if (targetStatus === "ACTIVE") {
+      if (!targetCompanyId || targetCompanyId.trim() === "") {
+        return NextResponse.json({ error: "Company is required." }, { status: 400 });
+      }
+      if (!targetDefaultLocationId || targetDefaultLocationId.trim() === "") {
+        return NextResponse.json({ error: "Default Location is required." }, { status: 400 });
+      }
+    }
+
     // Date validations
     const resolvedJoining = dateOfJoining !== undefined ? dateOfJoining : currentEmp.dateOfJoining;
     const resolvedQidExpiry = qidExpiryDate !== undefined ? qidExpiryDate : currentEmp.qidExpiryDate;
@@ -232,6 +246,17 @@ export async function PATCH(request: Request, { params }: RouteParams) {
       if (new Date(resolvedPassportExpiry) < new Date(resolvedPassportIssue)) {
         return NextResponse.json({ error: "Passport expiry date cannot be before issue date" }, { status: 400 });
       }
+    }
+
+    if (resolvedPassportIssue && new Date(resolvedPassportIssue) > new Date()) {
+      return NextResponse.json({ error: "Passport issue date cannot be in the future" }, { status: 400 });
+    }
+
+    const resolvedPassportNumber = passportNumber !== undefined ? passportNumber : currentEmp.passportNumber;
+    const resolvedPassportIssuingCountry = passportIssuingCountry !== undefined ? passportIssuingCountry : currentEmp.passportIssuingCountry;
+
+    if (resolvedPassportNumber && resolvedPassportNumber.trim() !== "" && (!resolvedPassportIssuingCountry || resolvedPassportIssuingCountry.trim() === "")) {
+      return NextResponse.json({ error: "Passport issue country is required when passport number is provided" }, { status: 400 });
     }
 
     const updated = await mockDb.updateEmployee(targetId, {
