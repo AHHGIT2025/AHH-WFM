@@ -14,7 +14,9 @@
     "build": "npm run build --workspaces",
     "lint": "npm run lint --workspaces",
     "db:generate": "npm run db:generate --workspace=packages/database",
-    "db:push": "npm run db:push --workspace=packages/database"
+    "db:push": "npm run db:push --workspace=packages/database",
+    "diagnose:users": "ts-node -T -P scripts/tsconfig.json scripts/diagnose-orphan-users.ts",
+    "cleanup:users": "ts-node -T -P scripts/tsconfig.json scripts/cleanup-orphan-users.ts"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",

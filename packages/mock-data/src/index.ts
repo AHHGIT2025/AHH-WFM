@@ -1205,8 +1205,9 @@ function buildEmployeePrismaData(input: any, isUpdate: boolean) {
     "isLoginEnabled",
     "mustChangePassword",
     "isLocked",
-    "failedLoginAttempts",
-    "usernameStrategy"
+    "usernameStrategy",
+    "webAccessEnabled",
+    "mobileAccessEnabled"
   ];
 
   const dateFields = [
@@ -3942,6 +3943,16 @@ export const mockDb = {
     if (generatedUsername && employees.some(e => e.username && e.username.toLowerCase() === generatedUsername.toLowerCase())) {
       throw new Error("Username already exists");
     }
+    if (empData.qidNumber && empData.qidNumber.trim() !== "") {
+      if (employees.some(e => e.qidNumber && e.qidNumber.trim() === empData.qidNumber.trim())) {
+        throw new Error("Qatar ID number already exists");
+      }
+    }
+    if (empData.passportNumber && empData.passportNumber.trim() !== "") {
+      if (employees.some(e => e.passportNumber && e.passportNumber.trim().toUpperCase() === empData.passportNumber.trim().toUpperCase())) {
+        throw new Error("Passport number already exists");
+      }
+    }
 
     const payload = {
       ...empData,
@@ -3966,15 +3977,67 @@ export const mockDb = {
     if (isDbConnected()) {
       await seedMySQL();
       const prismaData = buildEmployeePrismaData(payload, false);
-      const emp = await prismaClient.employee.create({
-        data: prismaData,
-        include: employeeInclude
+      return await prismaClient.$transaction(async (tx) => {
+        // Uniqueness checks within the transaction
+        const existingId = await tx.employee.findUnique({ where: { id: payload.id } });
+        if (existingId) throw new Error("Employee ID already exists");
+
+        const existingEmail = await tx.employee.findUnique({ where: { email: payload.email } });
+        if (existingEmail) throw new Error("Employee email already exists");
+
+        if (payload.username) {
+          const existingUsername = await tx.employee.findFirst({
+            where: { username: { equals: payload.username, mode: 'insensitive' } }
+          });
+          if (existingUsername) throw new Error("Username already exists");
+        }
+
+        if (payload.qidNumber) {
+          const existingQid = await tx.employee.findFirst({ where: { qidNumber: payload.qidNumber } });
+          if (existingQid) throw new Error("Qatar ID number already exists");
+        }
+
+        if (payload.passportNumber) {
+          const existingPassport = await tx.employee.findFirst({
+            where: { passportNumber: { equals: payload.passportNumber, mode: 'insensitive' } }
+          });
+          if (existingPassport) throw new Error("Passport number already exists");
+        }
+
+        const emp = await tx.employee.create({
+          data: prismaData,
+          include: employeeInclude
+        });
+
+        const systemRole = await tx.systemRole.findFirst({
+          where: { name: { equals: payload.role, mode: 'insensitive' } }
+        });
+
+        if (systemRole) {
+          await tx.userRoleAssignment.create({
+            data: {
+              employeeId: emp.id,
+              roleId: systemRole.id,
+              assignedById: "SYSTEM"
+            }
+          });
+        }
+
+        return emp;
       });
-      return emp;
     }
 
     const db = readDb();
     db.employees.push(payload);
+    db.userRoleAssignments = db.userRoleAssignments || [];
+    db.userRoleAssignments.push({
+      id: uuid(),
+      employeeId: payload.id,
+      roleId: payload.role,
+      assignedById: "SYSTEM",
+      assignedAt: new Date().toISOString(),
+      isActive: true
+    });
     writeDb(db);
     return payload;
   },
@@ -3995,6 +4058,14 @@ export const mockDb = {
     }
     if (!currentEmp) return null;
 
+    // Duplicates checks for update
+    const targetId = currentEmp.id;
+    if (data.email && data.email.toLowerCase() !== (currentEmp.email || "").toLowerCase()) {
+      if (employees.some(e => e.id !== targetId && e.email.toLowerCase() === data.email.toLowerCase())) {
+        throw new Error("Employee email already exists");
+      }
+    }
+
     const newCategory = data.employeeCategory || currentEmp.employeeCategory || "WHITE_COLLAR";
     const newStrategy = data.usernameStrategy || currentEmp.usernameStrategy || "MANUAL";
     let newUsername = data.username || currentEmp.username;
@@ -4009,8 +4080,20 @@ export const mockDb = {
     }
 
     if (newUsername && newUsername.toLowerCase() !== (currentEmp.username || "").toLowerCase()) {
-      if (employees.some(e => e.id !== currentEmp.id && e.username && e.username.toLowerCase() === newUsername.toLowerCase())) {
+      if (employees.some(e => e.id !== targetId && e.username && e.username.toLowerCase() === newUsername.toLowerCase())) {
         throw new Error("Username already exists");
+      }
+    }
+
+    if (data.qidNumber !== undefined && data.qidNumber !== null && data.qidNumber !== (currentEmp.qidNumber || "")) {
+      if (data.qidNumber.trim() !== "" && employees.some(e => e.id !== targetId && e.qidNumber && e.qidNumber.trim() === data.qidNumber.trim())) {
+        throw new Error("Qatar ID number already exists");
+      }
+    }
+
+    if (data.passportNumber !== undefined && data.passportNumber !== null && data.passportNumber.toUpperCase() !== (currentEmp.passportNumber || "").toUpperCase()) {
+      if (data.passportNumber.trim() !== "" && employees.some(e => e.id !== targetId && e.passportNumber && e.passportNumber.trim().toUpperCase() === data.passportNumber.trim().toUpperCase())) {
+        throw new Error("Passport number already exists");
       }
     }
 
@@ -4054,7 +4137,7 @@ export const mockDb = {
         return emp;
       } catch (e) {
         console.error(`[mockDb] Failed to update employee ${currentEmp.id} in MySQL:`, e);
-        return null;
+        throw e;
       }
     }
 

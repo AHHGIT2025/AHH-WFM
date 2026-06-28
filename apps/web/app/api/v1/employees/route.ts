@@ -155,6 +155,22 @@ export async function POST(request: Request) {
     if (!role || role.trim() === "") {
       return NextResponse.json({ error: "Role is required" }, { status: 400 });
     }
+    if (!employeeCategory || (employeeCategory !== "WHITE_COLLAR" && employeeCategory !== "BLUE_COLLAR")) {
+      return NextResponse.json({ error: "Valid Worker Category is required" }, { status: 400 });
+    }
+    if (!employmentStatus || employmentStatus.trim() === "") {
+      return NextResponse.json({ error: "Employment Status is required" }, { status: 400 });
+    }
+    if (!dutyStatus || dutyStatus.trim() === "") {
+      return NextResponse.json({ error: "Duty Status is required" }, { status: 400 });
+    }
+
+    if (webAccessEnabled !== undefined && typeof webAccessEnabled !== "boolean") {
+      return NextResponse.json({ error: "Web access flag must be a boolean" }, { status: 400 });
+    }
+    if (mobileAccessEnabled !== undefined && typeof mobileAccessEnabled !== "boolean") {
+      return NextResponse.json({ error: "Mobile access flag must be a boolean" }, { status: 400 });
+    }
 
     // New business validation: Company is required for new active employees
     if ((employmentStatus === "ACTIVE" || !employmentStatus) && (!companyId || companyId.trim() === "")) {
@@ -164,28 +180,39 @@ export async function POST(request: Request) {
     const employees = await mockDb.getEmployees();
     // 2. Prevent duplicate Employee ID
     if (employees.some(e => e.id.toLowerCase() === id.trim().toLowerCase())) {
-      return NextResponse.json({ error: "Employee ID already exists" }, { status: 400 });
+      return NextResponse.json({ error: "Employee ID already exists" }, { status: 409 });
     }
     // 3. Prevent duplicate Email
     if (employees.some(e => e.email.toLowerCase() === email.trim().toLowerCase())) {
-      return NextResponse.json({ error: "Employee email already exists" }, { status: 400 });
+      return NextResponse.json({ error: "Employee email already exists" }, { status: 409 });
     }
-    // 4. Prevent duplicate Username (if local login)
-    if (username && username.trim() !== "") {
-      if (employees.some(e => e.username && e.username.toLowerCase() === username.trim().toLowerCase())) {
-        return NextResponse.json({ error: "Username already exists" }, { status: 400 });
+
+    // Resolve username Strategy and normalize/validate username
+    const category = employeeCategory || "WHITE_COLLAR";
+    const resolvedStrategy = usernameStrategy || (category === "BLUE_COLLAR" ? "EMPLOYEE_CODE" : "EMAIL");
+    let generatedUsername = username;
+    if (!generatedUsername && resolvedStrategy !== "MANUAL") {
+      generatedUsername = resolvedStrategy === "EMPLOYEE_CODE" ? id.trim() : email.trim().toLowerCase();
+    }
+
+    if (generatedUsername && generatedUsername.trim() !== "") {
+      const normalizedUsername = generatedUsername.trim().toLowerCase();
+      if (employees.some(e => e.username && e.username.toLowerCase() === normalizedUsername)) {
+        return NextResponse.json({ error: "Username already exists" }, { status: 409 });
       }
+    } else if (isLoginEnabled || webAccessEnabled || mobileAccessEnabled) {
+      return NextResponse.json({ error: "Username is required for accounts with login enabled" }, { status: 400 });
     }
 
     // 5. Prevent duplicate QID / Passport
     if (qidNumber && qidNumber.trim() !== "") {
       if (employees.some(e => e.qidNumber && e.qidNumber.trim() === qidNumber.trim())) {
-        return NextResponse.json({ error: "Qatar ID number already exists" }, { status: 400 });
+        return NextResponse.json({ error: "Qatar ID number already exists" }, { status: 409 });
       }
     }
     if (passportNumber && passportNumber.trim() !== "") {
       if (employees.some(e => e.passportNumber && e.passportNumber.trim().toUpperCase() === passportNumber.trim().toUpperCase())) {
-        return NextResponse.json({ error: "Passport number already exists" }, { status: 400 });
+        return NextResponse.json({ error: "Passport number already exists" }, { status: 409 });
       }
     }
 
@@ -231,7 +258,7 @@ export async function POST(request: Request) {
       siteSupervisorId: siteSupervisorId || undefined,
       isSupervisor: isSupervisor || false,
       supervisorScopeType: supervisorScopeType || "DIRECT_REPORTS",
-      username: username ? username.trim() : undefined,
+      username: generatedUsername ? generatedUsername.trim() : undefined,
       authMode: authMode || "LOCAL",
       ssoProvider: ssoProvider || undefined,
       ssoSubject: ssoSubject || undefined,
@@ -240,7 +267,7 @@ export async function POST(request: Request) {
       isLocked: isLocked || false,
       webAccessEnabled: webAccessEnabled !== undefined ? webAccessEnabled : true,
       mobileAccessEnabled: mobileAccessEnabled !== undefined ? mobileAccessEnabled : true,
-      usernameStrategy: usernameStrategy || "MANUAL",
+      usernameStrategy: resolvedStrategy,
       failedLoginAttempts: 0,
       
       // New company & identity fields
@@ -266,7 +293,10 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json(normalized);
-  } catch (e) {
-    return NextResponse.json({ error: "Failed to create employee" }, { status: 500 });
+  } catch (e: any) {
+    console.error("[POST /api/v1/employees] Failed to create employee:", e);
+    const msg = e.message || "Failed to create employee";
+    const status = (msg.includes("exists") || msg.includes("duplicate")) ? 409 : 500;
+    return NextResponse.json({ error: msg }, { status });
   }
 }

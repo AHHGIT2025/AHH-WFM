@@ -190,11 +190,16 @@ export async function PATCH(request: Request, { params }: RouteParams) {
       }
 
       if (employees.some(e => e.id !== targetId && e.email.toLowerCase() === email.trim().toLowerCase())) {
-        return NextResponse.json({ error: "Employee email already exists" }, { status: 400 });
+        return NextResponse.json({ error: "Employee email already exists" }, { status: 409 });
       }
     }
     if (role !== undefined && role.trim() === "") {
       return NextResponse.json({ error: "Role is required" }, { status: 400 });
+    }
+    if (username !== undefined && username !== null && username.trim() !== "") {
+      if (employees.some(e => e.id !== targetId && e.username && e.username.toLowerCase() === username.trim().toLowerCase())) {
+        return NextResponse.json({ error: "Username already exists" }, { status: 409 });
+      }
     }
     if (profilePhotoUrl !== undefined && (auth.session?.user as any)?.role !== "ADMIN") {
       return NextResponse.json({ error: "Only admins can update profile photo from Web UI" }, { status: 403 });
@@ -203,12 +208,12 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     // Prevent duplicate QID / Passport
     if (qidNumber !== undefined && qidNumber !== null && qidNumber.trim() !== "") {
       if (employees.some(e => e.id !== targetId && e.qidNumber && e.qidNumber.trim() === qidNumber.trim())) {
-        return NextResponse.json({ error: "Qatar ID number already exists" }, { status: 400 });
+        return NextResponse.json({ error: "Qatar ID number already exists" }, { status: 409 });
       }
     }
     if (passportNumber !== undefined && passportNumber !== null && passportNumber.trim() !== "") {
       if (employees.some(e => e.id !== targetId && e.passportNumber && e.passportNumber.trim().toUpperCase() === passportNumber.trim().toUpperCase())) {
-        return NextResponse.json({ error: "Passport number already exists" }, { status: 400 });
+        return NextResponse.json({ error: "Passport number already exists" }, { status: 409 });
       }
     }
 
@@ -296,8 +301,11 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     }
 
     return NextResponse.json(normalized);
-  } catch (e) {
-    return NextResponse.json({ error: "Failed to update employee" }, { status: 500 });
+  } catch (e: any) {
+    console.error(`[PATCH /api/v1/employees/${params.id}] Failed to update employee:`, e);
+    const msg = e.message || "Failed to update employee";
+    const status = (msg.includes("exists") || msg.includes("duplicate")) ? 409 : 500;
+    return NextResponse.json({ error: msg }, { status });
   }
 }
 

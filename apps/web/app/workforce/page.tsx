@@ -457,6 +457,16 @@ export default function WorkforcePage() {
   }, []);
 
   useEffect(() => {
+    if (!selectedEmp) {
+      if (empEmployeeCategory === "BLUE_COLLAR") {
+        setEmpUsernameStrategy("EMPLOYEE_CODE");
+      } else {
+        setEmpUsernameStrategy("EMAIL");
+      }
+    }
+  }, [empEmployeeCategory, selectedEmp]);
+
+  useEffect(() => {
     if (empDefaultProjectId) {
       fetch(`/api/v1/projects/${empDefaultProjectId}/sites`)
         .then(res => res.ok ? res.json() : [])
@@ -1140,12 +1150,14 @@ export default function WorkforcePage() {
 
   // ── Filter logic (legacy-safe) ───────────────────────────────────────────
   const filtered = employees.filter((emp) => {
-    // Search: name / id / email
-    const name  = (emp.name  || "").toLowerCase();
-    const eid   = (emp.id    || "").toLowerCase();
-    const email = (emp.email || "").toLowerCase();
-    const q     = search.toLowerCase();
-    const matchesSearch = !q || name.includes(q) || eid.includes(q) || email.includes(q);
+    // Search: name / id / email / username / phone
+    const name     = (emp.name     || "").toLowerCase();
+    const eid      = (emp.id       || "").toLowerCase();
+    const email    = (emp.email    || "").toLowerCase();
+    const username = (emp.username || "").toLowerCase();
+    const phone    = (emp.phone    || "").toLowerCase();
+    const q        = search.toLowerCase();
+    const matchesSearch = !q || name.includes(q) || eid.includes(q) || email.includes(q) || username.includes(q) || phone.includes(q);
 
     // Department / Company
     const matchesDept    = deptFilter    === "all" || emp.departmentId === deptFilter;
@@ -1245,9 +1257,15 @@ export default function WorkforcePage() {
               setEmpDeptId("");
               setEmpShiftId("GEN-001");
               setEmpPassword("");
+              setEmpConfirmPassword("");
               setEmpEmploymentStatus("ACTIVE");
               setEmpDutyStatus("OFF_DUTY");
               setEmpEmployeeCategory("WHITE_COLLAR");
+              setEmpUsernameStrategy("EMAIL");
+              setEmpUsername("");
+              setEmpWebAccessEnabled(true);
+              setEmpMobileAccessEnabled(true);
+              setAddTab("basic");
               setIsAddEmpOpen(true);
             }}
             className="font-bold flex items-center gap-1.5 text-xs"
@@ -2201,6 +2219,9 @@ export default function WorkforcePage() {
                       <option value="EMAIL">Auto (Email)</option>
                       <option value="MANUAL">Manual Entry</option>
                     </select>
+                    <p className="text-[10px] text-on-surface-variant/70 leading-normal mt-1">
+                      💡 Blue Collar uses Employee ID as username. White Collar uses Email.
+                    </p>
                   </div>
                   
                   <div className="space-y-1">
@@ -2250,13 +2271,32 @@ export default function WorkforcePage() {
 
                 {empAuthMode !== "SSO" && (
                   <div className="grid grid-cols-2 gap-4 border-t border-outline-variant/30 pt-4">
-                    <Input
-                      label="Default Password"
-                      type="password"
-                      placeholder="Optional (Default: Password123!)"
-                      value={empPassword}
-                      onChange={(e) => setEmpPassword(e.target.value)}
-                    />
+                    <div className="space-y-1">
+                      <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Default Password</label>
+                      <div className="flex gap-2">
+                        <Input
+                          type="text"
+                          placeholder="Optional (Default: Password123!)"
+                          value={empPassword}
+                          onChange={(e) => setEmpPassword(e.target.value)}
+                          className="flex-1 font-mono animate-fade-in"
+                        />
+                        <Button
+                          variant="secondary"
+                          type="button"
+                          onClick={() => {
+                            const chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*";
+                            let pass = "";
+                            for (let i = 0; i < 12; i++) pass += chars[Math.floor(Math.random() * chars.length)];
+                            setEmpPassword(pass);
+                            setEmpConfirmPassword(pass);
+                            setEmpMustChangePassword(true);
+                          }}
+                        >
+                          Generate
+                        </Button>
+                      </div>
+                    </div>
                     <div className="flex items-center gap-6 pt-6">
                       <label className="flex items-center gap-2 text-xs font-semibold text-on-surface cursor-pointer">
                         <input
@@ -2778,6 +2818,9 @@ export default function WorkforcePage() {
                         <option value="EMAIL">Auto (Email)</option>
                         <option value="MANUAL">Manual Entry</option>
                       </select>
+                      <p className="text-[10px] text-on-surface-variant/70 leading-normal mt-1">
+                        💡 Blue Collar uses Employee ID as username. White Collar uses Email.
+                      </p>
                     </div>
                     
                     <div className="space-y-1">
