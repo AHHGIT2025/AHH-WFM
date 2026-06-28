@@ -34,21 +34,7 @@ function normalizeMasterPayload(entity: string, payload: any, isUpdate = false) 
   if (!payload) return payload;
   const copy = { ...payload };
 
-  // 1. Remove nested relation objects
-  const relationFields = [
-    "company",
-    "department",
-    "costCenter",
-    "project",
-    "site",
-    "location",
-    "allowedPunchLocation"
-  ];
-  for (const field of relationFields) {
-    delete copy[field];
-  }
-
-  // 2. Convert empty relation IDs from "" to null
+  // 1. Convert empty relation IDs from "" to null
   const relationIdFields = [
     "companyId",
     "departmentId",
@@ -60,6 +46,18 @@ function normalizeMasterPayload(entity: string, payload: any, isUpdate = false) 
   for (const field of relationIdFields) {
     if (copy[field] === "") {
       copy[field] = null;
+    }
+  }
+
+  // 2. Remove nested relation objects and arrays (any field that is an object/array except null)
+  for (const key of Object.keys(copy)) {
+    const val = copy[key];
+    if (val !== null && typeof val === "object") {
+      // For projects, costCenter is a required string, not an object relation.
+      if (key === "costCenter" && entity === "projects") {
+        continue;
+      }
+      delete copy[key];
     }
   }
 
@@ -255,8 +253,49 @@ export async function POST(request: Request, { params }: { params: { entity: str
       body.costCenter = "";
     }
 
-    // Leave type validation
-    if (entity === "leave-types") {
+    // 1. Perform validation of required fields
+    if (entity === "projects") {
+      if (!body.companyId) {
+        return NextResponse.json({ error: "Company is required" }, { status: 400 });
+      }
+      if (!body.projectCode || body.projectCode.trim() === "") {
+        return NextResponse.json({ error: "Project Code is required" }, { status: 400 });
+      }
+      if (!body.projectName || body.projectName.trim() === "") {
+        return NextResponse.json({ error: "Project Name is required" }, { status: 400 });
+      }
+      if (!body.locationId) {
+        return NextResponse.json({ error: "Location is required" }, { status: 400 });
+      }
+    }
+    else if (entity === "designations") {
+      if (!body.code || body.code.trim() === "") {
+        return NextResponse.json({ error: "Designation Code is required" }, { status: 400 });
+      }
+      if (!body.name || body.name.trim() === "") {
+        return NextResponse.json({ error: "Designation Title is required" }, { status: 400 });
+      }
+    }
+    else if (entity === "trade-classifications") {
+      if (!body.code || body.code.trim() === "") {
+        return NextResponse.json({ error: "Trade Code is required" }, { status: 400 });
+      }
+      if (!body.name || body.name.trim() === "") {
+        return NextResponse.json({ error: "Trade Name is required" }, { status: 400 });
+      }
+    }
+    else if (entity === "cost-centers") {
+      if (!body.companyId) {
+        return NextResponse.json({ error: "Company is required" }, { status: 400 });
+      }
+      if (!body.costCenterCode || body.costCenterCode.trim() === "") {
+        return NextResponse.json({ error: "Cost Center Code is required" }, { status: 400 });
+      }
+      if (!body.costCenterName || body.costCenterName.trim() === "") {
+        return NextResponse.json({ error: "Cost Center Name is required" }, { status: 400 });
+      }
+    }
+    else if (entity === "leave-types") {
       if (!body.code || body.code.trim() === "") {
         return NextResponse.json({ error: "Leave type code is required" }, { status: 400 });
       }
@@ -268,10 +307,49 @@ export async function POST(request: Request, { params }: { params: { entity: str
     // Normalize payload
     normalizedBody = normalizeMasterPayload(entity, body, false);
 
-    // Validate companyId requirements
+    // Validate companyId requirements dynamically if needed
     const requiredCompanyEntities = ["allowed-punch-locations"];
     if (requiredCompanyEntities.includes(entity) && !normalizedBody.companyId) {
       return NextResponse.json({ error: "Company is required" }, { status: 400 });
+    }
+
+    // 2. Perform case-insensitive duplicate checks for code fields
+    const codeFields: Record<string, string> = {
+      companies: "companyCode",
+      designations: "code",
+      "trade-classifications": "code",
+      locations: "locationCode",
+      "cost-centers": "costCenterCode",
+      projects: "projectCode",
+      "project-sites": "siteCode",
+      "leave-types": "code",
+    };
+
+    const codeField = codeFields[entity];
+    const modelName = entityMap[entity];
+    if (!modelName) {
+      return NextResponse.json({ error: "Invalid master entity" }, { status: 400 });
+    }
+
+    if (codeField && normalizedBody[codeField]) {
+      const codeValue = normalizedBody[codeField];
+      if (isDbConnected()) {
+        const dbModel: any = prisma[modelName];
+        const existing = await dbModel.findFirst({
+          where: { [codeField]: codeValue }
+        });
+        if (existing) {
+          return NextResponse.json({ error: `${entity.substring(0, entity.length - 1)} code already exists` }, { status: 409 });
+        }
+      } else {
+        const db = readDb();
+        const memoryKey = memoryKeyMap[entity];
+        const records = (db as any)[memoryKey] || [];
+        const existing = records.find((r: any) => String(r[codeField]).toLowerCase() === String(codeValue).toLowerCase());
+        if (existing) {
+          return NextResponse.json({ error: `${entity.substring(0, entity.length - 1)} code already exists` }, { status: 409 });
+        }
+      }
     }
 
     if (!isDbConnected()) {
@@ -284,7 +362,7 @@ export async function POST(request: Request, { params }: { params: { entity: str
       if (entity === "leave-types") {
         const existing = db.leaveTypes?.find((t: any) => t.code.toLowerCase() === normalizedBody.code.trim().toLowerCase());
         if (existing) {
-          return NextResponse.json({ error: "Leave type code must be unique" }, { status: 400 });
+          return NextResponse.json({ error: "Leave type code must be unique" }, { status: 409 });
         }
       }
 
@@ -322,11 +400,6 @@ export async function POST(request: Request, { params }: { params: { entity: str
       return NextResponse.json(normalizeRecord(entity, populatedRecord), { status: 201 });
     }
 
-    const modelName = entityMap[entity];
-    if (!modelName) {
-      return NextResponse.json({ error: "Invalid master entity" }, { status: 400 });
-    }
-
     // Verify company exists if provided in DB mode
     if (normalizedBody.companyId) {
       const company = await prisma.company.findUnique({ where: { id: normalizedBody.companyId } });
@@ -362,8 +435,8 @@ export async function POST(request: Request, { params }: { params: { entity: str
     });
 
     if (error.code === "P2002") {
-      return NextResponse.json({ error: "A unique constraint violation occurred" }, { status: 400 });
+      return NextResponse.json({ error: `${entity.substring(0, entity.length - 1)} code already exists` }, { status: 409 });
     }
-    return NextResponse.json({ error: `Failed to create ${entity}` }, { status: 500 });
+    return NextResponse.json({ error: `Failed to create ${entity}: ${error.message}` }, { status: 500 });
   }
 }
