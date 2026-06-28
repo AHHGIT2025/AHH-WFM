@@ -166,6 +166,10 @@ export default function WorkforcePage() {
   const [empId, setEmpId] = useState("");
   const [empName, setEmpName] = useState("");
   const [empEmail, setEmpEmail] = useState("");
+  const [empProfilePhotoUrl, setEmpProfilePhotoUrl] = useState("");
+  const [empProfilePhotoUpdatedAt, setEmpProfilePhotoUpdatedAt] = useState("");
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [photoError, setPhotoError] = useState("");
   const [empPhone, setEmpPhone] = useState("");
   const [empRole, setEmpRole] = useState("EMPLOYEE");
   const [empDeptId, setEmpDeptId] = useState("");
@@ -995,6 +999,8 @@ export default function WorkforcePage() {
   const populateEmpForm = (emp: any) => {
     setEmpName(emp.name || "");
     setEmpEmail(emp.email || "");
+    setEmpProfilePhotoUrl(emp.profilePhotoUrl || "");
+    setEmpProfilePhotoUpdatedAt(emp.profilePhotoUpdatedAt || "");
     setEmpPhone(emp.phone || "");
     setEmpRole(emp.role || "EMPLOYEE");
     setEmpDeptId(emp.departmentId || "");
@@ -1448,8 +1454,12 @@ export default function WorkforcePage() {
             <Card key={emp.id} className={`flex flex-col justify-between ${!isEmpActive ? "opacity-60 bg-surface-container-low" : ""}`}>
               <div className="flex justify-between items-start gap-4">
                 <div className="flex gap-3">
-                  <div className="w-10 h-10 rounded-full bg-secondary-container/10 flex items-center justify-center font-bold text-primary border border-secondary-container/20 shrink-0">
-                    {emp.name.split(" ").map((n) => n[0]).join("")}
+                  <div className="w-10 h-10 rounded-full bg-secondary-container/10 flex items-center justify-center overflow-hidden font-bold text-primary border border-secondary-container/20 shrink-0">
+                    {emp.profilePhotoUrl ? (
+                      <img src={`${emp.profilePhotoUrl}?v=${emp.profilePhotoUpdatedAt || ''}`} alt={emp.name} className="w-full h-full object-cover" />
+                    ) : (
+                      emp.name.split(" ").map((n) => n[0]).join("")
+                    )}
                   </div>
                   <div>
                     <h3 className="font-bold text-primary text-sm">{emp.name}</h3>
@@ -2451,6 +2461,98 @@ export default function WorkforcePage() {
             {/* BASIC INFO TAB */}
             {editTab === 'basic' && (
               <div className="space-y-4">
+                {/* Profile Photo Upload Section */}
+                <div className="p-4 bg-surface-container-low border border-outline-variant/30 rounded-2xl flex items-center gap-4">
+                  <div className="w-16 h-16 rounded-full bg-secondary-container/20 overflow-hidden border border-outline-variant flex items-center justify-center shrink-0 relative group">
+                    {empProfilePhotoUrl ? (
+                      <img src={`${empProfilePhotoUrl}?v=${empProfilePhotoUpdatedAt}`} alt="Profile" className="w-full h-full object-cover" />
+                    ) : (
+                      <span className="text-xl font-bold text-primary">
+                        {empName.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2)}
+                      </span>
+                    )}
+                    {uploadingPhoto && (
+                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center backdrop-blur-sm">
+                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      </div>
+                    )}
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-xs font-bold text-on-surface">Employee Profile Photo</p>
+                    <p className="text-[10px] text-on-surface-variant">PNG, JPG, or WebP up to 5MB.</p>
+                    <div className="flex items-center gap-2 pt-1">
+                      <Button
+                        variant="secondary"
+                        type="button"
+                        className="h-7 px-3 text-[10px] font-bold py-0"
+                        disabled={uploadingPhoto}
+                        onClick={() => {
+                          const fileInput = document.getElementById("editProfilePhotoInput") as HTMLInputElement;
+                          fileInput?.click();
+                        }}
+                      >
+                        Change Photo
+                      </Button>
+                      <input
+                        type="file"
+                        id="editProfilePhotoInput"
+                        className="hidden"
+                        accept="image/jpeg, image/png, image/webp, image/jpg"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+
+                          if (file.size > 5 * 1024 * 1024) {
+                            setPhotoError("File must be smaller than 5MB");
+                            return;
+                          }
+                          const allowedTypes = ["image/jpeg", "image/png", "image/webp", "image/jpg"];
+                          if (!allowedTypes.includes(file.type)) {
+                            setPhotoError("Invalid file type. Only JPG, PNG, and WebP are allowed.");
+                            return;
+                          }
+
+                          setUploadingPhoto(true);
+                          setPhotoError("");
+
+                          const formData = new FormData();
+                          formData.append("file", file);
+
+                          try {
+                            const res = await fetch(`/api/v1/employees/${selectedEmp.id}/profile-photo`, {
+                              method: "POST",
+                              body: formData,
+                            });
+
+                            const result = await res.json();
+                            if (!res.ok) {
+                              throw new Error(result.error || "Upload failed");
+                            }
+
+                            // Update local states
+                            setEmpProfilePhotoUrl(result.profilePhotoUrl);
+                            setEmpProfilePhotoUpdatedAt(result.profilePhotoUpdatedAt);
+
+                            // Trigger global custom events to sync layout shell
+                            window.dispatchEvent(new Event("profile-updated"));
+
+                            // Refresh directory list
+                            fetchDb();
+                          } catch (err: any) {
+                            setPhotoError(err.message || "Failed to upload photo");
+                          } finally {
+                            setUploadingPhoto(false);
+                            e.target.value = "";
+                          }
+                        }}
+                      />
+                    </div>
+                    {photoError && (
+                      <p className="text-[10px] text-status-error font-medium">{photoError}</p>
+                    )}
+                  </div>
+                </div>
+
                 <Input label="Employee ID (Read-only)" value={selectedEmp.id} disabled />
                 <div className="grid grid-cols-2 gap-4">
                   <Input label="Full Name" value={empName} onChange={(e) => setEmpName(e.target.value)} required />

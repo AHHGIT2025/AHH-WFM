@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
@@ -34,6 +34,35 @@ export const LayoutShell: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const { data: session, status } = useSession();
   const activeNavItems = filterNavigationByPermissions(session?.user as any, navItems);
+  const [profile, setProfile] = useState<any>(null);
+
+  const fetchProfile = async () => {
+    try {
+      const res = await fetch("/api/v1/me");
+      if (res.ok) {
+        const data = await res.json();
+        setProfile(data);
+      }
+    } catch (e) {
+      console.error("Failed to fetch profile in LayoutShell:", e);
+    }
+  };
+
+  useEffect(() => {
+    if (session) {
+      fetchProfile();
+    }
+  }, [session]);
+
+  useEffect(() => {
+    const handleProfileUpdate = () => {
+      fetchProfile();
+    };
+    window.addEventListener("profile-updated", handleProfileUpdate);
+    return () => {
+      window.removeEventListener("profile-updated", handleProfileUpdate);
+    };
+  }, []);
 
   const isActive = (path: string) => {
     if (path === "/") {
@@ -114,16 +143,22 @@ export const LayoutShell: React.FC<{ children: React.ReactNode }> = ({ children 
           </div>
           <div className="h-8 w-px bg-outline-variant hidden sm:block"></div>
           <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-full bg-secondary-container/20 overflow-hidden border border-outline-variant hidden sm:block">
-              <img
-                alt="Profile"
-                className="w-full h-full object-cover"
-                src="https://lh3.googleusercontent.com/aida-public/AB6AXuCNg_eu9oG9o7KjewqM98cvsKuUdEVWVK0s3YKUP9C6iKThWOar1LkwzZ21V0itvr30GNrpeo6Lf-BVTq3zqZHCMLxfsz-Y_883nu06UTnX1NlPJseense4FERMEYMKBnWgZkxjllCzEsptMEVQyR_BW6e8d1k_TlXpycYaweyAXIqm1AlOgG0YExHTAnGoXUNuLeIOHWijpRfTG5lAioKKpJRv3eF27Ox7cFp_XDgHeQzojDiO-wOBydVZ0f1O8GWiz-fnBzwWlQ"
-              />
+            <div className="h-9 w-9 rounded-full bg-secondary-container/20 overflow-hidden border border-outline-variant hidden sm:flex items-center justify-center shrink-0">
+              {(profile?.profilePhotoUrl || session?.user?.image) ? (
+                <img
+                  alt="Profile"
+                  className="w-full h-full object-cover"
+                  src={`${profile?.profilePhotoUrl || session?.user?.image}?v=${profile?.profilePhotoUpdatedAt || (session?.user as any)?.profilePhotoUpdatedAt || ''}`}
+                />
+              ) : (
+                <span className="text-xs font-bold text-primary">
+                  {((profile?.name || session?.user?.name || "System Admin").split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2))}
+                </span>
+              )}
             </div>
             <div>
-              <p className="text-xs font-bold text-primary hidden md:block">{session?.user?.name || "System Admin"}</p>
-              <p className="text-[10px] text-on-surface-variant leading-none hidden md:block">{(session?.user as any)?.role || "Admin Console"}</p>
+              <p className="text-xs font-bold text-primary hidden md:block">{profile?.name || session?.user?.name || "System Admin"}</p>
+              <p className="text-[10px] text-on-surface-variant leading-none hidden md:block">{profile?.role || (session?.user as any)?.role || "Admin Console"}</p>
             </div>
             <button
               onClick={() => signOut({ callbackUrl: "/login" })}

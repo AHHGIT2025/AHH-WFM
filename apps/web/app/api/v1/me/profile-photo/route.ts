@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "../../../../../lib/auth";
-import { prisma } from "@ahh-wfm/database";
+import { checkApiAuth } from "@/lib/api-guards";
+import { mockDb } from "@ahh-wfm/mock-data";
 import * as fs from "fs";
 import * as path from "path";
 import * as crypto from "crypto";
@@ -11,9 +10,10 @@ const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/jpg"];
 
 export async function POST(req: Request) {
   try {
-    const session = await getServerSession(authOptions);
-    const userId = (session?.user as any)?.id;
-    
+    const auth = await checkApiAuth();
+    if (auth.error) return auth.error;
+
+    const userId = (auth.session?.user as any)?.id;
     if (!userId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -41,39 +41,44 @@ export async function POST(req: Request) {
     const safeExt = ["jpeg", "jpg", "png", "webp"].includes(ext) ? ext : "jpg";
     const filename = `${userId}-${Date.now()}-${crypto.randomUUID().split('-')[0]}.${safeExt}`;
     
-    // Save to Mobile public uploads
-    const mobileUploadDir = path.join(process.cwd(), "public", "uploads", "profile-photos");
-    if (!fs.existsSync(mobileUploadDir)) {
-      fs.mkdirSync(mobileUploadDir, { recursive: true });
-    }
-    fs.writeFileSync(path.join(mobileUploadDir, filename), buffer);
-
     // Save to Web public uploads
+    const webUploadDir = path.join(process.cwd(), "public", "uploads", "profile-photos");
+    if (!fs.existsSync(webUploadDir)) {
+      fs.mkdirSync(webUploadDir, { recursive: true });
+    }
+    fs.writeFileSync(path.join(webUploadDir, filename), buffer);
+
+    // Save to Mobile public uploads
     try {
-      const webUploadDir = path.join(process.cwd(), "..", "web", "public", "uploads", "profile-photos");
-      if (!fs.existsSync(webUploadDir)) {
-        fs.mkdirSync(webUploadDir, { recursive: true });
+      const mobileUploadDir = path.join(process.cwd(), "..", "mobile", "public", "uploads", "profile-photos");
+      if (!fs.existsSync(mobileUploadDir)) {
+        fs.mkdirSync(mobileUploadDir, { recursive: true });
       }
-      fs.writeFileSync(path.join(webUploadDir, filename), buffer);
+      fs.writeFileSync(path.join(mobileUploadDir, filename), buffer);
     } catch (err) {
-      console.warn("[Profile Photo Sync] Failed to write to web directory:", err);
+      console.warn("[Profile Photo Sync] Failed to write to mobile directory:", err);
     }
 
     const publicUrl = `/uploads/profile-photos/${filename}`;
 
     // Update DB
-    const updatedEmployee = await prisma.employee.update({
-      where: { id: userId },
-      data: {
-        profilePhotoUrl: publicUrl,
-        profilePhotoUpdatedAt: new Date(),
-      }
-    });
+    const updatedEmployee = await mockDb.updateEmployee(userId, {
+      profilePhotoUrl: publicUrl,
+      profilePhotoUpdatedAt: new Date()
+    } as any);
+
+    if (!updatedEmployee) {
+      return NextResponse.json({ error: "Employee not found in database" }, { status: 404 });
+    }
 
     return NextResponse.json({ 
       success: true, 
       profilePhotoUrl: publicUrl,
-      profilePhotoUpdatedAt: updatedEmployee.profilePhotoUpdatedAt
+      profilePhotoUpdatedAt: updatedEmployee.profilePhotoUpdatedAt,
+      id: updatedEmployee.id,
+      employeeId: updatedEmployee.id,
+      name: updatedEmployee.name,
+      role: updatedEmployee.role
     });
 
   } catch (error) {

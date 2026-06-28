@@ -75,7 +75,9 @@ export const authOptions: NextAuthOptions = {
                   name: employee.name,
                   email: employee.email,
                   role: employee.role,
-                  mustChangePassword: employee.mustChangePassword
+                  mustChangePassword: employee.mustChangePassword,
+                  image: employee.profilePhotoUrl || null,
+                  profilePhotoUpdatedAt: employee.profilePhotoUpdatedAt ? new Date(employee.profilePhotoUpdatedAt).toISOString() : null
                 } as any;
               }
             }
@@ -133,6 +135,8 @@ export const authOptions: NextAuthOptions = {
         token.role = (user as any).role || "EMPLOYEE";
         token.id = user.id;
         token.mustChangePassword = (user as any).mustChangePassword || false;
+        token.image = (user as any).image || null;
+        token.profilePhotoUpdatedAt = (user as any).profilePhotoUpdatedAt || null;
 
         const email = user.email;
         if (email) {
@@ -145,6 +149,8 @@ export const authOptions: NextAuthOptions = {
               token.id = employee.id;
               token.role = employee.role;
               token.email = employee.email;
+              token.image = employee.profilePhotoUrl || null;
+              token.profilePhotoUpdatedAt = employee.profilePhotoUpdatedAt ? new Date(employee.profilePhotoUpdatedAt).toISOString() : null;
               if ((employee as any).employeeCode) {
                 token.employeeCode = (employee as any).employeeCode;
               }
@@ -170,6 +176,8 @@ export const authOptions: NextAuthOptions = {
             token.role = employee.role;
             token.mustChangePassword = employee.mustChangePassword || false;
             token.email = employee.email;
+            token.image = employee.profilePhotoUrl || null;
+            token.profilePhotoUpdatedAt = employee.profilePhotoUpdatedAt ? new Date(employee.profilePhotoUpdatedAt).toISOString() : null;
             if ((employee as any).employeeCode) {
               token.employeeCode = (employee as any).employeeCode;
             }
@@ -186,6 +194,8 @@ export const authOptions: NextAuthOptions = {
         (session.user as any).role = token.role;
         (session.user as any).id = token.id;
         (session.user as any).mustChangePassword = token.mustChangePassword;
+        session.user.image = (token.image as string) || null;
+        (session.user as any).profilePhotoUpdatedAt = token.profilePhotoUpdatedAt;
         if (token.employeeCode) {
           (session.user as any).employeeCode = token.employeeCode;
         }
