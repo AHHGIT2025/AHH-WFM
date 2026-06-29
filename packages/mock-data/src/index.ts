@@ -9124,6 +9124,12 @@ export const mockDb = {
       deploymentId: data.deploymentId,
       employeeId: data.employeeId,
       isReliever: !!data.isReliever,
+      deploymentType: data.deploymentType || "PERMANENT",
+      isOvertime: !!data.isOvertime,
+      overtimeReason: data.overtimeReason || null,
+      sourceType: data.sourceType || "GENERAL_POOL",
+      permanentDeploymentId: data.permanentDeploymentId || null,
+      validationWarnings: data.validationWarnings || null,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };

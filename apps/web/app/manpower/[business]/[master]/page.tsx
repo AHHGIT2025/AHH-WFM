@@ -32,6 +32,41 @@ export default function ManpowerMasterPage() {
   const [shiftsList, setShiftsList] = useState<any[]>([]);
   const [locationUnits, setLocationUnits] = useState<any[]>([]);
 
+  // Security Guarding compliance states
+  const [activeSubTab, setActiveSubTab] = useState("directory");
+  const [licensesList, setLicensesList] = useState<any[]>([]);
+  const [gatePassesList, setGatePassesList] = useState<any[]>([]);
+  const [relieverPoolsList, setRelieverPoolsList] = useState<any[]>([]);
+  const [relieverAssignmentsList, setRelieverAssignmentsList] = useState<any[]>([]);
+  const [deploymentsList, setDeploymentsList] = useState<any[]>([]);
+  const [showAddLicenseModal, setShowAddLicenseModal] = useState(false);
+  const [showAddGatePassModal, setShowAddGatePassModal] = useState(false);
+
+  // Security Projects states
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [projectAllocatedMaterials, setProjectAllocatedMaterials] = useState<any[]>([]);
+  const [projectShiftRequirements, setProjectShiftRequirements] = useState<any[]>([]);
+  const [projectDeployments, setProjectDeployments] = useState<any[]>([]);
+
+  async function loadSecurityComplianceData() {
+    try {
+      const [licRes, gpRes, poolsRes, poolAsgRes, depRes] = await Promise.all([
+        fetch("/api/v1/security/licenses"),
+        fetch("/api/v1/security/gate-passes"),
+        fetch("/api/v1/security/reliever-pools"),
+        fetch("/api/v1/security/reliever-pools/assignments"),
+        fetch(`/api/v1/manpower/security-guarding/deployments?date=${new Date().toISOString().split("T")[0]}`)
+      ]);
+      if (licRes.ok) setLicensesList(await licRes.json());
+      if (gpRes.ok) setGatePassesList(await gpRes.json());
+      if (poolsRes.ok) setRelieverPoolsList(await poolsRes.json());
+      if (poolAsgRes.ok) setRelieverAssignmentsList(await poolAsgRes.json());
+      if (depRes.ok) setDeploymentsList(await depRes.json());
+    } catch (e) {
+      console.error("Failed to load security compliance data", e);
+    }
+  }
+
   // Form states
   const [formData, setFormData] = useState<any>({});
   const [formError, setFormError] = useState("");
@@ -88,6 +123,9 @@ export default function ManpowerMasterPage() {
       if (master === "manpower") {
         const res = await fetch(`/api/v1/manpower/${business}/categories`);
         if (res.ok) setCategories(await res.json());
+      }
+      if (isSecurity && (master === "manpower" || master === "projects")) {
+        loadSecurityComplianceData();
       }
       if (master === "shifts") {
         const [sitesRes, catsRes, shiftsRes, unitsRes] = await Promise.all([
@@ -201,6 +239,551 @@ export default function ManpowerMasterPage() {
     return true;
   });
 
+  async function loadProjectDetails(projectId: string) {
+    setSelectedProjectId(projectId);
+    try {
+      const matRes = await fetch(`/api/v1/manpower/material-allocations?projectId=${projectId}`);
+      if (matRes.ok) setProjectAllocatedMaterials(await matRes.json());
+
+      const sitesRes = await fetch(`/api/v1/manpower/${business}/sites`);
+      if (sitesRes.ok) {
+        const allSites = await sitesRes.json();
+        const projectSites = allSites.filter((s: any) => s.projectId === projectId);
+        const projectSiteIds = projectSites.map((s: any) => s.id);
+        
+        const shiftsRes = await fetch(`/api/v1/shifts`);
+        if (shiftsRes.ok) {
+          const allShifts = await shiftsRes.json();
+          const filteredShifts = allShifts.filter((s: any) => projectSiteIds.includes(s.siteId));
+          setProjectShiftRequirements(filteredShifts);
+        }
+
+        const todayStr = new Date().toISOString().split("T")[0];
+        const depRes = await fetch(`/api/v1/manpower/${business}/deployments?date=${todayStr}`);
+        if (depRes.ok) {
+          const allDeps = await depRes.json();
+          const filteredDeps = allDeps.filter((d: any) => projectSiteIds.includes(d.shiftRequirement?.siteId));
+          setProjectDeployments(filteredDeps);
+        }
+      }
+    } catch (e) {
+      console.error("Failed to load project details", e);
+    }
+  }
+
+  const handleAddLicenseSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setFormError("");
+    const form = e.target as HTMLFormElement;
+    const formDataObj = new FormData(form);
+    const payload = {
+      employeeId: formDataObj.get("employeeId") as string,
+      licenseNumber: formDataObj.get("licenseNumber") as string,
+      issueDate: formDataObj.get("issueDate") as string,
+      expiryDate: formDataObj.get("expiryDate") as string,
+      status: "VALID"
+    };
+
+    try {
+      const res = await fetch("/api/v1/security/licenses", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      if (res.ok) {
+        setShowAddLicenseModal(false);
+        loadSecurityComplianceData();
+      } else {
+        const err = await res.json();
+        setFormError(err.error || "Failed to add license record");
+      }
+    } catch (err) {
+      setFormError("Server connection failed");
+    }
+  };
+
+  const handleAddGatePassSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setFormError("");
+    const form = e.target as HTMLFormElement;
+    const formDataObj = new FormData(form);
+    const payload = {
+      employeeId: formDataObj.get("employeeId") as string,
+      siteId: formDataObj.get("siteId") as string,
+      passNumber: formDataObj.get("passNumber") as string,
+      issueDate: formDataObj.get("issueDate") as string,
+      expiryDate: formDataObj.get("expiryDate") as string,
+      status: "ACTIVE"
+    };
+
+    try {
+      const res = await fetch("/api/v1/security/gate-passes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      if (res.ok) {
+        setShowAddGatePassModal(false);
+        loadSecurityComplianceData();
+      } else {
+        const err = await res.json();
+        setFormError(err.error || "Failed to add gate pass record");
+      }
+    } catch (err) {
+      setFormError("Server connection failed");
+    }
+  };
+
+  function renderProjectDetailsPanel() {
+    const project = data.find(p => p.id === selectedProjectId);
+    if (!project) return null;
+
+    const totalRequired = projectShiftRequirements.reduce((sum, s) => sum + (s.requiredCount || 0), 0);
+    const totalActual = projectDeployments.reduce((sum, d) => sum + (d.assignments?.length || 0), 0);
+    const coveragePercent = totalRequired > 0 ? Math.round((totalActual / totalRequired) * 100) : 100;
+
+    return (
+      <div className="w-1/2 bg-surface border border-outline-variant rounded-xl shadow-sm p-6 overflow-y-auto flex flex-col gap-6">
+        <div className="flex justify-between items-center border-b border-outline-variant/60 pb-3">
+          <div>
+            <h3 className="text-sm font-black text-primary">{project.name}</h3>
+            <p className="text-[10px] text-on-surface-variant">Project Code: {project.code}</p>
+          </div>
+          <button
+            onClick={() => setSelectedProjectId(null)}
+            className="w-6 h-6 rounded-full hover:bg-surface-container-high flex items-center justify-center text-on-surface-variant"
+          >
+            <span className="material-symbols-outlined text-[16px]">close</span>
+          </button>
+        </div>
+
+        {/* Deployment Coverage Widget */}
+        <div className="bg-surface-container-low border border-outline-variant p-4 rounded-xl space-y-2">
+          <p className="text-[9px] uppercase font-bold text-on-surface-variant">Daily Deployment Coverage Today</p>
+          <div className="flex items-center justify-between text-xs font-black">
+            <span className="text-on-surface">Guards Deployed: {totalActual} / {totalRequired}</span>
+            <span className={coveragePercent < 100 ? "text-status-error" : "text-status-success"}>
+              {coveragePercent}%
+            </span>
+          </div>
+          <div className="w-full bg-surface-container-high rounded-full h-2 overflow-hidden">
+            <div
+              className={`h-full rounded-full ${coveragePercent < 100 ? "bg-status-error" : "bg-status-success"}`}
+              style={{ width: `${Math.min(100, coveragePercent)}%` }}
+            ></div>
+          </div>
+        </div>
+
+        {/* Required vs Actual Ledger */}
+        <div className="space-y-2">
+          <h4 className="text-xs font-bold text-primary flex items-center gap-1">
+            <span className="material-symbols-outlined text-[16px]">equalizer</span>
+            Required vs Actual Manpower Ledger
+          </h4>
+          <div className="border border-outline-variant rounded-lg overflow-hidden bg-surface text-xs">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-surface-container-low border-b border-outline-variant text-[9px] uppercase text-on-surface-variant font-bold">
+                  <th className="px-3 py-2">Shift/Site</th>
+                  <th className="px-3 py-2 text-center">Req.</th>
+                  <th className="px-3 py-2 text-center">Act.</th>
+                  <th className="px-3 py-2 text-right">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-outline-variant/60">
+                {projectShiftRequirements.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="p-4 text-center text-on-surface-variant italic">No shifts configured for this project.</td>
+                  </tr>
+                ) : (
+                  projectShiftRequirements.map((req: any) => {
+                    const dep = projectDeployments.find((d: any) => d.shiftRequirementId === req.id);
+                    const actCount = dep?.assignments?.length || 0;
+                    const reqCount = req.requiredCount || 0;
+                    const statusStr = actCount < reqCount ? "UNDER" : actCount > reqCount ? "OVER" : "OK";
+                    return (
+                      <tr key={req.id} className="hover:bg-surface-container-lowest">
+                        <td className="px-3 py-2 font-semibold text-on-surface">
+                          {req.shiftCode} <span className="text-[10px] text-on-surface-variant font-normal">({req.site?.name || req.siteId})</span>
+                        </td>
+                        <td className="px-3 py-2 text-center">{reqCount}</td>
+                        <td className="px-3 py-2 text-center font-bold">{actCount}</td>
+                        <td className="px-3 py-2 text-right">
+                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${statusStr === "UNDER" ? "bg-status-error/15 text-status-error" : statusStr === "OVER" ? "bg-primary/15 text-primary" : "bg-status-success/15 text-status-success"}`}>
+                            {statusStr}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Reliever Pools */}
+        <div className="space-y-2">
+          <h4 className="text-xs font-bold text-primary flex items-center gap-1">
+            <span className="material-symbols-outlined text-[16px]">groups</span>
+            Reliever Pools
+          </h4>
+          <div className="border border-outline-variant rounded-lg overflow-hidden bg-surface text-xs">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-surface-container-low border-b border-outline-variant text-[9px] uppercase text-on-surface-variant font-bold">
+                  <th className="px-3 py-2">Pool Name</th>
+                  <th className="px-3 py-2 text-center">Assigned</th>
+                  <th className="px-3 py-2 text-center">Target</th>
+                  <th className="px-3 py-2 text-right">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-outline-variant/60">
+                {relieverPoolsList.filter(p => p.projectId === selectedProjectId).length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="p-4 text-center text-on-surface-variant italic">No reliever pools for this project.</td>
+                  </tr>
+                ) : (
+                  relieverPoolsList.filter(p => p.projectId === selectedProjectId).map((pool: any) => {
+                    const assignedCount = relieverAssignmentsList.filter(a => a.poolId === pool.id).length;
+                    const reqCount = pool.requiredRelieverCount || 3;
+                    const short = Math.max(0, reqCount - assignedCount);
+                    return (
+                      <tr key={pool.id} className="hover:bg-surface-container-lowest">
+                        <td className="px-3 py-2 font-semibold text-on-surface">{pool.poolName}</td>
+                        <td className="px-3 py-2 text-center">{assignedCount}</td>
+                        <td className="px-3 py-2 text-center">{reqCount}</td>
+                        <td className="px-3 py-2 text-right">
+                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${short > 0 ? "bg-status-error/15 text-status-error" : "bg-status-success/15 text-status-success"}`}>
+                            {short > 0 ? `${short} Short` : "Full"}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Material & Equipment Allocations */}
+        <div className="space-y-2">
+          <h4 className="text-xs font-bold text-primary flex items-center gap-1">
+            <span className="material-symbols-outlined text-[16px]">devices_other</span>
+            Material & Equipment Allocations
+          </h4>
+          <div className="border border-outline-variant rounded-lg overflow-hidden bg-surface text-xs">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-surface-container-low border-b border-outline-variant text-[9px] uppercase text-on-surface-variant font-bold">
+                  <th className="px-3 py-2">Item Name</th>
+                  <th className="px-3 py-2">Category</th>
+                  <th className="px-3 py-2 text-center">Allocated</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-outline-variant/60">
+                {projectAllocatedMaterials.length === 0 ? (
+                  <tr>
+                    <td colSpan={3} className="p-4 text-center text-on-surface-variant italic">No equipment allocated to this project.</td>
+                  </tr>
+                ) : (
+                  projectAllocatedMaterials.map((mat: any) => (
+                    <tr key={mat.id} className="hover:bg-surface-container-lowest">
+                      <td className="px-3 py-2 font-semibold text-on-surface">{mat.contractMaterial?.materialName || "Material"}</td>
+                      <td className="px-3 py-2 text-on-surface-variant">{mat.contractMaterial?.category || "Equipment"}</td>
+                      <td className="px-3 py-2 text-center font-bold">{mat.quantityAllocated}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  function renderSecurityComplianceTabs() {
+    if (activeSubTab === "licenses") {
+      return (
+        <div className="flex-1 flex flex-col min-h-0 overflow-y-auto p-4 space-y-4">
+          <div className="flex justify-between items-center bg-surface-container-low p-4 rounded-xl border border-outline-variant">
+            <h2 className="text-xs font-bold text-primary uppercase tracking-wider">MOI Security Guard Licenses</h2>
+            {canManage && (
+              <button
+                onClick={() => setShowAddLicenseModal(true)}
+                className="px-3 py-1.5 bg-primary text-white text-xs font-bold rounded-lg hover:bg-primary/90 transition-colors flex items-center gap-1"
+              >
+                <span className="material-symbols-outlined text-[16px]">add</span>
+                Record License
+              </button>
+            )}
+          </div>
+          <div className="border border-outline-variant rounded-xl overflow-hidden bg-surface">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-surface-container-low border-b border-outline-variant text-[10px] uppercase text-on-surface-variant font-bold">
+                  <th className="px-4 py-3">Guard ID</th>
+                  <th className="px-4 py-3">License Number</th>
+                  <th className="px-4 py-3">Issue Date</th>
+                  <th className="px-4 py-3">Expiry Date</th>
+                  <th className="px-4 py-3">Status</th>
+                  {canManage && <th className="px-4 py-3 text-right">Actions</th>}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-outline-variant">
+                {licensesList.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="p-8 text-center text-xs text-on-surface-variant italic">No license records recorded yet.</td>
+                  </tr>
+                ) : (
+                  licensesList.map((lic: any) => {
+                    const emp = data.find(e => e.id === lic.employeeId);
+                    const todayStr = new Date().toISOString().split("T")[0];
+                    const isExpired = lic.expiryDate < todayStr;
+                    return (
+                      <tr key={lic.id} className="text-xs hover:bg-surface-container-lowest">
+                        <td className="px-4 py-3 font-semibold text-on-surface">
+                          {emp ? `${emp.name} (${lic.employeeId})` : lic.employeeId}
+                        </td>
+                        <td className="px-4 py-3 text-on-surface-variant">{lic.licenseNumber}</td>
+                        <td className="px-4 py-3 text-on-surface-variant">{lic.issueDate}</td>
+                        <td className="px-4 py-3 text-on-surface-variant">{lic.expiryDate}</td>
+                        <td className="px-4 py-3">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${isExpired ? "bg-status-error/15 text-status-error" : "bg-status-success/15 text-status-success"}`}>
+                            {isExpired ? "Expired" : "Valid"}
+                          </span>
+                        </td>
+                        {canManage && (
+                          <td className="px-4 py-3 text-right">
+                            <button
+                              onClick={async () => {
+                                if (confirm("Revoke/delete this license record?")) {
+                                  await fetch(`/api/v1/security/licenses/${lic.id}`, { method: "DELETE" });
+                                  loadSecurityComplianceData();
+                                }
+                              }}
+                              className="text-status-error hover:underline font-bold"
+                            >
+                              Revoke
+                            </button>
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      );
+    }
+
+    if (activeSubTab === "gatePasses") {
+      return (
+        <div className="flex-1 flex flex-col min-h-0 overflow-y-auto p-4 space-y-4">
+          <div className="flex justify-between items-center bg-surface-container-low p-4 rounded-xl border border-outline-variant">
+            <h2 className="text-xs font-bold text-primary uppercase tracking-wider">Site Gate Passes</h2>
+            {canManage && (
+              <button
+                onClick={() => setShowAddGatePassModal(true)}
+                className="px-3 py-1.5 bg-primary text-white text-xs font-bold rounded-lg hover:bg-primary/90 transition-colors flex items-center gap-1"
+              >
+                <span className="material-symbols-outlined text-[16px]">add</span>
+                Record Gate Pass
+              </button>
+            )}
+          </div>
+          <div className="border border-outline-variant rounded-xl overflow-hidden bg-surface">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-surface-container-low border-b border-outline-variant text-[10px] uppercase text-on-surface-variant font-bold">
+                  <th className="px-4 py-3">Guard ID</th>
+                  <th className="px-4 py-3">Worksite</th>
+                  <th className="px-4 py-3">Pass Number</th>
+                  <th className="px-4 py-3">Expiry Date</th>
+                  <th className="px-4 py-3">Status</th>
+                  {canManage && <th className="px-4 py-3 text-right">Actions</th>}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-outline-variant">
+                {gatePassesList.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="p-8 text-center text-xs text-on-surface-variant italic">No gate passes recorded yet.</td>
+                  </tr>
+                ) : (
+                  gatePassesList.map((gp: any) => {
+                    const emp = data.find(e => e.id === gp.employeeId);
+                    const site = sites.find(s => s.id === gp.siteId);
+                    const todayStr = new Date().toISOString().split("T")[0];
+                    const isExpired = gp.expiryDate < todayStr;
+                    return (
+                      <tr key={gp.id} className="text-xs hover:bg-surface-container-lowest">
+                        <td className="px-4 py-3 font-semibold text-on-surface">
+                          {emp ? `${emp.name} (${gp.employeeId})` : gp.employeeId}
+                        </td>
+                        <td className="px-4 py-3 text-on-surface">{site?.name || gp.siteId}</td>
+                        <td className="px-4 py-3 text-on-surface-variant">{gp.passNumber}</td>
+                        <td className="px-4 py-3 text-on-surface-variant">{gp.expiryDate}</td>
+                        <td className="px-4 py-3">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${isExpired ? "bg-status-error/15 text-status-error" : "bg-status-success/15 text-status-success"}`}>
+                            {isExpired ? "Expired" : "Active"}
+                          </span>
+                        </td>
+                        {canManage && (
+                          <td className="px-4 py-3 text-right">
+                            <button
+                              onClick={async () => {
+                                if (confirm("Revoke/delete this gate pass record?")) {
+                                  await fetch(`/api/v1/security/gate-passes/${gp.id}`, { method: "DELETE" });
+                                  loadSecurityComplianceData();
+                                }
+                              }}
+                              className="text-status-error hover:underline font-bold"
+                            >
+                              Revoke
+                            </button>
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      );
+    }
+
+    if (activeSubTab === "relieverPools") {
+      return (
+        <div className="flex-1 flex flex-col min-h-0 overflow-y-auto p-4 space-y-4">
+          <div className="bg-surface-container-low p-4 rounded-xl border border-outline-variant">
+            <h2 className="text-xs font-bold text-primary uppercase tracking-wider">Project Reliever Pools</h2>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {relieverPoolsList.map((pool: any) => {
+              const proj = projects.find(p => p.id === pool.projectId);
+              const assigned = relieverAssignmentsList.filter((a: any) => a.poolId === pool.id);
+              return (
+                <div key={pool.id} className="bg-surface border border-outline-variant rounded-xl p-4 shadow-sm space-y-2">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <h4 className="text-xs font-black text-primary">{pool.poolName}</h4>
+                      <p className="text-[10px] text-on-surface-variant">Project: {proj?.name || pool.projectId}</p>
+                    </div>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-primary/10 text-primary">
+                      {assigned.length} / {pool.requiredRelieverCount || 3} Relievers
+                    </span>
+                  </div>
+                  <div className="pt-2 border-t border-outline-variant/40 space-y-1">
+                    <p className="text-[9px] uppercase font-bold text-on-surface-variant">Assigned Resource Personnel</p>
+                    {assigned.length === 0 ? (
+                      <p className="text-[10px] text-on-surface-variant italic">No relievers assigned to this pool.</p>
+                    ) : (
+                      <ul className="list-disc pl-4 text-xs text-on-surface space-y-0.5">
+                        {assigned.map((a: any) => {
+                          const emp = data.find(e => e.id === a.employeeId);
+                          return (
+                            <li key={a.id} className="font-medium">
+                              {emp ? emp.name : a.employeeId} ({a.employeeId})
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      );
+    }
+
+    if (activeSubTab === "overtimeLogs") {
+      const overtimeDeployments: any[] = [];
+      deploymentsList.forEach((dep: any) => {
+        dep.assignments?.forEach((asg: any) => {
+          if (asg.isOvertime || asg.deploymentType === "OVERTIME") {
+            overtimeDeployments.push({
+              id: asg.id,
+              date: dep.date,
+              employeeId: asg.employeeId,
+              siteName: dep.shiftRequirement?.site?.name || dep.shiftRequirement?.siteId,
+              shiftCode: dep.shiftRequirement?.shiftCode,
+              sourceType: asg.sourceType,
+              overtimeReason: asg.overtimeReason,
+              warnings: asg.validationWarnings || []
+            });
+          }
+        });
+      });
+
+      return (
+        <div className="flex-1 flex flex-col min-h-0 overflow-y-auto p-4 space-y-4">
+          <div className="bg-surface-container-low p-4 rounded-xl border border-outline-variant">
+            <h2 className="text-xs font-bold text-primary uppercase tracking-wider">Overtime & Reliever Duty History</h2>
+          </div>
+          <div className="border border-outline-variant rounded-xl overflow-hidden bg-surface">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-surface-container-low border-b border-outline-variant text-[10px] uppercase text-on-surface-variant font-bold">
+                  <th className="px-4 py-3">Date</th>
+                  <th className="px-4 py-3">Employee</th>
+                  <th className="px-4 py-3">Worksite / Shift</th>
+                  <th className="px-4 py-3">Allocation Source</th>
+                  <th className="px-4 py-3">Overtime Reason</th>
+                  <th className="px-4 py-3 text-right">Warnings</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-outline-variant">
+                {overtimeDeployments.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="p-8 text-center text-xs text-on-surface-variant italic">No active overtime or special assignments logged today.</td>
+                  </tr>
+                ) : (
+                  overtimeDeployments.map((ot: any) => {
+                    const emp = data.find(e => e.id === ot.employeeId);
+                    return (
+                      <tr key={ot.id} className="text-xs hover:bg-surface-container-lowest">
+                        <td className="px-4 py-3 text-on-surface font-semibold">{ot.date}</td>
+                        <td className="px-4 py-3 font-semibold text-on-surface">
+                          {emp ? emp.name : ot.employeeId} ({ot.employeeId})
+                        </td>
+                        <td className="px-4 py-3 text-on-surface-variant">{ot.siteName} - {ot.shiftCode}</td>
+                        <td className="px-4 py-3 text-on-surface-variant">
+                          <span className="px-1.5 py-0.5 bg-primary-container/10 text-primary font-bold rounded text-[9px]">
+                            {ot.sourceType || "GENERAL_POOL"}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-on-surface font-semibold text-status-warning">{ot.overtimeReason || "N/A"}</td>
+                        <td className="px-4 py-3 text-right">
+                          {ot.warnings.length > 0 ? (
+                            <span className="px-1.5 py-0.5 bg-status-error/10 text-status-error rounded text-[9px] font-bold">
+                              {ot.warnings.length} Alerts
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-status-success font-bold">Compliant</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      );
+    }
+
+    return null;
+  }
+
   return (
     <div className="flex-1 bg-surface-container-lowest p-6 flex flex-col h-[calc(100vh-4rem)] overflow-y-auto">
       {/* Header */}
@@ -220,16 +803,62 @@ export default function ManpowerMasterPage() {
 
         {canManage && (
           <button
-            onClick={() => setShowAddModal(true)}
+            onClick={() => {
+              if (isSecurity && master === "manpower") {
+                if (activeSubTab === "licenses") {
+                  setShowAddLicenseModal(true);
+                  return;
+                }
+                if (activeSubTab === "gatePasses") {
+                  setShowAddGatePassModal(true);
+                  return;
+                }
+                if (activeSubTab === "relieverPools" || activeSubTab === "overtimeLogs") {
+                  return;
+                }
+              }
+              setShowAddModal(true);
+            }}
             className={`px-3 py-2 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-2 ${
               isSecurity ? "bg-primary hover:bg-primary-container" : "bg-secondary hover:bg-secondary-container"
+            } ${
+              (isSecurity && master === "manpower" && (activeSubTab === "relieverPools" || activeSubTab === "overtimeLogs")) ? "opacity-50 cursor-not-allowed pointer-events-none" : ""
             }`}
           >
             <span className="material-symbols-outlined text-[16px]">add</span>
-            Add {masterLabel.replace(/s$/, "")}
+            Add {isSecurity && master === "manpower" && activeSubTab === "licenses" ? "Security License" : isSecurity && master === "manpower" && activeSubTab === "gatePasses" ? "Gate Pass" : masterLabel.replace(/s$/, "")}
           </button>
         )}
       </div>
+
+      {/* Sub-tabs for Security Manpower Console */}
+      {isSecurity && master === "manpower" && (
+        <div className="flex border-b border-outline-variant mb-6 gap-2 bg-surface p-1 rounded-xl">
+          {[
+            { id: "directory", label: "Directory", icon: "badge" },
+            { id: "licenses", label: "MOI Security Licenses", icon: "shield" },
+            { id: "gatePasses", label: "Site Gate Passes", icon: "badge_card" },
+            { id: "relieverPools", label: "Reliever Pool Assignments", icon: "groups" },
+            { id: "overtimeLogs", label: "Overtime & Event Logs", icon: "schedule" }
+          ].map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => {
+                setActiveSubTab(tab.id);
+                setSearchTerm("");
+              }}
+              className={`flex items-center gap-1.5 px-4 py-2 text-xs font-bold border-b-2 transition-all rounded-lg ${
+                activeSubTab === tab.id
+                  ? "border-primary text-primary bg-primary/5"
+                  : "border-transparent text-on-surface-variant hover:text-primary hover:bg-surface-container-low"
+              }`}
+            >
+              <span className="material-symbols-outlined text-[16px]">{tab.icon}</span>
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Filter Toolbar */}
       <div className="bg-surface border border-outline-variant p-4 rounded-xl shadow-sm mb-6 flex gap-4">
@@ -244,256 +873,275 @@ export default function ManpowerMasterPage() {
           />
         </div>
       </div>
+      {/* Roster Grid / Projects Panel split */}
+      <div className="flex gap-6 flex-1 min-h-0">
+        <div className={`bg-surface border border-outline-variant rounded-xl shadow-sm overflow-hidden flex flex-col ${
+          (isSecurity && master === "projects" && selectedProjectId) ? "w-1/2" : "w-full"
+        }`}>
+          {loading ? (
+            <div className="h-64 flex items-center justify-center flex-1">
+              <div className={`w-8 h-8 border-4 rounded-full animate-spin border-t-transparent ${isSecurity ? "border-primary" : "border-secondary"}`}></div>
+            </div>
+          ) : (isSecurity && master === "manpower" && activeSubTab !== "directory") ? (
+            renderSecurityComplianceTabs()
+          ) : filteredData.length === 0 ? (
+            <div className="p-8 text-center text-xs text-on-surface-variant flex-1 flex items-center justify-center">No items found.</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-surface-container-low border-b border-outline-variant">
+                    {master === "clients" && (
+                      <>
+                        <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Code</th>
+                        <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Client Name</th>
+                        <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Status</th>
+                      </>
+                    )}
+                    {master === "contracts" && (
+                      <>
+                        <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Contract No.</th>
+                        <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Client</th>
+                        <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Title</th>
+                        <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Start Date</th>
+                        <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">End Date</th>
+                        <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Status</th>
+                      </>
+                    )}
+                    {master === "projects" && (
+                      <>
+                        <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Code</th>
+                        <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Project Name</th>
+                        <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Contract</th>
+                        <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Status</th>
+                      </>
+                    )}
+                    {master === "sites" && (
+                      <>
+                        <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Worksite Name</th>
+                        <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Project</th>
+                        <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Radius (Meters)</th>
+                        <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Gate Pass Req.</th>
+                        <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Status</th>
+                        {canManage && <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Actions</th>}
+                      </>
+                    )}
+                    {master === "categories" && (
+                      <>
+                        <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Code</th>
+                        <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Category Name</th>
+                        <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider text-center">Blue Collar</th>
+                        <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider text-center">Deployable</th>
+                        <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider text-center">Overtime</th>
+                        <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider text-center">MOI License</th>
+                        <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider text-center">Gate Pass</th>
+                        <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Status</th>
+                        {canManage && <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Actions</th>}
+                      </>
+                    )}
+                    {(master === "zones" || master === "areas") && (
+                      <>
+                        <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Unit Name</th>
+                        <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Worksite</th>
+                        <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Unit Type</th>
+                        <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Status</th>
+                      </>
+                    )}
+                    {master === "manpower" && (
+                      <>
+                        <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">ID</th>
+                        <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Name</th>
+                        <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Email</th>
+                        <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Category</th>
+                        <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Duty Status</th>
+                      </>
+                    )}
+                    {master === "shifts" && (
+                      <>
+                        <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Worksite</th>
+                        <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Location Unit</th>
+                        <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Category</th>
+                        <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Shift Code</th>
+                        <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Required Count</th>
+                        <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Actions</th>
+                      </>
+                    )}
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredData.map((item: any, idx: number) => (
+                    <tr
+                      key={item.id || idx}
+                      onClick={() => {
+                        if (isSecurity && master === "projects") {
+                          loadProjectDetails(item.id);
+                        }
+                      }}
+                      className={`border-b border-outline-variant/40 hover:bg-surface-container-lowest cursor-pointer ${
+                        (isSecurity && master === "projects" && selectedProjectId === item.id) ? "bg-primary/10 font-bold" : ""
+                      }`}
+                    >
+                      {master === "clients" && (
+                        <>
+                          <td className="px-4 py-3 text-xs font-bold text-primary">{item.code}</td>
+                          <td className="px-4 py-3 text-xs text-on-surface">{item.name}</td>
+                          <td className="px-4 py-3 text-xs">
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${item.isActive ? "bg-status-success/15 text-status-success" : "bg-status-error/15 text-status-error"}`}>
+                              {item.isActive ? "Active" : "Inactive"}
+                            </span>
+                          </td>
+                        </>
+                      )}
+                      {master === "contracts" && (
+                        <>
+                          <td className="px-4 py-3 text-xs font-bold text-primary">{item.contractNumber}</td>
+                          <td className="px-4 py-3 text-xs text-on-surface">{item.client?.name || item.clientId}</td>
+                          <td className="px-4 py-3 text-xs text-on-surface font-semibold">{item.title}</td>
+                          <td className="px-4 py-3 text-xs text-on-surface-variant">{item.startDate}</td>
+                          <td className="px-4 py-3 text-xs text-on-surface-variant">{item.endDate}</td>
+                          <td className="px-4 py-3 text-xs">
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${item.status === "ACTIVE" ? "bg-status-success/15 text-status-success" : "bg-surface-container-high/40 text-on-surface-variant"}`}>
+                              {item.status}
+                            </span>
+                          </td>
+                        </>
+                      )}
+                      {master === "projects" && (
+                        <>
+                          <td className="px-4 py-3 text-xs font-bold text-primary">{item.code}</td>
+                          <td className="px-4 py-3 text-xs text-on-surface">{item.name}</td>
+                          <td className="px-4 py-3 text-xs text-on-surface">{item.contract?.title || item.contractId}</td>
+                          <td className="px-4 py-3 text-xs">
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${item.isActive ? "bg-status-success/15 text-status-success" : "bg-status-error/15 text-status-error"}`}>
+                              {item.isActive ? "Active" : "Inactive"}
+                            </span>
+                          </td>
+                        </>
+                      )}
+                      {master === "sites" && (
+                        <>
+                          <td className="px-4 py-3 text-xs font-bold text-on-surface">{item.name}</td>
+                          <td className="px-4 py-3 text-xs text-on-surface">{item.project?.name || item.projectId}</td>
+                          <td className="px-4 py-3 text-xs text-on-surface-variant">{item.radiusMeters}m</td>
+                          <td className="px-4 py-3 text-xs">
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${item.gatePassRequired ? "bg-primary-container/10 text-primary" : "bg-surface-container-high/40 text-on-surface-variant"}`}>
+                              {item.gatePassRequired ? "Yes" : "No"}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-xs">
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${item.isActive ? "bg-status-success/15 text-status-success" : "bg-status-error/15 text-status-error"}`}>
+                              {item.isActive ? "Active" : "Inactive"}
+                            </span>
+                          </td>
+                          {canManage && (
+                            <td className="px-4 py-3 text-xs">
+                              <button
+                                onClick={() => startEdit(item)}
+                                className="text-primary hover:underline text-[11px] font-bold mr-3"
+                              >
+                                Edit
+                              </button>
+                            </td>
+                          )}
+                        </>
+                      )}
+                      {master === "categories" && (
+                        <>
+                          <td className="px-4 py-3 text-xs font-bold text-primary">{item.code}</td>
+                          <td className="px-4 py-3 text-xs text-on-surface">{item.name}</td>
+                          <td className="px-4 py-3 text-xs text-center">
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${item.isBlueCollar ? "bg-primary-container/10 text-primary" : "bg-surface-container-high/40 text-on-surface-variant"}`}>
+                              {item.isBlueCollar ? "Yes" : "No"}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-xs text-center">
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${item.isDeployableInRoster ? "bg-status-success/15 text-status-success" : "bg-status-error/15 text-status-error"}`}>
+                              {item.isDeployableInRoster ? "Yes" : "No"}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-xs text-center">
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${item.canWorkOvertime ? "bg-status-success/15 text-status-success" : "bg-status-error/15 text-status-error"}`}>
+                              {item.canWorkOvertime ? "Yes" : "No"}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-xs text-center">
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${item.requiresMoiLicense ? "bg-primary-container/10 text-primary" : "bg-surface-container-high/40 text-on-surface-variant"}`}>
+                              {item.requiresMoiLicense ? "Yes" : "No"}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-xs text-center">
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${item.requiresGatePassCheck ? "bg-primary-container/10 text-primary" : "bg-surface-container-high/40 text-on-surface-variant"}`}>
+                              {item.requiresGatePassCheck ? "Yes" : "No"}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-xs">
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${item.isActive ? "bg-status-success/15 text-status-success" : "bg-status-error/15 text-status-error"}`}>
+                              {item.isActive ? "Active" : "Inactive"}
+                            </span>
+                          </td>
+                          {canManage && (
+                            <td className="px-4 py-3 text-xs">
+                              <button
+                                onClick={() => startEdit(item)}
+                                className="text-primary hover:underline text-[11px] font-bold mr-3"
+                              >
+                                Edit
+                              </button>
+                            </td>
+                          )}
+                        </>
+                      )}
+                      {(master === "zones" || master === "areas") && (
+                        <>
+                          <td className="px-4 py-3 text-xs font-bold text-on-surface">{item.name}</td>
+                          <td className="px-4 py-3 text-xs text-on-surface">{item.site?.name || item.siteId}</td>
+                          <td className="px-4 py-3 text-xs text-on-surface-variant">{item.type}</td>
+                          <td className="px-4 py-3 text-xs">
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${item.isActive ? "bg-status-success/15 text-status-success" : "bg-status-error/15 text-status-error"}`}>
+                              {item.isActive ? "Active" : "Inactive"}
+                            </span>
+                          </td>
+                        </>
+                      )}
+                      {master === "manpower" && (
+                        <>
+                          <td className="px-4 py-3 text-xs font-bold text-primary">{item.id}</td>
+                          <td className="px-4 py-3 text-xs text-on-surface">{item.name}</td>
+                          <td className="px-4 py-3 text-xs text-on-surface-variant">{item.email}</td>
+                          <td className="px-4 py-3 text-xs text-on-surface">{item.manpowerCategoryId || "General"}</td>
+                          <td className="px-4 py-3 text-xs">
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${item.dutyStatus === "ON_DUTY" ? "bg-status-success/15 text-status-success" : "bg-status-error/15 text-status-error"}`}>
+                              {item.dutyStatus || "OFF_DUTY"}
+                            </span>
+                          </td>
+                        </>
+                      )}
+                      {master === "shifts" && (
+                        <>
+                          <td className="px-4 py-3 text-xs font-bold text-on-surface">{item.site?.name || item.siteId}</td>
+                          <td className="px-4 py-3 text-xs text-on-surface">{item.locationUnit?.name || "All Site"}</td>
+                          <td className="px-4 py-3 text-xs text-on-surface">{item.category?.name || item.categoryId}</td>
+                          <td className="px-4 py-3 text-xs font-bold text-primary">{item.shiftCode}</td>
+                          <td className="px-4 py-3 text-xs text-on-surface-variant font-bold">{item.requiredCount}</td>
+                          <td className="px-4 py-3 text-xs">
+                            <button
+                              onClick={() => handleDeleteRequirement(item.id)}
+                              className="text-status-error hover:underline text-[11px] font-bold"
+                            >
+                              Delete
+                            </button>
+                          </td>
+                        </>
+                      )}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
 
-      {/* Roster Grid */}
-      <div className="bg-surface border border-outline-variant rounded-xl shadow-sm overflow-hidden flex-1">
-        {loading ? (
-          <div className="h-64 flex items-center justify-center">
-            <div className={`w-8 h-8 border-4 rounded-full animate-spin border-t-transparent ${isSecurity ? "border-primary" : "border-secondary"}`}></div>
-          </div>
-        ) : filteredData.length === 0 ? (
-          <div className="p-8 text-center text-xs text-on-surface-variant">No items found.</div>
-        ) : (
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-surface-container-low border-b border-outline-variant">
-                {master === "clients" && (
-                  <>
-                    <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Code</th>
-                    <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Client Name</th>
-                    <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Status</th>
-                  </>
-                )}
-                {master === "contracts" && (
-                  <>
-                    <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Contract No.</th>
-                    <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Client</th>
-                    <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Title</th>
-                    <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Start Date</th>
-                    <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">End Date</th>
-                    <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Status</th>
-                  </>
-                )}
-                {master === "projects" && (
-                  <>
-                    <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Code</th>
-                    <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Project Name</th>
-                    <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Contract</th>
-                    <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Status</th>
-                  </>
-                )}
-                {master === "sites" && (
-                  <>
-                    <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Worksite Name</th>
-                    <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Project</th>
-                    <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Radius (Meters)</th>
-                    <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Gate Pass Req.</th>
-                    <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Status</th>
-                    {canManage && <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Actions</th>}
-                  </>
-                )}
-                {master === "categories" && (
-                  <>
-                    <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Code</th>
-                    <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Category Name</th>
-                    <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider text-center">Blue Collar</th>
-                    <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider text-center">Deployable</th>
-                    <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider text-center">Overtime</th>
-                    <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider text-center">MOI License</th>
-                    <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider text-center">Gate Pass</th>
-                    <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Status</th>
-                    {canManage && <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Actions</th>}
-                  </>
-                )}
-                {(master === "zones" || master === "areas") && (
-                  <>
-                    <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Unit Name</th>
-                    <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Worksite</th>
-                    <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Unit Type</th>
-                    <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Status</th>
-                  </>
-                )}
-                {master === "manpower" && (
-                  <>
-                    <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">ID</th>
-                    <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Name</th>
-                    <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Email</th>
-                    <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Category</th>
-                    <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Duty Status</th>
-                  </>
-                )}
-                {master === "shifts" && (
-                  <>
-                    <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Worksite</th>
-                    <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Location Unit</th>
-                    <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Category</th>
-                    <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Shift Code</th>
-                    <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Required Count</th>
-                    <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Actions</th>
-                  </>
-                )}
-              </tr>
-            </thead>
-            <tbody>
-              {filteredData.map((item: any, idx: number) => (
-                <tr key={item.id || idx} className="border-b border-outline-variant/40 hover:bg-surface-container-lowest">
-                  {master === "clients" && (
-                    <>
-                      <td className="px-4 py-3 text-xs font-bold text-primary">{item.code}</td>
-                      <td className="px-4 py-3 text-xs text-on-surface">{item.name}</td>
-                      <td className="px-4 py-3 text-xs">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${item.isActive ? "bg-status-success/15 text-status-success" : "bg-status-error/15 text-status-error"}`}>
-                          {item.isActive ? "Active" : "Inactive"}
-                        </span>
-                      </td>
-                    </>
-                  )}
-                  {master === "contracts" && (
-                    <>
-                      <td className="px-4 py-3 text-xs font-bold text-primary">{item.contractNumber}</td>
-                      <td className="px-4 py-3 text-xs text-on-surface">{item.client?.name || item.clientId}</td>
-                      <td className="px-4 py-3 text-xs text-on-surface">{item.title}</td>
-                      <td className="px-4 py-3 text-xs text-on-surface-variant">{new Date(item.startDate).toLocaleDateString()}</td>
-                      <td className="px-4 py-3 text-xs text-on-surface-variant">{new Date(item.endDate).toLocaleDateString()}</td>
-                      <td className="px-4 py-3 text-xs">
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-primary-container/10 text-primary">
-                          {item.status}
-                        </span>
-                      </td>
-                    </>
-                  )}
-                  {master === "projects" && (
-                    <>
-                      <td className="px-4 py-3 text-xs font-bold text-primary">{item.code}</td>
-                      <td className="px-4 py-3 text-xs text-on-surface">{item.name}</td>
-                      <td className="px-4 py-3 text-xs text-on-surface">{item.contract?.title || item.contractId}</td>
-                      <td className="px-4 py-3 text-xs">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${item.isActive ? "bg-status-success/15 text-status-success" : "bg-status-error/15 text-status-error"}`}>
-                          {item.isActive ? "Active" : "Inactive"}
-                        </span>
-                      </td>
-                    </>
-                  )}
-                  {master === "sites" && (
-                    <>
-                      <td className="px-4 py-3 text-xs font-bold text-on-surface">{item.name}</td>
-                      <td className="px-4 py-3 text-xs text-on-surface">{item.project?.name || item.projectId}</td>
-                      <td className="px-4 py-3 text-xs text-on-surface-variant">{item.radiusMeters}m</td>
-                      <td className="px-4 py-3 text-xs">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${item.gatePassRequired ? "bg-primary-container/10 text-primary" : "bg-surface-container-high/40 text-on-surface-variant"}`}>
-                          {item.gatePassRequired ? "Yes" : "No"}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-xs">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${item.isActive ? "bg-status-success/15 text-status-success" : "bg-status-error/15 text-status-error"}`}>
-                          {item.isActive ? "Active" : "Inactive"}
-                        </span>
-                      </td>
-                      {canManage && (
-                        <td className="px-4 py-3 text-xs">
-                          <button
-                            onClick={() => startEdit(item)}
-                            className="text-primary hover:underline text-[11px] font-bold mr-3"
-                          >
-                            Edit
-                          </button>
-                        </td>
-                      )}
-                    </>
-                  )}
-                  {master === "categories" && (
-                    <>
-                      <td className="px-4 py-3 text-xs font-bold text-primary">{item.code}</td>
-                      <td className="px-4 py-3 text-xs text-on-surface">{item.name}</td>
-                      <td className="px-4 py-3 text-xs text-center">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${item.isBlueCollar ? "bg-primary-container/10 text-primary" : "bg-surface-container-high/40 text-on-surface-variant"}`}>
-                          {item.isBlueCollar ? "Yes" : "No"}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-xs text-center">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${item.isDeployableInRoster ? "bg-primary-container/10 text-primary" : "bg-surface-container-high/40 text-on-surface-variant"}`}>
-                          {item.isDeployableInRoster ? "Yes" : "No"}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-xs text-center">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${item.canWorkOvertime ? "bg-primary-container/10 text-primary" : "bg-surface-container-high/40 text-on-surface-variant"}`}>
-                          {item.canWorkOvertime ? "Yes" : "No"}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-xs text-center">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${item.requiresMoiLicense ? "bg-primary-container/10 text-primary" : "bg-surface-container-high/40 text-on-surface-variant"}`}>
-                          {item.requiresMoiLicense ? "Yes" : "No"}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-xs text-center">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${item.requiresGatePassCheck ? "bg-primary-container/10 text-primary" : "bg-surface-container-high/40 text-on-surface-variant"}`}>
-                          {item.requiresGatePassCheck ? "Yes" : "No"}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-xs">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${item.isActive ? "bg-status-success/15 text-status-success" : "bg-status-error/15 text-status-error"}`}>
-                          {item.isActive ? "Active" : "Inactive"}
-                        </span>
-                      </td>
-                      {canManage && (
-                        <td className="px-4 py-3 text-xs">
-                          <button
-                            onClick={() => startEdit(item)}
-                            className="text-primary hover:underline text-[11px] font-bold mr-3"
-                          >
-                            Edit
-                          </button>
-                        </td>
-                      )}
-                    </>
-                  )}
-                  {(master === "zones" || master === "areas") && (
-                    <>
-                      <td className="px-4 py-3 text-xs font-bold text-on-surface">{item.name}</td>
-                      <td className="px-4 py-3 text-xs text-on-surface">{item.site?.name || item.siteId}</td>
-                      <td className="px-4 py-3 text-xs text-on-surface-variant">{item.type}</td>
-                      <td className="px-4 py-3 text-xs">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${item.isActive ? "bg-status-success/15 text-status-success" : "bg-status-error/15 text-status-error"}`}>
-                          {item.isActive ? "Active" : "Inactive"}
-                        </span>
-                      </td>
-                    </>
-                  )}
-                  {master === "manpower" && (
-                    <>
-                      <td className="px-4 py-3 text-xs font-bold text-primary">{item.id}</td>
-                      <td className="px-4 py-3 text-xs text-on-surface">{item.name}</td>
-                      <td className="px-4 py-3 text-xs text-on-surface-variant">{item.email}</td>
-                      <td className="px-4 py-3 text-xs text-on-surface">{item.manpowerCategoryId || "General"}</td>
-                      <td className="px-4 py-3 text-xs">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${item.dutyStatus === "ON_DUTY" ? "bg-status-success/15 text-status-success" : "bg-status-error/15 text-status-error"}`}>
-                          {item.dutyStatus || "OFF_DUTY"}
-                        </span>
-                      </td>
-                    </>
-                  )}
-                  {master === "shifts" && (
-                    <>
-                      <td className="px-4 py-3 text-xs font-bold text-on-surface">{item.site?.name || item.siteId}</td>
-                      <td className="px-4 py-3 text-xs text-on-surface">{item.locationUnit?.name || "All Site"}</td>
-                      <td className="px-4 py-3 text-xs text-on-surface">{item.category?.name || item.categoryId}</td>
-                      <td className="px-4 py-3 text-xs font-bold text-primary">{item.shiftCode}</td>
-                      <td className="px-4 py-3 text-xs text-on-surface-variant font-bold">{item.requiredCount}</td>
-                      <td className="px-4 py-3 text-xs">
-                        <button
-                          onClick={() => handleDeleteRequirement(item.id)}
-                          className="text-status-error hover:underline text-[11px] font-bold"
-                        >
-                          Delete
-                        </button>
-                      </td>
-                    </>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+        {isSecurity && master === "projects" && selectedProjectId && renderProjectDetailsPanel()}
       </div>
 
       {/* Add Modal */}
@@ -1274,6 +1922,177 @@ export default function ManpowerMasterPage() {
                   }`}
                 >
                   Save Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Add Security License Modal */}
+      {showAddLicenseModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-surface rounded-xl border border-outline-variant shadow-lg max-w-md w-full overflow-hidden animate-fade-in">
+            <div className="px-6 py-4 border-b border-outline-variant flex justify-between items-center bg-surface-container-low">
+              <h3 className="text-sm font-black text-primary">Record MOI Security License</h3>
+              <button onClick={() => setShowAddLicenseModal(false)} className="text-on-surface-variant hover:text-primary">
+                <span className="material-symbols-outlined text-[20px]">close</span>
+              </button>
+            </div>
+            <form onSubmit={handleAddLicenseSubmit}>
+              <div className="p-6 space-y-4">
+                {formError && (
+                  <div className="p-3 bg-status-error/10 text-status-error text-xs rounded-lg font-bold">
+                    {formError}
+                  </div>
+                )}
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Select Security Guard</label>
+                  <select
+                    name="employeeId"
+                    required
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                  >
+                    <option value="">-- Choose Guard --</option>
+                    {data.filter((e: any) => e.manpowerCategoryId === "SECURITY_GUARD" || e.manpowerCategoryId === "SENIOR_GUARD" || !e.manpowerCategoryId).map((emp: any) => (
+                      <option key={emp.id} value={emp.id}>{emp.name} ({emp.id})</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">License Number</label>
+                  <input
+                    type="text"
+                    name="licenseNumber"
+                    required
+                    placeholder="e.g. MOI-SEC-998877"
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Issue Date</label>
+                  <input
+                    type="date"
+                    name="issueDate"
+                    required
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Expiry Date</label>
+                  <input
+                    type="date"
+                    name="expiryDate"
+                    required
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                  />
+                </div>
+              </div>
+              <div className="px-6 py-4 border-t border-outline-variant flex justify-end gap-3 bg-surface-container-low">
+                <button
+                  type="button"
+                  onClick={() => setShowAddLicenseModal(false)}
+                  className="px-3 py-2 border border-outline-variant rounded-lg text-xs font-bold text-on-surface hover:bg-surface-container-high transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-3 py-2 bg-primary text-white text-xs font-bold rounded-lg hover:bg-primary-variant transition-colors"
+                >
+                  Record License
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Add Gate Pass Modal */}
+      {showAddGatePassModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-surface rounded-xl border border-outline-variant shadow-lg max-w-md w-full overflow-hidden animate-fade-in">
+            <div className="px-6 py-4 border-b border-outline-variant flex justify-between items-center bg-surface-container-low">
+              <h3 className="text-sm font-black text-primary">Record Site Gate Pass</h3>
+              <button onClick={() => setShowAddGatePassModal(false)} className="text-on-surface-variant hover:text-primary">
+                <span className="material-symbols-outlined text-[20px]">close</span>
+              </button>
+            </div>
+            <form onSubmit={handleAddGatePassSubmit}>
+              <div className="p-6 space-y-4">
+                {formError && (
+                  <div className="p-3 bg-status-error/10 text-status-error text-xs rounded-lg font-bold">
+                    {formError}
+                  </div>
+                )}
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Select Security Guard</label>
+                  <select
+                    name="employeeId"
+                    required
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                  >
+                    <option value="">-- Choose Guard --</option>
+                    {data.filter((e: any) => e.manpowerCategoryId === "SECURITY_GUARD" || e.manpowerCategoryId === "SENIOR_GUARD" || !e.manpowerCategoryId).map((emp: any) => (
+                      <option key={emp.id} value={emp.id}>{emp.name} ({emp.id})</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Select Worksite</label>
+                  <select
+                    name="siteId"
+                    required
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                  >
+                    <option value="">-- Choose Worksite --</option>
+                    {sites.map((site: any) => (
+                      <option key={site.id} value={site.id}>{site.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Gate Pass Number</label>
+                  <input
+                    type="text"
+                    name="passNumber"
+                    required
+                    placeholder="e.g. GP-998877-SITE"
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Issue Date</label>
+                  <input
+                    type="date"
+                    name="issueDate"
+                    required
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Expiry Date</label>
+                  <input
+                    type="date"
+                    name="expiryDate"
+                    required
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                  />
+                </div>
+              </div>
+              <div className="px-6 py-4 border-t border-outline-variant flex justify-end gap-3 bg-surface-container-low">
+                <button
+                  type="button"
+                  onClick={() => setShowAddGatePassModal(false)}
+                  className="px-3 py-2 border border-outline-variant rounded-lg text-xs font-bold text-on-surface hover:bg-surface-container-high transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-3 py-2 bg-primary text-white text-xs font-bold rounded-lg hover:bg-primary-variant transition-colors"
+                >
+                  Record Gate Pass
                 </button>
               </div>
             </form>
