@@ -7032,8 +7032,10 @@ export const mockDb = {
     };
     if (isDbConnected()) {
       await seedMySQL();
-      // Remove any active roles first (1 role per user in this implementation model)
-      await prismaClient.userRoleAssignment.deleteMany({ where: { employeeId: data.employeeId } });
+      // Remove duplicate assignment if any
+      await prismaClient.userRoleAssignment.deleteMany({
+        where: { employeeId: data.employeeId, roleId: data.roleId }
+      });
       const created = await prismaClient.userRoleAssignment.create({ data });
       return {
         ...created,
@@ -7042,10 +7044,62 @@ export const mockDb = {
     }
     const db = readDb();
     db.userRoleAssignments = db.userRoleAssignments || [];
-    db.userRoleAssignments = db.userRoleAssignments.filter(a => a.employeeId !== data.employeeId);
+    db.userRoleAssignments = db.userRoleAssignments.filter(
+      a => !(a.employeeId === data.employeeId && a.roleId === data.roleId)
+    );
     db.userRoleAssignments.push(assign);
     writeDb(db);
     return assign;
+  },
+  saveUserRoleAssignments: async (employeeId: string, roleIds: string[], assignedById: string): Promise<any[]> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      await prismaClient.userRoleAssignment.deleteMany({ where: { employeeId } });
+      const createdList = [];
+      for (const roleId of roleIds) {
+        const c = await prismaClient.userRoleAssignment.create({
+          data: {
+            employeeId,
+            roleId,
+            assignedById,
+            isActive: true
+          }
+        });
+        createdList.push({
+          ...c,
+          assignedAt: c.assignedAt.toISOString()
+        });
+      }
+      return createdList;
+    }
+    const db = readDb();
+    db.userRoleAssignments = db.userRoleAssignments || [];
+    db.userRoleAssignments = db.userRoleAssignments.filter(a => a.employeeId !== employeeId);
+    const saved = [];
+    for (const roleId of roleIds) {
+      const assign = {
+        id: `URA-${Math.random().toString(36).substring(2, 9).toUpperCase()}`,
+        employeeId,
+        roleId,
+        assignedById,
+        isActive: true,
+        assignedAt: new Date().toISOString()
+      };
+      db.userRoleAssignments.push(assign);
+      saved.push(assign);
+    }
+    writeDb(db);
+    return saved;
+  },
+  deleteUserRoleAssignment: async (id: string): Promise<boolean> => {
+    if (isDbConnected()) {
+      await prismaClient.userRoleAssignment.delete({ where: { id } });
+      return true;
+    }
+    const db = readDb();
+    db.userRoleAssignments = (db.userRoleAssignments || []).filter(x => x.id !== id);
+    writeDb(db);
+    return true;
   },
 
   // Bulk Upload Jobs
@@ -8649,34 +8703,76 @@ export const mockDb = {
   },
 
   // --- User Operation Access CRUD ---
+  getUserOperationAccesses: async (): Promise<any[]> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      const accesses = await prismaClient.userOperationAccess.findMany();
+      return accesses.map((x: any) => ({
+        ...x,
+        createdAt: x.createdAt?.toISOString(),
+        updatedAt: x.updatedAt?.toISOString()
+      }));
+    }
+    const db = readDb();
+    return db.userOperationAccesses || [];
+  },
   getUserOperationAccess: async (employeeId: string): Promise<any | null> => {
     if (isDbConnected()) {
       await seedMySQL();
-      return await prismaClient.userOperationAccess.findUnique({ where: { employeeId } });
+      const x = await prismaClient.userOperationAccess.findUnique({ where: { employeeId } });
+      if (!x) return null;
+      return {
+        ...x,
+        createdAt: x.createdAt?.toISOString(),
+        updatedAt: x.updatedAt?.toISOString()
+      };
     }
     const db = readDb();
     return (db.userOperationAccesses || []).find((x: any) => x.employeeId === employeeId) || null;
   },
   upsertUserOperationAccess: async (employeeId: string, data: any): Promise<any> => {
     if (isDbConnected()) {
-      return await prismaClient.userOperationAccess.upsert({
+      const res = await prismaClient.userOperationAccess.upsert({
         where: { employeeId },
-        update: data,
-        create: { employeeId, ...data }
+        update: {
+          allowedWhiteCollar: data.allowedWhiteCollar,
+          allowedSecurityGuarding: data.allowedSecurityGuarding,
+          allowedFacilityManagement: data.allowedFacilityManagement,
+          defaultLanding: data.defaultLanding,
+          allowedCompanyIds: data.allowedCompanyIds
+        },
+        create: {
+          employeeId,
+          allowedWhiteCollar: data.allowedWhiteCollar !== false,
+          allowedSecurityGuarding: !!data.allowedSecurityGuarding,
+          allowedFacilityManagement: !!data.allowedFacilityManagement,
+          defaultLanding: data.defaultLanding,
+          allowedCompanyIds: data.allowedCompanyIds
+        }
       });
+      return {
+        ...res,
+        createdAt: res.createdAt?.toISOString(),
+        updatedAt: res.updatedAt?.toISOString()
+      };
     }
     const db = readDb();
     db.userOperationAccesses = db.userOperationAccesses || [];
     let record = db.userOperationAccesses.find((x: any) => x.employeeId === employeeId);
     if (record) {
       Object.assign(record, data);
+      record.updatedAt = new Date().toISOString();
     } else {
       record = {
         id: `uoa-${Date.now()}`,
         employeeId,
         allowedWhiteCollar: data.allowedWhiteCollar !== false,
         allowedSecurityGuarding: !!data.allowedSecurityGuarding,
-        allowedFacilityManagement: !!data.allowedFacilityManagement
+        allowedFacilityManagement: !!data.allowedFacilityManagement,
+        defaultLanding: data.defaultLanding || null,
+        allowedCompanyIds: data.allowedCompanyIds || null,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
       };
       db.userOperationAccesses.push(record);
     }

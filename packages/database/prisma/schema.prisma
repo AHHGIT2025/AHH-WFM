@@ -686,6 +686,8 @@ model SystemRole {
   description     String?
   isSystemDefault Boolean   @default(false)
   isActive        Boolean   @default(true)
+  isEditable      Boolean   @default(true)
+  scope           String?   @default("Global")
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 }
@@ -1157,6 +1159,10 @@ model UserOperationAccess {
   allowedWhiteCollar        Boolean  @default(true)
   allowedSecurityGuarding   Boolean  @default(false)
   allowedFacilityManagement Boolean  @default(false)
+  defaultLanding            String?
+  allowedCompanyIds         Json?
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
 }
 
 model ManpowerClient {

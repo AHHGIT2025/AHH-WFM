@@ -621,6 +621,8 @@ export interface SystemRole {
   description?: string;
   isSystemDefault: boolean;
   isActive: boolean;
+  isEditable?: boolean;
+  scope?: string;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -870,6 +872,10 @@ export interface UserOperationAccess {
   allowedWhiteCollar: boolean;
   allowedSecurityGuarding: boolean;
   allowedFacilityManagement: boolean;
+  defaultLanding?: string | null;
+  allowedCompanyIds?: any;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface ManpowerClient {
