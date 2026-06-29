@@ -131,6 +131,19 @@ let memoryDb: {
   relieverStandbyRules: RelieverStandbyRule[];
   allowedPunchLocations: AllowedPunchLocation[];
   employeeAllowedPunchLocations: EmployeeAllowedPunchLocation[];
+
+  // --- Manpower Operations Additions ---
+  manpowerClients: ManpowerClient[];
+  manpowerContracts: ManpowerContract[];
+  manpowerProjects: ManpowerProject[];
+  manpowerSites: ManpowerSite[];
+  manpowerLocationUnits: ManpowerLocationUnit[];
+  manpowerCategories: ManpowerCategory[];
+  manpowerShiftRequirements: ManpowerShiftRequirement[];
+  manpowerDeployments: ManpowerDeployment[];
+  manpowerDeploymentAssignments: ManpowerDeploymentAssignment[];
+  manpowerRelieverAssignments: ManpowerRelieverAssignment[];
+  userOperationAccesses: UserOperationAccess[];
 } = {
   companies: [
     { id: "COMP-001", companyCode: "AHH", companyName: "Al Hattab Holding", isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
@@ -331,7 +344,49 @@ let memoryDb: {
     { id: "APL-002", companyId: "COMP-001", name: "West Bay Office", locationType: "OFFICE", latitude: 25.2867, longitude: 51.5325, radiusMeters: 150.0, isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
     { id: "APL-003", companyId: "COMP-001", name: "Industrial Area Depot", locationType: "PROJECT_SITE", latitude: 25.2905, longitude: 51.5201, radiusMeters: 150.0, isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
   ],
-  employeeAllowedPunchLocations: []
+  employeeAllowedPunchLocations: [],
+  manpowerClients: [
+    { id: "MC-001", name: "Qatar Petroleum", code: "QP", operationType: "SECURITY_GUARDING", isActive: true },
+    { id: "MC-002", name: "Hamad Medical Corporation", code: "HMC", operationType: "FACILITY_MANAGEMENT", isActive: true }
+  ],
+  manpowerContracts: [
+    { id: "MCON-001", clientId: "MC-001", contractNumber: "SEC-QP-2026", title: "Security Guarding Services for QP HQ", startDate: "2026-01-01T00:00:00Z", endDate: "2028-12-31T00:00:00Z", operationType: "SECURITY_GUARDING", status: "ACTIVE" },
+    { id: "MCON-002", clientId: "MC-002", contractNumber: "FM-HMC-2026", title: "Cleaning and FM Support Services", startDate: "2026-01-01T00:00:00Z", endDate: "2027-12-31T00:00:00Z", operationType: "FACILITY_MANAGEMENT", status: "ACTIVE" }
+  ],
+  manpowerProjects: [
+    { id: "MPROJ-001", contractId: "MCON-001", name: "QP HQ Security", code: "PROJ-SEC-01", operationType: "SECURITY_GUARDING", isActive: true },
+    { id: "MPROJ-002", contractId: "MCON-002", name: "HMC Cleaning", code: "PROJ-FM-01", operationType: "FACILITY_MANAGEMENT", isActive: true }
+  ],
+  manpowerSites: [
+    { id: "MSITE-001", projectId: "MPROJ-001", name: "QP Tower A", lat: 25.3184, lng: 51.5208, radiusMeters: 100.0, operationType: "SECURITY_GUARDING", isActive: true },
+    { id: "MSITE-002", projectId: "MPROJ-002", name: "HMC General Hospital", lat: 25.2905, lng: 51.5201, radiusMeters: 100.0, operationType: "FACILITY_MANAGEMENT", isActive: true }
+  ],
+  manpowerLocationUnits: [
+    { id: "MLOC-001", siteId: "MSITE-001", name: "Main Gate", type: "GATE", operationType: "SECURITY_GUARDING", isActive: true },
+    { id: "MLOC-002", siteId: "MSITE-001", name: "Reception Post", type: "POST", operationType: "SECURITY_GUARDING", isActive: true },
+    { id: "MLOC-003", siteId: "MSITE-002", name: "Zone A - Lobby", type: "AREA", operationType: "FACILITY_MANAGEMENT", isActive: true },
+    { id: "MLOC-004", siteId: "MSITE-002", name: "Floor 2 - Wards", type: "FLOOR", operationType: "FACILITY_MANAGEMENT", isActive: true }
+  ],
+  manpowerCategories: [
+    { id: "PM-CAT-SEC-01", name: "CCTV Operator", code: "CCTV", operationType: "SECURITY_GUARDING", isActive: true },
+    { id: "PM-CAT-SEC-02", name: "Security Guard", code: "GUARD", operationType: "SECURITY_GUARDING", isActive: true },
+    { id: "PM-CAT-SEC-03", name: "Head Guard", code: "HEAD_GUARD", operationType: "SECURITY_GUARDING", isActive: true },
+    { id: "PM-CAT-SEC-04", name: "Security Supervisor", code: "SEC_SUPERVISOR", operationType: "SECURITY_GUARDING", isActive: true },
+    { id: "PM-CAT-SEC-05", name: "Security Project Manager", code: "SEC_PM", operationType: "SECURITY_GUARDING", isActive: true },
+    { id: "PM-CAT-SEC-06", name: "Reliever Guard", code: "RELIEVER_GUARD", operationType: "SECURITY_GUARDING", isActive: true },
+    
+    { id: "PM-CAT-FM-01", name: "Cleaner", code: "CLEANER", operationType: "FACILITY_MANAGEMENT", isActive: true },
+    { id: "PM-CAT-FM-02", name: "Office Boy", code: "OFFICE_BOY", operationType: "FACILITY_MANAGEMENT", isActive: true },
+    { id: "PM-CAT-FM-03", name: "Technician", code: "TECHNICIAN", operationType: "FACILITY_MANAGEMENT", isActive: true },
+    { id: "PM-CAT-FM-04", name: "FM Supervisor", code: "FM_SUPERVISOR", operationType: "FACILITY_MANAGEMENT", isActive: true },
+    { id: "PM-CAT-FM-05", name: "FM Project Manager", code: "FM_PM", operationType: "FACILITY_MANAGEMENT", isActive: true },
+    { id: "PM-CAT-FM-06", name: "Reliever Cleaner", code: "RELIEVER_CLEANER", operationType: "FACILITY_MANAGEMENT", isActive: true }
+  ],
+  manpowerShiftRequirements: [],
+  manpowerDeployments: [],
+  manpowerDeploymentAssignments: [],
+  manpowerRelieverAssignments: [],
+  userOperationAccesses: []
 };
 
 // Seeding helper to pre-fill MySQL with mock data if it is empty
@@ -819,6 +874,14 @@ export const readDb = (): typeof memoryDb & {
     const data = fs.readFileSync(dbPath, "utf-8");
     const parsed = JSON.parse(data);
     let needsWrite = false;
+
+    // Self-healing: backfill missing root collections from memoryDb defaults
+    for (const key of Object.keys(memoryDb)) {
+      if (parsed[key] === undefined || parsed[key] === null) {
+        parsed[key] = (memoryDb as any)[key];
+        needsWrite = true;
+      }
+    }
 
     if (parsed.employees) {
       for (const emp of parsed.employees) {
@@ -8319,6 +8382,516 @@ export const mockDb = {
 
   createOrUpdateEmployeeUser: async (employeeId: string, data: any): Promise<Employee | null> => {
     return await mockDb.updateEmployeeAccess(employeeId, data);
+  },
+
+  // --- Manpower Clients CRUD ---
+  getManpowerClients: async (operationType?: string): Promise<any[]> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      const where: any = {};
+      if (operationType) where.operationType = operationType;
+      const res = await prismaClient.manpowerClient.findMany({ where, orderBy: { name: "asc" } });
+      return res.map((x: any) => ({ ...x, createdAt: x.createdAt?.toISOString(), updatedAt: x.updatedAt?.toISOString() }));
+    }
+    const db = readDb();
+    let res = db.manpowerClients || [];
+    if (operationType) res = res.filter((x: any) => x.operationType === operationType);
+    return res;
+  },
+  createManpowerClient: async (data: any): Promise<any> => {
+    if (isDbConnected()) {
+      const res = await prismaClient.manpowerClient.create({ data });
+      return { ...res, createdAt: res.createdAt?.toISOString(), updatedAt: res.updatedAt?.toISOString() };
+    }
+    const db = readDb();
+    const newRecord = {
+      id: data.id || `mc-${Date.now()}`,
+      name: data.name || "",
+      code: data.code || "",
+      operationType: data.operationType || "SECURITY_GUARDING",
+      isActive: data.isActive !== false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    db.manpowerClients = db.manpowerClients || [];
+    db.manpowerClients.push(newRecord);
+    writeDb(db);
+    return newRecord;
+  },
+
+  // --- Manpower Contracts CRUD ---
+  getManpowerContracts: async (operationType?: string): Promise<any[]> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      const where: any = {};
+      if (operationType) where.operationType = operationType;
+      const res = await prismaClient.manpowerContract.findMany({
+        where,
+        include: { client: true },
+        orderBy: { contractNumber: "asc" }
+      });
+      return res.map((x: any) => ({
+        ...x,
+        createdAt: x.createdAt?.toISOString(),
+        updatedAt: x.updatedAt?.toISOString(),
+        startDate: x.startDate?.toISOString(),
+        endDate: x.endDate?.toISOString()
+      }));
+    }
+    const db = readDb();
+    let res = db.manpowerContracts || [];
+    if (operationType) res = res.filter((x: any) => x.operationType === operationType);
+    return res.map((x: any) => ({
+      ...x,
+      client: (db.manpowerClients || []).find((c: any) => c.id === x.clientId)
+    }));
+  },
+  createManpowerContract: async (data: any): Promise<any> => {
+    if (isDbConnected()) {
+      const res = await prismaClient.manpowerContract.create({
+        data: {
+          ...data,
+          startDate: new Date(data.startDate),
+          endDate: new Date(data.endDate)
+        }
+      });
+      return { ...res, createdAt: res.createdAt?.toISOString(), updatedAt: res.updatedAt?.toISOString() };
+    }
+    const db = readDb();
+    const newRecord = {
+      id: data.id || `mcon-${Date.now()}`,
+      clientId: data.clientId || "",
+      contractNumber: data.contractNumber || "",
+      title: data.title || "",
+      startDate: data.startDate || new Date().toISOString(),
+      endDate: data.endDate || new Date().toISOString(),
+      operationType: data.operationType || "SECURITY_GUARDING",
+      status: data.status || "DRAFT",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    db.manpowerContracts = db.manpowerContracts || [];
+    db.manpowerContracts.push(newRecord);
+    writeDb(db);
+    return newRecord;
+  },
+
+  // --- Manpower Projects CRUD ---
+  getManpowerProjects: async (operationType?: string): Promise<any[]> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      const where: any = {};
+      if (operationType) where.operationType = operationType;
+      const res = await prismaClient.manpowerProject.findMany({
+        where,
+        include: { contract: { include: { client: true } } },
+        orderBy: { code: "asc" }
+      });
+      return res.map((x: any) => ({ ...x, createdAt: x.createdAt?.toISOString(), updatedAt: x.updatedAt?.toISOString() }));
+    }
+    const db = readDb();
+    let res = db.manpowerProjects || [];
+    if (operationType) res = res.filter((x: any) => x.operationType === operationType);
+    return res.map((x: any) => {
+      const contract = (db.manpowerContracts || []).find((c: any) => c.id === x.contractId);
+      return {
+        ...x,
+        contract: contract ? {
+          ...contract,
+          client: (db.manpowerClients || []).find((c: any) => c.id === contract.clientId)
+        } : undefined
+      };
+    });
+  },
+  createManpowerProject: async (data: any): Promise<any> => {
+    if (isDbConnected()) {
+      const res = await prismaClient.manpowerProject.create({ data });
+      return { ...res, createdAt: res.createdAt?.toISOString(), updatedAt: res.updatedAt?.toISOString() };
+    }
+    const db = readDb();
+    const newRecord = {
+      id: data.id || `mproj-${Date.now()}`,
+      contractId: data.contractId || "",
+      name: data.name || "",
+      code: data.code || "",
+      operationType: data.operationType || "SECURITY_GUARDING",
+      isActive: data.isActive !== false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    db.manpowerProjects = db.manpowerProjects || [];
+    db.manpowerProjects.push(newRecord);
+    writeDb(db);
+    return newRecord;
+  },
+
+  // --- Manpower Sites CRUD ---
+  getManpowerSites: async (operationType?: string): Promise<any[]> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      const where: any = {};
+      if (operationType) where.operationType = operationType;
+      const res = await prismaClient.manpowerSite.findMany({
+        where,
+        include: { project: true },
+        orderBy: { name: "asc" }
+      });
+      return res.map((x: any) => ({ ...x, createdAt: x.createdAt?.toISOString(), updatedAt: x.updatedAt?.toISOString() }));
+    }
+    const db = readDb();
+    let res = db.manpowerSites || [];
+    if (operationType) res = res.filter((x: any) => x.operationType === operationType);
+    return res.map((x: any) => ({
+      ...x,
+      project: (db.manpowerProjects || []).find((p: any) => p.id === x.projectId)
+    }));
+  },
+  createManpowerSite: async (data: any): Promise<any> => {
+    if (isDbConnected()) {
+      const res = await prismaClient.manpowerSite.create({ data });
+      return { ...res, createdAt: res.createdAt?.toISOString(), updatedAt: res.updatedAt?.toISOString() };
+    }
+    const db = readDb();
+    const newRecord = {
+      id: data.id || `msite-${Date.now()}`,
+      projectId: data.projectId || "",
+      name: data.name || "",
+      lat: data.lat !== undefined ? Number(data.lat) : null,
+      lng: data.lng !== undefined ? Number(data.lng) : null,
+      radiusMeters: data.radiusMeters !== undefined ? Number(data.radiusMeters) : 100.0,
+      operationType: data.operationType || "SECURITY_GUARDING",
+      isActive: data.isActive !== false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    db.manpowerSites = db.manpowerSites || [];
+    db.manpowerSites.push(newRecord);
+    writeDb(db);
+    return newRecord;
+  },
+
+  // --- Manpower Location Units CRUD ---
+  getManpowerLocationUnits: async (operationType?: string): Promise<any[]> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      const where: any = {};
+      if (operationType) where.operationType = operationType;
+      const res = await prismaClient.manpowerLocationUnit.findMany({
+        where,
+        include: { site: true },
+        orderBy: { name: "asc" }
+      });
+      return res.map((x: any) => ({ ...x, createdAt: x.createdAt?.toISOString(), updatedAt: x.updatedAt?.toISOString() }));
+    }
+    const db = readDb();
+    let res = db.manpowerLocationUnits || [];
+    if (operationType) res = res.filter((x: any) => x.operationType === operationType);
+    return res.map((x: any) => ({
+      ...x,
+      site: (db.manpowerSites || []).find((s: any) => s.id === x.siteId)
+    }));
+  },
+  createManpowerLocationUnit: async (data: any): Promise<any> => {
+    if (isDbConnected()) {
+      const res = await prismaClient.manpowerLocationUnit.create({ data });
+      return { ...res, createdAt: res.createdAt?.toISOString(), updatedAt: res.updatedAt?.toISOString() };
+    }
+    const db = readDb();
+    const newRecord = {
+      id: data.id || `mloc-${Date.now()}`,
+      siteId: data.siteId || "",
+      name: data.name || "",
+      type: data.type || "",
+      operationType: data.operationType || "SECURITY_GUARDING",
+      isActive: data.isActive !== false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    db.manpowerLocationUnits = db.manpowerLocationUnits || [];
+    db.manpowerLocationUnits.push(newRecord);
+    writeDb(db);
+    return newRecord;
+  },
+
+  // --- Manpower Categories CRUD ---
+  getManpowerCategories: async (operationType?: string): Promise<any[]> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      const where: any = {};
+      if (operationType) where.operationType = operationType;
+      const res = await prismaClient.manpowerCategory.findMany({ where, orderBy: { name: "asc" } });
+      return res.map((x: any) => ({ ...x, createdAt: x.createdAt?.toISOString(), updatedAt: x.updatedAt?.toISOString() }));
+    }
+    const db = readDb();
+    let res = db.manpowerCategories || [];
+    if (operationType) res = res.filter((x: any) => x.operationType === operationType);
+    return res;
+  },
+  createManpowerCategory: async (data: any): Promise<any> => {
+    if (isDbConnected()) {
+      const res = await prismaClient.manpowerCategory.create({ data });
+      return { ...res, createdAt: res.createdAt?.toISOString(), updatedAt: res.updatedAt?.toISOString() };
+    }
+    const db = readDb();
+    const newRecord = {
+      id: data.id || `mcat-${Date.now()}`,
+      name: data.name || "",
+      code: data.code || "",
+      operationType: data.operationType || "SECURITY_GUARDING",
+      isActive: data.isActive !== false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    db.manpowerCategories = db.manpowerCategories || [];
+    db.manpowerCategories.push(newRecord);
+    writeDb(db);
+    return newRecord;
+  },
+
+  // --- User Operation Access CRUD ---
+  getUserOperationAccess: async (employeeId: string): Promise<any | null> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      return await prismaClient.userOperationAccess.findUnique({ where: { employeeId } });
+    }
+    const db = readDb();
+    return (db.userOperationAccesses || []).find((x: any) => x.employeeId === employeeId) || null;
+  },
+  upsertUserOperationAccess: async (employeeId: string, data: any): Promise<any> => {
+    if (isDbConnected()) {
+      return await prismaClient.userOperationAccess.upsert({
+        where: { employeeId },
+        update: data,
+        create: { employeeId, ...data }
+      });
+    }
+    const db = readDb();
+    db.userOperationAccesses = db.userOperationAccesses || [];
+    let record = db.userOperationAccesses.find((x: any) => x.employeeId === employeeId);
+    if (record) {
+      Object.assign(record, data);
+    } else {
+      record = {
+        id: `uoa-${Date.now()}`,
+        employeeId,
+        allowedWhiteCollar: data.allowedWhiteCollar !== false,
+        allowedSecurityGuarding: !!data.allowedSecurityGuarding,
+        allowedFacilityManagement: !!data.allowedFacilityManagement
+      };
+      db.userOperationAccesses.push(record);
+    }
+    writeDb(db);
+    return record;
+  },
+
+  // --- Manpower Shift Requirements CRUD ---
+  getManpowerShiftRequirements: async (operationType?: string): Promise<any[]> => {
+    if (isDbConnected()) {
+      await seedMySQL();
+      const where: any = {};
+      if (operationType) where.operationType = operationType;
+      const res = await prismaClient.manpowerShiftRequirement.findMany({
+        where,
+        include: { site: true, locationUnit: true, category: true }
+      });
+      return res.map((x: any) => ({ ...x, createdAt: x.createdAt?.toISOString(), updatedAt: x.updatedAt?.toISOString() }));
+    }
+    const db = readDb();
+    let res = db.manpowerShiftRequirements || [];
+    if (operationType) res = res.filter((x: any) => x.operationType === operationType);
+    return res.map((x: any) => ({
+      ...x,
+      site: (db.manpowerSites || []).find((s: any) => s.id === x.siteId),
+      locationUnit: (db.manpowerLocationUnits || []).find((l: any) => l.id === x.locationUnitId),
+      category: (db.manpowerCategories || []).find((c: any) => c.id === x.categoryId)
+    }));
+  },
+  createManpowerShiftRequirement: async (data: any): Promise<any> => {
+    if (isDbConnected()) {
+      const res = await prismaClient.manpowerShiftRequirement.create({ data });
+      return { ...res, createdAt: res.createdAt?.toISOString(), updatedAt: res.updatedAt?.toISOString() };
+    }
+    const db = readDb();
+    const newRecord = {
+      id: data.id || `msr-${Date.now()}`,
+      siteId: data.siteId || "",
+      locationUnitId: data.locationUnitId || null,
+      categoryId: data.categoryId || "",
+      shiftCode: data.shiftCode || "",
+      requiredCount: Number(data.requiredCount) || 1,
+      operationType: data.operationType || "SECURITY_GUARDING",
+      isActive: data.isActive !== false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    db.manpowerShiftRequirements = db.manpowerShiftRequirements || [];
+    db.manpowerShiftRequirements.push(newRecord);
+    writeDb(db);
+    return newRecord;
+  },
+  deleteManpowerShiftRequirement: async (id: string): Promise<boolean> => {
+    if (isDbConnected()) {
+      await prismaClient.manpowerShiftRequirement.delete({ where: { id } });
+      return true;
+    }
+    const db = readDb();
+    db.manpowerShiftRequirements = (db.manpowerShiftRequirements || []).filter((x: any) => x.id !== id);
+    writeDb(db);
+    return true;
+  },
+
+  // --- Manpower Deployments CRUD ---
+  getManpowerDeployments: async (operationType: string, dateStr: string): Promise<any[]> => {
+    // dateStr in YYYY-MM-DD
+    const startOfDay = new Date(dateStr);
+    startOfDay.setUTCHours(0, 0, 0, 0);
+    const endOfDay = new Date(dateStr);
+    endOfDay.setUTCHours(23, 59, 59, 999);
+
+    if (isDbConnected()) {
+      await seedMySQL();
+      const res = await prismaClient.manpowerDeployment.findMany({
+        where: {
+          operationType,
+          date: {
+            gte: startOfDay,
+            lte: endOfDay
+          }
+        },
+        include: {
+          shiftRequirement: { include: { site: true, locationUnit: true, category: true } },
+          assignments: {
+            include: {
+              employee: true,
+              relieverAssignments: { include: { relieverEmployee: true } }
+            }
+          }
+        }
+      });
+      return res.map((x: any) => ({
+        ...x,
+        date: x.date?.toISOString(),
+        createdAt: x.createdAt?.toISOString(),
+        updatedAt: x.updatedAt?.toISOString()
+      }));
+    }
+    const db = readDb();
+    let deployments = db.manpowerDeployments || [];
+    // filter by date and operation type
+    deployments = deployments.filter((d: any) => {
+      const dDate = new Date(d.date);
+      return d.operationType === operationType &&
+             dDate.getUTCFullYear() === startOfDay.getUTCFullYear() &&
+             dDate.getUTCMonth() === startOfDay.getUTCMonth() &&
+             dDate.getUTCDate() === startOfDay.getUTCDate();
+    });
+
+    return deployments.map((d: any) => {
+      const shiftReq = (db.manpowerShiftRequirements || []).find((r: any) => r.id === d.shiftRequirementId);
+      const assignments = (db.manpowerDeploymentAssignments || []).filter((a: any) => a.deploymentId === d.id);
+      
+      const mappedAssignments = assignments.map((a: any) => {
+        const employee = db.employees.find((e: any) => e.id === a.employeeId);
+        const relievers = (db.manpowerRelieverAssignments || []).filter((r: any) => r.originalAssignmentId === a.id);
+        const mappedRelievers = relievers.map((r: any) => ({
+          ...r,
+          relieverEmployee: db.employees.find((e: any) => e.id === r.relieverEmployeeId)
+        }));
+        return {
+          ...a,
+          employee,
+          relieverAssignments: mappedRelievers
+        };
+      });
+
+      return {
+        ...d,
+        shiftRequirement: shiftReq ? {
+          ...shiftReq,
+          site: (db.manpowerSites || []).find((s: any) => s.id === shiftReq.siteId),
+          locationUnit: (db.manpowerLocationUnits || []).find((l: any) => l.id === shiftReq.locationUnitId),
+          category: (db.manpowerCategories || []).find((c: any) => c.id === shiftReq.categoryId)
+        } : null,
+        assignments: mappedAssignments
+      };
+    });
+  },
+  createManpowerDeployment: async (data: any): Promise<any> => {
+    if (isDbConnected()) {
+      const res = await prismaClient.manpowerDeployment.create({
+        data: {
+          ...data,
+          date: new Date(data.date)
+        }
+      });
+      return { ...res, date: res.date?.toISOString(), createdAt: res.createdAt?.toISOString(), updatedAt: res.updatedAt?.toISOString() };
+    }
+    const db = readDb();
+    const newRecord = {
+      id: data.id || `dep-${Date.now()}`,
+      date: data.date,
+      shiftRequirementId: data.shiftRequirementId,
+      operationType: data.operationType,
+      approvalStatus: data.approvalStatus || "DRAFT",
+      approvedById: data.approvedById || null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    db.manpowerDeployments = db.manpowerDeployments || [];
+    db.manpowerDeployments.push(newRecord);
+    writeDb(db);
+    return newRecord;
+  },
+  assignManpowerToDeployment: async (data: any): Promise<any> => {
+    if (isDbConnected()) {
+      const res = await prismaClient.manpowerDeploymentAssignment.create({ data });
+      return { ...res, createdAt: res.createdAt?.toISOString(), updatedAt: res.updatedAt?.toISOString() };
+    }
+    const db = readDb();
+    const newRecord = {
+      id: data.id || `asg-${Date.now()}`,
+      deploymentId: data.deploymentId,
+      employeeId: data.employeeId,
+      isReliever: !!data.isReliever,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    db.manpowerDeploymentAssignments = db.manpowerDeploymentAssignments || [];
+    db.manpowerDeploymentAssignments.push(newRecord);
+    writeDb(db);
+    return newRecord;
+  },
+  unassignManpowerFromDeployment: async (assignmentId: string): Promise<boolean> => {
+    if (isDbConnected()) {
+      await prismaClient.manpowerDeploymentAssignment.delete({ where: { id: assignmentId } });
+      return true;
+    }
+    const db = readDb();
+    db.manpowerDeploymentAssignments = (db.manpowerDeploymentAssignments || []).filter((x: any) => x.id !== assignmentId);
+    // clean up relievers too
+    db.manpowerRelieverAssignments = (db.manpowerRelieverAssignments || []).filter((x: any) => x.originalAssignmentId !== assignmentId);
+    writeDb(db);
+    return true;
+  },
+  createRelieverAssignment: async (data: any): Promise<any> => {
+    if (isDbConnected()) {
+      const res = await prismaClient.manpowerRelieverAssignment.create({ data });
+      return { ...res, createdAt: res.createdAt?.toISOString(), updatedAt: res.updatedAt?.toISOString() };
+    }
+    const db = readDb();
+    const newRecord = {
+      id: data.id || `rel-${Date.now()}`,
+      originalAssignmentId: data.originalAssignmentId,
+      relieverEmployeeId: data.relieverEmployeeId,
+      reason: data.reason || null,
+      status: data.status || "APPROVED",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    db.manpowerRelieverAssignments = db.manpowerRelieverAssignments || [];
+    db.manpowerRelieverAssignments.push(newRecord);
+    writeDb(db);
+    return newRecord;
   }
 };
 

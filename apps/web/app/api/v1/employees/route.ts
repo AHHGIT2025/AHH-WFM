@@ -96,15 +96,23 @@ function maskNumber(num: string | null | undefined): string | null {
   return "*".repeat(clean.length - 4) + clean.substring(clean.length - 4);
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   const auth = await checkApiAuth(); // Any authenticated session may read the directory
   if (auth.error) return auth.error;
+
+  const { searchParams } = new URL(request.url);
+  const operationType = searchParams.get("operationType") || "WHITE_COLLAR";
 
   try {
     const employees = await mockDb.getEmployees();
     const canView = canViewIdentity(auth.session?.user);
 
-    const mapped = employees.map(emp => {
+    const filtered = employees.filter(emp => {
+      if (operationType === "ALL") return true;
+      return emp.operationType === operationType || (operationType === "WHITE_COLLAR" && !emp.operationType);
+    });
+
+    const mapped = filtered.map(emp => {
       const normalized = normalizeEmployee(emp);
       delete (normalized as any).passwordHash;
       if (!canView) {

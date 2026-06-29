@@ -109,6 +109,14 @@ model Employee {
 
   clearanceRequests     ClearanceRequest[] @relation("EmployeeClearance")
   clearanceApprovals    ClearanceApprovalStep[] @relation("Approver")
+
+  // --- Manpower Operations Additions ---
+  operationType         String                     @default("WHITE_COLLAR") // "WHITE_COLLAR" | "SECURITY_GUARDING" | "FACILITY_MANAGEMENT"
+  manpowerCategoryId    String?
+  manpowerCategory      ManpowerCategory?          @relation(fields: [manpowerCategoryId], references: [id], onDelete: SetNull)
+  userOperationAccess   UserOperationAccess?
+  manpowerAssignments   ManpowerDeploymentAssignment[]
+  manpowerRelievers     ManpowerRelieverAssignment[]
 }
 
 model Department {
@@ -1136,4 +1144,151 @@ model ClearanceHistory {
   actionType            String                     // "CREATED", "SUBMITTED", "SIGNED", "APPROVED", "REJECTED", "RETURNED", "OVERRIDE_APPLICABILITY", "COMPLETED"
   details               String                     @db.Text
   createdAt             DateTime                   @default(now())
+}
+
+// ==========================================
+// --- Manpower Operations Additive Models ---
+// ==========================================
+
+model UserOperationAccess {
+  id                        String   @id @default(uuid())
+  employeeId                String   @unique
+  employee                  Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  allowedWhiteCollar        Boolean  @default(true)
+  allowedSecurityGuarding   Boolean  @default(false)
+  allowedFacilityManagement Boolean  @default(false)
+}
+
+model ManpowerClient {
+  id            String             @id @default(uuid())
+  name          String
+  code          String             @unique
+  operationType String             // "SECURITY_GUARDING" | "FACILITY_MANAGEMENT"
+  isActive      Boolean            @default(true)
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  contracts     ManpowerContract[]
+}
+
+model ManpowerContract {
+  id             String             @id @default(uuid())
+  clientId       String
+  client         ManpowerClient     @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  contractNumber String             @unique
+  title          String
+  startDate      DateTime
+  endDate        DateTime
+  operationType  String             // "SECURITY_GUARDING" | "FACILITY_MANAGEMENT"
+  status         String             @default("DRAFT") // "DRAFT" | "ACTIVE" | "EXPIRED" | "TERMINATED"
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  projects       ManpowerProject[]
+}
+
+model ManpowerProject {
+  id            String             @id @default(uuid())
+  contractId    String
+  contract      ManpowerContract   @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  name          String
+  code          String             @unique
+  operationType String             // "SECURITY_GUARDING" | "FACILITY_MANAGEMENT"
+  isActive      Boolean            @default(true)
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  sites         ManpowerSite[]
+}
+
+model ManpowerSite {
+  id                String                     @id @default(uuid())
+  projectId         String
+  project           ManpowerProject            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name              String
+  lat               Float?
+  lng               Float?
+  radiusMeters      Float                      @default(100)
+  operationType     String                     // "SECURITY_GUARDING" | "FACILITY_MANAGEMENT"
+  isActive          Boolean                    @default(true)
+  createdAt         DateTime                   @default(now())
+  updatedAt         DateTime                   @updatedAt
+  locationUnits     ManpowerLocationUnit[]
+  shiftRequirements ManpowerShiftRequirement[]
+}
+
+model ManpowerLocationUnit {
+  id                String                     @id @default(uuid())
+  siteId            String
+  site              ManpowerSite               @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  name              String
+  type              String                     // "GATE" | "POST" | "ZONE" | "AREA" | "FLOOR" | "BLOCK" | "CLEANING_ZONE"
+  operationType     String                     // "SECURITY_GUARDING" | "FACILITY_MANAGEMENT"
+  isActive          Boolean                    @default(true)
+  createdAt         DateTime                   @default(now())
+  updatedAt         DateTime                   @updatedAt
+  shiftRequirements ManpowerShiftRequirement[]
+}
+
+model ManpowerCategory {
+  id                String                     @id @default(uuid())
+  name              String                     // e.g. "Security Guard", "CCTV Operator", "Cleaner"
+  code              String                     @unique
+  operationType     String                     // "SECURITY_GUARDING" | "FACILITY_MANAGEMENT"
+  isActive          Boolean                    @default(true)
+  createdAt         DateTime                   @default(now())
+  updatedAt         DateTime                   @updatedAt
+  employees         Employee[]
+  shiftRequirements ManpowerShiftRequirement[]
+}
+
+model ManpowerShiftRequirement {
+  id             String                 @id @default(uuid())
+  siteId         String
+  site           ManpowerSite           @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  locationUnitId String?
+  locationUnit   ManpowerLocationUnit?  @relation(fields: [locationUnitId], references: [id], onDelete: SetNull)
+  categoryId     String
+  category       ManpowerCategory       @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  shiftCode      String                 // references Shift.code (e.g. "GEN-001")
+  requiredCount  Int
+  operationType  String                 // "SECURITY_GUARDING" | "FACILITY_MANAGEMENT"
+  isActive       Boolean                @default(true)
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+  deployments    ManpowerDeployment[]
+}
+
+model ManpowerDeployment {
+  id                 String                         @id @default(uuid())
+  date               DateTime
+  shiftRequirementId String
+  shiftRequirement   ManpowerShiftRequirement       @relation(fields: [shiftRequirementId], references: [id], onDelete: Cascade)
+  operationType      String                         // "SECURITY_GUARDING" | "FACILITY_MANAGEMENT"
+  approvalStatus     String                         @default("DRAFT") // "DRAFT" | "SUBMITTED" | "APPROVED" | "REJECTED"
+  approvedById       String?
+  createdAt          DateTime                       @default(now())
+  updatedAt          DateTime                       @updatedAt
+  assignments        ManpowerDeploymentAssignment[]
+}
+
+model ManpowerDeploymentAssignment {
+  id                  String                       @id @default(uuid())
+  deploymentId        String
+  deployment          ManpowerDeployment           @relation(fields: [deploymentId], references: [id], onDelete: Cascade)
+  employeeId          String
+  employee            Employee                     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  isReliever          Boolean                      @default(false)
+  createdAt           DateTime                     @default(now())
+  updatedAt           DateTime                     @updatedAt
+  relieverAssignments ManpowerRelieverAssignment[] @relation("OriginalAssignment")
+}
+
+model ManpowerRelieverAssignment {
+  id                   String                       @id @default(uuid())
+  originalAssignmentId String
+  originalAssignment   ManpowerDeploymentAssignment @relation("OriginalAssignment", fields: [originalAssignmentId], references: [id], onDelete: Cascade)
+  relieverEmployeeId   String
+  relieverEmployee     Employee                     @relation(fields: [relieverEmployeeId], references: [id], onDelete: Cascade)
+  reason               String?
+  status               String                       @default("APPROVED") // "PENDING" | "APPROVED"
+  createdAt            DateTime                     @default(now())
+  updatedAt            DateTime                     @updatedAt
 }

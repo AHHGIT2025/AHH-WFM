@@ -18,6 +18,9 @@ export interface NavItem {
 const navItems: NavItem[] = [
   { label: "Dashboard", path: "/", icon: "dashboard" },
   { label: "Workforce Directory", path: "/workforce", icon: "group" },
+  { label: "Manpower Operations", path: "/manpower", icon: "hail" },
+  { label: "Security Guarding", path: "/manpower/security-guarding/dashboard", icon: "security" },
+  { label: "Facility Management", path: "/manpower/facility-management/dashboard", icon: "business" },
   { label: "Attendance Monitor", path: "/attendance", icon: "fact_check" },
   { label: "Leave Management", path: "/leave", icon: "event_busy" },
   { label: "Clearance Management", path: "/clearance", icon: "task" },
@@ -67,6 +70,9 @@ export const LayoutShell: React.FC<{ children: React.ReactNode }> = ({ children 
   const isActive = (path: string) => {
     if (path === "/") {
       return pathname === "/" || pathname === "/dashboard";
+    }
+    if (path === "/manpower") {
+      return pathname === "/manpower";
     }
     return pathname.startsWith(path);
   };

@@ -6,7 +6,10 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "overtime.view", "overtime.approve", "reports.view", "reports.export",
     "sap.view", "sap.sync", "sap.mapping",
     "backup.view", "backup.create", "backup.download", "backup.delete",
-    "settings.view", "settings.roles.manage", "masters.view", "masters.manage"
+    "settings.view", "settings.roles.manage", "masters.view", "masters.manage",
+    "manpower.security.view", "manpower.security.manage", "manpower.security.reports",
+    "manpower.fm.view", "manpower.fm.manage", "manpower.fm.reports",
+    "manpower.admin.full_access"
   ],
   ADMIN: [
     "dashboard.view", "employees.view", "employees.create", "employees.edit", "employees.bulkUpload",
@@ -15,13 +18,17 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "overtime.view", "overtime.approve", "reports.view", "reports.export",
     "sap.view", "sap.sync", "sap.mapping",
     "backup.view", "backup.create", "backup.download",
-    "settings.view", "masters.view", "masters.manage"
+    "settings.view", "masters.view", "masters.manage",
+    "manpower.security.view", "manpower.security.manage", "manpower.security.reports",
+    "manpower.fm.view", "manpower.fm.manage", "manpower.fm.reports"
   ],
   HR_MANAGER: [
     "dashboard.view", "employees.view", "employees.create", "employees.edit", "employees.bulkUpload",
     "attendance.view", "attendance.edit", "attendance.approveCorrection",
     "leaves.view", "leaves.approve", "shifts.view", "shifts.edit",
-    "reports.view", "reports.export", "masters.view"
+    "reports.view", "reports.export", "masters.view",
+    "manpower.security.view", "manpower.security.manage",
+    "manpower.fm.view", "manpower.fm.manage"
   ],
   FINANCE_MANAGER: [
     "dashboard.view", "employees.view", "attendance.view", "overtime.view", "overtime.approve",
@@ -76,6 +83,20 @@ export function filterNavigationByPermissions(user: { role?: string } | null | u
     if (item.path.startsWith("/admin/masters")) return hasPermission(user, "masters.view");
     if (item.path.startsWith("/settings")) return hasPermission(user, "settings.view");
     if (item.path.startsWith("/reports")) return hasPermission(user, "reports.view");
+    
+    // --- Manpower Operations Navigation Filtering ---
+    if (item.path === "/manpower") {
+      return hasPermission(user, "manpower.admin.full_access") || 
+             hasPermission(user, "manpower.security.view") || 
+             hasPermission(user, "manpower.fm.view");
+    }
+    if (item.path.startsWith("/manpower/security-guarding")) {
+      return hasPermission(user, "manpower.admin.full_access") || hasPermission(user, "manpower.security.view");
+    }
+    if (item.path.startsWith("/manpower/facility-management")) {
+      return hasPermission(user, "manpower.admin.full_access") || hasPermission(user, "manpower.fm.view");
+    }
+    
     return true;
   });
 }

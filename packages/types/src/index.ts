@@ -89,6 +89,12 @@ export interface Employee {
   mobileAccessEnabled?: boolean;
   usernameStrategy?: UsernameStrategy;
   deactivatedAt?: string | null;
+
+  // --- Manpower Operations additions ---
+  operationType?: "WHITE_COLLAR" | "SECURITY_GUARDING" | "FACILITY_MANAGEMENT" | string;
+  manpowerCategoryId?: string | null;
+  manpowerCategory?: ManpowerCategory | null;
+  userOperationAccess?: UserOperationAccess | null;
 }
 
 export interface Worksite {
@@ -849,5 +855,144 @@ export interface UserAccessSettings {
   mustChangePassword: boolean;
   isActive: boolean;
   deactivatedAt?: string;
+}
+
+// ==========================================
+// --- Manpower Operations Additive Types ---
+// ==========================================
+
+export type OperationType = "WHITE_COLLAR" | "SECURITY_GUARDING" | "FACILITY_MANAGEMENT";
+
+export interface UserOperationAccess {
+  id: string;
+  employeeId: string;
+  employee?: Employee;
+  allowedWhiteCollar: boolean;
+  allowedSecurityGuarding: boolean;
+  allowedFacilityManagement: boolean;
+}
+
+export interface ManpowerClient {
+  id: string;
+  name: string;
+  code: string;
+  operationType: OperationType;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ManpowerContract {
+  id: string;
+  clientId: string;
+  client?: ManpowerClient;
+  contractNumber: string;
+  title: string;
+  startDate: string;
+  endDate: string;
+  operationType: OperationType;
+  status: "DRAFT" | "ACTIVE" | "EXPIRED" | "TERMINATED" | string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ManpowerProject {
+  id: string;
+  contractId: string;
+  contract?: ManpowerContract;
+  name: string;
+  code: string;
+  operationType: OperationType;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ManpowerSite {
+  id: string;
+  projectId: string;
+  project?: ManpowerProject;
+  name: string;
+  lat?: number | null;
+  lng?: number | null;
+  radiusMeters: number;
+  operationType: OperationType;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ManpowerLocationUnit {
+  id: string;
+  siteId: string;
+  site?: ManpowerSite;
+  name: string;
+  type: "GATE" | "POST" | "ZONE" | "AREA" | "FLOOR" | "BLOCK" | "CLEANING_ZONE" | string;
+  operationType: OperationType;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ManpowerCategory {
+  id: string;
+  name: string;
+  code: string;
+  operationType: OperationType;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ManpowerShiftRequirement {
+  id: string;
+  siteId: string;
+  site?: ManpowerSite;
+  locationUnitId?: string | null;
+  locationUnit?: ManpowerLocationUnit | null;
+  categoryId: string;
+  category?: ManpowerCategory;
+  shiftCode: string;
+  requiredCount: number;
+  operationType: OperationType;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ManpowerDeployment {
+  id: string;
+  date: string;
+  shiftRequirementId: string;
+  shiftRequirement?: ManpowerShiftRequirement;
+  operationType: OperationType;
+  approvalStatus: "DRAFT" | "SUBMITTED" | "APPROVED" | "REJECTED" | string;
+  approvedById?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+  assignments?: ManpowerDeploymentAssignment[];
+}
+
+export interface ManpowerDeploymentAssignment {
+  id: string;
+  deploymentId: string;
+  deployment?: ManpowerDeployment;
+  employeeId: string;
+  employee?: Employee;
+  isReliever: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ManpowerRelieverAssignment {
+  id: string;
+  originalAssignmentId: string;
+  originalAssignment?: ManpowerDeploymentAssignment;
+  relieverEmployeeId: string;
+  relieverEmployee?: Employee;
+  reason?: string | null;
+  status: "PENDING" | "APPROVED" | string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
