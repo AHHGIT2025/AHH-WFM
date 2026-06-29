@@ -14,3 +14,7 @@ yarn-error.log*
 .pnpm-debug.log*
 /packages/database/src/generated/
 
+
+# Runtime uploaded files - do not commit
+apps/web/public/uploads/
+apps/mobile/public/uploads/
