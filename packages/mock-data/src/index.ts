@@ -1,4 +1,5 @@
-import { Employee, AttendanceRecord, Shift, LeaveRequest, SapMapping, SyncLog, Announcement, Department, Worksite, AttendanceCorrection, LeaveType, LeaveBalance, LeaveBalanceLedger, Holiday, LeaveApprovalWorkflow, LeaveApprovalStep, LeaveApprovalHistory, LeaveApprovalDelegation, ShiftTemplate, RotationTemplate, ShiftAssignment, ShiftSwapRequest, OvertimeRate, SapConnection, SapSyncJob, SapSyncLog, SapFieldMapping, SapRetryQueue, SapExportQueue, SapPayrollStage, SapReconciliationLog, SapPayrollPeriodLock, SavedReport, ReportExportLog, UserActivityLog, ProductionCheckLog, BackupJob, BackupAuditLog, EmployeeBulkUploadJob, SystemRole, SystemPermission, RolePermission, UserRoleAssignment, BlueCollarPositionCategory, Project, ProjectSite, EmployeeDeployment, Designation, TradeClassification, LocationMaster, CostCenter, ShiftRelieverAssignment, RelieverStandbyRule, Company, AllowedPunchLocation, EmployeeAllowedPunchLocation } from "@ahh-wfm/types";
+import { Employee, AttendanceRecord, Shift, LeaveRequest, SapMapping, SyncLog, Announcement, Department, Worksite, AttendanceCorrection, LeaveType, LeaveBalance, LeaveBalanceLedger, Holiday, LeaveApprovalWorkflow, LeaveApprovalStep, LeaveApprovalHistory, LeaveApprovalDelegation, ShiftTemplate, RotationTemplate, ShiftAssignment, ShiftSwapRequest, OvertimeRate, SapConnection, SapSyncJob, SapSyncLog, SapFieldMapping, SapRetryQueue, SapExportQueue, SapPayrollStage, SapReconciliationLog, SapPayrollPeriodLock, SavedReport, ReportExportLog, UserActivityLog, ProductionCheckLog, BackupJob, BackupAuditLog, EmployeeBulkUploadJob, SystemRole, SystemPermission, RolePermission, UserRoleAssignment, BlueCollarPositionCategory, Project, ProjectSite, EmployeeDeployment, Designation, TradeClassification, LocationMaster, CostCenter, ShiftRelieverAssignment, RelieverStandbyRule, Company, AllowedPunchLocation, EmployeeAllowedPunchLocation, ManpowerClient, ManpowerContract, ManpowerProject, ManpowerSite, ManpowerLocationUnit, ManpowerCategory, ManpowerShiftRequirement, ManpowerDeployment, ManpowerDeploymentAssignment, ManpowerRelieverAssignment, UserOperationAccess } from "@ahh-wfm/types";
+const uuid = () => Math.random().toString(36).substring(2) + Date.now().toString(36);
 import * as fs from "fs";
 import * as path from "path";
 import * as bcrypt from "bcryptjs";
@@ -144,6 +145,14 @@ let memoryDb: {
   manpowerDeploymentAssignments: ManpowerDeploymentAssignment[];
   manpowerRelieverAssignments: ManpowerRelieverAssignment[];
   userOperationAccesses: UserOperationAccess[];
+  securityLicenses: any[];
+  securityGatePasses: any[];
+  securityProjectRelieverPools: any[];
+  securityProjectRelieverAssignments: any[];
+  securityProjectCoordinatorAssignments: any[];
+  securitySiteInspections: any[];
+  manpowerContractMaterials: any[];
+  manpowerProjectMaterialAllocations: any[];
 } = {
   companies: [
     { id: "COMP-001", companyCode: "AHH", companyName: "Al Hattab Holding", isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
@@ -358,8 +367,8 @@ let memoryDb: {
     { id: "MPROJ-002", contractId: "MCON-002", name: "HMC Cleaning", code: "PROJ-FM-01", operationType: "FACILITY_MANAGEMENT", isActive: true }
   ],
   manpowerSites: [
-    { id: "MSITE-001", projectId: "MPROJ-001", name: "QP Tower A", lat: 25.3184, lng: 51.5208, radiusMeters: 100.0, operationType: "SECURITY_GUARDING", isActive: true },
-    { id: "MSITE-002", projectId: "MPROJ-002", name: "HMC General Hospital", lat: 25.2905, lng: 51.5201, radiusMeters: 100.0, operationType: "FACILITY_MANAGEMENT", isActive: true }
+    { id: "MSITE-001", projectId: "MPROJ-001", name: "QP Tower A", lat: 25.3184, lng: 51.5208, radiusMeters: 100.0, operationType: "SECURITY_GUARDING", isActive: true, gatePassRequired: true },
+    { id: "MSITE-002", projectId: "MPROJ-002", name: "HMC General Hospital", lat: 25.2905, lng: 51.5201, radiusMeters: 100.0, operationType: "FACILITY_MANAGEMENT", isActive: true, gatePassRequired: false }
   ],
   manpowerLocationUnits: [
     { id: "MLOC-001", siteId: "MSITE-001", name: "Main Gate", type: "GATE", operationType: "SECURITY_GUARDING", isActive: true },
@@ -368,25 +377,37 @@ let memoryDb: {
     { id: "MLOC-004", siteId: "MSITE-002", name: "Floor 2 - Wards", type: "FLOOR", operationType: "FACILITY_MANAGEMENT", isActive: true }
   ],
   manpowerCategories: [
-    { id: "PM-CAT-SEC-01", name: "CCTV Operator", code: "CCTV", operationType: "SECURITY_GUARDING", isActive: true },
-    { id: "PM-CAT-SEC-02", name: "Security Guard", code: "GUARD", operationType: "SECURITY_GUARDING", isActive: true },
-    { id: "PM-CAT-SEC-03", name: "Head Guard", code: "HEAD_GUARD", operationType: "SECURITY_GUARDING", isActive: true },
-    { id: "PM-CAT-SEC-04", name: "Security Supervisor", code: "SEC_SUPERVISOR", operationType: "SECURITY_GUARDING", isActive: true },
-    { id: "PM-CAT-SEC-05", name: "Security Project Manager", code: "SEC_PM", operationType: "SECURITY_GUARDING", isActive: true },
-    { id: "PM-CAT-SEC-06", name: "Reliever Guard", code: "RELIEVER_GUARD", operationType: "SECURITY_GUARDING", isActive: true },
+    { id: "PM-CAT-SEC-01", name: "CCTV Operator", code: "CCTV", operationType: "SECURITY_GUARDING", isActive: true, isBlueCollar: true, isDeployableInRoster: true, canWorkOvertime: true, requiresMoiLicense: true, requiresGatePassCheck: false },
+    { id: "PM-CAT-SEC-02", name: "Security Guard", code: "GUARD", operationType: "SECURITY_GUARDING", isActive: true, isBlueCollar: true, isDeployableInRoster: true, canWorkOvertime: true, requiresMoiLicense: true, requiresGatePassCheck: true },
+    { id: "PM-CAT-SEC-03", name: "Head Guard", code: "HEAD_GUARD", operationType: "SECURITY_GUARDING", isActive: true, isBlueCollar: true, isDeployableInRoster: true, canWorkOvertime: true, requiresMoiLicense: true, requiresGatePassCheck: true },
+    { id: "PM-CAT-SEC-04", name: "Security Supervisor", code: "SEC_SUPERVISOR", operationType: "SECURITY_GUARDING", isActive: true, isBlueCollar: true, isDeployableInRoster: true, canWorkOvertime: true, requiresMoiLicense: true, requiresGatePassCheck: true },
+    { id: "PM-CAT-SEC-06", name: "Reliever Guard", code: "RELIEVER_GUARD", operationType: "SECURITY_GUARDING", isActive: true, isBlueCollar: true, isDeployableInRoster: true, canWorkOvertime: true, requiresMoiLicense: true, requiresGatePassCheck: true },
+    { id: "PM-CAT-SEC-07", name: "Patrolling Supervisor", code: "PATROL_SUPERVISOR", operationType: "SECURITY_GUARDING", isActive: true, isBlueCollar: true, isDeployableInRoster: true, canWorkOvertime: true, requiresMoiLicense: true, requiresGatePassCheck: true },
+    { id: "PM-CAT-SEC-08", name: "Patrolling Guard", code: "PATROL_GUARD", operationType: "SECURITY_GUARDING", isActive: true, isBlueCollar: true, isDeployableInRoster: true, canWorkOvertime: true, requiresMoiLicense: true, requiresGatePassCheck: true },
+    { id: "PM-CAT-SEC-09", name: "Project Coordinator", code: "COORDINATOR", operationType: "SECURITY_GUARDING", isActive: true, isBlueCollar: false, isDeployableInRoster: false, canWorkOvertime: false, requiresMoiLicense: false, requiresGatePassCheck: false },
+    { id: "PM-CAT-SEC-10", name: "Event Guard", code: "EVENT_GUARD", operationType: "SECURITY_GUARDING", isActive: true, isBlueCollar: true, isDeployableInRoster: true, canWorkOvertime: true, requiresMoiLicense: false, requiresGatePassCheck: false },
+    { id: "PM-CAT-SEC-11", name: "Other Security Manpower", code: "OTHER_SEC", operationType: "SECURITY_GUARDING", isActive: true, isBlueCollar: true, isDeployableInRoster: true, canWorkOvertime: true, requiresMoiLicense: false, requiresGatePassCheck: false },
     
-    { id: "PM-CAT-FM-01", name: "Cleaner", code: "CLEANER", operationType: "FACILITY_MANAGEMENT", isActive: true },
-    { id: "PM-CAT-FM-02", name: "Office Boy", code: "OFFICE_BOY", operationType: "FACILITY_MANAGEMENT", isActive: true },
-    { id: "PM-CAT-FM-03", name: "Technician", code: "TECHNICIAN", operationType: "FACILITY_MANAGEMENT", isActive: true },
-    { id: "PM-CAT-FM-04", name: "FM Supervisor", code: "FM_SUPERVISOR", operationType: "FACILITY_MANAGEMENT", isActive: true },
-    { id: "PM-CAT-FM-05", name: "FM Project Manager", code: "FM_PM", operationType: "FACILITY_MANAGEMENT", isActive: true },
-    { id: "PM-CAT-FM-06", name: "Reliever Cleaner", code: "RELIEVER_CLEANER", operationType: "FACILITY_MANAGEMENT", isActive: true }
+    { id: "PM-CAT-FM-01", name: "Cleaner", code: "CLEANER", operationType: "FACILITY_MANAGEMENT", isActive: true, isBlueCollar: true, isDeployableInRoster: true, canWorkOvertime: true, requiresMoiLicense: false, requiresGatePassCheck: false },
+    { id: "PM-CAT-FM-02", name: "Office Boy", code: "OFFICE_BOY", operationType: "FACILITY_MANAGEMENT", isActive: true, isBlueCollar: true, isDeployableInRoster: true, canWorkOvertime: true, requiresMoiLicense: false, requiresGatePassCheck: false },
+    { id: "PM-CAT-FM-03", name: "Technician", code: "TECHNICIAN", operationType: "FACILITY_MANAGEMENT", isActive: true, isBlueCollar: true, isDeployableInRoster: true, canWorkOvertime: true, requiresMoiLicense: false, requiresGatePassCheck: false },
+    { id: "PM-CAT-FM-04", name: "FM Supervisor", code: "FM_SUPERVISOR", operationType: "FACILITY_MANAGEMENT", isActive: true, isBlueCollar: true, isDeployableInRoster: true, canWorkOvertime: true, requiresMoiLicense: false, requiresGatePassCheck: false },
+    { id: "PM-CAT-FM-05", name: "FM Project Manager", code: "FM_PM", operationType: "FACILITY_MANAGEMENT", isActive: true, isBlueCollar: false, isDeployableInRoster: false, canWorkOvertime: false, requiresMoiLicense: false, requiresGatePassCheck: false },
+    { id: "PM-CAT-FM-06", name: "Reliever Cleaner", code: "RELIEVER_CLEANER", operationType: "FACILITY_MANAGEMENT", isActive: true, isBlueCollar: true, isDeployableInRoster: true, canWorkOvertime: true, requiresMoiLicense: false, requiresGatePassCheck: false }
   ],
   manpowerShiftRequirements: [],
   manpowerDeployments: [],
   manpowerDeploymentAssignments: [],
   manpowerRelieverAssignments: [],
-  userOperationAccesses: []
+  userOperationAccesses: [],
+  securityLicenses: [],
+  securityGatePasses: [],
+  securityProjectRelieverPools: [],
+  securityProjectRelieverAssignments: [],
+  securityProjectCoordinatorAssignments: [],
+  securitySiteInspections: [],
+  manpowerContractMaterials: [],
+  manpowerProjectMaterialAllocations: []
 };
 
 // Seeding helper to pre-fill MySQL with mock data if it is empty
@@ -826,6 +847,98 @@ const seedMySQL = async () => {
             isActive: fmap.isActive
           }
         });
+      }
+
+      // Seed Manpower Categories
+      const mpCatCount = await prismaClient.manpowerCategory.count();
+      if (mpCatCount === 0) {
+        console.log("Seeding Manpower Categories...");
+        for (const cat of memoryDb.manpowerCategories) {
+          await prismaClient.manpowerCategory.create({
+            data: {
+              id: cat.id,
+              name: cat.name,
+              code: cat.code,
+              operationType: cat.operationType,
+              isActive: cat.isActive !== false,
+              isBlueCollar: cat.isBlueCollar !== false,
+              isDeployableInRoster: cat.isDeployableInRoster !== false,
+              canWorkOvertime: cat.canWorkOvertime !== false,
+              requiresMoiLicense: !!cat.requiresMoiLicense,
+              requiresGatePassCheck: !!cat.requiresGatePassCheck
+            }
+          });
+        }
+      }
+
+      // Seed Manpower Clients
+      const mpClientCount = await prismaClient.manpowerClient.count();
+      if (mpClientCount === 0) {
+        console.log("Seeding Manpower Clients...");
+        for (const client of memoryDb.manpowerClients) {
+          await prismaClient.manpowerClient.create({ data: client });
+        }
+      }
+
+      // Seed Manpower Contracts
+      const mpContractCount = await prismaClient.manpowerContract.count();
+      if (mpContractCount === 0) {
+        console.log("Seeding Manpower Contracts...");
+        for (const contract of memoryDb.manpowerContracts) {
+          await prismaClient.manpowerContract.create({
+            data: {
+              id: contract.id,
+              clientId: contract.clientId,
+              contractNumber: contract.contractNumber,
+              title: contract.title,
+              startDate: new Date(contract.startDate),
+              endDate: new Date(contract.endDate),
+              operationType: contract.operationType,
+              status: contract.status,
+              defaultManpowerCount: contract.defaultManpowerCount || 0,
+              defaultRelieverCount: contract.defaultRelieverCount || 0
+            }
+          });
+        }
+      }
+
+      // Seed Manpower Projects
+      const mpProjectCount = await prismaClient.manpowerProject.count();
+      if (mpProjectCount === 0) {
+        console.log("Seeding Manpower Projects...");
+        for (const proj of memoryDb.manpowerProjects) {
+          await prismaClient.manpowerProject.create({ data: proj });
+        }
+      }
+
+      // Seed Manpower Sites
+      const mpSiteCount = await prismaClient.manpowerSite.count();
+      if (mpSiteCount === 0) {
+        console.log("Seeding Manpower Sites...");
+        for (const site of memoryDb.manpowerSites) {
+          await prismaClient.manpowerSite.create({
+            data: {
+              id: site.id,
+              projectId: site.projectId,
+              name: site.name,
+              lat: site.lat,
+              lng: site.lng,
+              radiusMeters: site.radiusMeters,
+              operationType: site.operationType,
+              isActive: site.isActive,
+              gatePassRequired: !!site.gatePassRequired
+            }
+          });
+        }
+      }
+
+      // Seed Manpower Location Units
+      const mpUnitCount = await prismaClient.manpowerLocationUnit.count();
+      if (mpUnitCount === 0) {
+        console.log("Seeding Manpower Location Units...");
+        for (const unit of memoryDb.manpowerLocationUnits) {
+          await prismaClient.manpowerLocationUnit.create({ data: unit });
+        }
       }
 
       console.log("MySQL Database seeded successfully!");
@@ -1268,6 +1381,8 @@ function buildEmployeePrismaData(input: any, isUpdate: boolean) {
     "usernameStrategy",
     "webAccessEnabled",
     "mobileAccessEnabled",
+    "selfServiceEnabled",
+    "operationType",
     "reportingManagerId",
     "projectSupervisorId",
     "siteSupervisorId"
@@ -4003,13 +4118,13 @@ export const mockDb = {
     if (generatedUsername && employees.some(e => e.username && e.username.toLowerCase() === generatedUsername.toLowerCase())) {
       throw new Error("Username already exists");
     }
-    if (empData.qidNumber && empData.qidNumber.trim() !== "") {
-      if (employees.some(e => e.qidNumber && e.qidNumber.trim() === empData.qidNumber.trim())) {
+    if (empData.qidNumber?.trim()) {
+      if (employees.some(e => e.qidNumber && e.qidNumber.trim() === empData.qidNumber?.trim())) {
         throw new Error("Qatar ID number already exists");
       }
     }
-    if (empData.passportNumber && empData.passportNumber.trim() !== "") {
-      if (employees.some(e => e.passportNumber && e.passportNumber.trim().toUpperCase() === empData.passportNumber.trim().toUpperCase())) {
+    if (empData.passportNumber?.trim()) {
+      if (employees.some(e => e.passportNumber && e.passportNumber.trim().toUpperCase() === empData.passportNumber?.trim().toUpperCase())) {
         throw new Error("Passport number already exists");
       }
     }
@@ -4037,7 +4152,7 @@ export const mockDb = {
     if (isDbConnected()) {
       await seedMySQL();
       const prismaData = buildEmployeePrismaData(payload, false);
-      return await prismaClient.$transaction(async (tx) => {
+      return await prismaClient.$transaction(async (tx: any) => {
         // Uniqueness checks within the transaction
         const existingId = await tx.employee.findUnique({ where: { id: payload.id } });
         if (existingId) throw new Error("Employee ID already exists");
@@ -4120,8 +4235,9 @@ export const mockDb = {
 
     // Duplicates checks for update
     const targetId = currentEmp.id;
-    if (data.email && data.email.toLowerCase() !== (currentEmp.email || "").toLowerCase()) {
-      if (employees.some(e => e.id !== targetId && e.email.toLowerCase() === data.email.toLowerCase())) {
+    const dataEmail = data.email?.toLowerCase();
+    if (dataEmail && dataEmail !== (currentEmp.email || "").toLowerCase()) {
+      if (employees.some(e => e.id !== targetId && e.email?.toLowerCase() === dataEmail)) {
         throw new Error("Employee email already exists");
       }
     }
@@ -4145,14 +4261,16 @@ export const mockDb = {
       }
     }
 
-    if (data.qidNumber !== undefined && data.qidNumber !== null && data.qidNumber !== (currentEmp.qidNumber || "")) {
-      if (data.qidNumber.trim() !== "" && employees.some(e => e.id !== targetId && e.qidNumber && e.qidNumber.trim() === data.qidNumber.trim())) {
+    const dataQid = data.qidNumber?.trim();
+    if (dataQid !== undefined && dataQid !== null && dataQid !== (currentEmp.qidNumber || "")) {
+      if (dataQid !== "" && employees.some(e => e.id !== targetId && e.qidNumber && e.qidNumber.trim() === dataQid)) {
         throw new Error("Qatar ID number already exists");
       }
     }
 
-    if (data.passportNumber !== undefined && data.passportNumber !== null && data.passportNumber.toUpperCase() !== (currentEmp.passportNumber || "").toUpperCase()) {
-      if (data.passportNumber.trim() !== "" && employees.some(e => e.id !== targetId && e.passportNumber && e.passportNumber.trim().toUpperCase() === data.passportNumber.trim().toUpperCase())) {
+    const dataPassport = data.passportNumber?.trim()?.toUpperCase();
+    if (data.passportNumber !== undefined && data.passportNumber !== null && dataPassport !== (currentEmp.passportNumber || "").toUpperCase()) {
+      if (dataPassport !== "" && employees.some(e => e.id !== targetId && e.passportNumber && e.passportNumber.trim().toUpperCase() === dataPassport)) {
         throw new Error("Passport number already exists");
       }
     }
@@ -8614,6 +8732,7 @@ export const mockDb = {
       lng: data.lng !== undefined ? Number(data.lng) : null,
       radiusMeters: data.radiusMeters !== undefined ? Number(data.radiusMeters) : 100.0,
       operationType: data.operationType || "SECURITY_GUARDING",
+      gatePassRequired: !!data.gatePassRequired,
       isActive: data.isActive !== false,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
@@ -8622,6 +8741,31 @@ export const mockDb = {
     db.manpowerSites.push(newRecord);
     writeDb(db);
     return newRecord;
+  },
+  updateManpowerSite: async (id: string, data: any): Promise<any | null> => {
+    if (isDbConnected()) {
+      const res = await prismaClient.manpowerSite.update({
+        where: { id },
+        data
+      });
+      return { ...res, createdAt: res.createdAt?.toISOString(), updatedAt: res.updatedAt?.toISOString() };
+    }
+    const db = readDb();
+    db.manpowerSites = db.manpowerSites || [];
+    const idx = db.manpowerSites.findIndex((x: any) => x.id === id);
+    if (idx === -1) return null;
+    const updated = {
+      ...db.manpowerSites[idx],
+      ...data,
+      lat: data.lat !== undefined ? (data.lat !== null ? Number(data.lat) : null) : db.manpowerSites[idx].lat,
+      lng: data.lng !== undefined ? (data.lng !== null ? Number(data.lng) : null) : db.manpowerSites[idx].lng,
+      radiusMeters: data.radiusMeters !== undefined ? Number(data.radiusMeters) : db.manpowerSites[idx].radiusMeters,
+      gatePassRequired: data.gatePassRequired !== undefined ? !!data.gatePassRequired : db.manpowerSites[idx].gatePassRequired,
+      updatedAt: new Date().toISOString()
+    };
+    db.manpowerSites[idx] = updated;
+    writeDb(db);
+    return updated;
   },
 
   // --- Manpower Location Units CRUD ---
@@ -8692,6 +8836,11 @@ export const mockDb = {
       name: data.name || "",
       code: data.code || "",
       operationType: data.operationType || "SECURITY_GUARDING",
+      isBlueCollar: !!data.isBlueCollar,
+      isDeployableInRoster: !!data.isDeployableInRoster,
+      canWorkOvertime: !!data.canWorkOvertime,
+      requiresMoiLicense: !!data.requiresMoiLicense,
+      requiresGatePassCheck: !!data.requiresGatePassCheck,
       isActive: data.isActive !== false,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
@@ -8700,6 +8849,32 @@ export const mockDb = {
     db.manpowerCategories.push(newRecord);
     writeDb(db);
     return newRecord;
+  },
+  updateManpowerCategory: async (id: string, data: any): Promise<any | null> => {
+    if (isDbConnected()) {
+      const res = await prismaClient.manpowerCategory.update({
+        where: { id },
+        data
+      });
+      return { ...res, createdAt: res.createdAt?.toISOString(), updatedAt: res.updatedAt?.toISOString() };
+    }
+    const db = readDb();
+    db.manpowerCategories = db.manpowerCategories || [];
+    const idx = db.manpowerCategories.findIndex((x: any) => x.id === id);
+    if (idx === -1) return null;
+    const updated = {
+      ...db.manpowerCategories[idx],
+      ...data,
+      isBlueCollar: data.isBlueCollar !== undefined ? !!data.isBlueCollar : db.manpowerCategories[idx].isBlueCollar,
+      isDeployableInRoster: data.isDeployableInRoster !== undefined ? !!data.isDeployableInRoster : db.manpowerCategories[idx].isDeployableInRoster,
+      canWorkOvertime: data.canWorkOvertime !== undefined ? !!data.canWorkOvertime : db.manpowerCategories[idx].canWorkOvertime,
+      requiresMoiLicense: data.requiresMoiLicense !== undefined ? !!data.requiresMoiLicense : db.manpowerCategories[idx].requiresMoiLicense,
+      requiresGatePassCheck: data.requiresGatePassCheck !== undefined ? !!data.requiresGatePassCheck : db.manpowerCategories[idx].requiresGatePassCheck,
+      updatedAt: new Date().toISOString()
+    };
+    db.manpowerCategories[idx] = updated;
+    writeDb(db);
+    return updated;
   },
 
   // --- User Operation Access CRUD ---
@@ -8988,6 +9163,727 @@ export const mockDb = {
     db.manpowerRelieverAssignments.push(newRecord);
     writeDb(db);
     return newRecord;
+  },
+
+  // --- Security Licenses CRUD ---
+  getSecurityLicenses: async (employeeId?: string): Promise<any[]> => {
+    if (isDbConnected()) {
+      const where: any = {};
+      if (employeeId) where.employeeId = employeeId;
+      const res = await prismaClient.securityLicense.findMany({
+        where,
+        include: { employee: true },
+        orderBy: { expiryDate: "asc" }
+      });
+      return res.map((x: any) => ({
+        ...x,
+        issueDate: x.issueDate?.toISOString(),
+        expiryDate: x.expiryDate?.toISOString(),
+        createdAt: x.createdAt?.toISOString(),
+        updatedAt: x.updatedAt?.toISOString()
+      }));
+    }
+    const db = readDb();
+    let res = db.securityLicenses || [];
+    if (employeeId) res = res.filter((x: any) => x.employeeId === employeeId);
+    return res.map((x: any) => ({
+      ...x,
+      employee: (db.employees || []).find((e: any) => e.id === x.employeeId)
+    }));
+  },
+  createSecurityLicense: async (data: any): Promise<any> => {
+    if (isDbConnected()) {
+      const res = await prismaClient.securityLicense.create({
+        data: {
+          ...data,
+          issueDate: new Date(data.issueDate),
+          expiryDate: new Date(data.expiryDate)
+        }
+      });
+      return {
+        ...res,
+        issueDate: res.issueDate?.toISOString(),
+        expiryDate: res.expiryDate?.toISOString(),
+        createdAt: res.createdAt?.toISOString(),
+        updatedAt: res.updatedAt?.toISOString()
+      };
+    }
+    const db = readDb();
+    const newRecord = {
+      ...data,
+      id: data.id || `lic-${Date.now()}`,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    db.securityLicenses = db.securityLicenses || [];
+    db.securityLicenses.push(newRecord);
+    writeDb(db);
+    return newRecord;
+  },
+  updateSecurityLicense: async (id: string, data: any): Promise<any> => {
+    if (isDbConnected()) {
+      const updateData = { ...data };
+      if (data.issueDate) updateData.issueDate = new Date(data.issueDate);
+      if (data.expiryDate) updateData.expiryDate = new Date(data.expiryDate);
+      const res = await prismaClient.securityLicense.update({
+        where: { id },
+        data: updateData
+      });
+      return {
+        ...res,
+        issueDate: res.issueDate?.toISOString(),
+        expiryDate: res.expiryDate?.toISOString(),
+        createdAt: res.createdAt?.toISOString(),
+        updatedAt: res.updatedAt?.toISOString()
+      };
+    }
+    const db = readDb();
+    db.securityLicenses = db.securityLicenses || [];
+    const idx = db.securityLicenses.findIndex((x: any) => x.id === id);
+    if (idx === -1) return null;
+    const updated = {
+      ...db.securityLicenses[idx],
+      ...data,
+      updatedAt: new Date().toISOString()
+    };
+    db.securityLicenses[idx] = updated;
+    writeDb(db);
+    return updated;
+  },
+  deleteSecurityLicense: async (id: string): Promise<boolean> => {
+    if (isDbConnected()) {
+      await prismaClient.securityLicense.delete({ where: { id } });
+      return true;
+    }
+    const db = readDb();
+    db.securityLicenses = (db.securityLicenses || []).filter((x: any) => x.id !== id);
+    writeDb(db);
+    return true;
+  },
+
+  // --- Security Gate Passes CRUD ---
+  getSecurityGatePasses: async (employeeId?: string, siteId?: string): Promise<any[]> => {
+    if (isDbConnected()) {
+      const where: any = {};
+      if (employeeId) where.employeeId = employeeId;
+      if (siteId) where.siteId = siteId;
+      const res = await prismaClient.securityGatePass.findMany({
+        where,
+        include: { employee: true, site: true },
+        orderBy: { expiryDate: "asc" }
+      });
+      return res.map((x: any) => ({
+        ...x,
+        issueDate: x.issueDate?.toISOString(),
+        expiryDate: x.expiryDate?.toISOString(),
+        createdAt: x.createdAt?.toISOString(),
+        updatedAt: x.updatedAt?.toISOString()
+      }));
+    }
+    const db = readDb();
+    let res = db.securityGatePasses || [];
+    if (employeeId) res = res.filter((x: any) => x.employeeId === employeeId);
+    if (siteId) res = res.filter((x: any) => x.siteId === siteId);
+    return res.map((x: any) => ({
+      ...x,
+      employee: (db.employees || []).find((e: any) => e.id === x.employeeId),
+      site: (db.manpowerSites || []).find((s: any) => s.id === x.siteId)
+    }));
+  },
+  createSecurityGatePass: async (data: any): Promise<any> => {
+    if (isDbConnected()) {
+      const res = await prismaClient.securityGatePass.create({
+        data: {
+          ...data,
+          issueDate: new Date(data.issueDate),
+          expiryDate: new Date(data.expiryDate)
+        }
+      });
+      return {
+        ...res,
+        issueDate: res.issueDate?.toISOString(),
+        expiryDate: res.expiryDate?.toISOString(),
+        createdAt: res.createdAt?.toISOString(),
+        updatedAt: res.updatedAt?.toISOString()
+      };
+    }
+    const db = readDb();
+    const newRecord = {
+      ...data,
+      id: data.id || `gp-${Date.now()}`,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    db.securityGatePasses = db.securityGatePasses || [];
+    db.securityGatePasses.push(newRecord);
+    writeDb(db);
+    return newRecord;
+  },
+  updateSecurityGatePass: async (id: string, data: any): Promise<any> => {
+    if (isDbConnected()) {
+      const updateData = { ...data };
+      if (data.issueDate) updateData.issueDate = new Date(data.issueDate);
+      if (data.expiryDate) updateData.expiryDate = new Date(data.expiryDate);
+      const res = await prismaClient.securityGatePass.update({
+        where: { id },
+        data: updateData
+      });
+      return {
+        ...res,
+        issueDate: res.issueDate?.toISOString(),
+        expiryDate: res.expiryDate?.toISOString(),
+        createdAt: res.createdAt?.toISOString(),
+        updatedAt: res.updatedAt?.toISOString()
+      };
+    }
+    const db = readDb();
+    db.securityGatePasses = db.securityGatePasses || [];
+    const idx = db.securityGatePasses.findIndex((x: any) => x.id === id);
+    if (idx === -1) return null;
+    const updated = {
+      ...db.securityGatePasses[idx],
+      ...data,
+      updatedAt: new Date().toISOString()
+    };
+    db.securityGatePasses[idx] = updated;
+    writeDb(db);
+    return updated;
+  },
+  deleteSecurityGatePass: async (id: string): Promise<boolean> => {
+    if (isDbConnected()) {
+      await prismaClient.securityGatePass.delete({ where: { id } });
+      return true;
+    }
+    const db = readDb();
+    db.securityGatePasses = (db.securityGatePasses || []).filter((x: any) => x.id !== id);
+    writeDb(db);
+    return true;
+  },
+
+  // --- Security Project Reliever Pools CRUD ---
+  getSecurityProjectRelieverPools: async (projectId?: string): Promise<any[]> => {
+    if (isDbConnected()) {
+      const where: any = {};
+      if (projectId) where.projectId = projectId;
+      const res = await prismaClient.securityProjectRelieverPool.findMany({
+        where,
+        include: {
+          project: true,
+          relieverAssignments: {
+            include: { relieverEmployee: true }
+          }
+        }
+      });
+      return res.map((x: any) => ({
+        ...x,
+        createdAt: x.createdAt?.toISOString(),
+        updatedAt: x.updatedAt?.toISOString()
+      }));
+    }
+    const db = readDb();
+    let res = db.securityProjectRelieverPools || [];
+    if (projectId) res = res.filter((x: any) => x.projectId === projectId);
+    return res.map((x: any) => {
+      const poolAssignments = (db.securityProjectRelieverAssignments || []).filter((a: any) => a.poolId === x.id);
+      const relieverAssignments = poolAssignments.map((a: any) => ({
+        ...a,
+        relieverEmployee: (db.employees || []).find((e: any) => e.id === a.relieverEmployeeId)
+      }));
+      return {
+        ...x,
+        project: (db.manpowerProjects || []).find((p: any) => p.id === x.projectId),
+        relieverAssignments
+      };
+    });
+  },
+  createSecurityProjectRelieverPool: async (data: any): Promise<any> => {
+    if (isDbConnected()) {
+      const res = await prismaClient.securityProjectRelieverPool.create({ data });
+      return {
+        ...res,
+        createdAt: res.createdAt?.toISOString(),
+        updatedAt: res.updatedAt?.toISOString()
+      };
+    }
+    const db = readDb();
+    const newRecord = {
+      ...data,
+      id: data.id || `pool-${Date.now()}`,
+      isActive: data.isActive !== false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    db.securityProjectRelieverPools = db.securityProjectRelieverPools || [];
+    db.securityProjectRelieverPools.push(newRecord);
+    writeDb(db);
+    return newRecord;
+  },
+  updateSecurityProjectRelieverPool: async (id: string, data: any): Promise<any> => {
+    if (isDbConnected()) {
+      const res = await prismaClient.securityProjectRelieverPool.update({
+        where: { id },
+        data
+      });
+      return {
+        ...res,
+        createdAt: res.createdAt?.toISOString(),
+        updatedAt: res.updatedAt?.toISOString()
+      };
+    }
+    const db = readDb();
+    db.securityProjectRelieverPools = db.securityProjectRelieverPools || [];
+    const idx = db.securityProjectRelieverPools.findIndex((x: any) => x.id === id);
+    if (idx === -1) return null;
+    const updated = {
+      ...db.securityProjectRelieverPools[idx],
+      ...data,
+      updatedAt: new Date().toISOString()
+    };
+    db.securityProjectRelieverPools[idx] = updated;
+    writeDb(db);
+    return updated;
+  },
+  deleteSecurityProjectRelieverPool: async (id: string): Promise<boolean> => {
+    if (isDbConnected()) {
+      await prismaClient.securityProjectRelieverPool.delete({ where: { id } });
+      return true;
+    }
+    const db = readDb();
+    db.securityProjectRelieverPools = (db.securityProjectRelieverPools || []).filter((x: any) => x.id !== id);
+    // Cascade delete assignments
+    db.securityProjectRelieverAssignments = (db.securityProjectRelieverAssignments || []).filter((x: any) => x.poolId !== id);
+    writeDb(db);
+    return true;
+  },
+
+  // --- Security Project Reliever Assignments CRUD ---
+  getSecurityProjectRelieverAssignments: async (poolId?: string, relieverEmployeeId?: string): Promise<any[]> => {
+    if (isDbConnected()) {
+      const where: any = {};
+      if (poolId) where.poolId = poolId;
+      if (relieverEmployeeId) where.relieverEmployeeId = relieverEmployeeId;
+      const res = await prismaClient.securityProjectRelieverAssignment.findMany({
+        where,
+        include: { pool: true, relieverEmployee: true }
+      });
+      return res.map((x: any) => ({
+        ...x,
+        createdAt: x.createdAt?.toISOString(),
+        updatedAt: x.updatedAt?.toISOString()
+      }));
+    }
+    const db = readDb();
+    let res = db.securityProjectRelieverAssignments || [];
+    if (poolId) res = res.filter((x: any) => x.poolId === poolId);
+    if (relieverEmployeeId) res = res.filter((x: any) => x.relieverEmployeeId === relieverEmployeeId);
+    return res.map((x: any) => ({
+      ...x,
+      pool: (db.securityProjectRelieverPools || []).find((p: any) => p.id === x.poolId),
+      relieverEmployee: (db.employees || []).find((e: any) => e.id === x.relieverEmployeeId)
+    }));
+  },
+  createSecurityProjectRelieverAssignment: async (data: any): Promise<any> => {
+    if (isDbConnected()) {
+      const res = await prismaClient.securityProjectRelieverAssignment.create({ data });
+      return {
+        ...res,
+        createdAt: res.createdAt?.toISOString(),
+        updatedAt: res.updatedAt?.toISOString()
+      };
+    }
+    const db = readDb();
+    const newRecord = {
+      ...data,
+      id: data.id || `poolasg-${Date.now()}`,
+      isActive: data.isActive !== false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    db.securityProjectRelieverAssignments = db.securityProjectRelieverAssignments || [];
+    db.securityProjectRelieverAssignments.push(newRecord);
+    writeDb(db);
+    return newRecord;
+  },
+  updateSecurityProjectRelieverAssignment: async (id: string, data: any): Promise<any> => {
+    if (isDbConnected()) {
+      const res = await prismaClient.securityProjectRelieverAssignment.update({
+        where: { id },
+        data
+      });
+      return {
+        ...res,
+        createdAt: res.createdAt?.toISOString(),
+        updatedAt: res.updatedAt?.toISOString()
+      };
+    }
+    const db = readDb();
+    db.securityProjectRelieverAssignments = db.securityProjectRelieverAssignments || [];
+    const idx = db.securityProjectRelieverAssignments.findIndex((x: any) => x.id === id);
+    if (idx === -1) return null;
+    const updated = {
+      ...db.securityProjectRelieverAssignments[idx],
+      ...data,
+      updatedAt: new Date().toISOString()
+    };
+    db.securityProjectRelieverAssignments[idx] = updated;
+    writeDb(db);
+    return updated;
+  },
+  deleteSecurityProjectRelieverAssignment: async (id: string): Promise<boolean> => {
+    if (isDbConnected()) {
+      await prismaClient.securityProjectRelieverAssignment.delete({ where: { id } });
+      return true;
+    }
+    const db = readDb();
+    db.securityProjectRelieverAssignments = (db.securityProjectRelieverAssignments || []).filter((x: any) => x.id !== id);
+    writeDb(db);
+    return true;
+  },
+
+  // --- Security Project Coordinator Assignments CRUD ---
+  getSecurityProjectCoordinatorAssignments: async (projectId?: string, coordinatorEmployeeId?: string): Promise<any[]> => {
+    if (isDbConnected()) {
+      const where: any = {};
+      if (projectId) where.projectId = projectId;
+      if (coordinatorEmployeeId) where.coordinatorEmployeeId = coordinatorEmployeeId;
+      const res = await prismaClient.securityProjectCoordinatorAssignment.findMany({
+        where,
+        include: { project: true, coordinatorEmployee: true }
+      });
+      return res.map((x: any) => ({
+        ...x,
+        createdAt: x.createdAt?.toISOString(),
+        updatedAt: x.updatedAt?.toISOString()
+      }));
+    }
+    const db = readDb();
+    let res = db.securityProjectCoordinatorAssignments || [];
+    if (projectId) res = res.filter((x: any) => x.projectId === projectId);
+    if (coordinatorEmployeeId) res = res.filter((x: any) => x.coordinatorEmployeeId === coordinatorEmployeeId);
+    return res.map((x: any) => ({
+      ...x,
+      project: (db.manpowerProjects || []).find((p: any) => p.id === x.projectId),
+      coordinatorEmployee: (db.employees || []).find((e: any) => e.id === x.coordinatorEmployeeId)
+    }));
+  },
+  createSecurityProjectCoordinatorAssignment: async (data: any): Promise<any> => {
+    if (isDbConnected()) {
+      const res = await prismaClient.securityProjectCoordinatorAssignment.create({ data });
+      return {
+        ...res,
+        createdAt: res.createdAt?.toISOString(),
+        updatedAt: res.updatedAt?.toISOString()
+      };
+    }
+    const db = readDb();
+    const newRecord = {
+      ...data,
+      id: data.id || `coord-${Date.now()}`,
+      isActive: data.isActive !== false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    db.securityProjectCoordinatorAssignments = db.securityProjectCoordinatorAssignments || [];
+    db.securityProjectCoordinatorAssignments.push(newRecord);
+    writeDb(db);
+    return newRecord;
+  },
+  updateSecurityProjectCoordinatorAssignment: async (id: string, data: any): Promise<any> => {
+    if (isDbConnected()) {
+      const res = await prismaClient.securityProjectCoordinatorAssignment.update({
+        where: { id },
+        data
+      });
+      return {
+        ...res,
+        createdAt: res.createdAt?.toISOString(),
+        updatedAt: res.updatedAt?.toISOString()
+      };
+    }
+    const db = readDb();
+    db.securityProjectCoordinatorAssignments = db.securityProjectCoordinatorAssignments || [];
+    const idx = db.securityProjectCoordinatorAssignments.findIndex((x: any) => x.id === id);
+    if (idx === -1) return null;
+    const updated = {
+      ...db.securityProjectCoordinatorAssignments[idx],
+      ...data,
+      updatedAt: new Date().toISOString()
+    };
+    db.securityProjectCoordinatorAssignments[idx] = updated;
+    writeDb(db);
+    return updated;
+  },
+  deleteSecurityProjectCoordinatorAssignment: async (id: string): Promise<boolean> => {
+    if (isDbConnected()) {
+      await prismaClient.securityProjectCoordinatorAssignment.delete({ where: { id } });
+      return true;
+    }
+    const db = readDb();
+    db.securityProjectCoordinatorAssignments = (db.securityProjectCoordinatorAssignments || []).filter((x: any) => x.id !== id);
+    writeDb(db);
+    return true;
+  },
+
+  // --- Security Site Inspections CRUD ---
+  getSecuritySiteInspections: async (siteId?: string, inspectorEmployeeId?: string): Promise<any[]> => {
+    if (isDbConnected()) {
+      const where: any = {};
+      if (siteId) where.siteId = siteId;
+      if (inspectorEmployeeId) where.inspectorEmployeeId = inspectorEmployeeId;
+      const res = await prismaClient.securitySiteInspection.findMany({
+        where,
+        include: { site: true, inspectorEmployee: true },
+        orderBy: { inspectionDate: "desc" }
+      });
+      return res.map((x: any) => ({
+        ...x,
+        inspectionDate: x.inspectionDate?.toISOString(),
+        createdAt: x.createdAt?.toISOString(),
+        updatedAt: x.updatedAt?.toISOString()
+      }));
+    }
+    const db = readDb();
+    let res = db.securitySiteInspections || [];
+    if (siteId) res = res.filter((x: any) => x.siteId === siteId);
+    if (inspectorEmployeeId) res = res.filter((x: any) => x.inspectorEmployeeId === inspectorEmployeeId);
+    return res.map((x: any) => ({
+      ...x,
+      site: (db.manpowerSites || []).find((s: any) => s.id === x.siteId),
+      inspectorEmployee: (db.employees || []).find((e: any) => e.id === x.inspectorEmployeeId)
+    }));
+  },
+  createSecuritySiteInspection: async (data: any): Promise<any> => {
+    if (isDbConnected()) {
+      const res = await prismaClient.securitySiteInspection.create({
+        data: {
+          ...data,
+          inspectionDate: new Date(data.inspectionDate)
+        }
+      });
+      return {
+        ...res,
+        inspectionDate: res.inspectionDate?.toISOString(),
+        createdAt: res.createdAt?.toISOString(),
+        updatedAt: res.updatedAt?.toISOString()
+      };
+    }
+    const db = readDb();
+    const newRecord = {
+      ...data,
+      id: data.id || `insp-${Date.now()}`,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    db.securitySiteInspections = db.securitySiteInspections || [];
+    db.securitySiteInspections.push(newRecord);
+    writeDb(db);
+    return newRecord;
+  },
+  updateSecuritySiteInspection: async (id: string, data: any): Promise<any> => {
+    if (isDbConnected()) {
+      const updateData = { ...data };
+      if (data.inspectionDate) updateData.inspectionDate = new Date(data.inspectionDate);
+      const res = await prismaClient.securitySiteInspection.update({
+        where: { id },
+        data: updateData
+      });
+      return {
+        ...res,
+        inspectionDate: res.inspectionDate?.toISOString(),
+        createdAt: res.createdAt?.toISOString(),
+        updatedAt: res.updatedAt?.toISOString()
+      };
+    }
+    const db = readDb();
+    db.securitySiteInspections = db.securitySiteInspections || [];
+    const idx = db.securitySiteInspections.findIndex((x: any) => x.id === id);
+    if (idx === -1) return null;
+    const updated = {
+      ...db.securitySiteInspections[idx],
+      ...data,
+      updatedAt: new Date().toISOString()
+    };
+    db.securitySiteInspections[idx] = updated;
+    writeDb(db);
+    return updated;
+  },
+  deleteSecuritySiteInspection: async (id: string): Promise<boolean> => {
+    if (isDbConnected()) {
+      await prismaClient.securitySiteInspection.delete({ where: { id } });
+      return true;
+    }
+    const db = readDb();
+    db.securitySiteInspections = (db.securitySiteInspections || []).filter((x: any) => x.id !== id);
+    writeDb(db);
+    return true;
+  },
+
+  // --- Manpower Contract Materials CRUD ---
+  getManpowerContractMaterials: async (contractId?: string): Promise<any[]> => {
+    if (isDbConnected()) {
+      const where: any = {};
+      if (contractId) where.contractId = contractId;
+      const res = await prismaClient.manpowerContractMaterial.findMany({
+        where,
+        include: { contract: true },
+        orderBy: { materialName: "asc" }
+      });
+      return res.map((x: any) => ({
+        ...x,
+        createdAt: x.createdAt?.toISOString(),
+        updatedAt: x.updatedAt?.toISOString()
+      }));
+    }
+    const db = readDb();
+    let res = db.manpowerContractMaterials || [];
+    if (contractId) res = res.filter((x: any) => x.contractId === contractId);
+    return res.map((x: any) => ({
+      ...x,
+      contract: (db.manpowerContracts || []).find((c: any) => c.id === x.contractId)
+    }));
+  },
+  createManpowerContractMaterial: async (data: any): Promise<any> => {
+    if (isDbConnected()) {
+      const res = await prismaClient.manpowerContractMaterial.create({ data });
+      return {
+        ...res,
+        createdAt: res.createdAt?.toISOString(),
+        updatedAt: res.updatedAt?.toISOString()
+      };
+    }
+    const db = readDb();
+    const newRecord = {
+      ...data,
+      id: data.id || `mat-${Date.now()}`,
+      isActive: data.isActive !== false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    db.manpowerContractMaterials = db.manpowerContractMaterials || [];
+    db.manpowerContractMaterials.push(newRecord);
+    writeDb(db);
+    return newRecord;
+  },
+  updateManpowerContractMaterial: async (id: string, data: any): Promise<any> => {
+    if (isDbConnected()) {
+      const res = await prismaClient.manpowerContractMaterial.update({
+        where: { id },
+        data
+      });
+      return {
+        ...res,
+        createdAt: res.createdAt?.toISOString(),
+        updatedAt: res.updatedAt?.toISOString()
+      };
+    }
+    const db = readDb();
+    db.manpowerContractMaterials = db.manpowerContractMaterials || [];
+    const idx = db.manpowerContractMaterials.findIndex((x: any) => x.id === id);
+    if (idx === -1) return null;
+    const updated = {
+      ...db.manpowerContractMaterials[idx],
+      ...data,
+      updatedAt: new Date().toISOString()
+    };
+    db.manpowerContractMaterials[idx] = updated;
+    writeDb(db);
+    return updated;
+  },
+  deleteManpowerContractMaterial: async (id: string): Promise<boolean> => {
+    if (isDbConnected()) {
+      await prismaClient.manpowerContractMaterial.delete({ where: { id } });
+      return true;
+    }
+    const db = readDb();
+    db.manpowerContractMaterials = (db.manpowerContractMaterials || []).filter((x: any) => x.id !== id);
+    // Cascade delete allocations
+    db.manpowerProjectMaterialAllocations = (db.manpowerProjectMaterialAllocations || []).filter((x: any) => x.contractMaterialId !== id);
+    writeDb(db);
+    return true;
+  },
+
+  // --- Manpower Project Material Allocations CRUD ---
+  getManpowerProjectMaterialAllocations: async (projectId?: string, contractMaterialId?: string): Promise<any[]> => {
+    if (isDbConnected()) {
+      const where: any = {};
+      if (projectId) where.projectId = projectId;
+      if (contractMaterialId) where.contractMaterialId = contractMaterialId;
+      const res = await prismaClient.manpowerProjectMaterialAllocation.findMany({
+        where,
+        include: { project: true, contractMaterial: true }
+      });
+      return res.map((x: any) => ({
+        ...x,
+        createdAt: x.createdAt?.toISOString(),
+        updatedAt: x.updatedAt?.toISOString()
+      }));
+    }
+    const db = readDb();
+    let res = db.manpowerProjectMaterialAllocations || [];
+    if (projectId) res = res.filter((x: any) => x.projectId === projectId);
+    if (contractMaterialId) res = res.filter((x: any) => x.contractMaterialId === contractMaterialId);
+    return res.map((x: any) => ({
+      ...x,
+      project: (db.manpowerProjects || []).find((p: any) => p.id === x.projectId),
+      contractMaterial: (db.manpowerContractMaterials || []).find((m: any) => m.id === x.contractMaterialId)
+    }));
+  },
+  createManpowerProjectMaterialAllocation: async (data: any): Promise<any> => {
+    if (isDbConnected()) {
+      const res = await prismaClient.manpowerProjectMaterialAllocation.create({ data });
+      return {
+        ...res,
+        createdAt: res.createdAt?.toISOString(),
+        updatedAt: res.updatedAt?.toISOString()
+      };
+    }
+    const db = readDb();
+    const newRecord = {
+      ...data,
+      id: data.id || `alloc-${Date.now()}`,
+      isActive: data.isActive !== false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    db.manpowerProjectMaterialAllocations = db.manpowerProjectMaterialAllocations || [];
+    db.manpowerProjectMaterialAllocations.push(newRecord);
+    writeDb(db);
+    return newRecord;
+  },
+  updateManpowerProjectMaterialAllocation: async (id: string, data: any): Promise<any> => {
+    if (isDbConnected()) {
+      const res = await prismaClient.manpowerProjectMaterialAllocation.update({
+        where: { id },
+        data
+      });
+      return {
+        ...res,
+        createdAt: res.createdAt?.toISOString(),
+        updatedAt: res.updatedAt?.toISOString()
+      };
+    }
+    const db = readDb();
+    db.manpowerProjectMaterialAllocations = db.manpowerProjectMaterialAllocations || [];
+    const idx = db.manpowerProjectMaterialAllocations.findIndex((x: any) => x.id === id);
+    if (idx === -1) return null;
+    const updated = {
+      ...db.manpowerProjectMaterialAllocations[idx],
+      ...data,
+      updatedAt: new Date().toISOString()
+    };
+    db.manpowerProjectMaterialAllocations[idx] = updated;
+    writeDb(db);
+    return updated;
+  },
+  deleteManpowerProjectMaterialAllocation: async (id: string): Promise<boolean> => {
+    if (isDbConnected()) {
+      await prismaClient.manpowerProjectMaterialAllocation.delete({ where: { id } });
+      return true;
+    }
+    const db = readDb();
+    db.manpowerProjectMaterialAllocations = (db.manpowerProjectMaterialAllocations || []).filter((x: any) => x.id !== id);
+    writeDb(db);
+    return true;
   }
 };
 

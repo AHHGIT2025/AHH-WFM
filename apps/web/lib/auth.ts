@@ -123,6 +123,11 @@ export const authOptions: NextAuthOptions = {
               throw new Error("Account is disabled. Contact administrator.");
             }
 
+            const isSelfServiceUser = employee.role?.toUpperCase() === "EMPLOYEE" || employee.role?.toUpperCase() === "EMPLOYEE_SELF_SERVICE";
+            if (isSelfServiceUser && employee.selfServiceEnabled === false) {
+              throw new Error("Self-service access is disabled. Please contact HR/Admin.");
+            }
+
             if (employee.webAccessEnabled === false) {
               throw new Error("Your web access is disabled. Please contact HR/Admin.");
             }

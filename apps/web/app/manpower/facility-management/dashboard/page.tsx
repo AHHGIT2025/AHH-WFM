@@ -141,7 +141,17 @@ export default function FacilityManagementDashboard() {
               </div>
               <div>
                 <p className="text-xs font-bold text-primary">Staff Directory</p>
-                <p className="text-[10px] text-on-surface-variant">Cleaner/technician categories</p>
+                <p className="text-[10px] text-on-surface-variant">Staff directory list</p>
+              </div>
+            </Link>
+
+            <Link href="/manpower/facility-management/categories" className="bg-surface border border-outline-variant hover:border-secondary/20 hover:shadow-sm p-4 rounded-xl flex items-center gap-4 transition-all">
+              <div className="w-10 h-10 rounded-lg bg-secondary-container/10 flex items-center justify-center text-secondary shrink-0">
+                <span className="material-symbols-outlined text-[22px]">category</span>
+              </div>
+              <div>
+                <p className="text-xs font-bold text-primary">Manpower Categories</p>
+                <p className="text-[10px] text-on-surface-variant">Manage category properties</p>
               </div>
             </Link>
 

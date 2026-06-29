@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { mockDb } from "@ahh-wfm/mock-data";
 import { checkApiAuth } from "@/lib/api-guards";
+import { hasPermission } from "@/lib/permissions";
 
 interface RouteParams {
   params: {
@@ -12,14 +13,14 @@ export async function PATCH(request: Request, { params }: RouteParams) {
   const auth = await checkApiAuth();
   if (auth.error) return auth.error;
 
-  const isSuper = (auth.session?.user as any)?.role === "SUPER_ADMIN";
-  if (!isSuper && !checkApiAuth(["ADMIN"])) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const user = auth.session?.user as any;
+  if (!hasPermission(user, "users.manage")) {
+    return NextResponse.json({ error: "Forbidden: Requires users.manage permission" }, { status: 403 });
   }
 
   try {
     const payload = await request.json();
-    const { username, authMode, isLoginEnabled, role, assignedRoleIds, operationAccess } = payload;
+    const { username, authMode, isLoginEnabled, selfServiceEnabled, role, assignedRoleIds, operationAccess } = payload;
 
     if (username !== undefined && username.trim() === "") {
       return NextResponse.json({ error: "Username cannot be empty" }, { status: 400 });
@@ -43,6 +44,9 @@ export async function PATCH(request: Request, { params }: RouteParams) {
       if (isLoginEnabled === false) {
         return NextResponse.json({ error: "Super Admin account cannot be disabled." }, { status: 400 });
       }
+      if (selfServiceEnabled === false) {
+        return NextResponse.json({ error: "Super Admin self-service cannot be disabled." }, { status: 400 });
+      }
       if (role !== undefined && role !== "SUPER_ADMIN") {
         return NextResponse.json({ error: "Super Admin role cannot be demoted." }, { status: 400 });
       }
@@ -53,6 +57,7 @@ export async function PATCH(request: Request, { params }: RouteParams) {
       username: username !== undefined ? username : employee.username,
       authMode: authMode !== undefined ? authMode : employee.authMode,
       isLoginEnabled: isLoginEnabled !== undefined ? isLoginEnabled : employee.isLoginEnabled,
+      selfServiceEnabled: selfServiceEnabled !== undefined ? selfServiceEnabled : employee.selfServiceEnabled,
       role: role !== undefined ? role : employee.role
     } as any);
 

@@ -49,12 +49,20 @@ const DEFAULT_PERMISSIONS = [
 
   // Settings & Access Control
   { key: "settings.view", label: "View Settings Command", module: "Settings" },
+  { key: "settings.manage", label: "Manage Settings Configuration", module: "Settings" },
   { key: "settings.roles.manage", label: "Manage Roles & System Permissions Matrix", module: "Settings" },
   { key: "users.view", label: "View Users Directory", module: "Users" },
   { key: "users.manage", label: "Manage Users Configuration", module: "Users" },
   { key: "roles.view", label: "View Access Roles List", module: "Roles" },
   { key: "roles.manage", label: "Manage Custom Access Roles", module: "Roles" },
   { key: "audit.view", label: "View Access/Audit Logs", module: "Audit" },
+  { key: "audit.export", label: "Export Audit Logs Data", module: "Audit" },
+  { key: "system.config.view", label: "View System Configuration Parameters", module: "System Config" },
+  { key: "system.config.manage", label: "Modify System Configuration Parameters", module: "System Config" },
+  { key: "masterdata.view", label: "View Master Data References", module: "Master Data" },
+  { key: "masterdata.manage", label: "Modify Master Data References", module: "Master Data" },
+  { key: "integration.view", label: "View Integration Gateways", module: "Integration" },
+  { key: "integration.manage", label: "Configure Integration Gateways", module: "Integration" },
 
   // Manpower General
   { key: "manpower.view", label: "Access Manpower Module", module: "Manpower General" },
@@ -107,39 +115,62 @@ const DEFAULT_PERMISSIONS = [
   { key: "manpower.fm.relievers.view", label: "View FM Reliever Standby Lists", module: "Facility Management" },
   { key: "manpower.fm.relievers.manage", label: "Assign FM Relievers/Substitutes", module: "Facility Management" },
   { key: "manpower.fm.reports.view", label: "View FM Operational Reports", module: "Facility Management" },
-  { key: "manpower.fm.reports.export", label: "Export FM Reports Data", module: "Facility Management" }
+  { key: "manpower.fm.reports.export", label: "Export FM Reports Data", module: "Facility Management" },
+
+  // Employee Self-Service specific permissions
+  { key: "self.profile.view", label: "View Own Profile", module: "Self Service" },
+  { key: "self.attendance.view", label: "View Own Attendance Records", module: "Self Service" },
+  { key: "self.attendance.punch", label: "Clock In and Out", module: "Self Service" },
+  { key: "self.leave.view", label: "View Own Leave Requests", module: "Self Service" },
+  { key: "self.leave.apply", label: "Submit Leave Applications", module: "Self Service" },
+  { key: "self.announcements.view", label: "View Company Announcements", module: "Self Service" },
+  { key: "self.password.change", label: "Change Own Password", module: "Self Service" }
 ];
 
 const DEFAULT_SYSTEM_ROLES = [
-  // Core WFM Roles
-  { name: "SUPER_ADMIN", description: "All permissions granted including database backups and integrations configuration.", isSystemDefault: true, isActive: true, isEditable: false, scope: "Global" },
-  { name: "ADMIN", description: "Full operation administration controls.", isSystemDefault: true, isActive: true, isEditable: false, scope: "Global" },
-  { name: "HR_MANAGER", description: "Workforce directory and leave processing controls.", isSystemDefault: true, isActive: true, isEditable: false, scope: "Global" },
-  { name: "HR_EXECUTIVE", description: "Staff view and requests processing support.", isSystemDefault: true, isActive: true, isEditable: false, scope: "Global" },
-  { name: "FINANCE_VIEWER", description: "Read only access to SuccessFactors mappings and overtime reports.", isSystemDefault: true, isActive: true, isEditable: false, scope: "Global" },
-  { name: "DEPARTMENT_MANAGER", description: "Standard viewer for departments status.", isSystemDefault: true, isActive: true, isEditable: false, scope: "Global" },
-  { name: "SUPERVISOR", description: "Team schedule tracking and attendance corrections approvals.", isSystemDefault: true, isActive: true, isEditable: false, scope: "Global" },
-  { name: "EMPLOYEE", description: "Employee self service clocks and requests.", isSystemDefault: true, isActive: true, isEditable: false, scope: "Global" },
-  { name: "SAP_ADMIN", description: "SAP inbound synchronization and field schema overrides controls.", isSystemDefault: true, isActive: true, isEditable: false, scope: "Global" },
-  { name: "REPORT_VIEWER", description: "Read only access to reporting and analytics hub dashboards.", isSystemDefault: true, isActive: true, isEditable: false, scope: "Global" },
+  // IT / System Administration Roles
+  { name: "SUPER_ADMIN", description: "All permissions granted including database backups and integrations configuration.", isSystemDefault: true, isActive: true, isEditable: false, scope: "Global", roleType: "IT / System Administration" },
+  { name: "ADMIN", description: "Full operation administration controls.", isSystemDefault: true, isActive: true, isEditable: false, scope: "Global", roleType: "IT / System Administration" },
+  { name: "SYSTEM_ADMIN", description: "System configuration, users, roles, and settings manager.", isSystemDefault: true, isActive: true, isEditable: false, scope: "Global", roleType: "IT / System Administration" },
+  { name: "IT_ADMIN", description: "IT administrator for systems, backups, and audits.", isSystemDefault: true, isActive: true, isEditable: false, scope: "Global", roleType: "IT / System Administration" },
+  { name: "APPLICATION_ADMIN", description: "Admin for workforce users, roles, and master data.", isSystemDefault: true, isActive: true, isEditable: false, scope: "Global", roleType: "IT / System Administration" },
+  { name: "SETTINGS_ADMIN", description: "Manage settings parameters and custom security roles.", isSystemDefault: true, isActive: true, isEditable: false, scope: "Global", roleType: "IT / System Administration" },
+  { name: "AUDIT_VIEWER", description: "Read only access to settings and system audit logs.", isSystemDefault: true, isActive: true, isEditable: false, scope: "Global", roleType: "IT / System Administration" },
+  { name: "SAP_ADMIN", description: "SAP inbound synchronization and field schema overrides controls.", isSystemDefault: true, isActive: true, isEditable: false, scope: "Global", roleType: "IT / System Administration" },
+
+  // Employee Self-Service Roles
+  { name: "EMPLOYEE_SELF_SERVICE", description: "Self service access only (own profile, leave, and attendance).", isSystemDefault: true, isActive: true, isEditable: false, scope: "Global", roleType: "Employee Self-Service" },
+  { name: "EMPLOYEE", description: "Employee self service clocks and requests.", isSystemDefault: true, isActive: true, isEditable: false, scope: "Global", roleType: "Employee Self-Service" },
+
+  // White Collar Operations Roles
+  { name: "HR_MANAGER", description: "Workforce directory and leave processing controls.", isSystemDefault: true, isActive: true, isEditable: false, scope: "Global", roleType: "White Collar Operations" },
+  { name: "HR_EXECUTIVE", description: "Staff view and requests processing support.", isSystemDefault: true, isActive: true, isEditable: false, scope: "Global", roleType: "White Collar Operations" },
+  { name: "DEPARTMENT_MANAGER", description: "Standard viewer for departments status.", isSystemDefault: true, isActive: true, isEditable: false, scope: "Global", roleType: "White Collar Operations" },
+  { name: "SUPERVISOR", description: "Team schedule tracking and attendance corrections approvals.", isSystemDefault: true, isActive: true, isEditable: false, scope: "Global", roleType: "White Collar Operations" },
 
   // Security Guarding Specific Roles
-  { name: "SECURITY_ADMIN", description: "Full administration control over Security Guarding operations.", isSystemDefault: true, isActive: true, isEditable: false, scope: "Security Guarding" },
-  { name: "SECURITY_OPERATIONS_MANAGER", description: "Manager for rosters, shift schedules, and sites allocations.", isSystemDefault: true, isActive: true, isEditable: false, scope: "Security Guarding" },
-  { name: "SECURITY_PROJECT_MANAGER", description: "Manage projects, sites, and deploy guards.", isSystemDefault: true, isActive: true, isEditable: false, scope: "Security Guarding" },
-  { name: "SECURITY_SUPERVISOR", description: "Site supervisor to track guard attendance.", isSystemDefault: true, isActive: true, isEditable: false, scope: "Security Guarding" },
-  { name: "SECURITY_HR_PAYROLL_VIEWER", description: "HR viewer for guards profiles and shift reports.", isSystemDefault: true, isActive: true, isEditable: false, scope: "Security Guarding" },
-  { name: "SECURITY_FINANCE_VIEWER", description: "Finance viewer for guards overtime calculations.", isSystemDefault: true, isActive: true, isEditable: false, scope: "Security Guarding" },
-  { name: "SECURITY_READ_ONLY", description: "Read only viewer for security guard planning calendars.", isSystemDefault: true, isActive: true, isEditable: false, scope: "Security Guarding" },
+  { name: "SECURITY_ADMIN", description: "Full administration control over Security Guarding operations.", isSystemDefault: true, isActive: true, isEditable: false, scope: "Security Guarding", roleType: "Security Guarding Operations" },
+  { name: "SECURITY_OPERATIONS_MANAGER", description: "Manager for rosters, shift schedules, and sites allocations.", isSystemDefault: true, isActive: true, isEditable: false, scope: "Security Guarding", roleType: "Security Guarding Operations" },
+  { name: "SECURITY_PROJECT_MANAGER", description: "Manage projects, sites, and deploy guards.", isSystemDefault: true, isActive: true, isEditable: false, scope: "Security Guarding", roleType: "Security Guarding Operations" },
+  { name: "SECURITY_SUPERVISOR", description: "Site supervisor to track guard attendance.", isSystemDefault: true, isActive: true, isEditable: false, scope: "Security Guarding", roleType: "Security Guarding Operations" },
 
   // Facility Management Specific Roles
-  { name: "FM_ADMIN", description: "Full administration control over Facility Management operations.", isSystemDefault: true, isActive: true, isEditable: false, scope: "Facility Management" },
-  { name: "FM_OPERATIONS_MANAGER", description: "Manager for cleanings rosters and areas requirements.", isSystemDefault: true, isActive: true, isEditable: false, scope: "Facility Management" },
-  { name: "FM_PROJECT_MANAGER", description: "Manage FM projects, sites, and deploy cleaners.", isSystemDefault: true, isActive: true, isEditable: false, scope: "Facility Management" },
-  { name: "FM_SUPERVISOR", description: "FM supervisor to track cleaning attendance.", isSystemDefault: true, isActive: true, isEditable: false, scope: "Facility Management" },
-  { name: "FM_HR_PAYROLL_VIEWER", description: "HR viewer for FM staff profiles and shift reports.", isSystemDefault: true, isActive: true, isEditable: false, scope: "Facility Management" },
-  { name: "FM_FINANCE_VIEWER", description: "Finance viewer for FM overtime calculations.", isSystemDefault: true, isActive: true, isEditable: false, scope: "Facility Management" },
-  { name: "FM_READ_ONLY", description: "Read only viewer for FM planning calendars.", isSystemDefault: true, isActive: true, isEditable: false, scope: "Facility Management" }
+  { name: "FM_ADMIN", description: "Full administration control over Facility Management operations.", isSystemDefault: true, isActive: true, isEditable: false, scope: "Facility Management", roleType: "Facility Management Operations" },
+  { name: "FM_OPERATIONS_MANAGER", description: "Manager for cleanings rosters and areas requirements.", isSystemDefault: true, isActive: true, isEditable: false, scope: "Facility Management", roleType: "Facility Management Operations" },
+  { name: "FM_PROJECT_MANAGER", description: "Manage FM projects, sites, and deploy cleaners.", isSystemDefault: true, isActive: true, isEditable: false, scope: "Facility Management", roleType: "Facility Management Operations" },
+  { name: "FM_SUPERVISOR", description: "FM supervisor to track cleaning attendance.", isSystemDefault: true, isActive: true, isEditable: false, scope: "Facility Management", roleType: "Facility Management Operations" },
+
+  // Finance / Reports Roles
+  { name: "FINANCE_VIEWER", description: "Read only access to SuccessFactors mappings and overtime reports.", isSystemDefault: true, isActive: true, isEditable: false, scope: "Global", roleType: "Finance / Reports" },
+  { name: "SECURITY_HR_PAYROLL_VIEWER", description: "HR viewer for guards profiles and shift reports.", isSystemDefault: true, isActive: true, isEditable: false, scope: "Security Guarding", roleType: "Finance / Reports" },
+  { name: "SECURITY_FINANCE_VIEWER", description: "Finance viewer for guards overtime calculations.", isSystemDefault: true, isActive: true, isEditable: false, scope: "Security Guarding", roleType: "Finance / Reports" },
+  { name: "FM_HR_PAYROLL_VIEWER", description: "HR viewer for FM staff profiles and shift reports.", isSystemDefault: true, isActive: true, isEditable: false, scope: "Facility Management", roleType: "Finance / Reports" },
+  { name: "FM_FINANCE_VIEWER", description: "Finance viewer for FM overtime calculations.", isSystemDefault: true, isActive: true, isEditable: false, scope: "Facility Management", roleType: "Finance / Reports" },
+  { name: "REPORT_VIEWER", description: "Read only access to reporting and analytics hub dashboards.", isSystemDefault: true, isActive: true, isEditable: false, scope: "Global", roleType: "Finance / Reports" },
+
+  // Read Only Roles
+  { name: "SECURITY_READ_ONLY", description: "Read only viewer for security guard planning calendars.", isSystemDefault: true, isActive: true, isEditable: false, scope: "Security Guarding", roleType: "Read Only" },
+  { name: "FM_READ_ONLY", description: "Read only viewer for FM planning calendars.", isSystemDefault: true, isActive: true, isEditable: false, scope: "Facility Management", roleType: "Read Only" }
 ];
 
 async function seedPermissionsIfEmpty() {

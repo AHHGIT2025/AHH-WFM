@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "module": "commonjs",
+    "target": "es2020",
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "baseUrl": "..",
+    "paths": {
+      "@ahh-wfm/types": ["packages/types/src"],
+      "@ahh-wfm/mock-data": ["packages/mock-data/src"]
+    }
+  }
+}

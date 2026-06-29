@@ -17,7 +17,9 @@ const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "users.view", "users.manage", "roles.view", "roles.manage", "audit.view",
     "manpower.view", "manpower.manage", "manpower.admin.full_access",
     "manpower.security.view", "manpower.security.manage", "manpower.security.reports.view", "manpower.security.reports.export",
-    "manpower.fm.view", "manpower.fm.manage", "manpower.fm.reports.view", "manpower.fm.reports.export"
+    "manpower.fm.view", "manpower.fm.manage", "manpower.fm.reports.view", "manpower.fm.reports.export",
+    "self.profile.view", "self.attendance.view", "self.attendance.punch", "self.leave.view", "self.leave.apply", "self.announcements.view", "self.password.change",
+    "settings.manage", "system.config.view", "system.config.manage", "masterdata.view", "masterdata.manage", "audit.export", "integration.view", "integration.manage"
   ],
   ADMIN: [
     "dashboard.view", "employees.view", "employees.create", "employees.edit", "employees.bulkUpload",
@@ -30,7 +32,35 @@ const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "users.view", "users.manage", "roles.view", "roles.manage", "audit.view",
     "manpower.view", "manpower.manage",
     "manpower.security.view", "manpower.security.manage", "manpower.security.reports.view", "manpower.security.reports.export",
-    "manpower.fm.view", "manpower.fm.manage", "manpower.fm.reports.view", "manpower.fm.reports.export"
+    "manpower.fm.view", "manpower.fm.manage", "manpower.fm.reports.view", "manpower.fm.reports.export",
+    "self.profile.view", "self.attendance.view", "self.attendance.punch", "self.leave.view", "self.leave.apply", "self.announcements.view", "self.password.change",
+    "settings.manage", "system.config.view", "system.config.manage", "masterdata.view", "masterdata.manage", "audit.export", "integration.view", "integration.manage"
+  ],
+  SYSTEM_ADMIN: [
+    "settings.view", "settings.manage", "users.view", "users.manage", "roles.view", "roles.manage",
+    "system.config.view", "system.config.manage", "masterdata.view", "masterdata.manage",
+    "audit.view", "audit.export", "integration.view", "integration.manage",
+    "self.profile.view", "self.attendance.view", "self.attendance.punch", "self.leave.view", "self.leave.apply", "self.announcements.view", "self.password.change"
+  ],
+  IT_ADMIN: [
+    "settings.view", "settings.manage", "users.view", "users.manage", "roles.view", "roles.manage",
+    "system.config.view", "system.config.manage", "audit.view", "integration.view", "integration.manage",
+    "self.profile.view", "self.attendance.view", "self.attendance.punch", "self.leave.view", "self.leave.apply", "self.announcements.view", "self.password.change"
+  ],
+  APPLICATION_ADMIN: [
+    "settings.view", "users.view", "users.manage", "roles.view", "roles.manage", "masterdata.view", "masterdata.manage",
+    "self.profile.view", "self.attendance.view", "self.attendance.punch", "self.leave.view", "self.leave.apply", "self.announcements.view", "self.password.change"
+  ],
+  SETTINGS_ADMIN: [
+    "settings.view", "settings.manage", "roles.view", "roles.manage",
+    "self.profile.view", "self.attendance.view", "self.attendance.punch", "self.leave.view", "self.leave.apply", "self.announcements.view", "self.password.change"
+  ],
+  AUDIT_VIEWER: [
+    "settings.view", "audit.view",
+    "self.profile.view", "self.attendance.view", "self.attendance.punch", "self.leave.view", "self.leave.apply", "self.announcements.view", "self.password.change"
+  ],
+  EMPLOYEE_SELF_SERVICE: [
+    "self.profile.view", "self.attendance.view", "self.attendance.punch", "self.leave.view", "self.leave.apply", "self.announcements.view", "self.password.change"
   ],
   HR_MANAGER: [
     "dashboard.view", "employees.view", "employees.create", "employees.edit", "employees.bulkUpload",
@@ -40,28 +70,43 @@ const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "users.view", "users.manage", "roles.view", "roles.manage", "audit.view",
     "manpower.view", "manpower.manage",
     "manpower.security.view", "manpower.security.manage",
-    "manpower.fm.view", "manpower.fm.manage"
+    "manpower.fm.view", "manpower.fm.manage",
+    "self.profile.view", "self.attendance.view", "self.attendance.punch", "self.leave.view", "self.leave.apply", "self.announcements.view", "self.password.change"
   ],
   HR_EXECUTIVE: [
-    "dashboard.view", "employees.view", "attendance.view", "leaves.view", "shifts.view"
+    "dashboard.view", "employees.view", "attendance.view", "leaves.view", "shifts.view",
+    "self.profile.view", "self.attendance.view", "self.attendance.punch", "self.leave.view", "self.leave.apply", "self.announcements.view", "self.password.change"
   ],
   FINANCE_MANAGER: [
     "dashboard.view", "employees.view", "attendance.view", "overtime.view", "overtime.approve",
-    "reports.view", "reports.export", "sap.view"
+    "reports.view", "reports.export", "sap.view",
+    "self.profile.view", "self.attendance.view", "self.attendance.punch", "self.leave.view", "self.leave.apply", "self.announcements.view", "self.password.change"
   ],
   FINANCE_VIEWER: [
-    "dashboard.view", "reports.view", "sap.view"
+    "dashboard.view", "reports.view", "sap.view",
+    "self.profile.view", "self.attendance.view", "self.attendance.punch", "self.leave.view", "self.leave.apply", "self.announcements.view", "self.password.change"
   ],
   DEPARTMENT_MANAGER: [
-    "dashboard.view", "employees.view", "attendance.view", "leaves.view", "shifts.view"
+    "dashboard.view", "employees.view", "attendance.view", "leaves.view", "shifts.view",
+    "self.profile.view", "self.attendance.view", "self.attendance.punch", "self.leave.view", "self.leave.apply", "self.announcements.view", "self.password.change"
   ],
   SUPERVISOR: [
     "dashboard.view", "employees.view", "attendance.view", "attendance.approveCorrection",
-    "leaves.view", "leaves.approve", "shifts.view", "overtime.view"
+    "leaves.view", "leaves.approve", "shifts.view", "overtime.view",
+    "self.profile.view", "self.attendance.view", "self.attendance.punch", "self.leave.view", "self.leave.apply", "self.announcements.view", "self.password.change"
   ],
   EMPLOYEE: [
-    "dashboard.view", "employees.view", "attendance.view", "leaves.view", "shifts.view"
-  ]
+    "dashboard.view", "employees.view", "attendance.view", "leaves.view", "shifts.view",
+    "self.profile.view", "self.attendance.view", "self.attendance.punch", "self.leave.view", "self.leave.apply", "self.announcements.view", "self.password.change"
+  ],
+  SAP_ADMIN: [
+    "dashboard.view", "sap.view", "sap.sync", "sap.mapping", "reports.view",
+    "self.profile.view", "self.attendance.view", "self.attendance.punch", "self.leave.view", "self.leave.apply", "self.announcements.view", "self.password.change"
+  ],
+  REPORT_VIEWER: [
+    "dashboard.view", "reports.view",
+    "self.profile.view", "self.attendance.view", "self.attendance.punch", "self.leave.view", "self.leave.apply", "self.announcements.view", "self.password.change"
+  ],
 };
 
 async function fetchUserRBAC(userId: string, defaultRole: string) {
@@ -170,6 +215,11 @@ export const authOptions: NextAuthOptions = {
 
             if (employee.isLoginEnabled === false) {
               throw new Error("Account is disabled. Contact administrator.");
+            }
+
+            const isSelfServiceUser = employee.role?.toUpperCase() === "EMPLOYEE" || employee.role?.toUpperCase() === "EMPLOYEE_SELF_SERVICE";
+            if (isSelfServiceUser && employee.selfServiceEnabled === false) {
+              throw new Error("Self-service access is disabled. Please contact HR/Admin.");
             }
 
             if (employee.mobileAccessEnabled === false) {

@@ -35,6 +35,13 @@ export default function ManpowerMasterPage() {
   // Form states
   const [formData, setFormData] = useState<any>({});
   const [formError, setFormError] = useState("");
+  const [editItem, setEditItem] = useState<any | null>(null);
+
+  const startEdit = (item: any) => {
+    setEditItem(item);
+    setFormData({ ...item });
+    setFormError("");
+  };
 
   // Permission Checks
   const canView = hasPermission(session?.user as any, "manpower.admin.full_access") ||
@@ -151,6 +158,29 @@ export default function ManpowerMasterPage() {
     }
   };
 
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setFormError("");
+
+    try {
+      const res = await fetch(apiBase, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: editItem.id, ...formData })
+      });
+      if (res.ok) {
+        setEditItem(null);
+        setFormData({});
+        loadData();
+      } else {
+        const errJson = await res.json();
+        setFormError(errJson.error || "Failed to update item");
+      }
+    } catch (e) {
+      setFormError("Server connection failed");
+    }
+  };
+
   const filteredData = data.filter((item: any) => {
     const term = searchTerm.toLowerCase();
     if (master === "clients" || master === "categories") {
@@ -257,7 +287,22 @@ export default function ManpowerMasterPage() {
                     <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Worksite Name</th>
                     <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Project</th>
                     <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Radius (Meters)</th>
+                    <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Gate Pass Req.</th>
                     <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Status</th>
+                    {canManage && <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Actions</th>}
+                  </>
+                )}
+                {master === "categories" && (
+                  <>
+                    <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Code</th>
+                    <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Category Name</th>
+                    <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider text-center">Blue Collar</th>
+                    <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider text-center">Deployable</th>
+                    <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider text-center">Overtime</th>
+                    <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider text-center">MOI License</th>
+                    <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider text-center">Gate Pass</th>
+                    <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Status</th>
+                    {canManage && <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Actions</th>}
                   </>
                 )}
                 {(master === "zones" || master === "areas") && (
@@ -335,10 +380,71 @@ export default function ManpowerMasterPage() {
                       <td className="px-4 py-3 text-xs text-on-surface">{item.project?.name || item.projectId}</td>
                       <td className="px-4 py-3 text-xs text-on-surface-variant">{item.radiusMeters}m</td>
                       <td className="px-4 py-3 text-xs">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${item.gatePassRequired ? "bg-primary-container/10 text-primary" : "bg-surface-container-high/40 text-on-surface-variant"}`}>
+                          {item.gatePassRequired ? "Yes" : "No"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-xs">
                         <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${item.isActive ? "bg-status-success/15 text-status-success" : "bg-status-error/15 text-status-error"}`}>
                           {item.isActive ? "Active" : "Inactive"}
                         </span>
                       </td>
+                      {canManage && (
+                        <td className="px-4 py-3 text-xs">
+                          <button
+                            onClick={() => startEdit(item)}
+                            className="text-primary hover:underline text-[11px] font-bold mr-3"
+                          >
+                            Edit
+                          </button>
+                        </td>
+                      )}
+                    </>
+                  )}
+                  {master === "categories" && (
+                    <>
+                      <td className="px-4 py-3 text-xs font-bold text-primary">{item.code}</td>
+                      <td className="px-4 py-3 text-xs text-on-surface">{item.name}</td>
+                      <td className="px-4 py-3 text-xs text-center">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${item.isBlueCollar ? "bg-primary-container/10 text-primary" : "bg-surface-container-high/40 text-on-surface-variant"}`}>
+                          {item.isBlueCollar ? "Yes" : "No"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-xs text-center">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${item.isDeployableInRoster ? "bg-primary-container/10 text-primary" : "bg-surface-container-high/40 text-on-surface-variant"}`}>
+                          {item.isDeployableInRoster ? "Yes" : "No"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-xs text-center">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${item.canWorkOvertime ? "bg-primary-container/10 text-primary" : "bg-surface-container-high/40 text-on-surface-variant"}`}>
+                          {item.canWorkOvertime ? "Yes" : "No"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-xs text-center">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${item.requiresMoiLicense ? "bg-primary-container/10 text-primary" : "bg-surface-container-high/40 text-on-surface-variant"}`}>
+                          {item.requiresMoiLicense ? "Yes" : "No"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-xs text-center">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${item.requiresGatePassCheck ? "bg-primary-container/10 text-primary" : "bg-surface-container-high/40 text-on-surface-variant"}`}>
+                          {item.requiresGatePassCheck ? "Yes" : "No"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-xs">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${item.isActive ? "bg-status-success/15 text-status-success" : "bg-status-error/15 text-status-error"}`}>
+                          {item.isActive ? "Active" : "Inactive"}
+                        </span>
+                      </td>
+                      {canManage && (
+                        <td className="px-4 py-3 text-xs">
+                          <button
+                            onClick={() => startEdit(item)}
+                            className="text-primary hover:underline text-[11px] font-bold mr-3"
+                          >
+                            Edit
+                          </button>
+                        </td>
+                      )}
                     </>
                   )}
                   {(master === "zones" || master === "areas") && (
@@ -585,6 +691,87 @@ export default function ManpowerMasterPage() {
                         />
                       </div>
                     </div>
+                    <label className="flex items-center gap-2 text-xs text-on-surface cursor-pointer mt-2">
+                      <input
+                        type="checkbox"
+                        checked={!!formData.gatePassRequired}
+                        onChange={(e) => setFormData({ ...formData, gatePassRequired: e.target.checked })}
+                        className="rounded border-outline-variant text-primary focus:ring-primary"
+                      />
+                      <span>Gate Pass Required for Entry/Exit</span>
+                    </label>
+                  </>
+                )}
+
+                {master === "categories" && (
+                  <>
+                    <div>
+                      <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Code</label>
+                      <input
+                        type="text"
+                        required
+                        className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary"
+                        value={formData.code || ""}
+                        onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Category Name</label>
+                      <input
+                        type="text"
+                        required
+                        className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary"
+                        value={formData.name || ""}
+                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-2 pt-2 border-t border-outline-variant/40">
+                      <label className="flex items-center gap-2 text-xs text-on-surface cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={!!formData.isBlueCollar}
+                          onChange={(e) => setFormData({ ...formData, isBlueCollar: e.target.checked })}
+                          className="rounded border-outline-variant text-primary focus:ring-primary"
+                        />
+                        <span>Blue Collar (Roster-based)</span>
+                      </label>
+                      <label className="flex items-center gap-2 text-xs text-on-surface cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={!!formData.isDeployableInRoster}
+                          onChange={(e) => setFormData({ ...formData, isDeployableInRoster: e.target.checked })}
+                          className="rounded border-outline-variant text-primary focus:ring-primary"
+                        />
+                        <span>Deployable in Roster</span>
+                      </label>
+                      <label className="flex items-center gap-2 text-xs text-on-surface cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={!!formData.canWorkOvertime}
+                          onChange={(e) => setFormData({ ...formData, canWorkOvertime: e.target.checked })}
+                          className="rounded border-outline-variant text-primary focus:ring-primary"
+                        />
+                        <span>Can Work Overtime</span>
+                      </label>
+                      <label className="flex items-center gap-2 text-xs text-on-surface cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={!!formData.requiresMoiLicense}
+                          onChange={(e) => setFormData({ ...formData, requiresMoiLicense: e.target.checked })}
+                          className="rounded border-outline-variant text-primary focus:ring-primary"
+                        />
+                        <span>Requires MOI Security Guard License</span>
+                      </label>
+                      <label className="flex items-center gap-2 text-xs text-on-surface cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={!!formData.requiresGatePassCheck}
+                          onChange={(e) => setFormData({ ...formData, requiresGatePassCheck: e.target.checked })}
+                          className="rounded border-outline-variant text-primary focus:ring-primary"
+                        />
+                        <span>Requires Gate Pass Check</span>
+                      </label>
+                    </div>
                   </>
                 )}
 
@@ -774,6 +961,319 @@ export default function ManpowerMasterPage() {
                   }`}
                 >
                   Create
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {/* Edit Modal */}
+      {editItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-surface rounded-xl border border-outline-variant shadow-lg max-w-md w-full overflow-hidden">
+            <div className="px-6 py-4 border-b border-outline-variant flex justify-between items-center bg-surface-container-low">
+              <h3 className="text-sm font-bold text-primary">Edit {masterLabel.replace(/s$/, "")}</h3>
+              <button onClick={() => { setEditItem(null); setFormData({}); }} className="text-on-surface-variant hover:text-primary">
+                <span className="material-symbols-outlined text-[20px]">close</span>
+              </button>
+            </div>
+            <form onSubmit={handleEditSubmit}>
+              <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
+                {formError && (
+                  <div className="p-3 bg-status-error/10 text-status-error text-xs rounded-lg font-bold">
+                    {formError}
+                  </div>
+                )}
+
+                {/* Form fields based on master list */}
+                {master === "clients" && (
+                  <>
+                    <div>
+                      <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Code</label>
+                      <input
+                        type="text"
+                        required
+                        disabled
+                        className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-xs text-on-surface-variant focus:outline-none"
+                        value={formData.code || ""}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Client Name</label>
+                      <input
+                        type="text"
+                        required
+                        className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary"
+                        value={formData.name || ""}
+                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                      />
+                    </div>
+                  </>
+                )}
+
+                {master === "contracts" && (
+                  <>
+                    <div>
+                      <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Client</label>
+                      <select
+                        required
+                        className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary"
+                        value={formData.clientId || ""}
+                        onChange={(e) => setFormData({ ...formData, clientId: e.target.value })}
+                      >
+                        <option value="">Select Client...</option>
+                        {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Contract Number</label>
+                      <input
+                        type="text"
+                        required
+                        className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary"
+                        value={formData.contractNumber || ""}
+                        onChange={(e) => setFormData({ ...formData, contractNumber: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Contract Title</label>
+                      <input
+                        type="text"
+                        required
+                        className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary"
+                        value={formData.title || ""}
+                        onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Start Date</label>
+                        <input
+                          type="date"
+                          required
+                          className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary"
+                          value={formData.startDate ? formData.startDate.substring(0, 10) : ""}
+                          onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">End Date</label>
+                        <input
+                          type="date"
+                          required
+                          className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary"
+                          value={formData.endDate ? formData.endDate.substring(0, 10) : ""}
+                          onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+                        />
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {master === "projects" && (
+                  <>
+                    <div>
+                      <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Contract</label>
+                      <select
+                        required
+                        className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary"
+                        value={formData.contractId || ""}
+                        onChange={(e) => setFormData({ ...formData, contractId: e.target.value })}
+                      >
+                        <option value="">Select Contract...</option>
+                        {contracts.map(c => <option key={c.id} value={c.id}>{c.title} ({c.contractNumber})</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Project Code</label>
+                      <input
+                        type="text"
+                        required
+                        disabled
+                        className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-xs text-on-surface-variant focus:outline-none"
+                        value={formData.code || ""}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Project Name</label>
+                      <input
+                        type="text"
+                        required
+                        className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary"
+                        value={formData.name || ""}
+                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                      />
+                    </div>
+                  </>
+                )}
+
+                {master === "sites" && (
+                  <>
+                    <div>
+                      <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Project</label>
+                      <select
+                        required
+                        className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary"
+                        value={formData.projectId || ""}
+                        onChange={(e) => setFormData({ ...formData, projectId: e.target.value })}
+                      >
+                        <option value="">Select Project...</option>
+                        {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Site Name</label>
+                      <input
+                        type="text"
+                        required
+                        className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary"
+                        value={formData.name || ""}
+                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                      />
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Latitude</label>
+                        <input
+                          type="number"
+                          step="0.000001"
+                          className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary"
+                          value={formData.lat || ""}
+                          onChange={(e) => setFormData({ ...formData, lat: e.target.value })}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Longitude</label>
+                        <input
+                          type="number"
+                          step="0.000001"
+                          className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary"
+                          value={formData.lng || ""}
+                          onChange={(e) => setFormData({ ...formData, lng: e.target.value })}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Radius (m)</label>
+                        <input
+                          type="number"
+                          className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary"
+                          value={formData.radiusMeters || "100"}
+                          onChange={(e) => setFormData({ ...formData, radiusMeters: e.target.value })}
+                        />
+                      </div>
+                    </div>
+                    <label className="flex items-center gap-2 text-xs text-on-surface cursor-pointer mt-2">
+                      <input
+                        type="checkbox"
+                        checked={!!formData.gatePassRequired}
+                        onChange={(e) => setFormData({ ...formData, gatePassRequired: e.target.checked })}
+                        className="rounded border-outline-variant text-primary focus:ring-primary"
+                      />
+                      <span>Gate Pass Required for Entry/Exit</span>
+                    </label>
+                  </>
+                )}
+
+                {master === "categories" && (
+                  <>
+                    <div>
+                      <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Code</label>
+                      <input
+                        type="text"
+                        required
+                        disabled
+                        className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-xs text-on-surface-variant focus:outline-none"
+                        value={formData.code || ""}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Category Name</label>
+                      <input
+                        type="text"
+                        required
+                        className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary"
+                        value={formData.name || ""}
+                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                      />
+                    </div>
+                    <div className="space-y-2 pt-2 border-t border-outline-variant/40">
+                      <label className="flex items-center gap-2 text-xs text-on-surface cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={!!formData.isBlueCollar}
+                          onChange={(e) => setFormData({ ...formData, isBlueCollar: e.target.checked })}
+                          className="rounded border-outline-variant text-primary focus:ring-primary"
+                        />
+                        <span>Blue Collar (Roster-based)</span>
+                      </label>
+                      <label className="flex items-center gap-2 text-xs text-on-surface cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={!!formData.isDeployableInRoster}
+                          onChange={(e) => setFormData({ ...formData, isDeployableInRoster: e.target.checked })}
+                          className="rounded border-outline-variant text-primary focus:ring-primary"
+                        />
+                        <span>Deployable in Roster</span>
+                      </label>
+                      <label className="flex items-center gap-2 text-xs text-on-surface cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={!!formData.canWorkOvertime}
+                          onChange={(e) => setFormData({ ...formData, canWorkOvertime: e.target.checked })}
+                          className="rounded border-outline-variant text-primary focus:ring-primary"
+                        />
+                        <span>Can Work Overtime</span>
+                      </label>
+                      <label className="flex items-center gap-2 text-xs text-on-surface cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={!!formData.requiresMoiLicense}
+                          onChange={(e) => setFormData({ ...formData, requiresMoiLicense: e.target.checked })}
+                          className="rounded border-outline-variant text-primary focus:ring-primary"
+                        />
+                        <span>Requires MOI Security Guard License</span>
+                      </label>
+                      <label className="flex items-center gap-2 text-xs text-on-surface cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={!!formData.requiresGatePassCheck}
+                          onChange={(e) => setFormData({ ...formData, requiresGatePassCheck: e.target.checked })}
+                          className="rounded border-outline-variant text-primary focus:ring-primary"
+                        />
+                        <span>Requires Gate Pass Check</span>
+                      </label>
+                    </div>
+                  </>
+                )}
+
+                {/* Add Status Option for Edits */}
+                <div className="pt-2 border-t border-outline-variant/40">
+                  <label className="flex items-center gap-2 text-xs text-on-surface cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={formData.isActive !== false}
+                      onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
+                      className="rounded border-outline-variant text-primary focus:ring-primary"
+                    />
+                    <span>Active Status</span>
+                  </label>
+                </div>
+              </div>
+              <div className="px-6 py-4 border-t border-outline-variant flex justify-end gap-3 bg-surface-container-low">
+                <button
+                  type="button"
+                  onClick={() => { setEditItem(null); setFormData({}); }}
+                  className="px-3 py-2 border border-outline-variant rounded-lg text-xs font-bold text-on-surface hover:bg-surface-container-high transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className={`px-3 py-2 text-white text-xs font-bold rounded-lg transition-colors ${
+                    isSecurity ? "bg-primary hover:bg-primary-container" : "bg-secondary hover:bg-secondary-container"
+                  }`}
+                >
+                  Save Changes
                 </button>
               </div>
             </form>

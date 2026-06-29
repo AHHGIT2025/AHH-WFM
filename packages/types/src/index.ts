@@ -50,6 +50,7 @@ export interface Employee {
   isLocked?: boolean;
   failedLoginAttempts?: number;
   mustChangePassword?: boolean;
+  selfServiceEnabled?: boolean;
   passwordUpdatedAt?: string;
   immediateSupervisorId?: string;
   reportingManagerId?: string;
@@ -95,6 +96,7 @@ export interface Employee {
   manpowerCategoryId?: string | null;
   manpowerCategory?: ManpowerCategory | null;
   userOperationAccess?: UserOperationAccess | null;
+  profilePhotoUpdatedAt?: string;
 }
 
 export interface Worksite {
@@ -623,6 +625,7 @@ export interface SystemRole {
   isActive: boolean;
   isEditable?: boolean;
   scope?: string;
+  roleType?: string;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -898,6 +901,9 @@ export interface ManpowerContract {
   endDate: string;
   operationType: OperationType;
   status: "DRAFT" | "ACTIVE" | "EXPIRED" | "TERMINATED" | string;
+  defaultManpowerCount?: number;
+  defaultRelieverCount?: number;
+  shiftDefinitions?: any;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -924,6 +930,9 @@ export interface ManpowerSite {
   radiusMeters: number;
   operationType: OperationType;
   isActive: boolean;
+  gatePassRequired: boolean;
+  gatePassValidationMode?: "WARNING" | "STRICT" | string;
+  clientApprovalRequired?: boolean;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -946,6 +955,11 @@ export interface ManpowerCategory {
   code: string;
   operationType: OperationType;
   isActive: boolean;
+  isBlueCollar: boolean;
+  isDeployableInRoster: boolean;
+  canWorkOvertime: boolean;
+  requiresMoiLicense: boolean;
+  requiresGatePassCheck: boolean;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -960,6 +974,10 @@ export interface ManpowerShiftRequirement {
   category?: ManpowerCategory;
   shiftCode: string;
   requiredCount: number;
+  requiredRelieverCount?: number;
+  shiftStartTime?: string | null;
+  shiftEndTime?: string | null;
+  dutyHours?: number | null;
   operationType: OperationType;
   isActive: boolean;
   createdAt?: string;
@@ -986,6 +1004,12 @@ export interface ManpowerDeploymentAssignment {
   employeeId: string;
   employee?: Employee;
   isReliever: boolean;
+  deploymentType?: "PERMANENT" | "TEMPORARY" | "EVENT" | "OVERTIME" | "RELIEVER" | "EMERGENCY_REPLACEMENT" | string;
+  isOvertime?: boolean;
+  overtimeReason?: string | null;
+  sourceType?: "FIXED_RELIEVER" | "SITE_RELIEVER" | "GENERAL_POOL" | "EMERGENCY" | "OJT" | "FOC" | string;
+  permanentDeploymentId?: string | null;
+  validationWarnings?: any;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -998,6 +1022,127 @@ export interface ManpowerRelieverAssignment {
   relieverEmployee?: Employee;
   reason?: string | null;
   status: "PENDING" | "APPROVED" | string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface SecurityLicense {
+  id: string;
+  employeeId: string;
+  employee?: Employee;
+  licenseType: string;
+  licenseNumber: string;
+  issueDate: string;
+  expiryDate: string;
+  status: "VALID" | "EXPIRING_SOON" | "EXPIRED" | "NOT_AVAILABLE" | string;
+  documentUrl?: string | null;
+  remarks?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface SecurityGatePass {
+  id: string;
+  employeeId: string;
+  employee?: Employee;
+  projectId: string;
+  project?: ManpowerProject;
+  siteId: string;
+  site?: ManpowerSite;
+  gatePassNumber: string;
+  issueDate: string;
+  expiryDate: string;
+  status: "VALID" | "EXPIRING_SOON" | "EXPIRED" | "PENDING" | "NOT_REQUIRED" | string;
+  documentUrl?: string | null;
+  remarks?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface SecurityProjectRelieverPool {
+  id: string;
+  projectId: string;
+  project?: ManpowerProject;
+  siteId?: string | null;
+  site?: ManpowerSite | null;
+  requiredRelieverCount: number;
+  categoryId: string;
+  category?: ManpowerCategory;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+  assignments?: SecurityProjectRelieverAssignment[];
+}
+
+export interface SecurityProjectRelieverAssignment {
+  id: string;
+  relieverPoolId: string;
+  relieverPool?: SecurityProjectRelieverPool;
+  employeeId: string;
+  employee?: Employee;
+  startDate: string;
+  endDate?: string | null;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface SecurityProjectCoordinatorAssignment {
+  id: string;
+  coordinatorEmployeeId: string;
+  coordinator?: Employee;
+  projectId: string;
+  project?: ManpowerProject;
+  siteId?: string | null;
+  site?: ManpowerSite | null;
+  startDate: string;
+  endDate?: string | null;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface SecuritySiteInspection {
+  id: string;
+  coordinatorEmployeeId: string;
+  coordinator?: Employee;
+  projectId: string;
+  project?: ManpowerProject;
+  siteId: string;
+  site?: ManpowerSite;
+  inspectionDate: string;
+  status: "COMPLETED" | "PENDING" | string;
+  remarks?: string | null;
+  followUpRequired: boolean;
+  followUpStatus: "NONE" | "PENDING" | "RESOLVED" | string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ManpowerContractMaterial {
+  id: string;
+  contractId: string;
+  contract?: ManpowerContract;
+  itemName: string;
+  quantity: number;
+  startDate: string;
+  endDate: string;
+  operationType: OperationType;
+  createdAt?: string;
+  updatedAt?: string;
+  allocations?: ManpowerProjectMaterialAllocation[];
+}
+
+export interface ManpowerProjectMaterialAllocation {
+  id: string;
+  materialId: string;
+  material?: ManpowerContractMaterial;
+  projectId: string;
+  project?: ManpowerProject;
+  quantity: number;
+  startDate: string;
+  endDate: string;
+  operationType: OperationType;
   createdAt?: string;
   updatedAt?: string;
 }

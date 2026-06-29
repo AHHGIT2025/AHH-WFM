@@ -1,14 +1,15 @@
 import { NextResponse } from "next/server";
 import { mockDb } from "@ahh-wfm/mock-data";
 import { checkApiAuth } from "@/lib/api-guards";
+import { hasPermission } from "@/lib/permissions";
 
 export async function GET() {
   const auth = await checkApiAuth();
   if (auth.error) return auth.error;
 
-  const isSuper = (auth.session?.user as any)?.role === "SUPER_ADMIN";
-  if (!isSuper && !checkApiAuth(["ADMIN"])) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const user = auth.session?.user as any;
+  if (!hasPermission(user, "users.view")) {
+    return NextResponse.json({ error: "Forbidden: Requires users.view permission" }, { status: 403 });
   }
 
   try {
