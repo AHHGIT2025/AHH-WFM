@@ -28,8 +28,8 @@ export async function POST(request: Request) {
 
   try {
     const data = await request.json();
-    if (!data.employeeId || !data.siteId || !data.passNumber || !data.issueDate || !data.expiryDate) {
-      return NextResponse.json({ error: "Missing required fields (employeeId, siteId, passNumber, issueDate, expiryDate)" }, { status: 400 });
+    if (!data.employeeId || !data.siteId || !data.issueDate || !data.expiryDate) {
+      return NextResponse.json({ error: "Missing required fields (employeeId, siteId, issueDate, expiryDate)" }, { status: 400 });
     }
     const created = await mockDb.createSecurityGatePass(data);
     return NextResponse.json(created);

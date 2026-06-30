@@ -24,6 +24,59 @@ export const isDbConnected = () => {
   return !!prismaClient;
 };
 
+export async function getNextSequenceCode(prefix: string): Promise<string> {
+  const tableMap: Record<string, { model: string; field: string; dbKey: string }> = {
+    "SC": { model: "manpowerClient", field: "code", dbKey: "manpowerClients" },
+    "SCON": { model: "manpowerContract", field: "contractNumber", dbKey: "manpowerContracts" },
+    "SPROJ": { model: "manpowerProject", field: "code", dbKey: "manpowerProjects" },
+    "SSITE": { model: "manpowerSite", field: "code", dbKey: "manpowerSites" },
+    "SLOC": { model: "manpowerLocationUnit", field: "code", dbKey: "manpowerLocationUnits" },
+    "SRP": { model: "securityProjectRelieverPool", field: "code", dbKey: "securityProjectRelieverPools" },
+    "SCA": { model: "securityProjectCoordinatorAssignment", field: "code", dbKey: "securityProjectCoordinatorAssignments" },
+    "SINSP": { model: "securitySiteInspection", field: "code", dbKey: "securitySiteInspections" },
+    "SLIC": { model: "securityLicense", field: "licenseNumber", dbKey: "securityLicenses" },
+    "SGP": { model: "securityGatePass", field: "gatePassNumber", dbKey: "securityGatePasses" },
+    "SMAT": { model: "manpowerProjectMaterialAllocation", field: "code", dbKey: "manpowerProjectMaterialAllocations" }
+  };
+
+  const config = tableMap[prefix];
+  if (!config) {
+    throw new Error(`Unknown prefix: ${prefix}`);
+  }
+
+  let existingCodes: string[] = [];
+
+  if (isDbConnected()) {
+    const modelDelegate = (prismaClient as any)[config.model];
+    if (modelDelegate) {
+      const records = await modelDelegate.findMany({
+        select: { [config.field]: true }
+      });
+      existingCodes = records.map((r: any) => r[config.field] as string).filter(Boolean);
+    }
+  } else {
+    const db = readDb();
+    const records = db[config.dbKey] || [];
+    existingCodes = records.map((r: any) => r[config.field] as string).filter(Boolean);
+  }
+
+  let maxSeq = 0;
+  const regex = new RegExp(`^${prefix}-(\\d+)$`);
+  for (const code of existingCodes) {
+    const match = code.match(regex);
+    if (match) {
+      const seq = parseInt(match[1], 10);
+      if (seq > maxSeq) {
+        maxSeq = seq;
+      }
+    }
+  }
+
+  const nextSeq = maxSeq + 1;
+  const padded = String(nextSeq).padStart(4, "0");
+  return `${prefix}-${padded}`;
+}
+
 // Helper utilities for Leave Calculations
 function isWeekend(date: Date): boolean {
   const day = date.getDay();
@@ -155,7 +208,9 @@ let memoryDb: {
   manpowerProjectMaterialAllocations: any[];
 } = {
   companies: [
-    { id: "COMP-001", companyCode: "AHH", companyName: "Al Hattab Holding", isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
+    { id: "COMP-001", companyCode: "AHH", companyName: "Al Hattab Holding", isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+    { id: "COMP-002", companyCode: "AHS", companyName: "Al Hattab Security", isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+    { id: "COMP-003", companyCode: "AHF", companyName: "Al Hattab Facility Management", isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
   ],
   departments: [
     { id: "DEPT-001", name: "Operations", companyId: "COMP-001", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
@@ -170,7 +225,12 @@ let memoryDb: {
     { id: "BR-8823", name: "Brandon Reed", department: "Logistics", departmentId: "DEPT-003", companyId: "COMP-001", designationId: "DES-001", employeeCategory: "BLUE_COLLAR", role: "EMPLOYEE", status: "On Duty", email: "brandon.r@alhattab.qa", phone: "+974 5555 9012", shiftId: "AFT-103", passwordHash: defaultHash, isActive: true, dateOfJoining: "2024-02-01T00:00:00Z", qidNumber: "29532400789", qidExpiryDate: "2025-08-30T00:00:00Z", passportNumber: "P-BR8823", passportIssueDate: "2024-02-01T00:00:00Z", passportExpiryDate: "2034-02-01T00:00:00Z", passportIssuingCountry: "United Kingdom", sponsor: "Al Hattab Logistics", hasAccommodation: true, hasItAssets: false },
     { id: "JL-8824", name: "Jordan Lee", department: "Sales", departmentId: "DEPT-004", companyId: "COMP-001", role: "EMPLOYEE", status: "Offline", email: "jordan.lee@alhattab.qa", phone: "+974 5555 3456", shiftId: "ROT-A", passwordHash: defaultHash, isActive: true, dateOfJoining: "2023-09-01T00:00:00Z", qidNumber: "29132400111", qidExpiryDate: "2027-01-10T00:00:00Z", passportNumber: "P-JL8824", passportIssueDate: "2023-09-01T00:00:00Z", passportExpiryDate: "2033-09-01T00:00:00Z", passportIssuingCountry: "United States", sponsor: "Al Hattab Holding", hasAccommodation: false, hasItAssets: true },
     { id: "AA-1001", name: "Ahmed Ali", department: "Operations", departmentId: "DEPT-001", companyId: "COMP-001", designationId: "DES-001", employeeCategory: "BLUE_COLLAR", role: "EMPLOYEE", status: "Offline", email: "ahmed.ali@alhattab.qa", phone: "+974 6666 1111", shiftId: "GEN-001", passwordHash: defaultHash, isActive: true, dateOfJoining: "2024-05-15T00:00:00Z", qidNumber: "29632400222", qidExpiryDate: "2026-06-25T00:00:00Z", passportNumber: "P-AA1001", passportIssueDate: "2024-05-15T00:00:00Z", passportExpiryDate: "2034-05-15T00:00:00Z", passportIssuingCountry: "Egypt", sponsor: "Al Hattab Contracting", hasAccommodation: true, hasItAssets: false },
-    { id: "AD-0001", name: "System Administrator", department: "IT", departmentId: "DEPT-005", companyId: "COMP-001", role: "ADMIN", status: "Offline", email: "admin@alhattab.qa", phone: "+974 0000 0000", shiftId: "GEN-001", passwordHash: defaultHash, isActive: true, dateOfJoining: "2020-01-01T00:00:00Z", qidNumber: "28032400000", qidExpiryDate: "2029-12-31T00:00:00Z", passportNumber: "P-AD0001", passportIssueDate: "2020-01-01T00:00:00Z", passportExpiryDate: "2030-01-01T00:00:00Z", passportIssuingCountry: "Qatar", sponsor: "Al Hattab Holding", hasAccommodation: false, hasItAssets: true }
+    { id: "AD-0001", name: "System Administrator", department: "IT", departmentId: "DEPT-005", companyId: "COMP-001", role: "ADMIN", status: "Offline", email: "admin@alhattab.qa", phone: "+974 0000 0000", shiftId: "GEN-001", passwordHash: defaultHash, isActive: true, dateOfJoining: "2020-01-01T00:00:00Z", qidNumber: "28032400000", qidExpiryDate: "2029-12-31T00:00:00Z", passportNumber: "P-AD0001", passportIssueDate: "2020-01-01T00:00:00Z", passportExpiryDate: "2030-01-01T00:00:00Z", passportIssuingCountry: "Qatar", sponsor: "Al Hattab Holding", hasAccommodation: false, hasItAssets: true },
+    { id: "SEC-1001", name: "Guard One", department: "Operations", departmentId: "DEPT-001", companyId: "COMP-002", manpowerCategoryId: "PM-CAT-SEC-02", operationType: "SECURITY_GUARDING", isActive: true, status: "Offline", role: "EMPLOYEE", employeeCategory: "BLUE_COLLAR", dutyStatus: "OFF_DUTY", email: "guard1@alhattabsecurity.qa", phone: "+974 7777 0001", dateOfJoining: "2024-01-01T00:00:00Z", qidNumber: "29032400001", qidExpiryDate: "2028-01-01T00:00:00Z", passportNumber: "P-SEC1001", passportIssueDate: "2024-01-01T00:00:00Z", passportExpiryDate: "2034-01-01T00:00:00Z", passportIssuingCountry: "India", sponsor: "Al Hattab Security", hasAccommodation: true, hasItAssets: false },
+    { id: "SEC-1002", name: "Guard Two", department: "Operations", departmentId: "DEPT-001", companyId: "COMP-002", manpowerCategoryId: "PM-CAT-SEC-02", operationType: "SECURITY_GUARDING", isActive: true, status: "Offline", role: "EMPLOYEE", employeeCategory: "BLUE_COLLAR", dutyStatus: "OFF_DUTY", email: "guard2@alhattabsecurity.qa", phone: "+974 7777 0002", dateOfJoining: "2024-01-01T00:00:00Z", qidNumber: "29032400002", qidExpiryDate: "2028-01-01T00:00:00Z", passportNumber: "P-SEC1002", passportIssueDate: "2024-01-01T00:00:00Z", passportExpiryDate: "2034-01-01T00:00:00Z", passportIssuingCountry: "Nepal", sponsor: "Al Hattab Security", hasAccommodation: true, hasItAssets: false },
+    { id: "SEC-1003", name: "CCTV Operator One", department: "Operations", departmentId: "DEPT-001", companyId: "COMP-002", manpowerCategoryId: "PM-CAT-SEC-02", operationType: "SECURITY_GUARDING", isActive: true, status: "Offline", role: "EMPLOYEE", employeeCategory: "BLUE_COLLAR", dutyStatus: "OFF_DUTY", email: "cctv1@alhattabsecurity.qa", phone: "+974 7777 0003", dateOfJoining: "2024-01-01T00:00:00Z", qidNumber: "29032400003", qidExpiryDate: "2028-01-01T00:00:00Z", passportNumber: "P-SEC1003", passportIssueDate: "2024-01-01T00:00:00Z", passportExpiryDate: "2034-01-01T00:00:00Z", passportIssuingCountry: "India", sponsor: "Al Hattab Security", hasAccommodation: true, hasItAssets: false },
+    { id: "SEC-WC-001", name: "Zaid Omar", department: "Operations", departmentId: "DEPT-001", companyId: "COMP-002", role: "EMPLOYEE", employeeCategory: "WHITE_COLLAR", isActive: true, email: "zaid@alhattabsecurity.qa", phone: "+974 7777 0004", dateOfJoining: "2024-01-01T00:00:00Z", qidNumber: "29032400004", qidExpiryDate: "2028-01-01T00:00:00Z", passportNumber: "P-SECWC01", passportIssueDate: "2024-01-01T00:00:00Z", passportExpiryDate: "2034-01-01T00:00:00Z", passportIssuingCountry: "Qatar", sponsor: "Al Hattab Security", hasAccommodation: false, hasItAssets: true },
+    { id: "SEC-WC-002", name: "Fatima Noor", department: "Operations", departmentId: "DEPT-001", companyId: "COMP-002", role: "EMPLOYEE", employeeCategory: "WHITE_COLLAR", isActive: true, email: "fatima@alhattabsecurity.qa", phone: "+974 7777 0005", dateOfJoining: "2024-01-01T00:00:00Z", qidNumber: "29032400005", qidExpiryDate: "2028-01-01T00:00:00Z", passportNumber: "P-SECWC02", passportIssueDate: "2024-01-01T00:00:00Z", passportExpiryDate: "2034-01-01T00:00:00Z", passportIssuingCountry: "Qatar", sponsor: "Al Hattab Security", hasAccommodation: false, hasItAssets: true }
   ],
   attendance: [
     { id: "ATT-001", employeeId: "AM-8821", employeeName: "Alex Martinez", checkIn: "2026-06-11T08:55:00Z", checkOut: "2026-06-11T18:02:00Z", originalCheckIn: "2026-06-11T08:55:00Z", originalCheckOut: "2026-06-11T18:02:00Z", lat: 25.2854, lng: 51.5310, device: "Galaxy S23 · 5G · GPS Active", status: "ON_TIME", locationName: "Doha Headquarters", lateMinutes: 0 },
@@ -1194,6 +1254,28 @@ export const readDb = (): typeof memoryDb & {
         if (lb.adjustmentDays === undefined || lb.adjustmentDays === null) { lb.adjustmentDays = 0; needsWrite = true; }
         if (lb.usedDays === undefined || lb.usedDays === null) { lb.usedDays = 0; needsWrite = true; }
         if (lb.pendingDays === undefined || lb.pendingDays === null) { lb.pendingDays = 0; needsWrite = true; }
+      }
+    }
+
+    // Ensure COMP-002 and COMP-003 companies are in parsed.companies
+    if (parsed.companies) {
+      const compIds = new Set(parsed.companies.map((c: any) => c.id));
+      for (const comp of memoryDb.companies) {
+        if (!compIds.has(comp.id)) {
+          parsed.companies.push(comp);
+          needsWrite = true;
+        }
+      }
+    }
+
+    // Ensure SEC-1001, SEC-1002, SEC-1003 are in parsed.employees
+    if (parsed.employees) {
+      const empIds = new Set(parsed.employees.map((e: any) => e.id));
+      for (const emp of memoryDb.employees) {
+        if (!empIds.has(emp.id)) {
+          parsed.employees.push(emp);
+          needsWrite = true;
+        }
       }
     }
 
@@ -8571,17 +8653,19 @@ export const mockDb = {
     return res;
   },
   createManpowerClient: async (data: any): Promise<any> => {
+    const code = data.code || await getNextSequenceCode("SC");
+    const dataWithCode = { ...data, code };
     if (isDbConnected()) {
-      const res = await prismaClient.manpowerClient.create({ data });
+      const res = await prismaClient.manpowerClient.create({ data: dataWithCode });
       return { ...res, createdAt: res.createdAt?.toISOString(), updatedAt: res.updatedAt?.toISOString() };
     }
     const db = readDb();
     const newRecord = {
-      id: data.id || `mc-${Date.now()}`,
-      name: data.name || "",
-      code: data.code || "",
-      operationType: data.operationType || "SECURITY_GUARDING",
-      isActive: data.isActive !== false,
+      id: dataWithCode.id || `mc-${Date.now()}`,
+      name: dataWithCode.name || "",
+      code: dataWithCode.code || "",
+      operationType: dataWithCode.operationType || "SECURITY_GUARDING",
+      isActive: dataWithCode.isActive !== false,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
@@ -8619,26 +8703,28 @@ export const mockDb = {
     }));
   },
   createManpowerContract: async (data: any): Promise<any> => {
+    const contractNumber = data.contractNumber || await getNextSequenceCode("SCON");
+    const dataWithCode = { ...data, contractNumber };
     if (isDbConnected()) {
       const res = await prismaClient.manpowerContract.create({
         data: {
-          ...data,
-          startDate: new Date(data.startDate),
-          endDate: new Date(data.endDate)
+          ...dataWithCode,
+          startDate: new Date(dataWithCode.startDate),
+          endDate: new Date(dataWithCode.endDate)
         }
       });
       return { ...res, createdAt: res.createdAt?.toISOString(), updatedAt: res.updatedAt?.toISOString() };
     }
     const db = readDb();
     const newRecord = {
-      id: data.id || `mcon-${Date.now()}`,
-      clientId: data.clientId || "",
-      contractNumber: data.contractNumber || "",
-      title: data.title || "",
-      startDate: data.startDate || new Date().toISOString(),
-      endDate: data.endDate || new Date().toISOString(),
-      operationType: data.operationType || "SECURITY_GUARDING",
-      status: data.status || "DRAFT",
+      id: dataWithCode.id || `mcon-${Date.now()}`,
+      clientId: dataWithCode.clientId || "",
+      contractNumber: dataWithCode.contractNumber || "",
+      title: dataWithCode.title || "",
+      startDate: dataWithCode.startDate || new Date().toISOString(),
+      endDate: dataWithCode.endDate || new Date().toISOString(),
+      operationType: dataWithCode.operationType || "SECURITY_GUARDING",
+      status: dataWithCode.status || "DRAFT",
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
@@ -8676,18 +8762,20 @@ export const mockDb = {
     });
   },
   createManpowerProject: async (data: any): Promise<any> => {
+    const code = data.code || await getNextSequenceCode("SPROJ");
+    const dataWithCode = { ...data, code };
     if (isDbConnected()) {
-      const res = await prismaClient.manpowerProject.create({ data });
+      const res = await prismaClient.manpowerProject.create({ data: dataWithCode });
       return { ...res, createdAt: res.createdAt?.toISOString(), updatedAt: res.updatedAt?.toISOString() };
     }
     const db = readDb();
     const newRecord = {
-      id: data.id || `mproj-${Date.now()}`,
-      contractId: data.contractId || "",
-      name: data.name || "",
-      code: data.code || "",
-      operationType: data.operationType || "SECURITY_GUARDING",
-      isActive: data.isActive !== false,
+      id: dataWithCode.id || `mproj-${Date.now()}`,
+      contractId: dataWithCode.contractId || "",
+      name: dataWithCode.name || "",
+      code: dataWithCode.code || "",
+      operationType: dataWithCode.operationType || "SECURITY_GUARDING",
+      isActive: dataWithCode.isActive !== false,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
@@ -8719,21 +8807,26 @@ export const mockDb = {
     }));
   },
   createManpowerSite: async (data: any): Promise<any> => {
+    const code = data.code || await getNextSequenceCode("SSITE");
+    const dataWithCode = { ...data, code };
     if (isDbConnected()) {
-      const res = await prismaClient.manpowerSite.create({ data });
+      const res = await prismaClient.manpowerSite.create({ data: dataWithCode });
       return { ...res, createdAt: res.createdAt?.toISOString(), updatedAt: res.updatedAt?.toISOString() };
     }
     const db = readDb();
     const newRecord = {
-      id: data.id || `msite-${Date.now()}`,
-      projectId: data.projectId || "",
-      name: data.name || "",
-      lat: data.lat !== undefined ? Number(data.lat) : null,
-      lng: data.lng !== undefined ? Number(data.lng) : null,
-      radiusMeters: data.radiusMeters !== undefined ? Number(data.radiusMeters) : 100.0,
-      operationType: data.operationType || "SECURITY_GUARDING",
-      gatePassRequired: !!data.gatePassRequired,
-      isActive: data.isActive !== false,
+      id: dataWithCode.id || `msite-${Date.now()}`,
+      projectId: dataWithCode.projectId || "",
+      name: dataWithCode.name || "",
+      code: dataWithCode.code || "",
+      lat: dataWithCode.lat !== undefined ? (dataWithCode.lat !== null ? Number(dataWithCode.lat) : null) : null,
+      lng: dataWithCode.lng !== undefined ? (dataWithCode.lng !== null ? Number(dataWithCode.lng) : null) : null,
+      radiusMeters: dataWithCode.radiusMeters !== undefined ? Number(dataWithCode.radiusMeters) : 100.0,
+      operationType: dataWithCode.operationType || "SECURITY_GUARDING",
+      gatePassRequired: !!dataWithCode.gatePassRequired,
+      gatePassValidationMode: dataWithCode.gatePassValidationMode || "WARNING",
+      remarks: dataWithCode.remarks || "",
+      isActive: dataWithCode.isActive !== false,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
@@ -8790,18 +8883,22 @@ export const mockDb = {
     }));
   },
   createManpowerLocationUnit: async (data: any): Promise<any> => {
+    const code = data.code || await getNextSequenceCode("SLOC");
+    const dataWithCode = { ...data, code };
     if (isDbConnected()) {
-      const res = await prismaClient.manpowerLocationUnit.create({ data });
+      const res = await prismaClient.manpowerLocationUnit.create({ data: dataWithCode });
       return { ...res, createdAt: res.createdAt?.toISOString(), updatedAt: res.updatedAt?.toISOString() };
     }
     const db = readDb();
     const newRecord = {
-      id: data.id || `mloc-${Date.now()}`,
-      siteId: data.siteId || "",
-      name: data.name || "",
-      type: data.type || "",
-      operationType: data.operationType || "SECURITY_GUARDING",
-      isActive: data.isActive !== false,
+      id: dataWithCode.id || `mloc-${Date.now()}`,
+      siteId: dataWithCode.siteId || "",
+      name: dataWithCode.name || "",
+      code: dataWithCode.code || "",
+      type: dataWithCode.type || "",
+      remarks: dataWithCode.remarks || "",
+      operationType: dataWithCode.operationType || "SECURITY_GUARDING",
+      isActive: dataWithCode.isActive !== false,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
@@ -9198,12 +9295,14 @@ export const mockDb = {
     }));
   },
   createSecurityLicense: async (data: any): Promise<any> => {
+    const licenseNumber = data.licenseNumber || await getNextSequenceCode("SLIC");
+    const dataWithCode = { ...data, licenseNumber };
     if (isDbConnected()) {
       const res = await prismaClient.securityLicense.create({
         data: {
-          ...data,
-          issueDate: new Date(data.issueDate),
-          expiryDate: new Date(data.expiryDate)
+          ...dataWithCode,
+          issueDate: new Date(dataWithCode.issueDate),
+          expiryDate: new Date(dataWithCode.expiryDate)
         }
       });
       return {
@@ -9216,8 +9315,8 @@ export const mockDb = {
     }
     const db = readDb();
     const newRecord = {
-      ...data,
-      id: data.id || `lic-${Date.now()}`,
+      ...dataWithCode,
+      id: dataWithCode.id || `lic-${Date.now()}`,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
@@ -9297,12 +9396,15 @@ export const mockDb = {
     }));
   },
   createSecurityGatePass: async (data: any): Promise<any> => {
+    const gatePassNumber = data.gatePassNumber || data.passNumber || await getNextSequenceCode("SGP");
+    const dataWithCode = { ...data, gatePassNumber };
+    delete (dataWithCode as any).passNumber; // delete compatibility field if present
     if (isDbConnected()) {
       const res = await prismaClient.securityGatePass.create({
         data: {
-          ...data,
-          issueDate: new Date(data.issueDate),
-          expiryDate: new Date(data.expiryDate)
+          ...dataWithCode,
+          issueDate: new Date(dataWithCode.issueDate),
+          expiryDate: new Date(dataWithCode.expiryDate)
         }
       });
       return {
@@ -9315,8 +9417,8 @@ export const mockDb = {
     }
     const db = readDb();
     const newRecord = {
-      ...data,
-      id: data.id || `gp-${Date.now()}`,
+      ...dataWithCode,
+      id: dataWithCode.id || `gp-${Date.now()}`,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
@@ -9403,8 +9505,10 @@ export const mockDb = {
     });
   },
   createSecurityProjectRelieverPool: async (data: any): Promise<any> => {
+    const code = data.code || await getNextSequenceCode("SRP");
+    const dataWithCode = { ...data, code };
     if (isDbConnected()) {
-      const res = await prismaClient.securityProjectRelieverPool.create({ data });
+      const res = await prismaClient.securityProjectRelieverPool.create({ data: dataWithCode });
       return {
         ...res,
         createdAt: res.createdAt?.toISOString(),
@@ -9413,9 +9517,9 @@ export const mockDb = {
     }
     const db = readDb();
     const newRecord = {
-      ...data,
-      id: data.id || `pool-${Date.now()}`,
-      isActive: data.isActive !== false,
+      ...dataWithCode,
+      id: dataWithCode.id || `pool-${Date.now()}`,
+      isActive: dataWithCode.isActive !== false,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
@@ -9573,8 +9677,10 @@ export const mockDb = {
     }));
   },
   createSecurityProjectCoordinatorAssignment: async (data: any): Promise<any> => {
+    const code = data.code || await getNextSequenceCode("SCA");
+    const dataWithCode = { ...data, code };
     if (isDbConnected()) {
-      const res = await prismaClient.securityProjectCoordinatorAssignment.create({ data });
+      const res = await prismaClient.securityProjectCoordinatorAssignment.create({ data: dataWithCode });
       return {
         ...res,
         createdAt: res.createdAt?.toISOString(),
@@ -9583,9 +9689,9 @@ export const mockDb = {
     }
     const db = readDb();
     const newRecord = {
-      ...data,
-      id: data.id || `coord-${Date.now()}`,
-      isActive: data.isActive !== false,
+      ...dataWithCode,
+      id: dataWithCode.id || `coord-${Date.now()}`,
+      isActive: dataWithCode.isActive !== false,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
@@ -9659,11 +9765,13 @@ export const mockDb = {
     }));
   },
   createSecuritySiteInspection: async (data: any): Promise<any> => {
+    const code = data.code || await getNextSequenceCode("SINSP");
+    const dataWithCode = { ...data, code };
     if (isDbConnected()) {
       const res = await prismaClient.securitySiteInspection.create({
         data: {
-          ...data,
-          inspectionDate: new Date(data.inspectionDate)
+          ...dataWithCode,
+          inspectionDate: new Date(dataWithCode.inspectionDate)
         }
       });
       return {
@@ -9675,8 +9783,8 @@ export const mockDb = {
     }
     const db = readDb();
     const newRecord = {
-      ...data,
-      id: data.id || `insp-${Date.now()}`,
+      ...dataWithCode,
+      id: dataWithCode.id || `insp-${Date.now()}`,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
@@ -9835,8 +9943,10 @@ export const mockDb = {
     }));
   },
   createManpowerProjectMaterialAllocation: async (data: any): Promise<any> => {
+    const code = data.code || await getNextSequenceCode("SMAT");
+    const dataWithCode = { ...data, code };
     if (isDbConnected()) {
-      const res = await prismaClient.manpowerProjectMaterialAllocation.create({ data });
+      const res = await prismaClient.manpowerProjectMaterialAllocation.create({ data: dataWithCode });
       return {
         ...res,
         createdAt: res.createdAt?.toISOString(),
@@ -9845,9 +9955,9 @@ export const mockDb = {
     }
     const db = readDb();
     const newRecord = {
-      ...data,
-      id: data.id || `alloc-${Date.now()}`,
-      isActive: data.isActive !== false,
+      ...dataWithCode,
+      id: dataWithCode.id || `alloc-${Date.now()}`,
+      isActive: dataWithCode.isActive !== false,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };

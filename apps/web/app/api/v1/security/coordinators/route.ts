@@ -37,3 +37,25 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: e.message || "Failed to create coordinator assignment" }, { status: 500 });
   }
 }
+
+export async function PATCH(request: Request) {
+  const auth = await checkApiAuth(undefined, {
+    requiredOperation: "SECURITY_GUARDING"
+  });
+  if (auth.error) return auth.error;
+
+  try {
+    const payload = await request.json();
+    if (!payload.id) {
+      return NextResponse.json({ error: "Assignment ID is required" }, { status: 400 });
+    }
+    const { id, ...updates } = payload;
+    const updated = await mockDb.updateSecurityProjectCoordinatorAssignment(id, updates);
+    if (!updated) {
+      return NextResponse.json({ error: "Coordinator assignment not found" }, { status: 404 });
+    }
+    return NextResponse.json(updated);
+  } catch (e: any) {
+    return NextResponse.json({ error: e.message || "Failed to update coordinator assignment" }, { status: 500 });
+  }
+}

@@ -393,28 +393,44 @@ export default function SecurityGuardingDashboard() {
             </div>
           </div>
 
-          {/* Quick Shortcuts */}
-          <h2 className="text-xs font-bold text-primary uppercase tracking-widest">Console Shortcuts</h2>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-            <Link href="/manpower/security-guarding/clients" className="bg-surface border border-outline-variant hover:border-primary/20 hover:shadow-sm p-3 rounded-xl flex items-center gap-3 transition-all">
-              <span className="material-symbols-outlined text-primary text-[20px]">handshake</span>
-              <span className="text-xs font-bold text-on-surface">Clients</span>
+          {/* Quick Actions & Console Shortcuts */}
+          <h2 className="text-xs font-bold text-primary uppercase tracking-widest">Dashboard Quick Actions</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
+            <Link href="/manpower/security-guarding/clients?add=true" className="bg-surface border border-outline-variant hover:border-primary/20 hover:shadow-md p-3 rounded-xl flex items-center gap-3 transition-all">
+              <span className="material-symbols-outlined text-primary text-[20px]">person_add</span>
+              <span className="text-xs font-bold text-on-surface">Add Client</span>
             </Link>
-            <Link href="/manpower/security-guarding/contracts" className="bg-surface border border-outline-variant hover:border-primary/20 hover:shadow-sm p-3 rounded-xl flex items-center gap-3 transition-all">
-              <span className="material-symbols-outlined text-primary text-[20px]">assignment</span>
-              <span className="text-xs font-bold text-on-surface">Contracts</span>
+            <Link href="/manpower/security-guarding/contracts?add=true" className="bg-surface border border-outline-variant hover:border-primary/20 hover:shadow-md p-3 rounded-xl flex items-center gap-3 transition-all">
+              <span className="material-symbols-outlined text-primary text-[20px]">note_add</span>
+              <span className="text-xs font-bold text-on-surface">Add Contract</span>
             </Link>
-            <Link href="/manpower/security-guarding/projects" className="bg-surface border border-outline-variant hover:border-primary/20 hover:shadow-sm p-3 rounded-xl flex items-center gap-3 transition-all">
-              <span className="material-symbols-outlined text-primary text-[20px]">business_center</span>
-              <span className="text-xs font-bold text-on-surface">Projects</span>
+            <Link href="/manpower/security-guarding/projects?add=true" className="bg-surface border border-outline-variant hover:border-primary/20 hover:shadow-md p-3 rounded-xl flex items-center gap-3 transition-all">
+              <span className="material-symbols-outlined text-primary text-[20px]">create_new_folder</span>
+              <span className="text-xs font-bold text-on-surface">Add Project</span>
             </Link>
-            <Link href="/manpower/security-guarding/manpower" className="bg-surface border border-outline-variant hover:border-primary/20 hover:shadow-sm p-3 rounded-xl flex items-center gap-3 transition-all">
-              <span className="material-symbols-outlined text-primary text-[20px]">shield</span>
-              <span className="text-xs font-bold text-on-surface">Manpower</span>
+            <Link href="/manpower/security-guarding/sites?add=true" className="bg-surface border border-outline-variant hover:border-primary/20 hover:shadow-md p-3 rounded-xl flex items-center gap-3 transition-all">
+              <span className="material-symbols-outlined text-primary text-[20px]">add_location_alt</span>
+              <span className="text-xs font-bold text-on-surface">Add Site</span>
             </Link>
-            <Link href="/manpower/security-guarding/shifts" className="bg-surface border border-outline-variant hover:border-primary/20 hover:shadow-sm p-3 rounded-xl flex items-center gap-3 transition-all">
-              <span className="material-symbols-outlined text-primary text-[20px]">schedule</span>
-              <span className="text-xs font-bold text-on-surface">Shift Requirements</span>
+            <Link href="/manpower/security-guarding/zones?add=true" className="bg-surface border border-outline-variant hover:border-primary/20 hover:shadow-md p-3 rounded-xl flex items-center gap-3 transition-all">
+              <span className="material-symbols-outlined text-primary text-[20px]">add_home</span>
+              <span className="text-xs font-bold text-on-surface">Add Gate/Post/Zone</span>
+            </Link>
+            <Link href="/manpower/security-guarding/manpower" className="bg-surface border border-outline-variant hover:border-primary/20 hover:shadow-md p-3 rounded-xl flex items-center gap-3 transition-all">
+              <span className="material-symbols-outlined text-primary text-[20px]">badge</span>
+              <span className="text-xs font-bold text-on-surface">Manpower Directory</span>
+            </Link>
+            <Link href="/manpower/security-guarding/deployment-calendar" className="bg-surface border border-outline-variant hover:border-primary/20 hover:shadow-md p-3 rounded-xl flex items-center gap-3 transition-all">
+              <span className="material-symbols-outlined text-primary text-[20px]">calendar_month</span>
+              <span className="text-xs font-bold text-on-surface">Open Shift Planner</span>
+            </Link>
+            <Link href="/manpower/security-guarding/reliever-pools" className="bg-surface border border-outline-variant hover:border-primary/20 hover:shadow-md p-3 rounded-xl flex items-center gap-3 transition-all">
+              <span className="material-symbols-outlined text-primary text-[20px]">groups</span>
+              <span className="text-xs font-bold text-on-surface">Open Reliever Pools</span>
+            </Link>
+            <Link href="/manpower/security-guarding/coordinators" className="bg-surface border border-outline-variant hover:border-primary/20 hover:shadow-md p-3 rounded-xl flex items-center gap-3 transition-all">
+              <span className="material-symbols-outlined text-primary text-[20px]">assignment_turned_in</span>
+              <span className="text-xs font-bold text-on-surface">Project Coordinators</span>
             </Link>
           </div>
         </>

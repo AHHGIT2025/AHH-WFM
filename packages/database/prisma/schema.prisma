@@ -1222,6 +1222,7 @@ model ManpowerProject {
 
 model ManpowerSite {
   id                     String                                 @id @default(uuid())
+  code                   String?                                @unique
   projectId              String
   project                ManpowerProject                        @relation(fields: [projectId], references: [id], onDelete: Cascade)
   name                   String
@@ -1233,6 +1234,7 @@ model ManpowerSite {
   gatePassRequired       Boolean                                @default(false)
   gatePassValidationMode String                                 @default("WARNING") // WARNING | STRICT
   clientApprovalRequired Boolean                                @default(false)
+  remarks                String?                                @db.Text
   createdAt              DateTime                               @default(now())
   updatedAt              DateTime                               @updatedAt
   locationUnits          ManpowerLocationUnit[]
@@ -1245,12 +1247,14 @@ model ManpowerSite {
 
 model ManpowerLocationUnit {
   id                String                     @id @default(uuid())
+  code              String?                    @unique
   siteId            String
   site              ManpowerSite               @relation(fields: [siteId], references: [id], onDelete: Cascade)
   name              String
   type              String                     // "GATE" | "POST" | "ZONE" | "AREA" | "FLOOR" | "BLOCK" | "CLEANING_ZONE"
   operationType     String                     // "SECURITY_GUARDING" | "FACILITY_MANAGEMENT"
   isActive          Boolean                    @default(true)
+  remarks           String?                    @db.Text
   createdAt         DateTime                   @default(now())
   updatedAt         DateTime                   @updatedAt
   shiftRequirements ManpowerShiftRequirement[]
@@ -1375,6 +1379,7 @@ model SecurityGatePass {
 
 model SecurityProjectRelieverPool {
   id                    String                              @id @default(uuid())
+  code                  String?                             @unique
   projectId             String
   project               ManpowerProject                     @relation(fields: [projectId], references: [id], onDelete: Cascade)
   siteId                String?
@@ -1403,6 +1408,7 @@ model SecurityProjectRelieverAssignment {
 
 model SecurityProjectCoordinatorAssignment {
   id                    String          @id @default(uuid())
+  code                  String?         @unique
   coordinatorEmployeeId String
   coordinator           Employee        @relation(fields: [coordinatorEmployeeId], references: [id], onDelete: Cascade)
   projectId             String
@@ -1418,6 +1424,7 @@ model SecurityProjectCoordinatorAssignment {
 
 model SecuritySiteInspection {
   id                    String          @id @default(uuid())
+  code                  String?         @unique
   coordinatorEmployeeId String
   coordinator           Employee        @relation(fields: [coordinatorEmployeeId], references: [id], onDelete: Cascade)
   projectId             String
@@ -1449,6 +1456,7 @@ model ManpowerContractMaterial {
 
 model ManpowerProjectMaterialAllocation {
   id            String                     @id @default(uuid())
+  code          String?                    @unique
   materialId    String
   material      ManpowerContractMaterial   @relation(fields: [materialId], references: [id], onDelete: Cascade)
   projectId     String

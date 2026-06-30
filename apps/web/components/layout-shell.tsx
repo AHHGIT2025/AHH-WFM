@@ -36,7 +36,46 @@ export const LayoutShell: React.FC<{ children: React.ReactNode }> = ({ children 
   const pathname = usePathname();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const { data: session, status } = useSession();
-  const activeNavItems = filterNavigationByPermissions(session?.user as any, navItems);
+  const isSecurityGuarding = pathname.startsWith("/manpower/security-guarding");
+  const isFacilityManagement = pathname.startsWith("/manpower/facility-management");
+
+  let currentNavItems = navItems;
+  let sidebarTitle = "WFM Control Suite";
+  let sidebarSubtitle = "SuccessFactors Sync Hub";
+
+  if (isSecurityGuarding) {
+    currentNavItems = [
+      { label: "← Back to Main Menu", path: "/manpower", icon: "arrow_back" },
+      { label: "Security Dashboard", path: "/manpower/security-guarding/dashboard", icon: "dashboard" },
+      { label: "Clients", path: "/manpower/security-guarding/clients", icon: "handshake" },
+      { label: "Contracts", path: "/manpower/security-guarding/contracts", icon: "description" },
+      { label: "Projects", path: "/manpower/security-guarding/projects", icon: "business_center" },
+      { label: "Sites", path: "/manpower/security-guarding/sites", icon: "pin_drop" },
+      { label: "Gates / Posts / Zones", path: "/manpower/security-guarding/zones", icon: "door_sliding" },
+      { label: "Manpower Directory", path: "/manpower/security-guarding/manpower", icon: "badge" },
+      { label: "Shift Planner", path: "/manpower/security-guarding/deployment-calendar", icon: "calendar_month" },
+      { label: "Reliever Pools", path: "/manpower/security-guarding/reliever-pools", icon: "groups" },
+      { label: "Project Coordinators", path: "/manpower/security-guarding/coordinators", icon: "assignment_turned_in" }
+    ];
+    sidebarTitle = "Security Guarding";
+    sidebarSubtitle = "Operations & Compliance";
+  } else if (isFacilityManagement) {
+    currentNavItems = [
+      { label: "← Back to Main Menu", path: "/manpower", icon: "arrow_back" },
+      { label: "FM Dashboard", path: "/manpower/facility-management/dashboard", icon: "dashboard" },
+      { label: "Clients", path: "/manpower/facility-management/clients", icon: "handshake" },
+      { label: "Contracts", path: "/manpower/facility-management/contracts", icon: "description" },
+      { label: "Projects", path: "/manpower/facility-management/projects", icon: "business_center" },
+      { label: "Sites", path: "/manpower/facility-management/sites", icon: "pin_drop" },
+      { label: "Facility Areas", path: "/manpower/facility-management/areas", icon: "location_city" },
+      { label: "Manpower Directory", path: "/manpower/facility-management/manpower", icon: "badge" },
+      { label: "Shift Planner", path: "/manpower/facility-management/deployment-calendar", icon: "calendar_month" }
+    ];
+    sidebarTitle = "Facility Management";
+    sidebarSubtitle = "Operations & Services";
+  }
+
+  const activeNavItems = filterNavigationByPermissions(session?.user as any, currentNavItems);
   const [profile, setProfile] = useState<any>(null);
 
   const fetchProfile = async () => {
@@ -181,8 +220,8 @@ export const LayoutShell: React.FC<{ children: React.ReactNode }> = ({ children 
         {/* Desktop Sidebar Navigation */}
         <aside className="bg-primary fixed left-0 top-16 h-[calc(100vh-4rem)] w-64 border-r border-border-subtle py-6 flex flex-col gap-2 z-40 hidden md:flex text-on-primary">
           <div className="px-6 mb-6">
-            <p className="text-xs font-bold text-secondary-container uppercase tracking-widest">WFM Control Suite</p>
-            <p className="text-[10px] text-outline-variant opacity-70">SuccessFactors Sync Hub</p>
+            <p className="text-xs font-bold text-secondary-container uppercase tracking-widest">{sidebarTitle}</p>
+            <p className="text-[10px] text-outline-variant opacity-70">{sidebarSubtitle}</p>
           </div>
           <nav className="flex-1 px-3 space-y-1">
             {activeNavItems.map((item) => {
@@ -229,8 +268,8 @@ export const LayoutShell: React.FC<{ children: React.ReactNode }> = ({ children 
             <aside className="relative bg-primary w-64 h-full py-6 flex flex-col gap-2 text-on-primary z-10 shadow-2xl">
               <div className="px-6 mb-6 flex justify-between items-center">
                 <div>
-                  <p className="text-xs font-bold text-secondary-container uppercase tracking-widest">WFM Control Suite</p>
-                  <p className="text-[10px] text-outline-variant opacity-70">Mobile Drawer</p>
+                  <p className="text-xs font-bold text-secondary-container uppercase tracking-widest">{sidebarTitle}</p>
+                  <p className="text-[10px] text-outline-variant opacity-70">{isSecurityGuarding ? "Operations & Compliance" : isFacilityManagement ? "Operations & Services" : "Mobile Drawer"}</p>
                 </div>
                 <button
                   onClick={() => setIsSidebarOpen(false)}

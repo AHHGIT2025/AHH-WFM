@@ -7,6 +7,22 @@
       "isActive": true,
       "createdAt": "2026-06-16T06:07:32.167Z",
       "updatedAt": "2026-06-16T06:07:32.168Z"
+    },
+    {
+      "id": "COMP-002",
+      "companyCode": "AHS",
+      "companyName": "Al Hattab Security",
+      "isActive": true,
+      "createdAt": "2026-06-29T13:10:35.101Z",
+      "updatedAt": "2026-06-29T13:10:35.101Z"
+    },
+    {
+      "id": "COMP-003",
+      "companyCode": "AHF",
+      "companyName": "Al Hattab Facility Management",
+      "isActive": true,
+      "createdAt": "2026-06-29T13:10:35.101Z",
+      "updatedAt": "2026-06-29T13:10:35.101Z"
     }
   ],
   "departments": [
@@ -82,7 +98,8 @@
       "username": "sarah.kim@alhattab.qa",
       "deactivatedAt": "2026-06-16T06:07:48.848Z",
       "mustChangePassword": false,
-      "operationType": "WHITE_COLLAR"
+      "operationType": "WHITE_COLLAR",
+      "ssoRequired": false
     },
     {
       "id": "AM-8821",
@@ -117,7 +134,9 @@
       "isLoginEnabled": true,
       "usernameStrategy": "MANUAL",
       "username": "alex.m@alhattab.qa",
-      "operationType": "WHITE_COLLAR"
+      "operationType": "WHITE_COLLAR",
+      "ssoRequired": false,
+      "mustChangePassword": false
     },
     {
       "id": "BR-8823",
@@ -152,7 +171,9 @@
       "isLoginEnabled": true,
       "usernameStrategy": "MANUAL",
       "username": "BR-8823",
-      "operationType": "WHITE_COLLAR"
+      "operationType": "WHITE_COLLAR",
+      "ssoRequired": false,
+      "mustChangePassword": false
     },
     {
       "id": "JL-8824",
@@ -186,7 +207,9 @@
       "usernameStrategy": "MANUAL",
       "employeeCategory": "WHITE_COLLAR",
       "username": "jordan.lee@alhattab.qa",
-      "operationType": "WHITE_COLLAR"
+      "operationType": "WHITE_COLLAR",
+      "ssoRequired": false,
+      "mustChangePassword": false
     },
     {
       "id": "AA-1001",
@@ -221,7 +244,9 @@
       "isLoginEnabled": true,
       "usernameStrategy": "MANUAL",
       "username": "AA-1001",
-      "operationType": "WHITE_COLLAR"
+      "operationType": "WHITE_COLLAR",
+      "ssoRequired": false,
+      "mustChangePassword": false
     },
     {
       "id": "AD-0001",
@@ -255,7 +280,90 @@
       "usernameStrategy": "MANUAL",
       "employeeCategory": "WHITE_COLLAR",
       "username": "admin@alhattab.qa",
-      "operationType": "WHITE_COLLAR"
+      "operationType": "WHITE_COLLAR",
+      "ssoRequired": false,
+      "mustChangePassword": false
+    },
+    {
+      "id": "SEC-1001",
+      "name": "Guard One",
+      "department": "Operations",
+      "departmentId": "DEPT-001",
+      "companyId": "COMP-002",
+      "manpowerCategoryId": "PM-CAT-SEC-02",
+      "operationType": "SECURITY_GUARDING",
+      "isActive": true,
+      "status": "Offline",
+      "role": "EMPLOYEE",
+      "employeeCategory": "BLUE_COLLAR",
+      "dutyStatus": "OFF_DUTY",
+      "email": "guard1@alhattabsecurity.qa",
+      "phone": "+974 7777 0001",
+      "dateOfJoining": "2024-01-01T00:00:00Z",
+      "qidNumber": "29032400001",
+      "qidExpiryDate": "2028-01-01T00:00:00Z",
+      "passportNumber": "P-SEC1001",
+      "passportIssueDate": "2024-01-01T00:00:00Z",
+      "passportExpiryDate": "2034-01-01T00:00:00Z",
+      "passportIssuingCountry": "India",
+      "sponsor": "Al Hattab Security",
+      "hasAccommodation": true,
+      "hasItAssets": false,
+      "employmentStatus": "ACTIVE"
+    },
+    {
+      "id": "SEC-1002",
+      "name": "Guard Two",
+      "department": "Operations",
+      "departmentId": "DEPT-001",
+      "companyId": "COMP-002",
+      "manpowerCategoryId": "PM-CAT-SEC-02",
+      "operationType": "SECURITY_GUARDING",
+      "isActive": true,
+      "status": "Offline",
+      "role": "EMPLOYEE",
+      "employeeCategory": "BLUE_COLLAR",
+      "dutyStatus": "OFF_DUTY",
+      "email": "guard2@alhattabsecurity.qa",
+      "phone": "+974 7777 0002",
+      "dateOfJoining": "2024-01-01T00:00:00Z",
+      "qidNumber": "29032400002",
+      "qidExpiryDate": "2028-01-01T00:00:00Z",
+      "passportNumber": "P-SEC1002",
+      "passportIssueDate": "2024-01-01T00:00:00Z",
+      "passportExpiryDate": "2034-01-01T00:00:00Z",
+      "passportIssuingCountry": "Nepal",
+      "sponsor": "Al Hattab Security",
+      "hasAccommodation": true,
+      "hasItAssets": false,
+      "employmentStatus": "ACTIVE"
+    },
+    {
+      "id": "SEC-1003",
+      "name": "CCTV Operator One",
+      "department": "Operations",
+      "departmentId": "DEPT-001",
+      "companyId": "COMP-002",
+      "manpowerCategoryId": "PM-CAT-SEC-01",
+      "operationType": "SECURITY_GUARDING",
+      "isActive": true,
+      "status": "Offline",
+      "role": "EMPLOYEE",
+      "employeeCategory": "BLUE_COLLAR",
+      "dutyStatus": "OFF_DUTY",
+      "email": "cctv1@alhattabsecurity.qa",
+      "phone": "+974 7777 0003",
+      "dateOfJoining": "2024-01-01T00:00:00Z",
+      "qidNumber": "29032400003",
+      "qidExpiryDate": "2028-01-01T00:00:00Z",
+      "passportNumber": "P-SEC1003",
+      "passportIssueDate": "2024-01-01T00:00:00Z",
+      "passportExpiryDate": "2034-01-01T00:00:00Z",
+      "passportIssuingCountry": "India",
+      "sponsor": "Al Hattab Security",
+      "hasAccommodation": true,
+      "hasItAssets": false,
+      "employmentStatus": "ACTIVE"
     }
   ],
   "attendance": [
@@ -467,7 +575,11 @@
       "carryForward": true,
       "maxCarryOver": 5,
       "expiryMonths": 12,
-      "colorCode": "#0058be"
+      "colorCode": "#0058be",
+      "description": "",
+      "isPaid": true,
+      "requiresDocument": false,
+      "genderRestriction": "ALL"
     },
     {
       "id": "LTYPE-SICK",
@@ -478,7 +590,11 @@
       "carryForward": false,
       "maxCarryOver": 0,
       "expiryMonths": 0,
-      "colorCode": "#ea4335"
+      "colorCode": "#ea4335",
+      "description": "",
+      "isPaid": true,
+      "requiresDocument": false,
+      "genderRestriction": "ALL"
     },
     {
       "id": "LTYPE-EMERGENCY",
@@ -489,7 +605,11 @@
       "carryForward": false,
       "maxCarryOver": 0,
       "expiryMonths": 0,
-      "colorCode": "#fbbc05"
+      "colorCode": "#fbbc05",
+      "description": "",
+      "isPaid": true,
+      "requiresDocument": false,
+      "genderRestriction": "ALL"
     },
     {
       "id": "LTYPE-UNPAID",
@@ -500,7 +620,11 @@
       "carryForward": false,
       "maxCarryOver": 0,
       "expiryMonths": 0,
-      "colorCode": "#70757a"
+      "colorCode": "#70757a",
+      "description": "",
+      "isPaid": true,
+      "requiresDocument": false,
+      "genderRestriction": "ALL"
     },
     {
       "id": "LTYPE-BUSINESS",
@@ -511,7 +635,11 @@
       "carryForward": false,
       "maxCarryOver": 0,
       "expiryMonths": 0,
-      "colorCode": "#34a853"
+      "colorCode": "#34a853",
+      "description": "",
+      "isPaid": true,
+      "requiresDocument": false,
+      "genderRestriction": "ALL"
     }
   ],
   "holidays": [
@@ -552,7 +680,10 @@
       "allocatedDays": 22,
       "usedDays": 0,
       "pendingDays": 0,
-      "carriedOver": 0
+      "carriedOver": 0,
+      "year": 2026,
+      "carriedForwardDays": 0,
+      "adjustmentDays": 0
     },
     {
       "id": "BAL-SICK-SK-90210",
@@ -561,7 +692,10 @@
       "allocatedDays": 15,
       "usedDays": 0,
       "pendingDays": 0,
-      "carriedOver": 0
+      "carriedOver": 0,
+      "year": 2026,
+      "carriedForwardDays": 0,
+      "adjustmentDays": 0
     },
     {
       "id": "BAL-ANNUAL-AM-8821",
@@ -570,7 +704,10 @@
       "allocatedDays": 22,
       "usedDays": 0,
       "pendingDays": 0,
-      "carriedOver": 0
+      "carriedOver": 0,
+      "year": 2026,
+      "carriedForwardDays": 0,
+      "adjustmentDays": 0
     },
     {
       "id": "BAL-SICK-AM-8821",
@@ -579,7 +716,10 @@
       "allocatedDays": 15,
       "usedDays": 0,
       "pendingDays": 0,
-      "carriedOver": 0
+      "carriedOver": 0,
+      "year": 2026,
+      "carriedForwardDays": 0,
+      "adjustmentDays": 0
     },
     {
       "id": "BAL-ANNUAL-BR-8823",
@@ -588,7 +728,10 @@
       "allocatedDays": 22,
       "usedDays": 0,
       "pendingDays": 0,
-      "carriedOver": 0
+      "carriedOver": 0,
+      "year": 2026,
+      "carriedForwardDays": 0,
+      "adjustmentDays": 0
     },
     {
       "id": "BAL-SICK-BR-8823",
@@ -597,7 +740,10 @@
       "allocatedDays": 15,
       "usedDays": 0,
       "pendingDays": 0,
-      "carriedOver": 0
+      "carriedOver": 0,
+      "year": 2026,
+      "carriedForwardDays": 0,
+      "adjustmentDays": 0
     },
     {
       "id": "BAL-ANNUAL-JL-8824",
@@ -606,7 +752,10 @@
       "allocatedDays": 22,
       "usedDays": 0,
       "pendingDays": 0,
-      "carriedOver": 0
+      "carriedOver": 0,
+      "year": 2026,
+      "carriedForwardDays": 0,
+      "adjustmentDays": 0
     },
     {
       "id": "BAL-SICK-JL-8824",
@@ -615,7 +764,10 @@
       "allocatedDays": 15,
       "usedDays": 0,
       "pendingDays": 0,
-      "carriedOver": 0
+      "carriedOver": 0,
+      "year": 2026,
+      "carriedForwardDays": 0,
+      "adjustmentDays": 0
     },
     {
       "id": "BAL-ANNUAL-AA-1001",
@@ -624,7 +776,10 @@
       "allocatedDays": 22,
       "usedDays": 0,
       "pendingDays": 0,
-      "carriedOver": 0
+      "carriedOver": 0,
+      "year": 2026,
+      "carriedForwardDays": 0,
+      "adjustmentDays": 0
     },
     {
       "id": "BAL-SICK-AA-1001",
@@ -633,7 +788,10 @@
       "allocatedDays": 15,
       "usedDays": 0,
       "pendingDays": 0,
-      "carriedOver": 0
+      "carriedOver": 0,
+      "year": 2026,
+      "carriedForwardDays": 0,
+      "adjustmentDays": 0
     },
     {
       "id": "BAL-ANNUAL-AD-0001",
@@ -642,7 +800,10 @@
       "allocatedDays": 22,
       "usedDays": 0,
       "pendingDays": 0,
-      "carriedOver": 0
+      "carriedOver": 0,
+      "year": 2026,
+      "carriedForwardDays": 0,
+      "adjustmentDays": 0
     },
     {
       "id": "BAL-SICK-AD-0001",
@@ -651,7 +812,10 @@
       "allocatedDays": 15,
       "usedDays": 0,
       "pendingDays": 0,
-      "carriedOver": 0
+      "carriedOver": 0,
+      "year": 2026,
+      "carriedForwardDays": 0,
+      "adjustmentDays": 0
     },
     {
       "id": "BAL-1781590052281",
@@ -1597,5 +1761,13 @@
   "manpowerDeployments": [],
   "manpowerDeploymentAssignments": [],
   "manpowerRelieverAssignments": [],
-  "userOperationAccesses": []
+  "userOperationAccesses": [],
+  "securityLicenses": [],
+  "securityGatePasses": [],
+  "securityProjectRelieverPools": [],
+  "securityProjectRelieverAssignments": [],
+  "securityProjectCoordinatorAssignments": [],
+  "securitySiteInspections": [],
+  "manpowerContractMaterials": [],
+  "manpowerProjectMaterialAllocations": []
 }

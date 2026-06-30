@@ -27,8 +27,8 @@ export async function POST(request: Request) {
 
   try {
     const data = await request.json();
-    if (!data.employeeId || !data.licenseNumber || !data.issueDate || !data.expiryDate) {
-      return NextResponse.json({ error: "Missing required fields (employeeId, licenseNumber, issueDate, expiryDate)" }, { status: 400 });
+    if (!data.employeeId || !data.issueDate || !data.expiryDate) {
+      return NextResponse.json({ error: "Missing required fields (employeeId, issueDate, expiryDate)" }, { status: 400 });
     }
     const created = await mockDb.createSecurityLicense(data);
     return NextResponse.json(created);
