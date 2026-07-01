@@ -19,18 +19,42 @@ export async function GET(request: Request) {
     const licenseStatus = url.searchParams.get("licenseStatus") || undefined; // "VALID" | "EXPIRED" | "MISSING"
     const gatePassStatus = url.searchParams.get("gatePassStatus") || undefined; // "VALID" | "EXPIRED" | "MISSING"
 
-    let employees = await mockDb.getEmployees();
+    const normalizeCategory = (cat?: string) => {
+      if (!cat) return "";
+      return cat.trim().toUpperCase().replace(/[\s_-]+/g, "_");
+    };
 
-    // 1. Enforce strict filters for Al Hattab Security, SECURITY_GUARDING operation, and BLUE_COLLAR category only
-    employees = employees.filter(e => 
-      e.companyId === "COMP-002" && 
-      e.operationType === "SECURITY_GUARDING" &&
-      e.employeeCategory === "BLUE_COLLAR"
-    );
+    const normalizeCompanyCode = (code?: string) => {
+      if (!code) return "";
+      return code.trim().toUpperCase();
+    };
+
+    let allEmployees = await mockDb.getEmployees();
+
+    // Debugging counters
+    const totalFetched = allEmployees.length;
+    const hs01Count = allEmployees.filter(e => normalizeCompanyCode(e.company?.companyCode || (e as any).companyCode) === "HS01").length;
+    const hs01BlueCollarActiveCount = allEmployees.filter(e => 
+      normalizeCompanyCode(e.company?.companyCode || (e as any).companyCode) === "HS01" &&
+      normalizeCategory(e.employeeCategory) === "BLUE_COLLAR" &&
+      (e.isActive === true || e.status === "Active" || e.employmentStatus === "ACTIVE")
+    ).length;
+
+    console.log(`[Security Manpower API GET] Total fetched: ${totalFetched}, HS01: ${hs01Count}, HS01 Blue Collar Active: ${hs01BlueCollarActiveCount}`);
+
+    let employees = allEmployees.filter(e => {
+      const compCode = normalizeCompanyCode(e.company?.companyCode || (e as any).companyCode);
+      const category = normalizeCategory(e.employeeCategory);
+      
+      const isSecCompany = compCode === "HS01";
+      const isBlueCollar = category === "BLUE_COLLAR";
+      
+      return isSecCompany && isBlueCollar;
+    });
 
     // 2. Filter by isActive
     if (!includeInactive) {
-      employees = employees.filter(e => e.isActive === true);
+      employees = employees.filter(e => e.isActive === true || e.status === "Active" || e.employmentStatus === "ACTIVE");
     }
 
     // 3. Filter by category

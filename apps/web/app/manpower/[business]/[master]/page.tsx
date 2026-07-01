@@ -89,14 +89,21 @@ export default function ManpowerMasterPage() {
     ? `/api/v1/security/coordinators`
     : `/api/v1/manpower/${business}/${master === "areas" ? "areas" : master === "zones" ? "zones" : master}`;
 
+  const [includeInactive, setIncludeInactive] = useState(false);
+
   async function loadData() {
     if (!canView) return;
     setLoading(true);
     try {
-      const res = await fetch(apiBase);
+      const url = new URL(apiBase, window.location.origin);
+      if (master === "manpower" && includeInactive) {
+        url.searchParams.set("includeInactive", "true");
+      }
+      const res = await fetch(url.toString());
       if (res.ok) {
         const json = await res.json();
         setData(json);
+        console.log(`[Debug Master Page] Fetched manpower count: ${json.length}`);
       }
     } catch (e) {
       console.error("Failed to load master data", e);
@@ -178,7 +185,7 @@ export default function ManpowerMasterPage() {
       loadData();
       loadRelations();
     }
-  }, [business, master, session]);
+  }, [business, master, session, includeInactive]);
 
   // Support redirecting reliever-pools to manpower directory tab
   useEffect(() => {
@@ -225,6 +232,32 @@ export default function ManpowerMasterPage() {
       </div>
     );
   }
+
+  const handleSyncOperationType = async (employee: any) => {
+    const targetCategory = employee.manpowerCategoryId || (isSecurity ? "PM-CAT-SEC-02" : "PM-CAT-FM-01");
+    if (!confirm(`Are you sure you want to sync operation type for ${employee.name} (${employee.id})?`)) return;
+    try {
+      const res = await fetch(`/api/v1/manpower/${business}/manpower`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: employee.id,
+          manpowerCategoryId: targetCategory
+        })
+      });
+      if (res.ok) {
+        alert("Operation type synchronized successfully!");
+        loadData();
+        loadRelations();
+      } else {
+        const err = await res.json();
+        alert(err.error || "Failed to sync operation type");
+      }
+    } catch (e) {
+      console.error(e);
+      alert("An error occurred during synchronization");
+    }
+  };
 
   const handleAddSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -875,6 +908,8 @@ export default function ManpowerMasterPage() {
                   return;
                 }
               }
+              setFormData(master === "manpower" ? { mode: "promote", isActive: true } : {});
+              setFormError("");
               setShowAddModal(true);
             }}
             className={`px-3 py-2 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-2 ${
@@ -919,17 +954,73 @@ export default function ManpowerMasterPage() {
       )}
 
       {/* Filter Toolbar */}
-      <div className="bg-surface border border-outline-variant p-4 rounded-xl shadow-sm mb-6 flex gap-4">
-        <div className="flex-1 relative">
-          <span className="material-symbols-outlined absolute left-3 top-2.5 text-on-surface-variant text-[18px]">search</span>
-          <input
-            type="text"
-            placeholder={`Search ${masterLabel}...`}
-            className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg pl-9 pr-4 py-2 text-xs text-on-surface focus:outline-none focus:border-primary"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
+      <div className="bg-surface border border-outline-variant p-4 rounded-xl shadow-sm mb-6 flex flex-col gap-3">
+        <div className="flex gap-4 items-center">
+          <div className="flex-1 relative">
+            <span className="material-symbols-outlined absolute left-3 top-2.5 text-on-surface-variant text-[18px]">search</span>
+            <input
+              type="text"
+              placeholder={`Search ${masterLabel}...`}
+              className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg pl-9 pr-4 py-2 text-xs text-on-surface focus:outline-none focus:border-primary"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
+          {master === "manpower" && activeSubTab === "directory" && (
+            <label className="flex items-center gap-1.5 text-xs text-on-surface cursor-pointer select-none whitespace-nowrap font-bold">
+              <input
+                type="checkbox"
+                checked={includeInactive}
+                onChange={(e) => setIncludeInactive(e.target.checked)}
+                className="rounded border-outline-variant text-primary focus:ring-primary"
+              />
+              <span>Include Inactive</span>
+            </label>
+          )}
         </div>
+
+        {master === "manpower" && activeSubTab === "directory" && (
+          <div className="flex flex-wrap gap-2 pt-2 border-t border-outline-variant/40 items-center">
+            <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider mr-1">Enforced Filters:</span>
+            {isSecurity ? (
+              <>
+                <span className="inline-flex items-center px-2 py-1 rounded-md text-[10px] font-medium bg-primary/10 text-primary border border-primary/20">
+                  Company: AHH Security Services
+                </span>
+                <span className="inline-flex items-center px-2 py-1 rounded-md text-[10px] font-medium bg-primary/10 text-primary border border-primary/20">
+                  Code: HS01
+                </span>
+                <span className="inline-flex items-center px-2 py-1 rounded-md text-[10px] font-medium bg-primary/10 text-primary border border-primary/20">
+                  Category: Blue Collar
+                </span>
+                <span className="inline-flex items-center px-2 py-1 rounded-md text-[10px] font-medium bg-primary/10 text-primary border border-primary/20">
+                  Status: Active
+                </span>
+                <span className="inline-flex items-center px-2 py-1 rounded-md text-[10px] font-medium bg-primary/10 text-primary border border-primary/20">
+                  Source: Workforce Directory
+                </span>
+              </>
+            ) : (
+              <>
+                <span className="inline-flex items-center px-2 py-1 rounded-md text-[10px] font-medium bg-secondary/10 text-secondary border border-secondary/20">
+                  Company: Touch Cleaning & Hospitality
+                </span>
+                <span className="inline-flex items-center px-2 py-1 rounded-md text-[10px] font-medium bg-secondary/10 text-secondary border border-secondary/20">
+                  Code: TC01
+                </span>
+                <span className="inline-flex items-center px-2 py-1 rounded-md text-[10px] font-medium bg-secondary/10 text-secondary border border-secondary/20">
+                  Category: Blue Collar
+                </span>
+                <span className="inline-flex items-center px-2 py-1 rounded-md text-[10px] font-medium bg-secondary/10 text-secondary border border-secondary/20">
+                  Status: Active
+                </span>
+                <span className="inline-flex items-center px-2 py-1 rounded-md text-[10px] font-medium bg-secondary/10 text-secondary border border-secondary/20">
+                  Source: Workforce Directory
+                </span>
+              </>
+            )}
+          </div>
+        )}
       </div>
       {/* Roster Grid / Projects Panel split */}
       <div className="flex gap-6 flex-1 min-h-0">
@@ -1012,6 +1103,7 @@ export default function ManpowerMasterPage() {
                         <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Email</th>
                         <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Category</th>
                         <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Duty Status</th>
+                        <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider text-right">Actions / Status</th>
                       </>
                     )}
                     {master === "shifts" && (
@@ -1180,6 +1272,28 @@ export default function ManpowerMasterPage() {
                             <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${item.dutyStatus === "ON_DUTY" ? "bg-status-success/15 text-status-success" : "bg-status-error/15 text-status-error"}`}>
                               {item.dutyStatus || "OFF_DUTY"}
                             </span>
+                          </td>
+                          <td className="px-4 py-3 text-xs text-right">
+                            {item.operationType !== (isSecurity ? "SECURITY_GUARDING" : "FACILITY_MANAGEMENT") ? (
+                              <div className="flex items-center justify-end gap-2">
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-status-warning/15 text-status-warning border border-status-warning/20 animate-pulse">
+                                  Operation Type Needs Sync
+                                </span>
+                                {canManage && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleSyncOperationType(item);
+                                    }}
+                                    className="bg-primary hover:bg-primary-hover text-on-primary text-[10px] font-bold px-2 py-1 rounded transition-colors"
+                                  >
+                                    Sync
+                                  </button>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-[10px] text-status-success font-bold">Synced</span>
+                            )}
                           </td>
                         </>
                       )}
@@ -1630,113 +1744,96 @@ export default function ManpowerMasterPage() {
 
                 {master === "manpower" && (
                   <>
-                    {isSecurity ? (
-                      <>
-                        <div className="flex gap-4 p-2 bg-surface-container-low rounded-lg border border-outline-variant/60 mb-3">
-                          <label className="flex items-center gap-1.5 text-xs text-on-surface cursor-pointer font-bold">
-                            <input
-                              type="radio"
-                              name="manpowerMode"
-                              value="promote"
-                              checked={formData.mode !== "create"}
-                              onChange={() => {
-                                setFormData({ mode: "promote", isActive: true });
-                              }}
-                              className="text-primary focus:ring-primary"
-                            />
-                            <span>Promote Existing Employee</span>
-                          </label>
-                          <label className="flex items-center gap-1.5 text-xs text-on-surface cursor-pointer font-bold">
-                            <input
-                              type="radio"
-                              name="manpowerMode"
-                              value="create"
-                              checked={formData.mode === "create"}
-                              onChange={() => {
-                                setFormData({ mode: "create", isActive: true });
-                              }}
-                              className="text-primary focus:ring-primary"
-                            />
-                            <span>Create New Employee</span>
-                          </label>
-                        </div>
+                    <div className="flex gap-4 p-2 bg-surface-container-low rounded-lg border border-outline-variant/60 mb-3">
+                      <label className="flex items-center gap-1.5 text-xs text-on-surface cursor-pointer font-bold">
+                        <input
+                          type="radio"
+                          name="manpowerMode"
+                          value="promote"
+                          checked={formData.mode !== "create"}
+                          onChange={() => {
+                            setFormData({ mode: "promote", isActive: true });
+                          }}
+                          className="text-primary focus:ring-primary"
+                        />
+                        <span>Promote Existing Employee</span>
+                      </label>
+                      <label className="flex items-center gap-1.5 text-xs text-on-surface cursor-pointer font-bold">
+                        <input
+                          type="radio"
+                          name="manpowerMode"
+                          value="create"
+                          checked={formData.mode === "create"}
+                          onChange={() => {
+                            setFormData({ mode: "create", isActive: true });
+                          }}
+                          className="text-primary focus:ring-primary"
+                        />
+                        <span>Create New Employee</span>
+                      </label>
+                    </div>
 
-                        {formData.mode !== "create" ? (
-                          <div className="space-y-3">
-                            <div>
-                              <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Select Employee to Promote</label>
-                              <select
-                                required
-                                className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
-                                value={formData.id || ""}
-                                onChange={(e) => {
-                                  const emp = workforceEmployees.find(emp => emp.id === e.target.value);
-                                  if (emp) {
-                                    setFormData({
-                                      ...formData,
-                                      id: emp.id,
-                                      name: emp.name,
-                                      email: emp.email,
-                                      mode: "promote"
-                                    });
-                                  } else {
-                                    setFormData({ ...formData, id: "", name: "", email: "", mode: "promote" });
-                                  }
-                                }}
-                              >
-                                <option value="">-- Choose Employee --</option>
-                                {workforceEmployees
-                                  .filter(emp => emp.companyId === "COMP-002" && emp.isActive === true && emp.operationType !== "SECURITY_GUARDING")
-                                  .map(emp => (
-                                    <option key={emp.id} value={emp.id}>{emp.name} ({emp.id})</option>
-                                  ))
-                                }
-                              </select>
-                            </div>
-                            {formData.id && (
-                              <div className="p-3 bg-surface-container-low rounded-lg border border-outline-variant/60 space-y-1 text-xs text-on-surface-variant">
-                                <p><span className="font-bold text-on-surface">ID:</span> {formData.id}</p>
-                                <p><span className="font-bold text-on-surface">Name:</span> {formData.name}</p>
-                                <p><span className="font-bold text-on-surface">Email:</span> {formData.email}</p>
-                              </div>
-                            )}
+                    {formData.mode !== "create" ? (
+                      <div className="space-y-3">
+                        <div>
+                          <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Select Employee to Promote</label>
+                          <select
+                            required
+                            className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                            value={formData.id || ""}
+                            onChange={(e) => {
+                              const emp = workforceEmployees.find(emp => emp.id === e.target.value);
+                              if (emp) {
+                                setFormData({
+                                  ...formData,
+                                  id: emp.id,
+                                  name: emp.name,
+                                  email: emp.email,
+                                  mode: "promote"
+                                });
+                              } else {
+                                setFormData({ ...formData, id: "", name: "", email: "", mode: "promote" });
+                              }
+                            }}
+                          >
+                            <option value="">-- Choose Employee --</option>
+                            {workforceEmployees
+                              .filter(emp => {
+                                const normalizeCategory = (cat?: string) => {
+                                  if (!cat) return "";
+                                  return cat.trim().toUpperCase().replace(/[\s_-]+/g, "_");
+                                };
+                                const normalizeCompanyCode = (code?: string) => {
+                                  if (!code) return "";
+                                  return code.trim().toUpperCase();
+                                };
+                                
+                                const empCompanyCode = normalizeCompanyCode(emp.company?.companyCode || emp.companyCode);
+                                const empCategory = normalizeCategory(emp.employeeCategory);
+                                const targetCompanyCode = isSecurity ? "HS01" : "TC01";
+                                const targetOperationType = isSecurity ? "SECURITY_GUARDING" : "FACILITY_MANAGEMENT";
+
+                                return (
+                                  empCompanyCode === targetCompanyCode &&
+                                  empCategory === "BLUE_COLLAR" &&
+                                  (emp.isActive === true || emp.status === "Active" || emp.employmentStatus === "ACTIVE") &&
+                                  emp.operationType !== targetOperationType
+                                );
+                              })
+                              .map(emp => (
+                                <option key={emp.id} value={emp.id}>{emp.name} ({emp.id})</option>
+                              ))
+                            }
+                          </select>
+                        </div>
+                        {formData.id && (
+                          <div className="p-3 bg-surface-container-low rounded-lg border border-outline-variant/60 space-y-1 text-xs text-on-surface-variant">
+                            <p><span className="font-bold text-on-surface">ID:</span> {formData.id}</p>
+                            <p><span className="font-bold text-on-surface">Name:</span> {formData.name}</p>
+                            <p><span className="font-bold text-on-surface">Email:</span> {formData.email}</p>
                           </div>
-                        ) : (
-                          <>
-                            <div>
-                              <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Employee ID</label>
-                              <input
-                                type="text"
-                                required
-                                placeholder="e.g. SEC-001"
-                                className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
-                                value={formData.id || ""}
-                                onChange={(e) => setFormData({ ...formData, id: e.target.value.toUpperCase() })}
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Display Name</label>
-                              <input
-                                type="text"
-                                required
-                                className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
-                                value={formData.name || ""}
-                                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Email</label>
-                              <input
-                                type="email"
-                                required
-                                className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
-                                value={formData.email || ""}
-                                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                              />
-                            </div>
-                          </>
                         )}
-                      </>
+                      </div>
                     ) : (
                       <>
                         <div>
@@ -1744,7 +1841,7 @@ export default function ManpowerMasterPage() {
                           <input
                             type="text"
                             required
-                            placeholder="e.g. FM-001"
+                            placeholder={`e.g. ${isSecurity ? "SEC" : "FM"}-001`}
                             className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
                             value={formData.id || ""}
                             onChange={(e) => setFormData({ ...formData, id: e.target.value.toUpperCase() })}
