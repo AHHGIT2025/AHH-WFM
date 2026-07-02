@@ -9125,13 +9125,11 @@ export const mockDb = {
     const totalMaterialValue = materialReqs.reduce((sum: number, mat: any) => sum + (mat.lineTotal || 0), 0);
     const totalContractValue = totalManpowerValue + totalMaterialValue;
 
-    const dbData = {
-      clientId: data.clientId,
+    const dbData: any = {
       title: data.title,
       startDate,
       endDate,
       status: data.status,
-      remarks: data.remarks,
       operationType: data.operationType,
       defaultManpowerCount: data.defaultManpowerCount || 0,
       defaultRelieverCount: data.defaultRelieverCount || 0,
@@ -9142,112 +9140,122 @@ export const mockDb = {
       totalMaterialValue,
       totalContractValue
     };
-    if (isDbConnected()) {
-      await prismaClient.manpowerContract.update({
-        where: { id },
-        data: dbData
-      });
-      if (data.manpowerRequirements !== undefined) {
-        await prismaClient.contractManpowerRequirement.deleteMany({ where: { contractId: id } });
-        if (manpowerReqs.length > 0) {
-          await Promise.all(manpowerReqs.map((mr: any) => prismaClient.contractManpowerRequirement.create({
-            data: {
-              contractId: id,
-              position: mr.position,
-              quantity: mr.quantity,
-              deploymentType: mr.deploymentType,
-              unitPrice: mr.unitPrice,
-              billingFrequency: mr.billingFrequency,
-              billingPeriodCount: mr.billingPeriodCount,
-              isFoc: mr.isFoc,
-              lineTotal: mr.lineTotal,
-              remarks: mr.remarks
-            }
-          })));
-        }
-      }
-      if (data.relieverRequirements !== undefined) {
-        await prismaClient.contractRelieverRequirement.deleteMany({ where: { contractId: id } });
-        if (relieverReqs.length > 0) {
-          await Promise.all(relieverReqs.map((rr: any) => prismaClient.contractRelieverRequirement.create({
-            data: {
-              contractId: id,
-              position: rr.position,
-              quantity: rr.quantity,
-              sourcePreference: rr.sourcePreference,
-              remarks: rr.remarks
-            }
-          })));
-        }
-      }
-      if (data.shiftRequirements !== undefined) {
-        await prismaClient.contractShiftRequirement.deleteMany({ where: { contractId: id } });
-        if (shiftReqs.length > 0) {
-          await Promise.all(shiftReqs.map((sr: any) => prismaClient.contractShiftRequirement.create({
-            data: {
-              contractId: id,
-              shiftName: sr.shiftName,
-              startTime: sr.startTime,
-              endTime: sr.endTime,
-              postsCovered: sr.postsCovered,
-              daysPattern: sr.daysPattern,
-              remarks: sr.remarks
-            }
-          })));
-        }
-      }
-      if (data.materials !== undefined) {
-        await prismaClient.manpowerContractMaterial.deleteMany({ where: { contractId: id } });
-        if (materialReqs.length > 0) {
-          await Promise.all(materialReqs.map((mat: any) => prismaClient.manpowerContractMaterial.create({
-            data: {
-              contractId: id,
-              materialId: mat.materialId,
-              itemName: mat.itemName,
-              quantity: mat.quantity,
-              unitPrice: mat.unitPrice,
-              isFoc: mat.isFoc,
-              lineTotal: mat.lineTotal,
-              remarks: mat.remarks,
-              startDate: startDate || new Date(),
-              endDate: endDate || new Date(),
-              operationType
-            }
-          })));
-        }
-      }
-      const res = await prismaClient.manpowerContract.findUnique({
-        where: { id },
-        include: {
-          client: true,
-          manpowerRequirements: true,
-          relieverRequirements: true,
-          shiftRequirements: true,
-          addendums: true,
-          materials: true
-        }
-      });
-      if (!res) return null;
-      const mr = res.manpowerRequirements || [];
-      const rr = res.relieverRequirements || [];
-      const sr = res.shiftRequirements || [];
-      const materials = res.materials || [];
-      return {
-        ...res,
-        createdAt: res.createdAt?.toISOString(),
-        updatedAt: res.updatedAt?.toISOString(),
-        startDate: res.startDate?.toISOString(),
-        endDate: res.endDate?.toISOString(),
-        manpowerLineCount: mr.length,
-        totalManpower: mr.reduce((sum: number, x: any) => sum + (x.quantity || 0), 0),
-        relieverRequired: rr.length > 0 ? "Yes" : "No",
-        totalRelievers: rr.reduce((sum: number, x: any) => sum + (x.quantity || 0), 0),
-        shiftLineCount: sr.length,
-        materials,
-        totalManpowerValue,
-        totalMaterialValue,
-        totalContractValue
+    if (data.clientId) {
+      dbData.client = {
+        connect: { id: data.clientId }
       };
+    }
+    if (isDbConnected()) {
+      try {
+        await prismaClient.manpowerContract.update({
+          where: { id },
+          data: dbData
+        });
+        if (data.manpowerRequirements !== undefined) {
+          await prismaClient.contractManpowerRequirement.deleteMany({ where: { contractId: id } });
+          if (manpowerReqs.length > 0) {
+            await Promise.all(manpowerReqs.map((mr: any) => prismaClient.contractManpowerRequirement.create({
+              data: {
+                contractId: id,
+                position: mr.position,
+                quantity: mr.quantity,
+                deploymentType: mr.deploymentType,
+                unitPrice: mr.unitPrice,
+                billingFrequency: mr.billingFrequency,
+                billingPeriodCount: mr.billingPeriodCount,
+                isFoc: mr.isFoc,
+                lineTotal: mr.lineTotal,
+                remarks: mr.remarks
+              }
+            })));
+          }
+        }
+        if (data.relieverRequirements !== undefined) {
+          await prismaClient.contractRelieverRequirement.deleteMany({ where: { contractId: id } });
+          if (relieverReqs.length > 0) {
+            await Promise.all(relieverReqs.map((rr: any) => prismaClient.contractRelieverRequirement.create({
+              data: {
+                contractId: id,
+                position: rr.position,
+                quantity: rr.quantity,
+                sourcePreference: rr.sourcePreference,
+                remarks: rr.remarks
+              }
+            })));
+          }
+        }
+        if (data.shiftRequirements !== undefined) {
+          await prismaClient.contractShiftRequirement.deleteMany({ where: { contractId: id } });
+          if (shiftReqs.length > 0) {
+            await Promise.all(shiftReqs.map((sr: any) => prismaClient.contractShiftRequirement.create({
+              data: {
+                contractId: id,
+                shiftName: sr.shiftName,
+                startTime: sr.startTime,
+                endTime: sr.endTime,
+                postsCovered: sr.postsCovered,
+                daysPattern: sr.daysPattern,
+                remarks: sr.remarks
+              }
+            })));
+          }
+        }
+        if (data.materials !== undefined) {
+          await prismaClient.manpowerContractMaterial.deleteMany({ where: { contractId: id } });
+          if (materialReqs.length > 0) {
+            await Promise.all(materialReqs.map((mat: any) => prismaClient.manpowerContractMaterial.create({
+              data: {
+                contractId: id,
+                materialId: mat.materialId,
+                itemName: mat.itemName,
+                quantity: mat.quantity,
+                unitPrice: mat.unitPrice,
+                isFoc: mat.isFoc,
+                lineTotal: mat.lineTotal,
+                remarks: mat.remarks,
+                startDate: startDate || new Date(),
+                endDate: endDate || new Date(),
+                operationType
+              }
+            })));
+          }
+        }
+        const res = await prismaClient.manpowerContract.findUnique({
+          where: { id },
+          include: {
+            client: true,
+            manpowerRequirements: true,
+            relieverRequirements: true,
+            shiftRequirements: true,
+            addendums: true,
+            materials: true
+          }
+        });
+        if (!res) return null;
+        const mr = res.manpowerRequirements || [];
+        const rr = res.relieverRequirements || [];
+        const sr = res.shiftRequirements || [];
+        const materials = res.materials || [];
+        return {
+          ...res,
+          createdAt: res.createdAt?.toISOString(),
+          updatedAt: res.updatedAt?.toISOString(),
+          startDate: res.startDate?.toISOString(),
+          endDate: res.endDate?.toISOString(),
+          manpowerLineCount: mr.length,
+          totalManpower: mr.reduce((sum: number, x: any) => sum + (x.quantity || 0), 0),
+          relieverRequired: rr.length > 0 ? "Yes" : "No",
+          totalRelievers: rr.reduce((sum: number, x: any) => sum + (x.quantity || 0), 0),
+          shiftLineCount: sr.length,
+          materials,
+          totalManpowerValue,
+          totalMaterialValue,
+          totalContractValue
+        };
+      } catch (error: any) {
+        console.error("updateManpowerContract database error:", error);
+        throw error;
+      }
     }
     const db = readDb();
     const idx = (db.manpowerContracts || []).findIndex((c: any) => c.id === id);

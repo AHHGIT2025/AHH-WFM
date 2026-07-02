@@ -37,6 +37,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
     const contract = await mockDb.updateManpowerContract(params.id, payload);
     return NextResponse.json(contract);
   } catch (error: any) {
+    console.error("PUT API Route Error for Security Guarding:", error);
     return NextResponse.json(
       { error: "Contract save failed", details: String(error) },
       { status: 500 }
