@@ -9046,39 +9046,98 @@ export const mockDb = {
     });
   },
   updateManpowerContract: async (id: string, data: any): Promise<any> => {
-    const manpowerReqs = data.manpowerRequirements || [];
-    const materialReqs = data.materials || [];
+    const operationType = data.operationType || "SECURITY_GUARDING";
 
-    const totalManpowerValue = manpowerReqs.reduce((sum: number, mr: any) => {
-      if (mr.isFoc === true || mr.isFoc === "Yes") return sum;
-      const qty = parseInt(mr.quantity, 10) || 0;
-      const price = parseFloat(mr.unitPrice) || 0;
-      const count = parseInt(mr.billingPeriodCount, 10) || 1;
-      return sum + (qty * price * count);
-    }, 0);
+    // Normalize dates
+    const startDate = data.startDate ? new Date(data.startDate) : undefined;
+    const endDate = data.endDate ? new Date(data.endDate) : undefined;
+    let totalDurationDays = undefined;
+    if (startDate && endDate && !isNaN(startDate.getTime()) && !isNaN(endDate.getTime())) {
+      const diffTime = endDate.getTime() - startDate.getTime();
+      totalDurationDays = diffTime >= 0 ? Math.round(diffTime / (1000 * 60 * 60 * 24)) + 1 : 0;
+    }
 
-    const totalMaterialValue = materialReqs.reduce((sum: number, mat: any) => {
-      if (mat.isFoc === true || mat.isFoc === "Yes") return sum;
-      const qty = parseInt(mat.quantity, 10) || 0;
-      const price = parseFloat(mat.unitPrice) || 0;
-      return sum + (qty * price);
-    }, 0);
+    const durationNumber = data.durationNumber !== undefined && data.durationNumber !== "" && data.durationNumber !== null ? parseInt(data.durationNumber, 10) : null;
+    const durationUnit = data.durationUnit !== undefined ? data.durationUnit : undefined;
 
+    // Normalize manpowerRequirements
+    const manpowerReqs = (data.manpowerRequirements || []).map((mr: any) => {
+      const quantity = parseInt(mr.quantity, 10) || 0;
+      const unitPrice = mr.unitPrice !== undefined && mr.unitPrice !== "" && mr.unitPrice !== null ? parseFloat(mr.unitPrice) : null;
+      const billingPeriodCount = mr.billingPeriodCount !== undefined && mr.billingPeriodCount !== "" && mr.billingPeriodCount !== null ? parseInt(mr.billingPeriodCount, 10) : 1;
+      const isFoc = mr.isFoc === true || mr.isFoc === "Yes";
+      const lineTotal = isFoc ? 0 : quantity * (unitPrice || 0) * billingPeriodCount;
+      return {
+        ...mr,
+        position: mr.position || "Staff",
+        quantity,
+        deploymentType: mr.deploymentType || "Permanent",
+        unitPrice,
+        billingFrequency: mr.billingFrequency || "Monthly",
+        billingPeriodCount,
+        isFoc,
+        lineTotal,
+        remarks: mr.remarks || ""
+      };
+    });
+
+    // Normalize materials
+    const materialReqs = (data.materials || []).map((mat: any) => {
+      const quantity = parseInt(mat.quantity, 10) || 0;
+      const unitPrice = mat.unitPrice !== undefined && mat.unitPrice !== "" && mat.unitPrice !== null ? parseFloat(mat.unitPrice) : null;
+      const isFoc = mat.isFoc === true || mat.isFoc === "Yes";
+      const lineTotal = isFoc ? 0 : quantity * (unitPrice || 0);
+      const materialId = mat.materialId && mat.materialId !== "" ? mat.materialId : null;
+      return {
+        ...mat,
+        materialId,
+        itemName: mat.itemName || mat.materialName || "Material",
+        quantity,
+        unitPrice,
+        isFoc,
+        lineTotal,
+        remarks: mat.remarks || ""
+      };
+    });
+
+    // Normalize relieverRequirements
+    const relieverReqs = (data.relieverRequirements || []).map((rr: any) => ({
+      ...rr,
+      position: rr.position || "Staff",
+      quantity: parseInt(rr.quantity, 10) || 0,
+      sourcePreference: rr.sourcePreference || "General Pool",
+      remarks: rr.remarks || ""
+    }));
+
+    // Normalize shiftRequirements
+    const shiftReqs = (data.shiftRequirements || []).map((sr: any) => ({
+      ...sr,
+      shiftName: sr.shiftName || "Default",
+      startTime: sr.startTime || "00:00",
+      endTime: sr.endTime || "00:00",
+      postsCovered: parseInt(sr.postsCovered, 10) || 0,
+      daysPattern: sr.daysPattern || "Daily",
+      remarks: sr.remarks || ""
+    }));
+
+    // Calculate totals
+    const totalManpowerValue = manpowerReqs.reduce((sum: number, mr: any) => sum + (mr.lineTotal || 0), 0);
+    const totalMaterialValue = materialReqs.reduce((sum: number, mat: any) => sum + (mat.lineTotal || 0), 0);
     const totalContractValue = totalManpowerValue + totalMaterialValue;
 
     const dbData = {
       clientId: data.clientId,
       title: data.title,
-      startDate: data.startDate ? new Date(data.startDate) : undefined,
-      endDate: data.endDate ? new Date(data.endDate) : undefined,
+      startDate,
+      endDate,
       status: data.status,
       remarks: data.remarks,
       operationType: data.operationType,
       defaultManpowerCount: data.defaultManpowerCount || 0,
       defaultRelieverCount: data.defaultRelieverCount || 0,
-      durationNumber: data.durationNumber !== undefined ? (data.durationNumber !== null ? parseInt(data.durationNumber, 10) : null) : undefined,
-      durationUnit: data.durationUnit !== undefined ? data.durationUnit : undefined,
-      totalDurationDays: data.totalDurationDays !== undefined ? (data.totalDurationDays !== null ? parseInt(data.totalDurationDays, 10) : null) : undefined,
+      durationNumber: data.durationNumber !== undefined ? durationNumber : undefined,
+      durationUnit,
+      totalDurationDays: totalDurationDays !== undefined ? totalDurationDays : undefined,
       totalManpowerValue,
       totalMaterialValue,
       totalContractValue
@@ -9090,69 +9149,69 @@ export const mockDb = {
       });
       if (data.manpowerRequirements !== undefined) {
         await prismaClient.contractManpowerRequirement.deleteMany({ where: { contractId: id } });
-        if (data.manpowerRequirements && data.manpowerRequirements.length > 0) {
-          await Promise.all(data.manpowerRequirements.map((mr: any) => prismaClient.contractManpowerRequirement.create({
+        if (manpowerReqs.length > 0) {
+          await Promise.all(manpowerReqs.map((mr: any) => prismaClient.contractManpowerRequirement.create({
             data: {
               contractId: id,
               position: mr.position,
-              quantity: parseInt(mr.quantity, 10) || 0,
+              quantity: mr.quantity,
               deploymentType: mr.deploymentType,
-              unitPrice: mr.unitPrice !== undefined ? parseFloat(mr.unitPrice) : null,
-              billingFrequency: mr.billingFrequency || null,
-              billingPeriodCount: mr.billingPeriodCount !== undefined ? parseInt(mr.billingPeriodCount, 10) : null,
-              isFoc: mr.isFoc === true || mr.isFoc === "Yes",
-              lineTotal: (mr.isFoc === true || mr.isFoc === "Yes") ? 0 : (parseInt(mr.quantity, 10) || 0) * (parseFloat(mr.unitPrice) || 0) * (parseInt(mr.billingPeriodCount, 10) || 1),
-              remarks: mr.remarks || ""
+              unitPrice: mr.unitPrice,
+              billingFrequency: mr.billingFrequency,
+              billingPeriodCount: mr.billingPeriodCount,
+              isFoc: mr.isFoc,
+              lineTotal: mr.lineTotal,
+              remarks: mr.remarks
             }
           })));
         }
       }
       if (data.relieverRequirements !== undefined) {
         await prismaClient.contractRelieverRequirement.deleteMany({ where: { contractId: id } });
-        if (data.relieverRequirements && data.relieverRequirements.length > 0) {
-          await Promise.all(data.relieverRequirements.map((rr: any) => prismaClient.contractRelieverRequirement.create({
+        if (relieverReqs.length > 0) {
+          await Promise.all(relieverReqs.map((rr: any) => prismaClient.contractRelieverRequirement.create({
             data: {
               contractId: id,
               position: rr.position,
-              quantity: parseInt(rr.quantity, 10) || 0,
+              quantity: rr.quantity,
               sourcePreference: rr.sourcePreference,
-              remarks: rr.remarks || ""
+              remarks: rr.remarks
             }
           })));
         }
       }
       if (data.shiftRequirements !== undefined) {
         await prismaClient.contractShiftRequirement.deleteMany({ where: { contractId: id } });
-        if (data.shiftRequirements && data.shiftRequirements.length > 0) {
-          await Promise.all(data.shiftRequirements.map((sr: any) => prismaClient.contractShiftRequirement.create({
+        if (shiftReqs.length > 0) {
+          await Promise.all(shiftReqs.map((sr: any) => prismaClient.contractShiftRequirement.create({
             data: {
               contractId: id,
               shiftName: sr.shiftName,
               startTime: sr.startTime,
               endTime: sr.endTime,
-              postsCovered: parseInt(sr.postsCovered, 10) || 0,
+              postsCovered: sr.postsCovered,
               daysPattern: sr.daysPattern,
-              remarks: sr.remarks || ""
+              remarks: sr.remarks
             }
           })));
         }
       }
       if (data.materials !== undefined) {
         await prismaClient.manpowerContractMaterial.deleteMany({ where: { contractId: id } });
-        if (data.materials && data.materials.length > 0) {
-          await Promise.all(data.materials.map((mat: any) => prismaClient.manpowerContractMaterial.create({
+        if (materialReqs.length > 0) {
+          await Promise.all(materialReqs.map((mat: any) => prismaClient.manpowerContractMaterial.create({
             data: {
               contractId: id,
-              materialId: mat.materialId || null,
-              itemName: mat.itemName || mat.materialName || "",
-              quantity: parseInt(mat.quantity, 10) || 0,
-              unitPrice: mat.unitPrice !== undefined ? parseFloat(mat.unitPrice) : null,
-              isFoc: mat.isFoc === true || mat.isFoc === "Yes",
-              lineTotal: (mat.isFoc === true || mat.isFoc === "Yes") ? 0 : (parseInt(mat.quantity, 10) || 0) * (parseFloat(mat.unitPrice) || 0),
-              remarks: mat.remarks || "",
-              startDate: data.startDate ? new Date(data.startDate) : new Date(),
-              endDate: data.endDate ? new Date(data.endDate) : new Date(),
-              operationType: data.operationType || "SECURITY_GUARDING"
+              materialId: mat.materialId,
+              itemName: mat.itemName,
+              quantity: mat.quantity,
+              unitPrice: mat.unitPrice,
+              isFoc: mat.isFoc,
+              lineTotal: mat.lineTotal,
+              remarks: mat.remarks,
+              startDate: startDate || new Date(),
+              endDate: endDate || new Date(),
+              operationType
             }
           })));
         }
@@ -9543,92 +9602,150 @@ export const mockDb = {
     };
   },
   createManpowerContract: async (data: any): Promise<any> => {
-    const contractNumber = data.contractNumber || await getNextSequenceCode("SCON");
-    const dataWithCode = { ...data, contractNumber };
-    const contractId = dataWithCode.id || `mcon-${Date.now()}`;
+    const operationType = data.operationType || "SECURITY_GUARDING";
+    const prefix = operationType === "FACILITY_MANAGEMENT" ? "FCON" : "SCON";
+    const contractNumber = data.contractNumber || await getNextSequenceCode(prefix);
+    const contractId = data.id || `mcon-${Date.now()}`;
 
-    const manpowerReqs = dataWithCode.manpowerRequirements || [];
-    const materialReqs = dataWithCode.materials || [];
+    // Normalize dates
+    const startDate = data.startDate ? new Date(data.startDate) : new Date();
+    const endDate = data.endDate ? new Date(data.endDate) : new Date();
+    let totalDurationDays = 0;
+    if (startDate && endDate && !isNaN(startDate.getTime()) && !isNaN(endDate.getTime())) {
+      const diffTime = endDate.getTime() - startDate.getTime();
+      totalDurationDays = diffTime >= 0 ? Math.round(diffTime / (1000 * 60 * 60 * 24)) + 1 : 0;
+    }
 
-    const totalManpowerValue = manpowerReqs.reduce((sum: number, mr: any) => {
-      if (mr.isFoc === true || mr.isFoc === "Yes") return sum;
-      const qty = parseInt(mr.quantity, 10) || 0;
-      const price = parseFloat(mr.unitPrice) || 0;
-      const count = parseInt(mr.billingPeriodCount, 10) || 1;
-      return sum + (qty * price * count);
-    }, 0);
+    const durationNumber = data.durationNumber !== undefined && data.durationNumber !== "" && data.durationNumber !== null ? parseInt(data.durationNumber, 10) : null;
+    const durationUnit = data.durationUnit || null;
 
-    const totalMaterialValue = materialReqs.reduce((sum: number, mat: any) => {
-      if (mat.isFoc === true || mat.isFoc === "Yes") return sum;
-      const qty = parseInt(mat.quantity, 10) || 0;
-      const price = parseFloat(mat.unitPrice) || 0;
-      return sum + (qty * price);
-    }, 0);
+    // Normalize manpowerRequirements
+    const manpowerReqs = (data.manpowerRequirements || []).map((mr: any) => {
+      const quantity = parseInt(mr.quantity, 10) || 0;
+      const unitPrice = mr.unitPrice !== undefined && mr.unitPrice !== "" && mr.unitPrice !== null ? parseFloat(mr.unitPrice) : null;
+      const billingPeriodCount = mr.billingPeriodCount !== undefined && mr.billingPeriodCount !== "" && mr.billingPeriodCount !== null ? parseInt(mr.billingPeriodCount, 10) : 1;
+      const isFoc = mr.isFoc === true || mr.isFoc === "Yes";
+      const lineTotal = isFoc ? 0 : quantity * (unitPrice || 0) * billingPeriodCount;
+      return {
+        ...mr,
+        position: mr.position || "Staff",
+        quantity,
+        deploymentType: mr.deploymentType || "Permanent",
+        unitPrice,
+        billingFrequency: mr.billingFrequency || "Monthly",
+        billingPeriodCount,
+        isFoc,
+        lineTotal,
+        remarks: mr.remarks || ""
+      };
+    });
 
+    // Normalize materials
+    const materialReqs = (data.materials || []).map((mat: any) => {
+      const quantity = parseInt(mat.quantity, 10) || 0;
+      const unitPrice = mat.unitPrice !== undefined && mat.unitPrice !== "" && mat.unitPrice !== null ? parseFloat(mat.unitPrice) : null;
+      const isFoc = mat.isFoc === true || mat.isFoc === "Yes";
+      const lineTotal = isFoc ? 0 : quantity * (unitPrice || 0);
+      const materialId = mat.materialId && mat.materialId !== "" ? mat.materialId : null;
+      return {
+        ...mat,
+        materialId,
+        itemName: mat.itemName || mat.materialName || "Material",
+        quantity,
+        unitPrice,
+        isFoc,
+        lineTotal,
+        remarks: mat.remarks || ""
+      };
+    });
+
+    // Normalize relieverRequirements
+    const relieverReqs = (data.relieverRequirements || []).map((rr: any) => ({
+      ...rr,
+      position: rr.position || "Staff",
+      quantity: parseInt(rr.quantity, 10) || 0,
+      sourcePreference: rr.sourcePreference || "General Pool",
+      remarks: rr.remarks || ""
+    }));
+
+    // Normalize shiftRequirements
+    const shiftReqs = (data.shiftRequirements || []).map((sr: any) => ({
+      ...sr,
+      shiftName: sr.shiftName || "Default",
+      startTime: sr.startTime || "00:00",
+      endTime: sr.endTime || "00:00",
+      postsCovered: parseInt(sr.postsCovered, 10) || 0,
+      daysPattern: sr.daysPattern || "Daily",
+      remarks: sr.remarks || ""
+    }));
+
+    // Calculate totals
+    const totalManpowerValue = manpowerReqs.reduce((sum: number, mr: any) => sum + (mr.lineTotal || 0), 0);
+    const totalMaterialValue = materialReqs.reduce((sum: number, mat: any) => sum + (mat.lineTotal || 0), 0);
     const totalContractValue = totalManpowerValue + totalMaterialValue;
 
     if (isDbConnected()) {
       const res = await prismaClient.manpowerContract.create({
         data: {
           id: contractId,
-          clientId: dataWithCode.clientId,
-          contractNumber: dataWithCode.contractNumber,
-          title: dataWithCode.title,
-          startDate: new Date(dataWithCode.startDate),
-          endDate: new Date(dataWithCode.endDate),
-          operationType: dataWithCode.operationType || "SECURITY_GUARDING",
-          status: dataWithCode.status || "DRAFT",
-          defaultManpowerCount: dataWithCode.defaultManpowerCount || 0,
-          defaultRelieverCount: dataWithCode.defaultRelieverCount || 0,
-          durationNumber: dataWithCode.durationNumber !== undefined ? parseInt(dataWithCode.durationNumber, 10) : null,
-          durationUnit: dataWithCode.durationUnit || null,
-          totalDurationDays: dataWithCode.totalDurationDays !== undefined ? parseInt(dataWithCode.totalDurationDays, 10) : null,
+          clientId: data.clientId,
+          contractNumber,
+          title: data.title,
+          startDate,
+          endDate,
+          operationType,
+          status: data.status || "DRAFT",
+          defaultManpowerCount: data.defaultManpowerCount || 0,
+          defaultRelieverCount: data.defaultRelieverCount || 0,
+          durationNumber,
+          durationUnit,
+          totalDurationDays,
           totalManpowerValue,
           totalMaterialValue,
           totalContractValue,
           manpowerRequirements: {
-            create: (dataWithCode.manpowerRequirements || []).map((mr: any) => ({
+            create: manpowerReqs.map((mr: any) => ({
               position: mr.position,
-              quantity: parseInt(mr.quantity, 10) || 0,
+              quantity: mr.quantity,
               deploymentType: mr.deploymentType,
-              unitPrice: mr.unitPrice !== undefined ? parseFloat(mr.unitPrice) : null,
-              billingFrequency: mr.billingFrequency || null,
-              billingPeriodCount: mr.billingPeriodCount !== undefined ? parseInt(mr.billingPeriodCount, 10) : null,
-              isFoc: mr.isFoc === true || mr.isFoc === "Yes",
-              lineTotal: (mr.isFoc === true || mr.isFoc === "Yes") ? 0 : (parseInt(mr.quantity, 10) || 0) * (parseFloat(mr.unitPrice) || 0) * (parseInt(mr.billingPeriodCount, 10) || 1),
+              unitPrice: mr.unitPrice,
+              billingFrequency: mr.billingFrequency,
+              billingPeriodCount: mr.billingPeriodCount,
+              isFoc: mr.isFoc,
+              lineTotal: mr.lineTotal,
               remarks: mr.remarks
             }))
           },
           relieverRequirements: {
-            create: (dataWithCode.relieverRequirements || []).map((rr: any) => ({
+            create: relieverReqs.map((rr: any) => ({
               position: rr.position,
-              quantity: parseInt(rr.quantity, 10) || 0,
+              quantity: rr.quantity,
               sourcePreference: rr.sourcePreference,
               remarks: rr.remarks
             }))
           },
           shiftRequirements: {
-            create: (dataWithCode.shiftRequirements || []).map((sr: any) => ({
+            create: shiftReqs.map((sr: any) => ({
               shiftName: sr.shiftName,
               startTime: sr.startTime,
               endTime: sr.endTime,
-              postsCovered: parseInt(sr.postsCovered, 10) || 0,
+              postsCovered: sr.postsCovered,
               daysPattern: sr.daysPattern,
               remarks: sr.remarks
             }))
           },
           materials: {
-            create: (dataWithCode.materials || []).map((mat: any) => ({
-              materialId: mat.materialId || null,
-              itemName: mat.itemName || mat.materialName || "",
-              quantity: parseInt(mat.quantity, 10) || 0,
-              unitPrice: mat.unitPrice !== undefined ? parseFloat(mat.unitPrice) : null,
-              isFoc: mat.isFoc === true || mat.isFoc === "Yes",
-              lineTotal: (mat.isFoc === true || mat.isFoc === "Yes") ? 0 : (parseInt(mat.quantity, 10) || 0) * (parseFloat(mat.unitPrice) || 0),
+            create: materialReqs.map((mat: any) => ({
+              materialId: mat.materialId,
+              itemName: mat.itemName,
+              quantity: mat.quantity,
+              unitPrice: mat.unitPrice,
+              isFoc: mat.isFoc,
+              lineTotal: mat.lineTotal,
               remarks: mat.remarks,
-              startDate: new Date(dataWithCode.startDate),
-              endDate: new Date(dataWithCode.endDate),
-              operationType: dataWithCode.operationType || "SECURITY_GUARDING"
+              startDate,
+              endDate,
+              operationType
             }))
           }
         },

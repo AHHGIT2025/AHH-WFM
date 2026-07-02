@@ -1203,14 +1203,73 @@ export default function ManpowerMasterPage() {
     }
     try {
       const isEditing = editItem !== null;
+      const currentScope = isSecurity ? "SECURITY_GUARDING" : "FACILITY_MANAGEMENT";
+      const statusVal = status || formData.status || "DRAFT";
+
+      const normalizedManpower = (formData.manpowerRequirements || []).map((mr: any) => ({
+        position: mr.position || "",
+        quantity: parseInt(mr.quantity, 10) || 1,
+        deploymentType: mr.deploymentType || "Permanent",
+        unitPrice: mr.unitPrice === "" || mr.unitPrice === null || mr.unitPrice === undefined ? 0 : parseFloat(mr.unitPrice),
+        billingFrequency: mr.billingFrequency || "Monthly",
+        billingPeriodCount: mr.billingPeriodCount === "" || mr.billingPeriodCount === null || mr.billingPeriodCount === undefined ? 1 : parseInt(mr.billingPeriodCount, 10),
+        isFoc: !!mr.isFoc,
+        lineTotal: mr.isFoc ? 0 : (parseInt(mr.quantity, 10) || 1) * (parseFloat(mr.unitPrice) || 0) * (parseInt(mr.billingPeriodCount, 10) || 1),
+        remarks: mr.remarks || ""
+      }));
+
+      const normalizedRelievers = (formData.relieverRequirements || []).map((rr: any) => ({
+        position: rr.position || "",
+        quantity: parseInt(rr.quantity, 10) || 1,
+        sourcePreference: rr.sourcePreference || "General Pool",
+        remarks: rr.remarks || ""
+      }));
+
+      const normalizedShifts = (formData.shiftRequirements || []).map((sr: any) => ({
+        shiftName: sr.shiftName || "",
+        startTime: sr.startTime || "",
+        endTime: sr.endTime || "",
+        postsCovered: parseInt(sr.postsCovered, 10) || 1,
+        daysPattern: sr.daysPattern || "Daily",
+        remarks: sr.remarks || ""
+      }));
+
+      const normalizedMaterials = (formData.materials || []).map((mat: any) => ({
+        materialId: mat.materialId && mat.materialId !== "" ? mat.materialId : null,
+        itemName: mat.itemName || mat.materialName || "",
+        quantity: parseInt(mat.quantity, 10) || 1,
+        unitPrice: mat.unitPrice === "" || mat.unitPrice === null || mat.unitPrice === undefined ? 0 : parseFloat(mat.unitPrice),
+        isFoc: !!mat.isFoc,
+        lineTotal: mat.isFoc ? 0 : (parseInt(mat.quantity, 10) || 1) * (parseFloat(mat.unitPrice) || 0),
+        remarks: mat.remarks || ""
+      }));
+
+      const payload = {
+        clientId: formData.clientId || "",
+        contractNumber: formData.contractNumber || "",
+        title: formData.title || "",
+        startDate: formData.startDate || "",
+        endDate: formData.endDate || "",
+        remarks: formData.remarks || "",
+        status: statusVal,
+        operationType: currentScope,
+        durationNumber: formData.durationNumber === "" || formData.durationNumber === null || formData.durationNumber === undefined ? null : parseInt(formData.durationNumber, 10),
+        durationUnit: formData.durationUnit || "Month",
+        totalDurationDays: formData.totalDurationDays === "" || formData.totalDurationDays === null || formData.totalDurationDays === undefined ? null : parseInt(formData.totalDurationDays, 10),
+        defaultManpowerCount: parseInt(formData.defaultManpowerCount, 10) || 0,
+        defaultRelieverCount: parseInt(formData.defaultRelieverCount, 10) || 0,
+        manpowerRequirements: normalizedManpower,
+        relieverRequirements: normalizedRelievers,
+        shiftRequirements: normalizedShifts,
+        materials: normalizedMaterials
+      };
+
       const res = await fetch(apiBase, {
         method: isEditing ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...(isEditing ? { id: editItem.id } : {}),
-          ...formData,
-          status,
-          operationType: "SECURITY_GUARDING"
+          ...payload
         })
       });
       if (res.ok) {
