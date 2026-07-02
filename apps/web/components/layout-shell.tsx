@@ -55,7 +55,8 @@ export const LayoutShell: React.FC<{ children: React.ReactNode }> = ({ children 
       { label: "Manpower Directory", path: "/manpower/security-guarding/manpower", icon: "badge" },
       { label: "Shift Planner", path: "/manpower/security-guarding/deployment-calendar", icon: "calendar_month" },
       { label: "Reliever Pools", path: "/manpower/security-guarding/reliever-pools", icon: "groups" },
-      { label: "Project Coordinators", path: "/manpower/security-guarding/coordinators", icon: "assignment_turned_in" }
+      { label: "Project Coordinators", path: "/manpower/security-guarding/coordinators", icon: "assignment_turned_in" },
+      { label: "Material Master", path: "/manpower/security-guarding/materials", icon: "inventory_2" }
     ];
     sidebarTitle = "Security Guarding";
     sidebarSubtitle = "Operations & Compliance";
@@ -69,7 +70,8 @@ export const LayoutShell: React.FC<{ children: React.ReactNode }> = ({ children 
       { label: "Sites", path: "/manpower/facility-management/sites", icon: "pin_drop" },
       { label: "Facility Areas", path: "/manpower/facility-management/areas", icon: "location_city" },
       { label: "Manpower Directory", path: "/manpower/facility-management/manpower", icon: "badge" },
-      { label: "Shift Planner", path: "/manpower/facility-management/deployment-calendar", icon: "calendar_month" }
+      { label: "Shift Planner", path: "/manpower/facility-management/deployment-calendar", icon: "calendar_month" },
+      { label: "Material Master", path: "/manpower/facility-management/materials", icon: "inventory_2" }
     ];
     sidebarTitle = "Facility Management";
     sidebarSubtitle = "Operations & Services";

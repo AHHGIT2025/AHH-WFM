@@ -907,8 +907,40 @@ export interface ManpowerContractAddendum {
   addendumType: string;
   description?: string | null;
   commercialImpact?: string | null;
+  calculatedCommercialImpact?: number | null;
   attachmentUrl?: string | null;
   status: "DRAFT" | "APPROVED" | "ACTIVE" | "CANCELLED" | string;
+  createdAt?: string;
+  updatedAt?: string;
+  lineItems?: ManpowerContractAddendumLineItem[];
+}
+
+export interface ManpowerMaterialMaster {
+  id: string;
+  materialCode: string;
+  materialName: string;
+  materialCategory: string;
+  unitOfMeasure: string;
+  defaultUnitPrice?: number | null;
+  operationType: "SECURITY_GUARDING" | "FACILITY_MANAGEMENT" | "SHARED" | string;
+  isActive: boolean;
+  remarks?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ManpowerContractAddendumLineItem {
+  id: string;
+  addendumId: string;
+  itemType: "MANPOWER" | "MATERIAL" | string;
+  changeType: "ADD" | "REMOVE" | "MODIFY" | string;
+  itemName: string;
+  quantity: number;
+  unitPrice?: number | null;
+  billingFrequency?: string | null;
+  isFoc: boolean;
+  lineTotal?: number | null;
+  remarks?: string | null;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -982,12 +1014,19 @@ export interface ManpowerContract {
   defaultManpowerCount?: number;
   defaultRelieverCount?: number;
   shiftDefinitions?: any;
+  durationNumber?: number | null;
+  durationUnit?: "Day" | "Month" | "Year" | string | null;
+  totalDurationDays?: number | null;
+  totalManpowerValue?: number | null;
+  totalMaterialValue?: number | null;
+  totalContractValue?: number | null;
   createdAt?: string;
   updatedAt?: string;
   manpowerRequirements?: ContractManpowerRequirement[];
   relieverRequirements?: ContractRelieverRequirement[];
   shiftRequirements?: ContractShiftRequirement[];
   addendums?: ManpowerContractAddendum[];
+  materials?: ManpowerContractMaterial[];
   manpowerLineCount?: number;
   totalManpower?: number;
   relieverRequired?: "Yes" | "No";
@@ -1210,8 +1249,13 @@ export interface ManpowerContractMaterial {
   id: string;
   contractId: string;
   contract?: ManpowerContract;
+  materialId?: string | null;
   itemName: string;
   quantity: number;
+  unitPrice?: number | null;
+  isFoc: boolean;
+  lineTotal?: number | null;
+  remarks?: string | null;
   startDate: string;
   endDate: string;
   operationType: OperationType;
@@ -1240,6 +1284,11 @@ export interface ContractManpowerRequirement {
   position: string;
   quantity: number;
   deploymentType: string;
+  unitPrice?: number | null;
+  billingFrequency?: string | null;
+  billingPeriodCount?: number | null;
+  isFoc: boolean;
+  lineTotal?: number | null;
   remarks?: string;
   createdAt?: string;
   updatedAt?: string;

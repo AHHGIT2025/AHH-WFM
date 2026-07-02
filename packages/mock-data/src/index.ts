@@ -37,7 +37,8 @@ export async function getNextSequenceCode(prefix: string): Promise<string> {
     "SLIC": { model: "securityLicense", field: "licenseNumber", dbKey: "securityLicenses" },
     "SGP": { model: "securityGatePass", field: "gatePassNumber", dbKey: "securityGatePasses" },
     "SMAT": { model: "manpowerProjectMaterialAllocation", field: "code", dbKey: "manpowerProjectMaterialAllocations" },
-    "ADD": { model: "manpowerContractAddendum", field: "addendumNumber", dbKey: "manpowerContractAddendums" }
+    "ADD": { model: "manpowerContractAddendum", field: "addendumNumber", dbKey: "manpowerContractAddendums" },
+    "MAT": { model: "manpowerMaterialMaster", field: "materialCode", dbKey: "manpowerMaterialMasters" }
   };
 
   const config = tableMap[prefix];
@@ -214,6 +215,8 @@ let memoryDb: {
   contractShiftRequirements: any[];
   manpowerClientDocuments: any[];
   manpowerContractAddendums: any[];
+  manpowerMaterialMasters: any[];
+  manpowerContractAddendumLineItems: any[];
 } = {
   companies: [
     { id: "COMP-001", companyCode: "AHH", companyName: "Al Hattab Holding", isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
@@ -482,7 +485,9 @@ let memoryDb: {
   contractRelieverRequirements: [],
   contractShiftRequirements: [],
   manpowerClientDocuments: [],
-  manpowerContractAddendums: []
+  manpowerContractAddendums: [],
+  manpowerMaterialMasters: [],
+  manpowerContractAddendumLineItems: []
 };
 
 // Seeding helper to pre-fill MySQL with mock data if it is empty
@@ -8950,7 +8955,8 @@ export const mockDb = {
           manpowerRequirements: true,
           relieverRequirements: true,
           shiftRequirements: true,
-          addendums: true
+          addendums: true,
+          materials: true
         },
         orderBy: { contractNumber: "asc" }
       });
@@ -8958,6 +8964,22 @@ export const mockDb = {
         const manpowerRequirements = x.manpowerRequirements || [];
         const relieverRequirements = x.relieverRequirements || [];
         const shiftRequirements = x.shiftRequirements || [];
+        const materials = x.materials || [];
+        const addendums = x.addendums || [];
+
+        const totalManpowerValue = manpowerRequirements.reduce((sum: number, r: any) => {
+          if (r.isFoc) return sum;
+          return sum + ((r.quantity || 0) * (r.unitPrice || 0) * (r.billingPeriodCount || 1));
+        }, 0);
+        const totalMaterialValue = materials.reduce((sum: number, m: any) => {
+          if (m.isFoc) return sum;
+          return sum + ((m.quantity || 0) * (m.unitPrice || 0));
+        }, 0);
+        const totalContractValue = totalManpowerValue + totalMaterialValue;
+
+        const focManpowerCount = manpowerRequirements.filter((r: any) => r.isFoc).reduce((sum: number, r: any) => sum + (r.quantity || 0), 0);
+        const focMaterialCount = materials.filter((m: any) => m.isFoc).reduce((sum: number, m: any) => sum + (m.quantity || 0), 0);
+
         return {
           ...x,
           createdAt: x.createdAt?.toISOString(),
@@ -8969,7 +8991,12 @@ export const mockDb = {
           relieverRequired: relieverRequirements.length > 0 ? "Yes" : "No",
           totalRelievers: relieverRequirements.reduce((sum: number, r: any) => sum + (r.quantity || 0), 0),
           shiftLineCount: shiftRequirements.length,
-          addendumsCount: x.addendums?.length || 0
+          addendumsCount: addendums.length,
+          totalManpowerValue,
+          totalMaterialValue,
+          totalContractValue,
+          focManpowerCount,
+          focMaterialCount
         };
       });
     }
@@ -8981,6 +9008,21 @@ export const mockDb = {
       const relieverRequirements = (db.contractRelieverRequirements || []).filter((rr: any) => rr.contractId === x.id);
       const shiftRequirements = (db.contractShiftRequirements || []).filter((sr: any) => sr.contractId === x.id);
       const addendums = (db.manpowerContractAddendums || []).filter((a: any) => a.contractId === x.id);
+      const materials = (db.manpowerContractMaterials || []).filter((m: any) => m.contractId === x.id);
+
+      const totalManpowerValue = manpowerRequirements.reduce((sum: number, r: any) => {
+        if (r.isFoc) return sum;
+        return sum + ((r.quantity || 0) * (r.unitPrice || 0) * (r.billingPeriodCount || 1));
+      }, 0);
+      const totalMaterialValue = materials.reduce((sum: number, m: any) => {
+        if (m.isFoc) return sum;
+        return sum + ((m.quantity || 0) * (m.unitPrice || 0));
+      }, 0);
+      const totalContractValue = totalManpowerValue + totalMaterialValue;
+
+      const focManpowerCount = manpowerRequirements.filter((r: any) => r.isFoc).reduce((sum: number, r: any) => sum + (r.quantity || 0), 0);
+      const focMaterialCount = materials.filter((m: any) => m.isFoc).reduce((sum: number, m: any) => sum + (m.quantity || 0), 0);
+
       return {
         ...x,
         client: (db.manpowerClients || []).find((c: any) => c.id === x.clientId),
@@ -8988,16 +9030,42 @@ export const mockDb = {
         relieverRequirements,
         shiftRequirements,
         addendums,
+        materials,
         manpowerLineCount: manpowerRequirements.length,
         totalManpower: manpowerRequirements.reduce((sum: number, r: any) => sum + (r.quantity || 0), 0),
         relieverRequired: relieverRequirements.length > 0 ? "Yes" : "No",
         totalRelievers: relieverRequirements.reduce((sum: number, r: any) => sum + (r.quantity || 0), 0),
         shiftLineCount: shiftRequirements.length,
-        addendumsCount: addendums.length
+        addendumsCount: addendums.length,
+        totalManpowerValue,
+        totalMaterialValue,
+        totalContractValue,
+        focManpowerCount,
+        focMaterialCount
       };
     });
   },
   updateManpowerContract: async (id: string, data: any): Promise<any> => {
+    const manpowerReqs = data.manpowerRequirements || [];
+    const materialReqs = data.materials || [];
+
+    const totalManpowerValue = manpowerReqs.reduce((sum: number, mr: any) => {
+      if (mr.isFoc === true || mr.isFoc === "Yes") return sum;
+      const qty = parseInt(mr.quantity, 10) || 0;
+      const price = parseFloat(mr.unitPrice) || 0;
+      const count = parseInt(mr.billingPeriodCount, 10) || 1;
+      return sum + (qty * price * count);
+    }, 0);
+
+    const totalMaterialValue = materialReqs.reduce((sum: number, mat: any) => {
+      if (mat.isFoc === true || mat.isFoc === "Yes") return sum;
+      const qty = parseInt(mat.quantity, 10) || 0;
+      const price = parseFloat(mat.unitPrice) || 0;
+      return sum + (qty * price);
+    }, 0);
+
+    const totalContractValue = totalManpowerValue + totalMaterialValue;
+
     const dbData = {
       clientId: data.clientId,
       title: data.title,
@@ -9008,6 +9076,12 @@ export const mockDb = {
       operationType: data.operationType,
       defaultManpowerCount: data.defaultManpowerCount || 0,
       defaultRelieverCount: data.defaultRelieverCount || 0,
+      durationNumber: data.durationNumber !== undefined ? (data.durationNumber !== null ? parseInt(data.durationNumber, 10) : null) : undefined,
+      durationUnit: data.durationUnit !== undefined ? data.durationUnit : undefined,
+      totalDurationDays: data.totalDurationDays !== undefined ? (data.totalDurationDays !== null ? parseInt(data.totalDurationDays, 10) : null) : undefined,
+      totalManpowerValue,
+      totalMaterialValue,
+      totalContractValue
     };
     if (isDbConnected()) {
       await prismaClient.manpowerContract.update({
@@ -9021,8 +9095,13 @@ export const mockDb = {
             data: {
               contractId: id,
               position: mr.position,
-              quantity: parseInt(mr.quantity, 10),
+              quantity: parseInt(mr.quantity, 10) || 0,
               deploymentType: mr.deploymentType,
+              unitPrice: mr.unitPrice !== undefined ? parseFloat(mr.unitPrice) : null,
+              billingFrequency: mr.billingFrequency || null,
+              billingPeriodCount: mr.billingPeriodCount !== undefined ? parseInt(mr.billingPeriodCount, 10) : null,
+              isFoc: mr.isFoc === true || mr.isFoc === "Yes",
+              lineTotal: (mr.isFoc === true || mr.isFoc === "Yes") ? 0 : (parseInt(mr.quantity, 10) || 0) * (parseFloat(mr.unitPrice) || 0) * (parseInt(mr.billingPeriodCount, 10) || 1),
               remarks: mr.remarks || ""
             }
           })));
@@ -9035,7 +9114,7 @@ export const mockDb = {
             data: {
               contractId: id,
               position: rr.position,
-              quantity: parseInt(rr.quantity, 10),
+              quantity: parseInt(rr.quantity, 10) || 0,
               sourcePreference: rr.sourcePreference,
               remarks: rr.remarks || ""
             }
@@ -9051,9 +9130,29 @@ export const mockDb = {
               shiftName: sr.shiftName,
               startTime: sr.startTime,
               endTime: sr.endTime,
-              postsCovered: parseInt(sr.postsCovered, 10),
+              postsCovered: parseInt(sr.postsCovered, 10) || 0,
               daysPattern: sr.daysPattern,
               remarks: sr.remarks || ""
+            }
+          })));
+        }
+      }
+      if (data.materials !== undefined) {
+        await prismaClient.manpowerContractMaterial.deleteMany({ where: { contractId: id } });
+        if (data.materials && data.materials.length > 0) {
+          await Promise.all(data.materials.map((mat: any) => prismaClient.manpowerContractMaterial.create({
+            data: {
+              contractId: id,
+              materialId: mat.materialId || null,
+              itemName: mat.itemName || mat.materialName || "",
+              quantity: parseInt(mat.quantity, 10) || 0,
+              unitPrice: mat.unitPrice !== undefined ? parseFloat(mat.unitPrice) : null,
+              isFoc: mat.isFoc === true || mat.isFoc === "Yes",
+              lineTotal: (mat.isFoc === true || mat.isFoc === "Yes") ? 0 : (parseInt(mat.quantity, 10) || 0) * (parseFloat(mat.unitPrice) || 0),
+              remarks: mat.remarks || "",
+              startDate: data.startDate ? new Date(data.startDate) : new Date(),
+              endDate: data.endDate ? new Date(data.endDate) : new Date(),
+              operationType: data.operationType || "SECURITY_GUARDING"
             }
           })));
         }
@@ -9065,13 +9164,15 @@ export const mockDb = {
           manpowerRequirements: true,
           relieverRequirements: true,
           shiftRequirements: true,
-          addendums: true
+          addendums: true,
+          materials: true
         }
       });
       if (!res) return null;
       const mr = res.manpowerRequirements || [];
       const rr = res.relieverRequirements || [];
       const sr = res.shiftRequirements || [];
+      const materials = res.materials || [];
       return {
         ...res,
         createdAt: res.createdAt?.toISOString(),
@@ -9082,7 +9183,11 @@ export const mockDb = {
         totalManpower: mr.reduce((sum: number, x: any) => sum + (x.quantity || 0), 0),
         relieverRequired: rr.length > 0 ? "Yes" : "No",
         totalRelievers: rr.reduce((sum: number, x: any) => sum + (x.quantity || 0), 0),
-        shiftLineCount: sr.length
+        shiftLineCount: sr.length,
+        materials,
+        totalManpowerValue,
+        totalMaterialValue,
+        totalContractValue
       };
     }
     const db = readDb();
@@ -9098,6 +9203,12 @@ export const mockDb = {
       status: dbData.status || existing.status,
       remarks: data.remarks !== undefined ? data.remarks : existing.remarks,
       operationType: dbData.operationType || existing.operationType,
+      durationNumber: dbData.durationNumber !== undefined ? dbData.durationNumber : existing.durationNumber,
+      durationUnit: dbData.durationUnit !== undefined ? dbData.durationUnit : existing.durationUnit,
+      totalDurationDays: dbData.totalDurationDays !== undefined ? dbData.totalDurationDays : existing.totalDurationDays,
+      totalManpowerValue,
+      totalMaterialValue,
+      totalContractValue,
       updatedAt: new Date().toISOString()
     };
     db.manpowerContracts[idx] = updatedRecord;
@@ -9109,8 +9220,13 @@ export const mockDb = {
           id: mr.id || `mr-${id}-${index}-${Date.now()}`,
           contractId: id,
           position: mr.position,
-          quantity: parseInt(mr.quantity, 10),
+          quantity: parseInt(mr.quantity, 10) || 0,
           deploymentType: mr.deploymentType,
+          unitPrice: mr.unitPrice !== undefined ? parseFloat(mr.unitPrice) : null,
+          billingFrequency: mr.billingFrequency || null,
+          billingPeriodCount: mr.billingPeriodCount !== undefined ? parseInt(mr.billingPeriodCount, 10) : null,
+          isFoc: mr.isFoc === true || mr.isFoc === "Yes",
+          lineTotal: (mr.isFoc === true || mr.isFoc === "Yes") ? 0 : (parseInt(mr.quantity, 10) || 0) * (parseFloat(mr.unitPrice) || 0) * (parseInt(mr.billingPeriodCount, 10) || 1),
           remarks: mr.remarks || "",
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
@@ -9124,7 +9240,7 @@ export const mockDb = {
           id: rr.id || `rr-${id}-${index}-${Date.now()}`,
           contractId: id,
           position: rr.position,
-          quantity: parseInt(rr.quantity, 10),
+          quantity: parseInt(rr.quantity, 10) || 0,
           sourcePreference: rr.sourcePreference,
           remarks: rr.remarks || "",
           createdAt: new Date().toISOString(),
@@ -9141,9 +9257,30 @@ export const mockDb = {
           shiftName: sr.shiftName,
           startTime: sr.startTime,
           endTime: sr.endTime,
-          postsCovered: parseInt(sr.postsCovered, 10),
+          postsCovered: parseInt(sr.postsCovered, 10) || 0,
           daysPattern: sr.daysPattern,
           remarks: sr.remarks || "",
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        });
+      });
+    }
+    if (data.materials !== undefined) {
+      db.manpowerContractMaterials = (db.manpowerContractMaterials || []).filter((m: any) => m.contractId !== id);
+      data.materials.forEach((mat: any, index: number) => {
+        db.manpowerContractMaterials.push({
+          id: mat.id || `mat-${id}-${index}-${Date.now()}`,
+          contractId: id,
+          materialId: mat.materialId || null,
+          itemName: mat.itemName || mat.materialName || "",
+          quantity: parseInt(mat.quantity, 10) || 0,
+          unitPrice: mat.unitPrice !== undefined ? parseFloat(mat.unitPrice) : null,
+          isFoc: mat.isFoc === true || mat.isFoc === "Yes",
+          lineTotal: (mat.isFoc === true || mat.isFoc === "Yes") ? 0 : (parseInt(mat.quantity, 10) || 0) * (parseFloat(mat.unitPrice) || 0),
+          remarks: mat.remarks || "",
+          startDate: updatedRecord.startDate,
+          endDate: updatedRecord.endDate,
+          operationType: updatedRecord.operationType,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         });
@@ -9153,12 +9290,14 @@ export const mockDb = {
     const mr = (db.contractManpowerRequirements || []).filter((x: any) => x.contractId === id);
     const rr = (db.contractRelieverRequirements || []).filter((x: any) => x.contractId === id);
     const sr = (db.contractShiftRequirements || []).filter((x: any) => x.contractId === id);
+    const materials = (db.manpowerContractMaterials || []).filter((x: any) => x.contractId === id);
     return {
       ...updatedRecord,
       client: (db.manpowerClients || []).find((c: any) => c.id === updatedRecord.clientId),
       manpowerRequirements: mr,
       relieverRequirements: rr,
       shiftRequirements: sr,
+      materials,
       manpowerLineCount: mr.length,
       totalManpower: mr.reduce((sum: number, x: any) => sum + (x.quantity || 0), 0),
       relieverRequired: rr.length > 0 ? "Yes" : "No",
@@ -9175,13 +9314,34 @@ export const mockDb = {
           manpowerRequirements: true,
           relieverRequirements: true,
           shiftRequirements: true,
-          addendums: true
+          addendums: {
+            include: {
+              lineItems: true
+            }
+          },
+          materials: true
         }
       });
       if (!res) return null;
       const mr = res.manpowerRequirements || [];
       const rr = res.relieverRequirements || [];
       const sr = res.shiftRequirements || [];
+      const materials = res.materials || [];
+      const addendums = res.addendums || [];
+
+      const totalManpowerValue = mr.reduce((sum: number, r: any) => {
+        if (r.isFoc) return sum;
+        return sum + ((r.quantity || 0) * (r.unitPrice || 0) * (r.billingPeriodCount || 1));
+      }, 0);
+      const totalMaterialValue = materials.reduce((sum: number, m: any) => {
+        if (m.isFoc) return sum;
+        return sum + ((m.quantity || 0) * (m.unitPrice || 0));
+      }, 0);
+      const totalContractValue = totalManpowerValue + totalMaterialValue;
+
+      const focManpowerCount = mr.filter((r: any) => r.isFoc).reduce((sum: number, r: any) => sum + (r.quantity || 0), 0);
+      const focMaterialCount = materials.filter((m: any) => m.isFoc).reduce((sum: number, m: any) => sum + (m.quantity || 0), 0);
+
       return {
         ...res,
         createdAt: res.createdAt?.toISOString(),
@@ -9192,7 +9352,13 @@ export const mockDb = {
         totalManpower: mr.reduce((sum: number, x: any) => sum + (x.quantity || 0), 0),
         relieverRequired: rr.length > 0 ? "Yes" : "No",
         totalRelievers: rr.reduce((sum: number, x: any) => sum + (x.quantity || 0), 0),
-        shiftLineCount: sr.length
+        shiftLineCount: sr.length,
+        addendumsCount: addendums.length,
+        totalManpowerValue,
+        totalMaterialValue,
+        totalContractValue,
+        focManpowerCount,
+        focMaterialCount
       };
     }
     const db = readDb();
@@ -9201,7 +9367,25 @@ export const mockDb = {
     const mr = (db.contractManpowerRequirements || []).filter((x: any) => x.contractId === id);
     const rr = (db.contractRelieverRequirements || []).filter((x: any) => x.contractId === id);
     const sr = (db.contractShiftRequirements || []).filter((x: any) => x.contractId === id);
-    const addendums = (db.manpowerContractAddendums || []).filter((x: any) => x.contractId === id);
+    const addendums = (db.manpowerContractAddendums || []).filter((x: any) => x.contractId === id).map((a: any) => {
+      const lineItems = (db.manpowerContractAddendumLineItems || []).filter((li: any) => li.addendumId === a.id);
+      return { ...a, lineItems };
+    });
+    const materials = (db.manpowerContractMaterials || []).filter((x: any) => x.contractId === id);
+
+    const totalManpowerValue = mr.reduce((sum: number, r: any) => {
+      if (r.isFoc) return sum;
+      return sum + ((r.quantity || 0) * (r.unitPrice || 0) * (r.billingPeriodCount || 1));
+    }, 0);
+    const totalMaterialValue = materials.reduce((sum: number, m: any) => {
+      if (m.isFoc) return sum;
+      return sum + ((m.quantity || 0) * (m.unitPrice || 0));
+    }, 0);
+    const totalContractValue = totalManpowerValue + totalMaterialValue;
+
+    const focManpowerCount = mr.filter((r: any) => r.isFoc).reduce((sum: number, r: any) => sum + (r.quantity || 0), 0);
+    const focMaterialCount = materials.filter((m: any) => m.isFoc).reduce((sum: number, m: any) => sum + (m.quantity || 0), 0);
+
     return {
       ...contract,
       client: (db.manpowerClients || []).find((c: any) => c.id === contract.clientId),
@@ -9209,17 +9393,27 @@ export const mockDb = {
       relieverRequirements: rr,
       shiftRequirements: sr,
       addendums,
+      materials,
       manpowerLineCount: mr.length,
       totalManpower: mr.reduce((sum: number, x: any) => sum + (x.quantity || 0), 0),
       relieverRequired: rr.length > 0 ? "Yes" : "No",
       totalRelievers: rr.reduce((sum: number, x: any) => sum + (x.quantity || 0), 0),
-      shiftLineCount: sr.length
+      shiftLineCount: sr.length,
+      addendumsCount: addendums.length,
+      totalManpowerValue,
+      totalMaterialValue,
+      totalContractValue,
+      focManpowerCount,
+      focMaterialCount
     };
   },
   getManpowerContractAddendums: async (contractId: string): Promise<any[]> => {
     if (isDbConnected()) {
       const res = await prismaClient.manpowerContractAddendum.findMany({
         where: { contractId },
+        include: {
+          lineItems: true
+        },
         orderBy: { createdAt: "desc" }
       });
       return res.map((x: any) => ({
@@ -9232,7 +9426,10 @@ export const mockDb = {
       }));
     }
     const db = readDb();
-    return (db.manpowerContractAddendums || []).filter((x: any) => x.contractId === contractId);
+    return (db.manpowerContractAddendums || []).filter((x: any) => x.contractId === contractId).map((a: any) => {
+      const lineItems = (db.manpowerContractAddendumLineItems || []).filter((li: any) => li.addendumId === a.id);
+      return { ...a, lineItems };
+    });
   },
   createManpowerContractAddendum: async (data: any): Promise<any> => {
     const nextCode = await getNextSequenceCode("ADD");
@@ -9240,6 +9437,16 @@ export const mockDb = {
     const addendumNumber = data.contractNumber
       ? `${data.contractNumber}-ADD-${seqPart}`
       : `ADD-${seqPart}`;
+
+    const lines = data.lineItems || [];
+    const calculatedCommercialImpact = lines.reduce((sum: number, li: any) => {
+      if (li.isFoc === true || li.isFoc === "Yes") return sum;
+      const qty = parseFloat(li.quantity) || 0;
+      const price = parseFloat(li.unitPrice) || 0;
+      const factor = li.changeType === "REMOVE" ? -1 : 1;
+      return sum + (factor * qty * price);
+    }, 0);
+
     const payload = {
       contractId: data.contractId,
       addendumNumber,
@@ -9250,12 +9457,32 @@ export const mockDb = {
       addendumType: data.addendumType,
       description: data.description || "",
       commercialImpact: data.commercialImpact || "",
+      calculatedCommercialImpact,
       attachmentUrl: data.attachmentUrl || "",
       status: data.status || "DRAFT"
     };
+
     if (isDbConnected()) {
       const res = await prismaClient.manpowerContractAddendum.create({
-        data: payload
+        data: {
+          ...payload,
+          lineItems: {
+            create: (data.lineItems || []).map((li: any) => ({
+              itemType: li.itemType,
+              changeType: li.changeType,
+              itemName: li.itemName,
+              quantity: parseFloat(li.quantity) || 0,
+              unitPrice: li.unitPrice !== undefined ? parseFloat(li.unitPrice) : null,
+              billingFrequency: li.billingFrequency || null,
+              isFoc: li.isFoc === true || li.isFoc === "Yes",
+              lineTotal: (li.isFoc === true || li.isFoc === "Yes") ? 0 : (li.changeType === "REMOVE" ? -1 : 1) * (parseFloat(li.quantity) || 0) * (parseFloat(li.unitPrice) || 0),
+              remarks: li.remarks
+            }))
+          }
+        },
+        include: {
+          lineItems: true
+        }
       });
       return {
         ...res,
@@ -9278,6 +9505,7 @@ export const mockDb = {
       addendumType: payload.addendumType,
       description: payload.description,
       commercialImpact: payload.commercialImpact,
+      calculatedCommercialImpact,
       attachmentUrl: payload.attachmentUrl,
       status: payload.status,
       createdAt: new Date().toISOString(),
@@ -9285,13 +9513,60 @@ export const mockDb = {
     };
     db.manpowerContractAddendums = db.manpowerContractAddendums || [];
     db.manpowerContractAddendums.push(newRecord);
+
+    const newLineItems = (data.lineItems || []).map((li: any, index: number) => {
+      const isFocVal = li.isFoc === true || li.isFoc === "Yes";
+      const factor = li.changeType === "REMOVE" ? -1 : 1;
+      const lineTotal = isFocVal ? 0 : factor * (parseFloat(li.quantity) || 0) * (parseFloat(li.unitPrice) || 0);
+      return {
+        id: li.id || `addli-${newRecord.id}-${index}-${Date.now()}`,
+        addendumId: newRecord.id,
+        itemType: li.itemType,
+        changeType: li.changeType,
+        itemName: li.itemName,
+        quantity: parseFloat(li.quantity) || 0,
+        unitPrice: li.unitPrice !== undefined ? parseFloat(li.unitPrice) : null,
+        billingFrequency: li.billingFrequency || null,
+        isFoc: isFocVal,
+        lineTotal,
+        remarks: li.remarks || "",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+    });
+    db.manpowerContractAddendumLineItems = db.manpowerContractAddendumLineItems || [];
+    db.manpowerContractAddendumLineItems.push(...newLineItems);
     writeDb(db);
-    return newRecord;
+    return {
+      ...newRecord,
+      lineItems: newLineItems
+    };
   },
   createManpowerContract: async (data: any): Promise<any> => {
     const contractNumber = data.contractNumber || await getNextSequenceCode("SCON");
     const dataWithCode = { ...data, contractNumber };
     const contractId = dataWithCode.id || `mcon-${Date.now()}`;
+
+    const manpowerReqs = dataWithCode.manpowerRequirements || [];
+    const materialReqs = dataWithCode.materials || [];
+
+    const totalManpowerValue = manpowerReqs.reduce((sum: number, mr: any) => {
+      if (mr.isFoc === true || mr.isFoc === "Yes") return sum;
+      const qty = parseInt(mr.quantity, 10) || 0;
+      const price = parseFloat(mr.unitPrice) || 0;
+      const count = parseInt(mr.billingPeriodCount, 10) || 1;
+      return sum + (qty * price * count);
+    }, 0);
+
+    const totalMaterialValue = materialReqs.reduce((sum: number, mat: any) => {
+      if (mat.isFoc === true || mat.isFoc === "Yes") return sum;
+      const qty = parseInt(mat.quantity, 10) || 0;
+      const price = parseFloat(mat.unitPrice) || 0;
+      return sum + (qty * price);
+    }, 0);
+
+    const totalContractValue = totalManpowerValue + totalMaterialValue;
+
     if (isDbConnected()) {
       const res = await prismaClient.manpowerContract.create({
         data: {
@@ -9305,18 +9580,29 @@ export const mockDb = {
           status: dataWithCode.status || "DRAFT",
           defaultManpowerCount: dataWithCode.defaultManpowerCount || 0,
           defaultRelieverCount: dataWithCode.defaultRelieverCount || 0,
+          durationNumber: dataWithCode.durationNumber !== undefined ? parseInt(dataWithCode.durationNumber, 10) : null,
+          durationUnit: dataWithCode.durationUnit || null,
+          totalDurationDays: dataWithCode.totalDurationDays !== undefined ? parseInt(dataWithCode.totalDurationDays, 10) : null,
+          totalManpowerValue,
+          totalMaterialValue,
+          totalContractValue,
           manpowerRequirements: {
             create: (dataWithCode.manpowerRequirements || []).map((mr: any) => ({
               position: mr.position,
-              quantity: parseInt(mr.quantity, 10),
+              quantity: parseInt(mr.quantity, 10) || 0,
               deploymentType: mr.deploymentType,
+              unitPrice: mr.unitPrice !== undefined ? parseFloat(mr.unitPrice) : null,
+              billingFrequency: mr.billingFrequency || null,
+              billingPeriodCount: mr.billingPeriodCount !== undefined ? parseInt(mr.billingPeriodCount, 10) : null,
+              isFoc: mr.isFoc === true || mr.isFoc === "Yes",
+              lineTotal: (mr.isFoc === true || mr.isFoc === "Yes") ? 0 : (parseInt(mr.quantity, 10) || 0) * (parseFloat(mr.unitPrice) || 0) * (parseInt(mr.billingPeriodCount, 10) || 1),
               remarks: mr.remarks
             }))
           },
           relieverRequirements: {
             create: (dataWithCode.relieverRequirements || []).map((rr: any) => ({
               position: rr.position,
-              quantity: parseInt(rr.quantity, 10),
+              quantity: parseInt(rr.quantity, 10) || 0,
               sourcePreference: rr.sourcePreference,
               remarks: rr.remarks
             }))
@@ -9326,9 +9612,23 @@ export const mockDb = {
               shiftName: sr.shiftName,
               startTime: sr.startTime,
               endTime: sr.endTime,
-              postsCovered: parseInt(sr.postsCovered, 10),
+              postsCovered: parseInt(sr.postsCovered, 10) || 0,
               daysPattern: sr.daysPattern,
               remarks: sr.remarks
+            }))
+          },
+          materials: {
+            create: (dataWithCode.materials || []).map((mat: any) => ({
+              materialId: mat.materialId || null,
+              itemName: mat.itemName || mat.materialName || "",
+              quantity: parseInt(mat.quantity, 10) || 0,
+              unitPrice: mat.unitPrice !== undefined ? parseFloat(mat.unitPrice) : null,
+              isFoc: mat.isFoc === true || mat.isFoc === "Yes",
+              lineTotal: (mat.isFoc === true || mat.isFoc === "Yes") ? 0 : (parseInt(mat.quantity, 10) || 0) * (parseFloat(mat.unitPrice) || 0),
+              remarks: mat.remarks,
+              startDate: new Date(dataWithCode.startDate),
+              endDate: new Date(dataWithCode.endDate),
+              operationType: dataWithCode.operationType || "SECURITY_GUARDING"
             }))
           }
         },
@@ -9336,12 +9636,14 @@ export const mockDb = {
           client: true,
           manpowerRequirements: true,
           relieverRequirements: true,
-          shiftRequirements: true
+          shiftRequirements: true,
+          materials: true
         }
       });
       const manpowerRequirements = res.manpowerRequirements || [];
       const relieverRequirements = res.relieverRequirements || [];
       const shiftRequirements = res.shiftRequirements || [];
+      const materials = res.materials || [];
       return { 
         ...res, 
         createdAt: res.createdAt?.toISOString(), 
@@ -9352,7 +9654,11 @@ export const mockDb = {
         totalManpower: manpowerRequirements.reduce((sum: number, r: any) => sum + (r.quantity || 0), 0),
         relieverRequired: relieverRequirements.length > 0 ? "Yes" : "No",
         totalRelievers: relieverRequirements.reduce((sum: number, r: any) => sum + (r.quantity || 0), 0),
-        shiftLineCount: shiftRequirements.length
+        shiftLineCount: shiftRequirements.length,
+        materials,
+        totalManpowerValue,
+        totalMaterialValue,
+        totalContractValue
       };
     }
     const db = readDb();
@@ -9365,6 +9671,12 @@ export const mockDb = {
       endDate: dataWithCode.endDate || new Date().toISOString(),
       operationType: dataWithCode.operationType || "SECURITY_GUARDING",
       status: dataWithCode.status || "DRAFT",
+      durationNumber: dataWithCode.durationNumber !== undefined ? parseInt(dataWithCode.durationNumber, 10) : null,
+      durationUnit: dataWithCode.durationUnit || null,
+      totalDurationDays: dataWithCode.totalDurationDays !== undefined ? parseInt(dataWithCode.totalDurationDays, 10) : null,
+      totalManpowerValue,
+      totalMaterialValue,
+      totalContractValue,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
@@ -9375,8 +9687,13 @@ export const mockDb = {
       id: mr.id || `mr-${contractId}-${index}-${Date.now()}`,
       contractId: contractId,
       position: mr.position,
-      quantity: parseInt(mr.quantity, 10),
+      quantity: parseInt(mr.quantity, 10) || 0,
       deploymentType: mr.deploymentType,
+      unitPrice: mr.unitPrice !== undefined ? parseFloat(mr.unitPrice) : null,
+      billingFrequency: mr.billingFrequency || null,
+      billingPeriodCount: mr.billingPeriodCount !== undefined ? parseInt(mr.billingPeriodCount, 10) : null,
+      isFoc: mr.isFoc === true || mr.isFoc === "Yes",
+      lineTotal: (mr.isFoc === true || mr.isFoc === "Yes") ? 0 : (parseInt(mr.quantity, 10) || 0) * (parseFloat(mr.unitPrice) || 0) * (parseInt(mr.billingPeriodCount, 10) || 1),
       remarks: mr.remarks || "",
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
@@ -9387,7 +9704,7 @@ export const mockDb = {
       id: rr.id || `rr-${contractId}-${index}-${Date.now()}`,
       contractId: contractId,
       position: rr.position,
-      quantity: parseInt(rr.quantity, 10),
+      quantity: parseInt(rr.quantity, 10) || 0,
       sourcePreference: rr.sourcePreference,
       remarks: rr.remarks || "",
       createdAt: new Date().toISOString(),
@@ -9401,13 +9718,31 @@ export const mockDb = {
       shiftName: sr.shiftName,
       startTime: sr.startTime,
       endTime: sr.endTime,
-      postsCovered: parseInt(sr.postsCovered, 10),
+      postsCovered: parseInt(sr.postsCovered, 10) || 0,
       daysPattern: sr.daysPattern,
       remarks: sr.remarks || "",
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     }));
     db.contractShiftRequirements.push(...newShiftReqs);
+    db.manpowerContractMaterials = db.manpowerContractMaterials || [];
+    const newMaterials = (dataWithCode.materials || []).map((mat: any, index: number) => ({
+      id: mat.id || `mat-${contractId}-${index}-${Date.now()}`,
+      contractId: contractId,
+      materialId: mat.materialId || null,
+      itemName: mat.itemName || mat.materialName || "",
+      quantity: parseInt(mat.quantity, 10) || 0,
+      unitPrice: mat.unitPrice !== undefined ? parseFloat(mat.unitPrice) : null,
+      isFoc: mat.isFoc === true || mat.isFoc === "Yes",
+      lineTotal: (mat.isFoc === true || mat.isFoc === "Yes") ? 0 : (parseInt(mat.quantity, 10) || 0) * (parseFloat(mat.unitPrice) || 0),
+      remarks: mat.remarks || "",
+      startDate: newRecord.startDate,
+      endDate: newRecord.endDate,
+      operationType: newRecord.operationType,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    }));
+    db.manpowerContractMaterials.push(...newMaterials);
     writeDb(db);
     return {
       ...newRecord,
@@ -9415,6 +9750,7 @@ export const mockDb = {
       manpowerRequirements: newManpowerReqs,
       relieverRequirements: newRelieverReqs,
       shiftRequirements: newShiftReqs,
+      materials: newMaterials,
       manpowerLineCount: newManpowerReqs.length,
       totalManpower: newManpowerReqs.reduce((sum: number, r: any) => sum + (r.quantity || 0), 0),
       relieverRequired: newRelieverReqs.length > 0 ? "Yes" : "No",
@@ -10689,6 +11025,91 @@ export const mockDb = {
     db.manpowerProjectMaterialAllocations = (db.manpowerProjectMaterialAllocations || []).filter((x: any) => x.id !== id);
     writeDb(db);
     return true;
+  },
+
+  // --- Manpower Material Master CRUD ---
+  getManpowerMaterialMasters: async (operationType?: string, includeInactive = false): Promise<any[]> => {
+    if (isDbConnected()) {
+      const where: any = {};
+      if (!includeInactive) where.isActive = true;
+      if (operationType) {
+        where.OR = [
+          { operationType },
+          { operationType: "SHARED" }
+        ];
+      }
+      return await prismaClient.manpowerMaterialMaster.findMany({
+        where,
+        orderBy: { materialName: "asc" }
+      });
+    }
+    const db = readDb();
+    let res = db.manpowerMaterialMasters || [];
+    if (!includeInactive) {
+      res = res.filter((x: any) => x.isActive !== false);
+    }
+    if (operationType) {
+      res = res.filter((x: any) => x.operationType === operationType || x.operationType === "SHARED");
+    }
+    return res;
+  },
+  createManpowerMaterialMaster: async (data: any): Promise<any> => {
+    const nextCode = await getNextSequenceCode("MAT");
+    const materialCode = data.materialCode || nextCode;
+    const payload = {
+      materialCode,
+      materialName: data.materialName,
+      materialCategory: data.materialCategory,
+      unitOfMeasure: data.unitOfMeasure,
+      defaultUnitPrice: data.defaultUnitPrice !== undefined && data.defaultUnitPrice !== "" ? parseFloat(data.defaultUnitPrice) : null,
+      operationType: data.operationType || "SHARED",
+      isActive: data.isActive !== false,
+      remarks: data.remarks || ""
+    };
+    if (isDbConnected()) {
+      return await prismaClient.manpowerMaterialMaster.create({
+        data: payload
+      });
+    }
+    const db = readDb();
+    const newRecord = {
+      id: `mat-${Date.now()}`,
+      ...payload,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    db.manpowerMaterialMasters = db.manpowerMaterialMasters || [];
+    db.manpowerMaterialMasters.push(newRecord);
+    writeDb(db);
+    return newRecord;
+  },
+  updateManpowerMaterialMaster: async (id: string, data: any): Promise<any> => {
+    const payload = {
+      materialName: data.materialName,
+      materialCategory: data.materialCategory,
+      unitOfMeasure: data.unitOfMeasure,
+      defaultUnitPrice: data.defaultUnitPrice !== undefined && data.defaultUnitPrice !== "" ? parseFloat(data.defaultUnitPrice) : null,
+      operationType: data.operationType,
+      isActive: data.isActive,
+      remarks: data.remarks
+    };
+    if (isDbConnected()) {
+      return await prismaClient.manpowerMaterialMaster.update({
+        where: { id },
+        data: payload
+      });
+    }
+    const db = readDb();
+    const idx = (db.manpowerMaterialMasters || []).findIndex((x: any) => x.id === id);
+    if (idx === -1) throw new Error("Material not found");
+    const updated = {
+      ...db.manpowerMaterialMasters[idx],
+      ...payload,
+      updatedAt: new Date().toISOString()
+    };
+    db.manpowerMaterialMasters[idx] = updated;
+    writeDb(db);
+    return updated;
   }
 };
 

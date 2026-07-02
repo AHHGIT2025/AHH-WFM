@@ -1242,6 +1242,12 @@ model ManpowerContract {
   defaultManpowerCount Int                        @default(0)
   defaultRelieverCount Int                        @default(0)
   shiftDefinitions     Json?
+  durationNumber       Int?
+  durationUnit         String?
+  totalDurationDays    Int?
+  totalManpowerValue   Float?
+  totalMaterialValue   Float?
+  totalContractValue   Float?
   createdAt            DateTime                   @default(now())
   updatedAt            DateTime                   @updatedAt
   projects             ManpowerProject[]
@@ -1494,8 +1500,14 @@ model ManpowerContractMaterial {
   id            String                     @id @default(uuid())
   contractId    String
   contract      ManpowerContract           @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  materialId    String?
+  materialMaster ManpowerMaterialMaster?   @relation(fields: [materialId], references: [id], onDelete: SetNull)
   itemName      String
   quantity      Int
+  unitPrice     Float?
+  isFoc         Boolean                    @default(false)
+  lineTotal     Float?
+  remarks       String?
   startDate     DateTime
   endDate       DateTime
   operationType String                     // "SECURITY_GUARDING" | "FACILITY_MANAGEMENT"
@@ -1526,6 +1538,11 @@ model ContractManpowerRequirement {
   position       String
   quantity       Int
   deploymentType String
+  unitPrice      Float?
+  billingFrequency String?
+  billingPeriodCount Int?
+  isFoc          Boolean          @default(false)
+  lineTotal      Float?
   remarks        String?
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
@@ -1574,19 +1591,53 @@ model ManpowerClientDocument {
 }
 
 model ManpowerContractAddendum {
-  id               String           @id @default(uuid())
-  contractId       String
-  contract         ManpowerContract @relation(fields: [contractId], references: [id], onDelete: Cascade)
-  addendumNumber   String
-  title            String
-  addendumDate     DateTime
-  effectiveFrom    DateTime
-  effectiveTo      DateTime?
-  addendumType     String
-  description      String?
-  commercialImpact String?
-  attachmentUrl    String?
-  status           String           @default("DRAFT")
-  createdAt        DateTime         @default(now())
-  updatedAt        DateTime         @updatedAt
+  id                         String           @id @default(uuid())
+  contractId                 String
+  contract                   ManpowerContract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  addendumNumber             String
+  title                      String
+  addendumDate               DateTime
+  effectiveFrom              DateTime
+  effectiveTo                DateTime?
+  addendumType               String
+  description                String?
+  commercialImpact           String?
+  calculatedCommercialImpact Float?
+  attachmentUrl              String?
+  status                     String           @default("DRAFT")
+  createdAt                  DateTime         @default(now())
+  updatedAt                  DateTime         @updatedAt
+  lineItems                  ManpowerContractAddendumLineItem[]
+}
+
+model ManpowerMaterialMaster {
+  id               String                     @id @default(uuid())
+  materialCode     String                     @unique
+  materialName     String
+  materialCategory String
+  unitOfMeasure    String
+  defaultUnitPrice Float?
+  operationType    String                     @default("SHARED") // "SECURITY_GUARDING" | "FACILITY_MANAGEMENT" | "SHARED"
+  isActive         Boolean                    @default(true)
+  remarks          String?
+  createdAt        DateTime                   @default(now())
+  updatedAt        DateTime                   @updatedAt
+  contractMaterials ManpowerContractMaterial[]
+}
+
+model ManpowerContractAddendumLineItem {
+  id               String                   @id @default(uuid())
+  addendumId       String
+  addendum         ManpowerContractAddendum @relation(fields: [addendumId], references: [id], onDelete: Cascade)
+  itemType         String                   // "MANPOWER" | "MATERIAL"
+  changeType       String                   // "ADD" | "REMOVE" | "MODIFY"
+  itemName         String
+  quantity         Float
+  unitPrice        Float?
+  billingFrequency String?
+  isFoc            Boolean                  @default(false)
+  lineTotal        Float?
+  remarks          String?
+  createdAt        DateTime                 @default(now())
+  updatedAt        DateTime                 @updatedAt
 }
