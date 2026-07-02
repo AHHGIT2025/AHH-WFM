@@ -1264,13 +1264,13 @@ export default function ManpowerMasterPage() {
         materials: normalizedMaterials
       };
 
-      const res = await fetch(apiBase, {
-        method: isEditing ? "PATCH" : "POST",
+      const url = isEditing ? `${apiBase}/${editItem.id}` : apiBase;
+      const method = isEditing ? "PUT" : "POST";
+
+      const res = await fetch(url, {
+        method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...(isEditing ? { id: editItem.id } : {}),
-          ...payload
-        })
+        body: JSON.stringify(payload)
       });
       if (res.ok) {
         setShowAddModal(false);

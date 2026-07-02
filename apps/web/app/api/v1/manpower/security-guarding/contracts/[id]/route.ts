@@ -36,7 +36,10 @@ export async function PUT(request: Request, { params }: { params: { id: string }
     const payload = await request.json();
     const contract = await mockDb.updateManpowerContract(params.id, payload);
     return NextResponse.json(contract);
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message || "Failed to update contract" }, { status: 500 });
+  } catch (error: any) {
+    return NextResponse.json(
+      { error: "Contract save failed", details: String(error) },
+      { status: 500 }
+    );
   }
 }

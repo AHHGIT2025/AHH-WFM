@@ -39,8 +39,11 @@ export async function POST(request: Request) {
       operationType: "SECURITY_GUARDING"
     });
     return NextResponse.json(contract);
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message || "Failed to create contract" }, { status: 500 });
+  } catch (error: any) {
+    return NextResponse.json(
+      { error: "Contract save failed", details: String(error) },
+      { status: 500 }
+    );
   }
 }
 
@@ -60,7 +63,10 @@ export async function PATCH(request: Request) {
     }
     const contract = await mockDb.updateManpowerContract(payload.id, payload);
     return NextResponse.json(contract);
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message || "Failed to update contract" }, { status: 500 });
+  } catch (error: any) {
+    return NextResponse.json(
+      { error: "Contract save failed", details: String(error) },
+      { status: 500 }
+    );
   }
 }
