@@ -40,6 +40,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
     });
     return NextResponse.json(addendum);
   } catch (e: any) {
+    console.error("ADDENDUM POST ERROR:", e);
     return NextResponse.json({ error: e.message || "Failed to create contract addendum" }, { status: 500 });
   }
 }

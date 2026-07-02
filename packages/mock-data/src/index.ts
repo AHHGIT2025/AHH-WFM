@@ -36,7 +36,8 @@ export async function getNextSequenceCode(prefix: string): Promise<string> {
     "SINSP": { model: "securitySiteInspection", field: "code", dbKey: "securitySiteInspections" },
     "SLIC": { model: "securityLicense", field: "licenseNumber", dbKey: "securityLicenses" },
     "SGP": { model: "securityGatePass", field: "gatePassNumber", dbKey: "securityGatePasses" },
-    "SMAT": { model: "manpowerProjectMaterialAllocation", field: "code", dbKey: "manpowerProjectMaterialAllocations" }
+    "SMAT": { model: "manpowerProjectMaterialAllocation", field: "code", dbKey: "manpowerProjectMaterialAllocations" },
+    "ADD": { model: "manpowerContractAddendum", field: "addendumNumber", dbKey: "manpowerContractAddendums" }
   };
 
   const config = tableMap[prefix];
@@ -61,7 +62,9 @@ export async function getNextSequenceCode(prefix: string): Promise<string> {
   }
 
   let maxSeq = 0;
-  const regex = new RegExp(`^${prefix}-(\\d+)$`);
+  const regex = prefix === "ADD"
+    ? /(?:^|-)ADD-(\d+)$/
+    : new RegExp(`^${prefix}-(\\d+)$`);
   for (const code of existingCodes) {
     const match = code.match(regex);
     if (match) {
@@ -9233,7 +9236,10 @@ export const mockDb = {
   },
   createManpowerContractAddendum: async (data: any): Promise<any> => {
     const nextCode = await getNextSequenceCode("ADD");
-    const addendumNumber = `${data.contractNumber || "CON"}-ADD-${nextCode}`;
+    const seqPart = nextCode.includes("-") ? nextCode.split("-")[1] : nextCode;
+    const addendumNumber = data.contractNumber
+      ? `${data.contractNumber}-ADD-${seqPart}`
+      : `ADD-${seqPart}`;
     const payload = {
       contractId: data.contractId,
       addendumNumber,
