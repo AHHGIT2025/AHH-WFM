@@ -1055,6 +1055,109 @@ export default function ManpowerMasterPage() {
     });
   };
 
+  const calculateEndDate = (start: string, num: number, unit: string): string => {
+    if (!start || !num || num <= 0) return "";
+    const startDate = new Date(start);
+    if (isNaN(startDate.getTime())) return "";
+
+    let endDate = new Date(startDate);
+    if (unit === "Day") {
+      endDate.setDate(startDate.getDate() + num);
+    } else if (unit === "Month") {
+      endDate.setMonth(startDate.getMonth() + num);
+    } else if (unit === "Year") {
+      endDate.setFullYear(startDate.getFullYear() + num);
+    }
+    endDate.setDate(endDate.getDate() - 1);
+
+    const yyyy = endDate.getFullYear();
+    const mm = String(endDate.getMonth() + 1).padStart(2, '0');
+    const dd = String(endDate.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  };
+
+  const calculateDurationDays = (start: string, end: string): number => {
+    if (!start || !end) return 0;
+    const startDate = new Date(start);
+    const endDate = new Date(end);
+    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) return 0;
+
+    const diffTime = endDate.getTime() - startDate.getTime();
+    if (diffTime < 0) return 0;
+    return Math.round(diffTime / (1000 * 60 * 60 * 24)) + 1;
+  };
+
+  const addMaterialRow = () => {
+    const list = formData.materials || [];
+    setFormData({
+      ...formData,
+      materials: [
+        ...list,
+        {
+          id: `new-mat-${Date.now()}`,
+          materialId: "",
+          materialName: "",
+          itemName: "",
+          quantity: 1,
+          unitOfMeasure: "Each",
+          unitPrice: 0,
+          isFoc: false,
+          lineTotal: 0,
+          remarks: ""
+        }
+      ]
+    });
+  };
+
+  const updateMaterialRow = (index: number, field: string, value: any) => {
+    const list = [...(formData.materials || [])];
+    const item = { ...list[index], [field]: value };
+
+    if (field === "materialId") {
+      const selectedMat = materialsList.find((m: any) => m.id === value);
+      if (selectedMat) {
+        item.materialName = selectedMat.materialName;
+        item.itemName = selectedMat.materialName;
+        item.unitOfMeasure = selectedMat.unitOfMeasure || "Each";
+        item.unitPrice = selectedMat.defaultUnitPrice !== null && selectedMat.defaultUnitPrice !== undefined ? selectedMat.defaultUnitPrice : 0;
+      } else {
+        item.materialName = "";
+        item.itemName = "";
+        item.unitOfMeasure = "Each";
+        item.unitPrice = 0;
+      }
+    }
+
+    const qty = field === "quantity" ? (parseInt(value, 10) || 0) : (parseInt(item.quantity, 10) || 0);
+    const price = field === "unitPrice" ? (parseFloat(value) || 0) : (parseFloat(item.unitPrice) || 0);
+    const isFoc = field === "isFoc" ? !!value : !!item.isFoc;
+
+    item.lineTotal = isFoc ? 0 : qty * price;
+
+    list[index] = item;
+    setFormData({ ...formData, materials: list });
+  };
+
+  const deleteMaterialRow = (index: number) => {
+    const list = [...(formData.materials || [])];
+    list.splice(index, 1);
+    setFormData({ ...formData, materials: list });
+  };
+
+  const removeMaterialRow = deleteMaterialRow;
+
+  const calculateMaterialLineTotal = (quantity: number, unitPrice: number, isFoc: boolean) => {
+    return isFoc ? 0 : (quantity || 0) * (unitPrice || 0);
+  };
+  
+  const recalculateContractTotals = () => {
+    // Totals are computed dynamically during render
+  };
+
+  const addAddendumLineItem = addAddendumLine;
+  const updateAddendumLineItem = updateAddendumLine;
+  const removeAddendumLineItem = deleteAddendumLine;
+
   const handleSaveContract = async (status: "DRAFT" | "ACTIVE") => {
     setFormError("");
     if (!formData.clientId || !formData.title || !formData.startDate || !formData.endDate) {
