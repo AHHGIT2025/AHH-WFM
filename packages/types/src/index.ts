@@ -881,6 +881,38 @@ export interface UserOperationAccess {
   updatedAt?: string;
 }
 
+export interface ManpowerClientDocument {
+  id: string;
+  clientId: string;
+  documentType: string;
+  fileName?: string | null;
+  fileUrl?: string | null;
+  storagePath?: string | null;
+  expiryDate?: string | null;
+  remarks?: string | null;
+  uploadedBy?: string | null;
+  uploadedAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ManpowerContractAddendum {
+  id: string;
+  contractId: string;
+  addendumNumber: string;
+  title: string;
+  addendumDate: string;
+  effectiveFrom: string;
+  effectiveTo?: string | null;
+  addendumType: string;
+  description?: string | null;
+  commercialImpact?: string | null;
+  attachmentUrl?: string | null;
+  status: "DRAFT" | "APPROVED" | "ACTIVE" | "CANCELLED" | string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface ManpowerClient {
   id: string;
   name: string;
@@ -889,6 +921,52 @@ export interface ManpowerClient {
   isActive: boolean;
   createdAt?: string;
   updatedAt?: string;
+  documents?: ManpowerClientDocument[];
+  customerType?: "COMPANY" | "INDIVIDUAL" | string;
+  tradingName?: string | null;
+  businessType?: string | null;
+  addressLine1?: string | null;
+  addressLine2?: string | null;
+  zone?: string | null;
+  area?: string | null;
+  city?: string | null;
+  country?: string | null;
+  poBox?: string | null;
+  mapLocation?: string | null;
+  mainPhone?: string | null;
+  mainEmail?: string | null;
+  website?: string | null;
+  operationContactName?: string | null;
+  operationContactDesignation?: string | null;
+  operationContactMobile?: string | null;
+  operationContactEmail?: string | null;
+  operationContactAltPhone?: string | null;
+  financeContactName?: string | null;
+  financeContactDesignation?: string | null;
+  financeContactMobile?: string | null;
+  financeContactEmail?: string | null;
+  financeContactAltPhone?: string | null;
+  billingEmail?: string | null;
+  paymentTerms?: string | null;
+  crNumber?: string | null;
+  crExpiryDate?: string | null;
+  taxNumber?: string | null;
+  establishmentCardNumber?: string | null;
+  establishmentCardExpiryDate?: string | null;
+  authorizedSignatoryName?: string | null;
+  authorizedSignatoryQid?: string | null;
+  qidNumber?: string | null;
+  qidExpiryDate?: string | null;
+  passportNumber?: string | null;
+  passportExpiryDate?: string | null;
+  nationality?: string | null;
+  dateOfBirth?: string | null;
+  internalSalesPersonId?: string | null;
+  internalSalesPersonName?: string | null;
+  internalSalesPersonMobile?: string | null;
+  internalSalesPersonEmail?: string | null;
+  legalRemarks?: string | null;
+  remarks?: string | null;
 }
 
 export interface ManpowerContract {
@@ -906,6 +984,15 @@ export interface ManpowerContract {
   shiftDefinitions?: any;
   createdAt?: string;
   updatedAt?: string;
+  manpowerRequirements?: ContractManpowerRequirement[];
+  relieverRequirements?: ContractRelieverRequirement[];
+  shiftRequirements?: ContractShiftRequirement[];
+  addendums?: ManpowerContractAddendum[];
+  manpowerLineCount?: number;
+  totalManpower?: number;
+  relieverRequired?: "Yes" | "No";
+  totalRelievers?: number;
+  shiftLineCount?: number;
 }
 
 export interface ManpowerProject {
@@ -1146,4 +1233,40 @@ export interface ManpowerProjectMaterialAllocation {
   createdAt?: string;
   updatedAt?: string;
 }
+
+export interface ContractManpowerRequirement {
+  id: string;
+  contractId: string;
+  position: string;
+  quantity: number;
+  deploymentType: string;
+  remarks?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ContractRelieverRequirement {
+  id: string;
+  contractId: string;
+  position: string;
+  quantity: number;
+  sourcePreference: string;
+  remarks?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ContractShiftRequirement {
+  id: string;
+  contractId: string;
+  shiftName: string;
+  startTime: string;
+  endTime: string;
+  postsCovered: number;
+  daysPattern: string;
+  remarks?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 

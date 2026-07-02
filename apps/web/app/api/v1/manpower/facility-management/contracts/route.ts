@@ -43,3 +43,24 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: e.message || "Failed to create contract" }, { status: 500 });
   }
 }
+
+export async function PATCH(request: Request) {
+  const auth = await checkApiAuth();
+  if (auth.error) return auth.error;
+
+  if (!hasPermission(auth.session?.user, "manpower.admin.full_access") &&
+      !hasPermission(auth.session?.user, "manpower.fm.manage")) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  try {
+    const payload = await request.json();
+    if (!payload.id) {
+      return NextResponse.json({ error: "Contract ID is required" }, { status: 400 });
+    }
+    const contract = await mockDb.updateManpowerContract(payload.id, payload);
+    return NextResponse.json(contract);
+  } catch (e: any) {
+    return NextResponse.json({ error: e.message || "Failed to update contract" }, { status: 500 });
+  }
+}

@@ -1173,14 +1173,60 @@ model UserOperationAccess {
 }
 
 model ManpowerClient {
-  id            String             @id @default(uuid())
-  name          String
-  code          String             @unique
-  operationType String             // "SECURITY_GUARDING" | "FACILITY_MANAGEMENT"
-  isActive      Boolean            @default(true)
-  createdAt     DateTime           @default(now())
-  updatedAt     DateTime           @updatedAt
-  contracts     ManpowerContract[]
+  id                            String                   @id @default(uuid())
+  name                          String
+  code                          String                   @unique
+  operationType                 String                   // "SECURITY_GUARDING" | "FACILITY_MANAGEMENT"
+  isActive                      Boolean                  @default(true)
+  createdAt                     DateTime                 @default(now())
+  updatedAt                     DateTime                 @updatedAt
+  contracts                     ManpowerContract[]
+  documents                     ManpowerClientDocument[]
+  customerType                  String                   @default("COMPANY")
+  tradingName                   String?
+  businessType                  String?
+  addressLine1                  String?
+  addressLine2                  String?
+  zone                          String?
+  area                          String?
+  city                          String?
+  country                       String?
+  poBox                         String?
+  mapLocation                   String?
+  mainPhone                     String?
+  mainEmail                     String?
+  website                       String?
+  operationContactName          String?
+  operationContactDesignation   String?
+  operationContactMobile        String?
+  operationContactEmail         String?
+  operationContactAltPhone      String?
+  financeContactName            String?
+  financeContactDesignation     String?
+  financeContactMobile          String?
+  financeContactEmail           String?
+  financeContactAltPhone        String?
+  billingEmail                  String?
+  paymentTerms                  String?
+  crNumber                      String?
+  crExpiryDate                  DateTime?
+  taxNumber                     String?
+  establishmentCardNumber       String?
+  establishmentCardExpiryDate   DateTime?
+  authorizedSignatoryName       String?
+  authorizedSignatoryQid        String?
+  qidNumber                     String?
+  qidExpiryDate                 DateTime?
+  passportNumber                String?
+  passportExpiryDate            DateTime?
+  nationality                   String?
+  dateOfBirth                   DateTime?
+  internalSalesPersonId         String?
+  internalSalesPersonName       String?
+  internalSalesPersonMobile     String?
+  internalSalesPersonEmail      String?
+  legalRemarks                  String?
+  remarks                       String?
 }
 
 model ManpowerContract {
@@ -1200,6 +1246,10 @@ model ManpowerContract {
   updatedAt            DateTime                   @updatedAt
   projects             ManpowerProject[]
   materials            ManpowerContractMaterial[]
+  manpowerRequirements ContractManpowerRequirement[]
+  relieverRequirements ContractRelieverRequirement[]
+  shiftRequirements    ContractShiftRequirement[]
+  addendums            ManpowerContractAddendum[]
 }
 
 model ManpowerProject {
@@ -1467,4 +1517,76 @@ model ManpowerProjectMaterialAllocation {
   operationType String                     // "SECURITY_GUARDING" | "FACILITY_MANAGEMENT"
   createdAt     DateTime                   @default(now())
   updatedAt     DateTime                   @updatedAt
+}
+
+model ContractManpowerRequirement {
+  id             String           @id @default(uuid())
+  contractId     String
+  contract       ManpowerContract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  position       String
+  quantity       Int
+  deploymentType String
+  remarks        String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+}
+
+model ContractRelieverRequirement {
+  id               String           @id @default(uuid())
+  contractId       String
+  contract         ManpowerContract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  position         String
+  quantity         Int
+  sourcePreference String
+  remarks          String?
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+}
+
+model ContractShiftRequirement {
+  id           String           @id @default(uuid())
+  contractId   String
+  contract     ManpowerContract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  shiftName    String
+  startTime    String
+  endTime      String
+  postsCovered Int
+  daysPattern  String
+  remarks      String?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+}
+
+model ManpowerClientDocument {
+  id           String         @id @default(uuid())
+  clientId     String
+  client       ManpowerClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  documentType String
+  fileName     String?
+  fileUrl      String?
+  storagePath  String?
+  expiryDate   DateTime?
+  remarks      String?
+  uploadedBy   String?
+  uploadedAt   DateTime       @default(now())
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+}
+
+model ManpowerContractAddendum {
+  id               String           @id @default(uuid())
+  contractId       String
+  contract         ManpowerContract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  addendumNumber   String
+  title            String
+  addendumDate     DateTime
+  effectiveFrom    DateTime
+  effectiveTo      DateTime?
+  addendumType     String
+  description      String?
+  commercialImpact String?
+  attachmentUrl    String?
+  status           String           @default("DRAFT")
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
 }

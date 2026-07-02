@@ -1842,5 +1842,10 @@
   "securityProjectCoordinatorAssignments": [],
   "securitySiteInspections": [],
   "manpowerContractMaterials": [],
-  "manpowerProjectMaterialAllocations": []
+  "manpowerProjectMaterialAllocations": [],
+  "contractManpowerRequirements": [],
+  "contractRelieverRequirements": [],
+  "contractShiftRequirements": [],
+  "manpowerClientDocuments": [],
+  "manpowerContractAddendums": []
 }

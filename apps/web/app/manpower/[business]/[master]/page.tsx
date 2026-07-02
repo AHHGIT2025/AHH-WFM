@@ -72,11 +72,51 @@ export default function ManpowerMasterPage() {
   const [formData, setFormData] = useState<any>({});
   const [formError, setFormError] = useState("");
   const [editItem, setEditItem] = useState<any | null>(null);
+  const [filterCustomerType, setFilterCustomerType] = useState<string>("ALL");
+  const [filterStatus, setFilterStatus] = useState<string>("ALL");
+  const [selectedClientDetail, setSelectedClientDetail] = useState<any | null>(null);
+  const [selectedContractDetail, setSelectedContractDetail] = useState<any | null>(null);
+  const [addendumContract, setAddendumContract] = useState<any | null>(null);
+  const [addendumForm, setAddendumForm] = useState<any>({
+    title: "",
+    addendumType: "Manpower Increase",
+    addendumDate: new Date().toISOString().substring(0, 10),
+    effectiveFrom: new Date().toISOString().substring(0, 10),
+    description: "",
+    commercialImpact: "",
+    status: "DRAFT"
+  });
 
   const startEdit = (item: any) => {
     setEditItem(item);
     setFormData({ ...item });
     setFormError("");
+  };
+
+  const viewClientDetails = async (clientId: string) => {
+    try {
+      const res = await fetch(`/api/v1/manpower/${business}/clients/${clientId}`);
+      if (res.ok) {
+        setSelectedClientDetail(await res.json());
+      } else {
+        alert("Failed to load customer details");
+      }
+    } catch (e) {
+      alert("Failed to connect to server");
+    }
+  };
+
+  const viewContractDetails = async (contractId: string) => {
+    try {
+      const res = await fetch(`/api/v1/manpower/${business}/contracts/${contractId}`);
+      if (res.ok) {
+        setSelectedContractDetail(await res.json());
+      } else {
+        alert("Failed to load contract details");
+      }
+    } catch (e) {
+      alert("Failed to connect to server");
+    }
   };
 
   // Permission Checks
@@ -115,8 +155,12 @@ export default function ManpowerMasterPage() {
   async function loadRelations() {
     try {
       if (master === "contracts" || master === "projects" || master === "sites" || master === "zones" || master === "areas") {
-        const res = await fetch(`/api/v1/manpower/${business}/clients`);
-        if (res.ok) setClients(await res.json());
+        const [clientsRes, categoriesRes] = await Promise.all([
+          fetch(`/api/v1/manpower/${business}/clients`),
+          fetch(`/api/v1/manpower/${business}/categories`)
+        ]);
+        if (clientsRes.ok) setClients(await clientsRes.json());
+        if (categoriesRes.ok) setCategories(await categoriesRes.json());
       }
       if (master === "projects" || master === "sites" || master === "zones" || master === "areas") {
         const res = await fetch(`/api/v1/manpower/${business}/contracts`);
@@ -307,7 +351,22 @@ export default function ManpowerMasterPage() {
 
   const filteredData = data.filter((item: any) => {
     const term = searchTerm.toLowerCase();
-    if (master === "clients" || master === "categories") {
+    if (master === "clients") {
+      const searchMatch = (
+        item.name?.toLowerCase().includes(term) ||
+        item.code?.toLowerCase().includes(term) ||
+        item.crNumber?.toLowerCase().includes(term) ||
+        item.qidNumber?.toLowerCase().includes(term) ||
+        item.mainPhone?.toLowerCase().includes(term) ||
+        item.mainEmail?.toLowerCase().includes(term) ||
+        item.operationContactName?.toLowerCase().includes(term) ||
+        item.financeContactName?.toLowerCase().includes(term)
+      );
+      const typeMatch = filterCustomerType === "ALL" || item.customerType === filterCustomerType;
+      const statusMatch = filterStatus === "ALL" || (filterStatus === "ACTIVE" ? item.isActive : !item.isActive);
+      return searchMatch && typeMatch && statusMatch;
+    }
+    if (master === "categories") {
       return item.name?.toLowerCase().includes(term) || item.code?.toLowerCase().includes(term);
     }
     if (master === "contracts") {
@@ -875,6 +934,1380 @@ export default function ManpowerMasterPage() {
     return null;
   }
 
+  const addManpowerRow = () => {
+    const list = formData.manpowerRequirements || [];
+    setFormData({
+      ...formData,
+      manpowerRequirements: [...list, { id: `new-mr-${Date.now()}`, position: "", quantity: 1, deploymentType: "Permanent", remarks: "" }]
+    });
+  };
+
+  const updateManpowerRow = (index: number, field: string, value: any) => {
+    const list = [...(formData.manpowerRequirements || [])];
+    list[index] = { ...list[index], [field]: value };
+    setFormData({ ...formData, manpowerRequirements: list });
+  };
+
+  const deleteManpowerRow = (index: number) => {
+    const list = [...(formData.manpowerRequirements || [])];
+    list.splice(index, 1);
+    setFormData({ ...formData, manpowerRequirements: list });
+  };
+
+  const addRelieverRow = () => {
+    const list = formData.relieverRequirements || [];
+    setFormData({
+      ...formData,
+      relieverRequirements: [...list, { id: `new-rr-${Date.now()}`, position: "", quantity: 1, sourcePreference: "General Pool", remarks: "" }]
+    });
+  };
+
+  const updateRelieverRow = (index: number, field: string, value: any) => {
+    const list = [...(formData.relieverRequirements || [])];
+    list[index] = { ...list[index], [field]: value };
+    setFormData({ ...formData, relieverRequirements: list });
+  };
+
+  const deleteRelieverRow = (index: number) => {
+    const list = [...(formData.relieverRequirements || [])];
+    list.splice(index, 1);
+    setFormData({ ...formData, relieverRequirements: list });
+  };
+
+  const addShiftRow = () => {
+    const list = formData.shiftRequirements || [];
+    setFormData({
+      ...formData,
+      shiftRequirements: [...list, { id: `new-sr-${Date.now()}`, shiftName: "Day Shift", startTime: "07:00", endTime: "19:00", postsCovered: 1, daysPattern: "Daily", remarks: "" }]
+    });
+  };
+
+  const updateShiftRow = (index: number, field: string, value: any) => {
+    const list = [...(formData.shiftRequirements || [])];
+    list[index] = { ...list[index], [field]: value };
+    setFormData({ ...formData, shiftRequirements: list });
+  };
+
+  const deleteShiftRow = (index: number) => {
+    const list = [...(formData.shiftRequirements || [])];
+    list.splice(index, 1);
+    setFormData({ ...formData, shiftRequirements: list });
+  };
+
+  const handleSaveContract = async (status: "DRAFT" | "ACTIVE") => {
+    setFormError("");
+    if (!formData.clientId || !formData.title || !formData.startDate || !formData.endDate) {
+      setFormError("Client, Contract Title, Start Date, and End Date are required.");
+      return;
+    }
+    const start = new Date(formData.startDate);
+    const end = new Date(formData.endDate);
+    if (end < start) {
+      setFormError("End Date must be greater than or equal to Start Date.");
+      return;
+    }
+    if (status === "ACTIVE") {
+      const manpowerRequirements = formData.manpowerRequirements || [];
+      if (manpowerRequirements.length === 0) {
+        setFormError("At least one manpower requirement line is required to create an Active contract.");
+        return;
+      }
+      if (manpowerRequirements.some((mr: any) => !mr.position || !mr.quantity || mr.quantity <= 0)) {
+        setFormError("All manpower requirement lines must have a valid position and quantity greater than 0.");
+        return;
+      }
+      if (formData.relieverRequired === "Yes") {
+        const relieverRequirements = formData.relieverRequirements || [];
+        if (relieverRequirements.length === 0) {
+          setFormError("At least one reliever requirement line is required when Reliever Required is Yes.");
+          return;
+        }
+        if (relieverRequirements.some((rr: any) => !rr.position || !rr.quantity || rr.quantity <= 0)) {
+          setFormError("All reliever requirement lines must have a valid position and quantity greater than 0.");
+          return;
+        }
+      }
+      const shiftRequirements = formData.shiftRequirements || [];
+      if (shiftRequirements.length === 0) {
+        setFormError("At least one shift requirement line is required to create an Active contract.");
+        return;
+      }
+      if (shiftRequirements.some((sr: any) => !sr.shiftName || !sr.startTime || !sr.endTime || !sr.postsCovered || sr.postsCovered <= 0)) {
+        setFormError("All shift requirement lines must have a shift name, times, and posts covered greater than 0.");
+        return;
+      }
+    }
+    try {
+      const isEditing = editItem !== null;
+      const res = await fetch(apiBase, {
+        method: isEditing ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...(isEditing ? { id: editItem.id } : {}),
+          ...formData,
+          status,
+          operationType: "SECURITY_GUARDING"
+        })
+      });
+      if (res.ok) {
+        setShowAddModal(false);
+        setEditItem(null);
+        setFormData({});
+        loadData();
+        loadRelations();
+      } else {
+        const errJson = await res.json();
+        setFormError(errJson.error || `Failed to ${isEditing ? "save" : "create"} contract`);
+      }
+    } catch (e) {
+      setFormError("Server connection failed");
+    }
+  };
+
+  function renderSecurityContractForm() {
+    const secClients = clients.filter((c: any) => c.operationType === "SECURITY_GUARDING");
+    const secCategories = categories.filter((c: any) => c.operationType === "SECURITY_GUARDING");
+    const fallbackCategories = [
+      { id: "PM-CAT-SEC-02", name: "Security Guard", code: "SECURITY_GUARD" },
+      { id: "PM-CAT-SEC-03", name: "Head Guard", code: "HEAD_GUARD" },
+      { id: "PM-CAT-SEC-04", name: "Security Supervisor", code: "SECURITY_SUPERVISOR" },
+      { id: "PM-CAT-SEC-05", name: "CCTV Operator", code: "CCTV_OPERATOR" },
+      { id: "PM-CAT-SEC-06", name: "Patrolling Supervisor", code: "PATROL_SUPERVISOR" },
+      { id: "PM-CAT-SEC-07", name: "Reliever Guard", code: "RELIEVER_GUARD" },
+      { id: "PM-CAT-SEC-11", name: "Other Security Manpower", code: "OTHER_SEC" }
+    ];
+    const displayCategories = secCategories.length > 0 ? secCategories : fallbackCategories;
+    const manpowerReqs = formData.manpowerRequirements || [];
+    const totalManpower = manpowerReqs.reduce((sum: number, r: any) => sum + (parseInt(r.quantity, 10) || 0), 0);
+    const relieverReqs = formData.relieverRequirements || [];
+    const totalRelievers = relieverReqs.reduce((sum: number, r: any) => sum + (parseInt(r.quantity, 10) || 0), 0);
+    const shiftReqs = formData.shiftRequirements || [];
+    const shiftCount = shiftReqs.length;
+    let durationText = "N/A";
+    if (formData.startDate && formData.endDate) {
+      const start = new Date(formData.startDate);
+      const end = new Date(formData.endDate);
+      if (end >= start) {
+        const diffTime = Math.abs(end.getTime() - start.getTime());
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+        durationText = `${diffDays} days`;
+      }
+    }
+    const validationErrors: string[] = [];
+    if (!formData.clientId) validationErrors.push("Client is required.");
+    if (!formData.title) validationErrors.push("Contract Title is required.");
+    if (!formData.startDate) validationErrors.push("Start Date is required.");
+    if (!formData.endDate) validationErrors.push("End Date is required.");
+    if (formData.startDate && formData.endDate && new Date(formData.endDate) < new Date(formData.startDate)) {
+      validationErrors.push("End Date must be greater than or equal to Start Date.");
+    }
+    const activeErrors: string[] = [];
+    if (manpowerReqs.length === 0) activeErrors.push("At least one manpower requirement is required.");
+    if (manpowerReqs.some((r: any) => !r.position || !r.quantity || r.quantity <= 0)) {
+      activeErrors.push("All manpower quantities must be greater than 0.");
+    }
+    if (formData.relieverRequired === "Yes") {
+      if (relieverReqs.length === 0) activeErrors.push("At least one reliever requirement is required when Reliever Required = Yes.");
+      if (relieverReqs.some((r: any) => !r.position || !r.quantity || r.quantity <= 0)) {
+        activeErrors.push("All reliever quantities must be greater than 0.");
+      }
+    }
+    if (shiftReqs.length === 0) activeErrors.push("At least one shift requirement is required.");
+    if (shiftReqs.some((r: any) => !r.shiftName || !r.startTime || !r.endTime || !r.postsCovered || r.postsCovered <= 0)) {
+      activeErrors.push("All shifts must have valid name, times, and posts > 0.");
+    }
+    const isDraftDisabled = !formData.clientId || !formData.title || !formData.startDate || !formData.endDate || (new Date(formData.endDate) < new Date(formData.startDate));
+    const isCreateDisabled = isDraftDisabled || activeErrors.length > 0 || validationErrors.length > 0;
+    return (
+      <div className="space-y-6 text-on-surface">
+        <div className="bg-surface-container-low border border-outline-variant p-4 rounded-xl space-y-4">
+          <h4 className="text-xs font-bold text-primary uppercase tracking-wider border-b border-outline-variant/60 pb-1">Basic Contract Details</h4>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-3">
+              <div>
+                <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Client *</label>
+                <select
+                  required
+                  className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                  value={formData.clientId || ""}
+                  onChange={(e) => setFormData({ ...formData, clientId: e.target.value })}
+                >
+                  <option value="">Select Client...</option>
+                  {secClients.map((c: any) => <option key={c.id} value={c.id}>{c.name} ({c.code})</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Contract Title *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. QP HQ Security Guarding 2026"
+                  className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                  value={formData.title || ""}
+                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Remarks / Notes (Optional)</label>
+                <textarea
+                  placeholder="Enter remarks..."
+                  rows={2}
+                  className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface resize-none"
+                  value={formData.remarks || ""}
+                  onChange={(e) => setFormData({ ...formData, remarks: e.target.value })}
+                />
+              </div>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Contract Number</label>
+                <input
+                  type="text"
+                  disabled
+                  placeholder="Auto-generated (SCON-XXXX)"
+                  className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-xs text-on-surface-variant focus:outline-none"
+                  value={formData.contractNumber || ""}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Start Date *</label>
+                  <input
+                    type="date"
+                    required
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                    value={formData.startDate || ""}
+                    onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">End Date *</label>
+                  <input
+                    type="date"
+                    required
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                    value={formData.endDate || ""}
+                    onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Contract Status</label>
+                <select
+                  className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                  value={formData.status || "DRAFT"}
+                  onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                >
+                  <option value="DRAFT">Draft</option>
+                  <option value="ACTIVE">Active</option>
+                  <option value="EXPIRED">Expired</option>
+                  <option value="TERMINATED">Terminated</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="bg-surface-container-low border border-outline-variant p-4 rounded-xl space-y-4">
+          <div className="flex justify-between items-center border-b border-outline-variant/60 pb-1">
+            <h4 className="text-xs font-bold text-primary uppercase tracking-wider">Manpower Requirements *</h4>
+            <button
+              type="button"
+              onClick={addManpowerRow}
+              className="px-2 py-1 bg-primary text-white text-[10px] font-bold rounded flex items-center gap-1 hover:bg-primary-container transition-colors"
+            >
+              <span className="material-symbols-outlined text-[12px]">add</span> Add Line
+            </button>
+          </div>
+          {manpowerReqs.length === 0 ? (
+            <p className="text-[11px] text-on-surface-variant italic py-2">No manpower requirements added yet.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="border-b border-outline-variant text-[10px] text-on-surface-variant font-bold uppercase tracking-wider">
+                    <th className="pb-2 pr-2">Position Category *</th>
+                    <th className="pb-2 pr-2 w-24">Qty *</th>
+                    <th className="pb-2 pr-2 w-36">Deployment *</th>
+                    <th className="pb-2 pr-2">Remarks</th>
+                    <th className="pb-2 w-10 text-right">Delete</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-outline-variant/40">
+                  {manpowerReqs.map((row: any, idx: number) => (
+                    <tr key={row.id || idx} className="hover:bg-surface-container-lowest/40">
+                      <td className="py-2 pr-2">
+                        <select
+                          required
+                          value={row.position || ""}
+                          onChange={(e) => updateManpowerRow(idx, "position", e.target.value)}
+                          className="w-full bg-surface-container-lowest border border-outline-variant rounded px-2 py-1 focus:outline-none"
+                        >
+                          <option value="">Select Position...</option>
+                          {displayCategories.map((c: any) => (
+                            <option key={c.id} value={c.name}>{c.name}</option>
+                          ))}
+                        </select>
+                      </td>
+                      <td className="py-2 pr-2">
+                        <input
+                          type="number"
+                          required
+                          min="1"
+                          value={row.quantity || ""}
+                          onChange={(e) => updateManpowerRow(idx, "quantity", parseInt(e.target.value, 10))}
+                          className="w-full bg-surface-container-lowest border border-outline-variant rounded px-2 py-1 focus:outline-none"
+                        />
+                      </td>
+                      <td className="py-2 pr-2">
+                        <select
+                          required
+                          value={row.deploymentType || "Permanent"}
+                          onChange={(e) => updateManpowerRow(idx, "deploymentType", e.target.value)}
+                          className="w-full bg-surface-container-lowest border border-outline-variant rounded px-2 py-1 focus:outline-none"
+                        >
+                          <option value="Permanent">Permanent</option>
+                          <option value="Temporary">Temporary</option>
+                          <option value="Event">Event</option>
+                          <option value="Overtime">Overtime</option>
+                          <option value="Reliever">Reliever</option>
+                        </select>
+                      </td>
+                      <td className="py-2 pr-2">
+                        <input
+                          type="text"
+                          value={row.remarks || ""}
+                          placeholder="Optional notes"
+                          onChange={(e) => updateManpowerRow(idx, "remarks", e.target.value)}
+                          className="w-full bg-surface-container-lowest border border-outline-variant rounded px-2 py-1 focus:outline-none"
+                        />
+                      </td>
+                      <td className="py-2 text-right">
+                        <button
+                          type="button"
+                          onClick={() => deleteManpowerRow(idx)}
+                          className="text-status-error hover:bg-status-error/10 p-1 rounded"
+                        >
+                          <span className="material-symbols-outlined text-[16px]">delete</span>
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+        <div className="bg-surface-container-low border border-outline-variant p-4 rounded-xl space-y-4">
+          <div className="flex justify-between items-center border-b border-outline-variant/60 pb-1">
+            <div className="flex items-center gap-4">
+              <h4 className="text-xs font-bold text-primary uppercase tracking-wider">Reliever Requirements</h4>
+              <div className="flex items-center gap-1.5 text-xs">
+                <span className="font-bold text-[11px] text-on-surface-variant uppercase">Reliever Required?</span>
+                <select
+                  value={formData.relieverRequired || "No"}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setFormData({
+                      ...formData,
+                      relieverRequired: val,
+                      relieverRequirements: val === "Yes" ? (formData.relieverRequirements || []) : []
+                    });
+                  }}
+                  className="bg-surface-container-lowest border border-outline-variant rounded px-2 py-0.5 text-xs font-bold"
+                >
+                  <option value="No">No</option>
+                  <option value="Yes">Yes</option>
+                </select>
+              </div>
+            </div>
+            {formData.relieverRequired === "Yes" && (
+              <button
+                type="button"
+                onClick={addRelieverRow}
+                className="px-2 py-1 bg-primary text-white text-[10px] font-bold rounded flex items-center gap-1 hover:bg-primary-container transition-colors"
+              >
+                <span className="material-symbols-outlined text-[12px]">add</span> Add Line
+              </button>
+            )}
+          </div>
+          {formData.relieverRequired === "Yes" ? (
+            relieverReqs.length === 0 ? (
+              <p className="text-[11px] text-on-surface-variant italic py-2">No reliever requirements added yet.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="border-b border-outline-variant text-[10px] text-on-surface-variant font-bold uppercase tracking-wider">
+                      <th className="pb-2 pr-2">Reliever Position *</th>
+                      <th className="pb-2 pr-2 w-24">Qty *</th>
+                      <th className="pb-2 pr-2 w-48">Source Preference *</th>
+                      <th className="pb-2 pr-2">Remarks</th>
+                      <th className="pb-2 w-10 text-right">Delete</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-outline-variant/40">
+                    {relieverReqs.map((row: any, idx: number) => (
+                      <tr key={row.id || idx} className="hover:bg-surface-container-lowest/40">
+                        <td className="py-2 pr-2">
+                          <select
+                            required
+                            value={row.position || ""}
+                            onChange={(e) => updateRelieverRow(idx, "position", e.target.value)}
+                            className="w-full bg-surface-container-lowest border border-outline-variant rounded px-2 py-1 focus:outline-none"
+                          >
+                            <option value="">Select Reliever Position...</option>
+                            <option value="Reliever Guard">Reliever Guard</option>
+                            <option value="Head Guard">Head Guard</option>
+                            <option value="Supervisor Reliever">Supervisor Reliever</option>
+                            <option value="Patrolling Reliever">Patrolling Reliever</option>
+                          </select>
+                        </td>
+                        <td className="py-2 pr-2">
+                          <input
+                            type="number"
+                            required
+                            min="1"
+                            value={row.quantity || ""}
+                            onChange={(e) => updateRelieverRow(idx, "quantity", parseInt(e.target.value, 10))}
+                            className="w-full bg-surface-container-lowest border border-outline-variant rounded px-2 py-1 focus:outline-none"
+                          />
+                        </td>
+                        <td className="py-2 pr-2">
+                          <select
+                            required
+                            value={row.sourcePreference || "General Pool"}
+                            onChange={(e) => updateRelieverRow(idx, "sourcePreference", e.target.value)}
+                            className="w-full bg-surface-container-lowest border border-outline-variant rounded px-2 py-1 focus:outline-none"
+                          >
+                            <option value="Fixed Project Reliever">Fixed Project Reliever</option>
+                            <option value="Site Reliever">Site Reliever</option>
+                            <option value="General Pool">General Pool</option>
+                            <option value="Emergency">Emergency</option>
+                          </select>
+                        </td>
+                        <td className="py-2 pr-2">
+                          <input
+                            type="text"
+                            value={row.remarks || ""}
+                            placeholder="Optional notes"
+                            onChange={(e) => updateRelieverRow(idx, "remarks", e.target.value)}
+                            className="w-full bg-surface-container-lowest border border-outline-variant rounded px-2 py-1 focus:outline-none"
+                          />
+                        </td>
+                        <td className="py-2 text-right">
+                          <button
+                            type="button"
+                            onClick={() => deleteRelieverRow(idx)}
+                            className="text-status-error hover:bg-status-error/10 p-1 rounded"
+                          >
+                            <span className="material-symbols-outlined text-[16px]">delete</span>
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )
+          ) : (
+            <p className="text-[11px] text-on-surface-variant/70 italic">Relievers are not required for this contract.</p>
+          )}
+        </div>
+        <div className="bg-surface-container-low border border-outline-variant p-4 rounded-xl space-y-4">
+          <div className="flex justify-between items-center border-b border-outline-variant/60 pb-1">
+            <h4 className="text-xs font-bold text-primary uppercase tracking-wider">Shift Requirements *</h4>
+            <button
+              type="button"
+              onClick={addShiftRow}
+              className="px-2 py-1 bg-primary text-white text-[10px] font-bold rounded flex items-center gap-1 hover:bg-primary-container transition-colors"
+            >
+              <span className="material-symbols-outlined text-[12px]">add</span> Add Line
+            </button>
+          </div>
+          {shiftReqs.length === 0 ? (
+            <p className="text-[11px] text-on-surface-variant italic py-2">No shift requirements added yet.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="border-b border-outline-variant text-[10px] text-on-surface-variant font-bold uppercase tracking-wider">
+                    <th className="pb-2 pr-2 w-36">Shift Name *</th>
+                    <th className="pb-2 pr-2 w-28">Start *</th>
+                    <th className="pb-2 pr-2 w-28">End *</th>
+                    <th className="pb-2 pr-2 w-24">Posts Covered *</th>
+                    <th className="pb-2 pr-2 w-32">Days Pattern *</th>
+                    <th className="pb-2 pr-2">Remarks</th>
+                    <th className="pb-2 w-10 text-right">Delete</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-outline-variant/40">
+                  {shiftReqs.map((row: any, idx: number) => (
+                    <tr key={row.id || idx} className="hover:bg-surface-container-lowest/40">
+                      <td className="py-2 pr-2">
+                        <select
+                          required
+                          value={row.shiftName || "Day Shift"}
+                          onChange={(e) => updateShiftRow(idx, "shiftName", e.target.value)}
+                          className="w-full bg-surface-container-lowest border border-outline-variant rounded px-2 py-1 focus:outline-none font-semibold text-on-surface"
+                        >
+                          <option value="Day Shift">Day Shift</option>
+                          <option value="Night Shift">Night Shift</option>
+                          <option value="24 Hours">24 Hours</option>
+                          <option value="Custom">Custom</option>
+                        </select>
+                      </td>
+                      <td className="py-2 pr-2">
+                        <input
+                          type="time"
+                          required
+                          value={row.startTime || "07:00"}
+                          onChange={(e) => updateShiftRow(idx, "startTime", e.target.value)}
+                          className="w-full bg-surface-container-lowest border border-outline-variant rounded px-2 py-1 focus:outline-none"
+                        />
+                      </td>
+                      <td className="py-2 pr-2">
+                        <input
+                          type="time"
+                          required
+                          value={row.endTime || "19:00"}
+                          onChange={(e) => updateShiftRow(idx, "endTime", e.target.value)}
+                          className="w-full bg-surface-container-lowest border border-outline-variant rounded px-2 py-1 focus:outline-none"
+                        />
+                      </td>
+                      <td className="py-2 pr-2">
+                        <input
+                          type="number"
+                          required
+                          min="1"
+                          value={row.postsCovered || ""}
+                          onChange={(e) => updateShiftRow(idx, "postsCovered", parseInt(e.target.value, 10))}
+                          className="w-full bg-surface-container-lowest border border-outline-variant rounded px-2 py-1 focus:outline-none"
+                        />
+                      </td>
+                      <td className="py-2 pr-2">
+                        <select
+                          required
+                          value={row.daysPattern || "Daily"}
+                          onChange={(e) => updateShiftRow(idx, "daysPattern", e.target.value)}
+                          className="w-full bg-surface-container-lowest border border-outline-variant rounded px-2 py-1 focus:outline-none"
+                        >
+                          <option value="Daily">Daily</option>
+                          <option value="Weekdays">Weekdays</option>
+                          <option value="Weekend">Weekend</option>
+                          <option value="Custom">Custom</option>
+                        </select>
+                      </td>
+                      <td className="py-2 pr-2">
+                        <input
+                          type="text"
+                          value={row.remarks || ""}
+                          placeholder="e.g. main entrance"
+                          onChange={(e) => updateShiftRow(idx, "remarks", e.target.value)}
+                          className="w-full bg-surface-container-lowest border border-outline-variant rounded px-2 py-1 focus:outline-none"
+                        />
+                      </td>
+                      <td className="py-2 text-right">
+                        <button
+                          type="button"
+                          onClick={() => deleteShiftRow(idx)}
+                          className="text-status-error hover:bg-status-error/10 p-1 rounded"
+                        >
+                          <span className="material-symbols-outlined text-[16px]">delete</span>
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+        <div className="bg-surface-container border border-outline-variant p-4 rounded-xl grid grid-cols-3 gap-4">
+          <div className="col-span-2 space-y-3">
+            <h4 className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider border-b border-outline-variant pb-1">Validation & Summary</h4>
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <p className="text-on-surface-variant">Total Manpower Required: <span className="font-bold text-on-surface">{totalManpower} guards</span></p>
+              <p className="text-on-surface-variant">Total Relievers Required: <span className="font-bold text-on-surface">{totalRelievers} relievers</span></p>
+              <p className="text-on-surface-variant">Shift lines logged: <span className="font-bold text-on-surface">{shiftCount} shift(s)</span></p>
+              <p className="text-on-surface-variant">Contract Duration: <span className="font-bold text-on-surface">{durationText}</span></p>
+            </div>
+          </div>
+          <div className="border-l border-outline-variant pl-4 space-y-2">
+            <h5 className="text-[9px] font-bold uppercase tracking-wider text-on-surface-variant">Save Blockers</h5>
+            {validationErrors.length > 0 ? (
+              <ul className="list-disc pl-3 text-[10px] text-status-error font-bold space-y-1">
+                {validationErrors.map((err, i) => <li key={i}>{err}</li>)}
+              </ul>
+            ) : activeErrors.length > 0 ? (
+              <div className="space-y-1">
+                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-status-warning/15 text-status-warning border border-status-warning/20">
+                  Ready as Draft Only
+                </span>
+                <ul className="list-disc pl-3 text-[10px] text-on-surface-variant space-y-1">
+                  {activeErrors.map((err, i) => <li key={i}>{err}</li>)}
+                </ul>
+              </div>
+            ) : (
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-status-success/15 text-status-success border border-status-success/20">
+                Fully Validated & Ready
+              </span>
+            )}
+          </div>
+        </div>
+        <div className="px-6 py-4 border-t border-outline-variant flex justify-end gap-3 bg-surface-container-low -mx-6 -mb-6 rounded-b-xl mt-4">
+          <button
+            type="button"
+            onClick={() => {
+              setShowAddModal(false);
+              setEditItem(null);
+              setFormData({});
+            }}
+            className="px-3 py-2 border border-outline-variant rounded-lg text-xs font-bold text-on-surface hover:bg-surface-container-high transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            disabled={isDraftDisabled}
+            onClick={() => handleSaveContract("DRAFT")}
+            className={`px-3 py-2 text-xs font-bold rounded-lg border border-outline-variant transition-colors ${
+              isDraftDisabled ? "opacity-40 cursor-not-allowed text-on-surface-variant" : "bg-surface-container-high hover:bg-surface-container-highest text-on-surface"
+            }`}
+          >
+            Save as Draft
+          </button>
+          <button
+            type="button"
+            disabled={isCreateDisabled}
+            onClick={() => handleSaveContract("ACTIVE")}
+            className={`px-3 py-2 text-white text-xs font-bold rounded-lg transition-colors ${
+              isCreateDisabled ? "opacity-40 cursor-not-allowed bg-primary/40" : "bg-primary hover:bg-primary-container"
+            }`}
+          >
+            Create Contract
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const renderEnhancedCustomerForm = (isEdit: boolean) => {
+    const customerType = formData.customerType || "COMPANY";
+    
+    const handleTypeChange = (newType: string) => {
+      if (isEdit) {
+        let warnMsg = "Changing the customer type will change the profile layout. ";
+        if (formData.contracts?.length > 0 || formData.documents?.length > 0) {
+          warnMsg += "Warning: This client already has associated contracts or documents. Are you sure you want to change the customer type?";
+        } else {
+          warnMsg += "Are you sure you want to proceed?";
+        }
+        if (!confirm(warnMsg)) return;
+      }
+      setFormData({
+        ...formData,
+        customerType: newType
+      });
+    };
+    
+    return (
+      <div className="space-y-6 text-on-surface">
+        <div className="bg-surface-container-low border border-outline-variant p-4 rounded-xl space-y-3">
+          <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Customer Type *</label>
+          <div className="flex gap-4">
+            <label className="flex items-center gap-2 text-xs font-semibold cursor-pointer">
+              <input
+                type="radio"
+                name="customerType"
+                value="COMPANY"
+                checked={customerType === "COMPANY"}
+                onChange={() => handleTypeChange("COMPANY")}
+                className="text-primary focus:ring-primary"
+              />
+              Company / Corporate
+            </label>
+            <label className="flex items-center gap-2 text-xs font-semibold cursor-pointer">
+              <input
+                type="radio"
+                name="customerType"
+                value="INDIVIDUAL"
+                checked={customerType === "INDIVIDUAL"}
+                onChange={() => handleTypeChange("INDIVIDUAL")}
+                className="text-primary focus:ring-primary"
+              />
+              Individual Customer
+            </label>
+          </div>
+        </div>
+
+        {customerType === "COMPANY" ? (
+          <>
+            <div className="bg-surface-container-low border border-outline-variant p-4 rounded-xl space-y-4">
+              <h4 className="text-xs font-bold text-primary uppercase tracking-wider border-b border-outline-variant/60 pb-1">Basic Company Details</h4>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Customer Code</label>
+                  <input
+                    type="text"
+                    disabled
+                    placeholder={isSecurity ? "Auto-generated (SC-XXXX)" : "Auto-generated (FC-XXXX)"}
+                    className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-xs text-on-surface-variant focus:outline-none"
+                    value={formData.code || ""}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Company Name *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Al Hattab Group"
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                    value={formData.name || ""}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Trading Name / Short Name</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. AHG"
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                    value={formData.tradingName || ""}
+                    onChange={(e) => setFormData({ ...formData, tradingName: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Business Type / Industry</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Construction, Logistics"
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                    value={formData.businessType || ""}
+                    onChange={(e) => setFormData({ ...formData, businessType: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Customer Status</label>
+                  <select
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                    value={formData.isActive !== false ? "ACTIVE" : "INACTIVE"}
+                    onChange={(e) => setFormData({ ...formData, isActive: e.target.value === "ACTIVE" })}
+                  >
+                    <option value="ACTIVE">Active</option>
+                    <option value="INACTIVE">Inactive</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Remarks / Notes</label>
+                  <input
+                    type="text"
+                    placeholder="General remarks..."
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                    value={formData.remarks || ""}
+                    onChange={(e) => setFormData({ ...formData, remarks: e.target.value })}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-surface-container-low border border-outline-variant p-4 rounded-xl space-y-4">
+              <h4 className="text-xs font-bold text-primary uppercase tracking-wider border-b border-outline-variant/60 pb-1">Company Address</h4>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Building / Street</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Building 24, St 950"
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                    value={formData.addressLine1 || ""}
+                    onChange={(e) => setFormData({ ...formData, addressLine1: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Zone</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Zone 25"
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                    value={formData.zone || ""}
+                    onChange={(e) => setFormData({ ...formData, zone: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Area</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Mansoura"
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                    value={formData.area || ""}
+                    onChange={(e) => setFormData({ ...formData, area: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">City</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Doha"
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                    value={formData.city || ""}
+                    onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Country</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Qatar"
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                    value={formData.country || ""}
+                    onChange={(e) => setFormData({ ...formData, country: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">PO Box</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 12345"
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                    value={formData.poBox || ""}
+                    onChange={(e) => setFormData({ ...formData, poBox: e.target.value })}
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Google Map Location / Coordinates</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 25.276987, 51.520008"
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                    value={formData.mapLocation || ""}
+                    onChange={(e) => setFormData({ ...formData, mapLocation: e.target.value })}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-surface-container-low border border-outline-variant p-4 rounded-xl space-y-4">
+              <h4 className="text-xs font-bold text-primary uppercase tracking-wider border-b border-outline-variant/60 pb-1">Main Contact Details</h4>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Company Phone Number</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. +974 4444 5555"
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                    value={formData.mainPhone || ""}
+                    onChange={(e) => setFormData({ ...formData, mainPhone: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Company Email</label>
+                  <input
+                    type="email"
+                    placeholder="e.g. info@company.com"
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                    value={formData.mainEmail || ""}
+                    onChange={(e) => setFormData({ ...formData, mainEmail: e.target.value })}
+                  />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Website (Optional)</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. www.company.com"
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                    value={formData.website || ""}
+                    onChange={(e) => setFormData({ ...formData, website: e.target.value })}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-surface-container-low border border-outline-variant p-4 rounded-xl space-y-4">
+              <h4 className="text-xs font-bold text-primary uppercase tracking-wider border-b border-outline-variant/60 pb-1">Operation Contact Person</h4>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Contact Person Name</label>
+                  <input
+                    type="text"
+                    placeholder="Name"
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                    value={formData.operationContactName || ""}
+                    onChange={(e) => setFormData({ ...formData, operationContactName: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Designation</label>
+                  <input
+                    type="text"
+                    placeholder="Designation"
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                    value={formData.operationContactDesignation || ""}
+                    onChange={(e) => setFormData({ ...formData, operationContactDesignation: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Mobile Number</label>
+                  <input
+                    type="text"
+                    placeholder="Mobile"
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                    value={formData.operationContactMobile || ""}
+                    onChange={(e) => setFormData({ ...formData, operationContactMobile: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Email</label>
+                  <input
+                    type="email"
+                    placeholder="Email"
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                    value={formData.operationContactEmail || ""}
+                    onChange={(e) => setFormData({ ...formData, operationContactEmail: e.target.value })}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-surface-container-low border border-outline-variant p-4 rounded-xl space-y-4">
+              <h4 className="text-xs font-bold text-primary uppercase tracking-wider border-b border-outline-variant/60 pb-1">Finance Contact Person</h4>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Finance Contact Name</label>
+                  <input
+                    type="text"
+                    placeholder="Finance Contact Name"
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                    value={formData.financeContactName || ""}
+                    onChange={(e) => setFormData({ ...formData, financeContactName: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Mobile Number</label>
+                  <input
+                    type="text"
+                    placeholder="Finance Mobile"
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                    value={formData.financeContactMobile || ""}
+                    onChange={(e) => setFormData({ ...formData, financeContactMobile: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Billing Email</label>
+                  <input
+                    type="email"
+                    placeholder="Billing Email"
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                    value={formData.billingEmail || ""}
+                    onChange={(e) => setFormData({ ...formData, billingEmail: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Payment Terms</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Net 30 Days"
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                    value={formData.paymentTerms || ""}
+                    onChange={(e) => setFormData({ ...formData, paymentTerms: e.target.value })}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-surface-container-low border border-outline-variant p-4 rounded-xl space-y-4">
+              <h4 className="text-xs font-bold text-primary uppercase tracking-wider border-b border-outline-variant/60 pb-1">Company Registration / Legal Details</h4>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">CR Number</label>
+                  <input
+                    type="text"
+                    placeholder="CR Number"
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                    value={formData.crNumber || ""}
+                    onChange={(e) => setFormData({ ...formData, crNumber: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">CR Expiry Date</label>
+                  <input
+                    type="date"
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                    value={formData.crExpiryDate ? formData.crExpiryDate.substring(0, 10) : ""}
+                    onChange={(e) => setFormData({ ...formData, crExpiryDate: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Tax Number / VAT Number</label>
+                  <input
+                    type="text"
+                    placeholder="Tax/VAT Number"
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                    value={formData.taxNumber || ""}
+                    onChange={(e) => setFormData({ ...formData, taxNumber: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Establishment Card Number</label>
+                  <input
+                    type="text"
+                    placeholder="Establishment Card Number"
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                    value={formData.establishmentCardNumber || ""}
+                    onChange={(e) => setFormData({ ...formData, establishmentCardNumber: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Establishment Card Expiry</label>
+                  <input
+                    type="date"
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                    value={formData.establishmentCardExpiryDate ? formData.establishmentCardExpiryDate.substring(0, 10) : ""}
+                    onChange={(e) => setFormData({ ...formData, establishmentCardExpiryDate: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Authorized Signatory Name</label>
+                  <input
+                    type="text"
+                    placeholder="Authorized Signatory Name"
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                    value={formData.authorizedSignatoryName || ""}
+                    onChange={(e) => setFormData({ ...formData, authorizedSignatoryName: e.target.value })}
+                  />
+                </div>
+              </div>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="bg-surface-container-low border border-outline-variant p-4 rounded-xl space-y-4">
+              <h4 className="text-xs font-bold text-primary uppercase tracking-wider border-b border-outline-variant/60 pb-1">Personal Details</h4>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Customer Code</label>
+                  <input
+                    type="text"
+                    disabled
+                    placeholder={isSecurity ? "Auto-generated (SC-XXXX)" : "Auto-generated (FC-XXXX)"}
+                    className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-xs text-on-surface-variant focus:outline-none"
+                    value={formData.code || ""}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Full Name *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Full Name"
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                    value={formData.name || ""}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Nationality</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Qatari, British"
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                    value={formData.nationality || ""}
+                    onChange={(e) => setFormData({ ...formData, nationality: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Date of Birth</label>
+                  <input
+                    type="date"
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                    value={formData.dateOfBirth ? formData.dateOfBirth.substring(0, 10) : ""}
+                    onChange={(e) => setFormData({ ...formData, dateOfBirth: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Customer Status</label>
+                  <select
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                    value={formData.isActive !== false ? "ACTIVE" : "INACTIVE"}
+                    onChange={(e) => setFormData({ ...formData, isActive: e.target.value === "ACTIVE" })}
+                  >
+                    <option value="ACTIVE">Active</option>
+                    <option value="INACTIVE">Inactive</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Remarks / Notes</label>
+                  <input
+                    type="text"
+                    placeholder="Notes..."
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                    value={formData.remarks || ""}
+                    onChange={(e) => setFormData({ ...formData, remarks: e.target.value })}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-surface-container-low border border-outline-variant p-4 rounded-xl space-y-4">
+              <h4 className="text-xs font-bold text-primary uppercase tracking-wider border-b border-outline-variant/60 pb-1">Individual Address</h4>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Building / Street / Villa</label>
+                  <input
+                    type="text"
+                    placeholder="Villa/Bldg details"
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                    value={formData.addressLine1 || ""}
+                    onChange={(e) => setFormData({ ...formData, addressLine1: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Zone</label>
+                  <input
+                    type="text"
+                    placeholder="Zone"
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                    value={formData.zone || ""}
+                    onChange={(e) => setFormData({ ...formData, zone: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Area</label>
+                  <input
+                    type="text"
+                    placeholder="Area"
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                    value={formData.area || ""}
+                    onChange={(e) => setFormData({ ...formData, area: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">City</label>
+                  <input
+                    type="text"
+                    placeholder="City"
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                    value={formData.city || ""}
+                    onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-surface-container-low border border-outline-variant p-4 rounded-xl space-y-4">
+              <h4 className="text-xs font-bold text-primary uppercase tracking-wider border-b border-outline-variant/60 pb-1">Contact Details</h4>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Mobile Number *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Mobile Number"
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                    value={formData.mainPhone || ""}
+                    onChange={(e) => setFormData({ ...formData, mainPhone: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Email</label>
+                  <input
+                    type="email"
+                    placeholder="Email"
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                    value={formData.mainEmail || ""}
+                    onChange={(e) => setFormData({ ...formData, mainEmail: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">WhatsApp Number</label>
+                  <input
+                    type="text"
+                    placeholder="WhatsApp Number"
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                    value={formData.website || ""}
+                    onChange={(e) => setFormData({ ...formData, website: e.target.value })}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-surface-container-low border border-outline-variant p-4 rounded-xl space-y-4">
+              <h4 className="text-xs font-bold text-primary uppercase tracking-wider border-b border-outline-variant/60 pb-1">Identity Details</h4>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">QID Number</label>
+                  <input
+                    type="text"
+                    placeholder="QID Number"
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                    value={formData.qidNumber || ""}
+                    onChange={(e) => setFormData({ ...formData, qidNumber: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">QID Expiry Date</label>
+                  <input
+                    type="date"
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                    value={formData.qidExpiryDate ? formData.qidExpiryDate.substring(0, 10) : ""}
+                    onChange={(e) => setFormData({ ...formData, qidExpiryDate: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Passport Number</label>
+                  <input
+                    type="text"
+                    placeholder="Passport Number"
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                    value={formData.passportNumber || ""}
+                    onChange={(e) => setFormData({ ...formData, passportNumber: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Passport Expiry</label>
+                  <input
+                    type="date"
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                    value={formData.passportExpiryDate ? formData.passportExpiryDate.substring(0, 10) : ""}
+                    onChange={(e) => setFormData({ ...formData, passportExpiryDate: e.target.value })}
+                  />
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+
+        <div className="bg-surface-container-low border border-outline-variant p-4 rounded-xl space-y-4">
+          <div className="flex justify-between items-center border-b border-outline-variant/60 pb-1">
+            <h4 className="text-xs font-bold text-primary uppercase tracking-wider">Document Metadata Attachments</h4>
+            <button
+              type="button"
+              onClick={() => {
+                const list = formData.documents || [];
+                setFormData({
+                  ...formData,
+                  documents: [...list, { id: `doc-meta-${Date.now()}`, documentType: "Agreement / Contract Document", fileName: "document.pdf", remarks: "" }]
+                });
+              }}
+              className="px-2 py-1 bg-primary text-white text-[10px] font-bold rounded flex items-center gap-1 hover:bg-primary-container transition-colors"
+            >
+              <span className="material-symbols-outlined text-[12px]">add</span> Add Document Row
+            </button>
+          </div>
+          {(formData.documents || []).length === 0 ? (
+            <p className="text-[11px] text-on-surface-variant italic py-2">No document metadata logged.</p>
+          ) : (
+            <div className="space-y-3">
+              {(formData.documents || []).map((doc: any, idx: number) => (
+                <div key={doc.id || idx} className="grid grid-cols-4 gap-3 bg-surface-container-lowest border border-outline-variant p-3 rounded-lg relative text-xs">
+                  <div>
+                    <label className="block text-[9px] font-bold text-on-surface-variant uppercase mb-0.5">Doc Type *</label>
+                    <select
+                      value={doc.documentType || ""}
+                      onChange={(e) => {
+                        const list = [...formData.documents];
+                        list[idx] = { ...list[idx], documentType: e.target.value };
+                        setFormData({ ...formData, documents: list });
+                      }}
+                      className="w-full bg-surface-container-low border border-outline-variant rounded p-1 text-xs text-on-surface"
+                    >
+                      <option value="CR Copy">CR Copy</option>
+                      <option value="Computer Card / Establishment Card">Establishment Card Copy</option>
+                      <option value="Tax Certificate">Tax Certificate</option>
+                      <option value="QID Copy">QID Copy</option>
+                      <option value="Passport Copy">Passport Copy</option>
+                      <option value="Authorized Signatory Document">Signatory Doc</option>
+                      <option value="Authorization Letter">Authorization Letter</option>
+                      <option value="Agreement / Contract Document">Agreement / Contract</option>
+                      <option value="Other Documents">Other</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[9px] font-bold text-on-surface-variant uppercase mb-0.5">File Name</label>
+                    <input
+                      type="text"
+                      value={doc.fileName || ""}
+                      onChange={(e) => {
+                        const list = [...formData.documents];
+                        list[idx] = { ...list[idx], fileName: e.target.value };
+                        setFormData({ ...formData, documents: list });
+                      }}
+                      className="w-full bg-surface-container-low border border-outline-variant rounded p-1 text-xs text-on-surface"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[9px] font-bold text-on-surface-variant uppercase mb-0.5">Expiry Date</label>
+                    <input
+                      type="date"
+                      value={doc.expiryDate ? doc.expiryDate.substring(0, 10) : ""}
+                      onChange={(e) => {
+                        const list = [...formData.documents];
+                        list[idx] = { ...list[idx], expiryDate: e.target.value };
+                        setFormData({ ...formData, documents: list });
+                      }}
+                      className="w-full bg-surface-container-low border border-outline-variant rounded p-1 text-xs text-on-surface"
+                    />
+                  </div>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex-1">
+                      <label className="block text-[9px] font-bold text-on-surface-variant uppercase mb-0.5">Remarks</label>
+                      <input
+                        type="text"
+                        value={doc.remarks || ""}
+                        onChange={(e) => {
+                          const list = [...formData.documents];
+                          list[idx] = { ...list[idx], remarks: e.target.value };
+                          setFormData({ ...formData, documents: list });
+                        }}
+                        className="w-full bg-surface-container-low border border-outline-variant rounded p-1 text-xs text-on-surface"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const list = [...formData.documents];
+                        list.splice(idx, 1);
+                        setFormData({ ...formData, documents: list });
+                      }}
+                      className="text-status-error hover:bg-status-error/10 p-1 rounded mt-3"
+                    >
+                      <span className="material-symbols-outlined text-[16px]">delete</span>
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="bg-surface-container-low border border-outline-variant p-4 rounded-xl space-y-4">
+          <h4 className="text-xs font-bold text-primary uppercase tracking-wider border-b border-outline-variant/60 pb-1">Internal Sales Person</h4>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Account Manager Name</label>
+              <input
+                type="text"
+                placeholder="Name"
+                className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                value={formData.internalSalesPersonName || ""}
+                onChange={(e) => setFormData({ ...formData, internalSalesPersonName: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Mobile Number</label>
+              <input
+                type="text"
+                placeholder="AM Mobile"
+                className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                value={formData.internalSalesPersonMobile || ""}
+                onChange={(e) => setFormData({ ...formData, internalSalesPersonMobile: e.target.value })}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex-1 bg-surface-container-lowest p-6 flex flex-col h-[calc(100vh-4rem)] overflow-y-auto">
       {/* Header */}
@@ -908,7 +2341,7 @@ export default function ManpowerMasterPage() {
                   return;
                 }
               }
-              setFormData(master === "manpower" ? { mode: "promote", isActive: true } : {});
+              setFormData(master === "manpower" ? { mode: "promote", isActive: true } : master === "contracts" ? { status: "DRAFT", manpowerRequirements: [], relieverRequirements: [], shiftRequirements: [], relieverRequired: "No" } : {});
               setFormError("");
               setShowAddModal(true);
             }}
@@ -1021,6 +2454,35 @@ export default function ManpowerMasterPage() {
             )}
           </div>
         )}
+
+        {master === "clients" && (
+          <div className="flex flex-wrap gap-4 pt-2 border-t border-outline-variant/40 items-center text-xs">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Customer Type:</span>
+              <select
+                className="bg-surface-container-lowest border border-outline-variant rounded px-2 py-1 text-xs text-on-surface"
+                value={filterCustomerType}
+                onChange={(e) => setFilterCustomerType(e.target.value)}
+              >
+                <option value="ALL">All Types</option>
+                <option value="COMPANY">Company</option>
+                <option value="INDIVIDUAL">Individual</option>
+              </select>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Status:</span>
+              <select
+                className="bg-surface-container-lowest border border-outline-variant rounded px-2 py-1 text-xs text-on-surface"
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value)}
+              >
+                <option value="ALL">All Statuses</option>
+                <option value="ACTIVE">Active</option>
+                <option value="INACTIVE">Inactive</option>
+              </select>
+            </div>
+          </div>
+        )}
       </div>
       {/* Roster Grid / Projects Panel split */}
       <div className="flex gap-6 flex-1 min-h-0">
@@ -1043,8 +2505,14 @@ export default function ManpowerMasterPage() {
                     {master === "clients" && (
                       <>
                         <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Code</th>
-                        <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Client Name</th>
+                        <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Customer Name</th>
+                        <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Type</th>
+                        <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Main Contact</th>
+                        <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Operations Contact</th>
+                        <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Finance Contact</th>
+                        <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Docs</th>
                         <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Status</th>
+                        <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Actions</th>
                       </>
                     )}
                     {master === "contracts" && (
@@ -1052,9 +2520,18 @@ export default function ManpowerMasterPage() {
                         <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Contract No.</th>
                         <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Client</th>
                         <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Title</th>
+                        {isSecurity && (
+                          <>
+                            <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Manpower Req (Lines / Total)</th>
+                            <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Relievers (Req? / Total)</th>
+                            <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Shifts</th>
+                          </>
+                        )}
+                        <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Addendums</th>
                         <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Start Date</th>
                         <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">End Date</th>
                         <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Status</th>
+                        <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Actions</th>
                       </>
                     )}
                     {master === "projects" && (
@@ -1143,25 +2620,162 @@ export default function ManpowerMasterPage() {
                       {master === "clients" && (
                         <>
                           <td className="px-4 py-3 text-xs font-bold text-primary">{item.code}</td>
-                          <td className="px-4 py-3 text-xs text-on-surface">{item.name}</td>
+                          <td className="px-4 py-3 text-xs text-on-surface">
+                            <div className="font-semibold">{item.name}</div>
+                            {item.tradingName && <div className="text-[10px] text-on-surface-variant italic">{item.tradingName}</div>}
+                          </td>
+                          <td className="px-4 py-3 text-xs text-on-surface font-semibold">{item.customerType || "COMPANY"}</td>
+                          <td className="px-4 py-3 text-xs text-on-surface-variant">
+                            <div>{item.mainPhone || "—"}</div>
+                            <div className="text-[10px]">{item.mainEmail || ""}</div>
+                          </td>
+                          <td className="px-4 py-3 text-xs text-on-surface">
+                            {item.operationContactName ? (
+                              <div>
+                                <div className="font-medium">{item.operationContactName}</div>
+                                <div className="text-[10px] text-on-surface-variant">{item.operationContactMobile || ""}</div>
+                              </div>
+                            ) : "—"}
+                          </td>
+                          <td className="px-4 py-3 text-xs text-on-surface">
+                            {item.financeContactName ? (
+                              <div>
+                                <div className="font-medium">{item.financeContactName}</div>
+                                <div className="text-[10px] text-on-surface-variant">{item.financeContactMobile || ""}</div>
+                              </div>
+                            ) : "—"}
+                          </td>
+                          <td className="px-4 py-3 text-xs text-on-surface font-bold">
+                            {item.documentsCount || (item.documents?.length) || 0} docs
+                          </td>
                           <td className="px-4 py-3 text-xs">
                             <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${item.isActive ? "bg-status-success/15 text-status-success" : "bg-status-error/15 text-status-error"}`}>
                               {item.isActive ? "Active" : "Inactive"}
                             </span>
                           </td>
+                          <td className="px-4 py-3 text-xs whitespace-nowrap">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                viewClientDetails(item.id);
+                              }}
+                              className="text-primary hover:underline text-[11px] font-bold mr-3"
+                            >
+                              View
+                            </button>
+                            {canManage && (
+                              <>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    startEdit(item);
+                                  }}
+                                  className="text-secondary hover:underline text-[11px] font-bold mr-3"
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setFormData({ clientId: item.id, status: "DRAFT", manpowerRequirements: [], relieverRequirements: [], shiftRequirements: [], relieverRequired: "No" });
+                                    router.push(`/manpower/${business}/contracts`);
+                                    setShowAddModal(true);
+                                  }}
+                                  className="text-status-success hover:underline text-[11px] font-bold mr-3"
+                                >
+                                  Add Contract
+                                </button>
+                                <button
+                                  onClick={async (e) => {
+                                    e.stopPropagation();
+                                    if (confirm(`Are you sure you want to ${item.isActive ? "deactivate" : "activate"} this client?`)) {
+                                      await fetch(apiBase, {
+                                        method: "PATCH",
+                                        headers: { "Content-Type": "application/json" },
+                                        body: JSON.stringify({ id: item.id, isActive: !item.isActive })
+                                      });
+                                      loadData();
+                                    }
+                                  }}
+                                  className={`${item.isActive ? "text-status-error" : "text-status-success"} hover:underline text-[11px] font-bold`}
+                                >
+                                  {item.isActive ? "Deactivate" : "Activate"}
+                                </button>
+                              </>
+                            )}
+                          </td>
                         </>
                       )}
                       {master === "contracts" && (
                         <>
-                          <td className="px-4 py-3 text-xs font-bold text-primary">{item.contractNumber}</td>
-                          <td className="px-4 py-3 text-xs text-on-surface">{item.client?.name || item.clientId}</td>
+                          <td className="px-4 py-3 text-xs font-bold text-primary">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                viewContractDetails(item.id);
+                              }}
+                              className="hover:underline text-left text-primary"
+                            >
+                              {item.contractNumber}
+                            </button>
+                          </td>
+                          <td className="px-4 py-3 text-xs text-on-surface font-semibold">{item.client?.name || item.clientId}</td>
                           <td className="px-4 py-3 text-xs text-on-surface font-semibold">{item.title}</td>
-                          <td className="px-4 py-3 text-xs text-on-surface-variant">{item.startDate}</td>
-                          <td className="px-4 py-3 text-xs text-on-surface-variant">{item.endDate}</td>
+                          {isSecurity && (
+                            <>
+                              <td className="px-4 py-3 text-xs text-on-surface-variant">
+                                {item.manpowerLineCount || 0} lines ({item.totalManpower || 0} guards)
+                              </td>
+                              <td className="px-4 py-3 text-xs text-on-surface-variant">
+                                {item.relieverRequired || "No"} ({item.totalRelievers || 0} relievers)
+                              </td>
+                              <td className="px-4 py-3 text-xs text-on-surface-variant">
+                                {item.shiftLineCount || 0} shifts
+                              </td>
+                            </>
+                          )}
+                          <td className="px-4 py-3 text-xs text-on-surface-variant font-bold">
+                            {item.addendumsCount || (item.addendums?.length) || 0} addendums
+                          </td>
+                          <td className="px-4 py-3 text-xs text-on-surface-variant">{item.startDate ? new Date(item.startDate).toLocaleDateString() : ""}</td>
+                          <td className="px-4 py-3 text-xs text-on-surface-variant">{item.endDate ? new Date(item.endDate).toLocaleDateString() : ""}</td>
                           <td className="px-4 py-3 text-xs">
                             <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${item.status === "ACTIVE" ? "bg-status-success/15 text-status-success" : "bg-surface-container-high/40 text-on-surface-variant"}`}>
                               {item.status}
                             </span>
+                          </td>
+                          <td className="px-4 py-3 text-xs whitespace-nowrap">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                viewContractDetails(item.id);
+                              }}
+                              className="text-primary hover:underline text-[11px] font-bold mr-3"
+                            >
+                              View
+                            </button>
+                            {canManage && (
+                              <>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    startEdit(item);
+                                  }}
+                                  className="text-secondary hover:underline text-[11px] font-bold mr-3"
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setAddendumContract(item);
+                                  }}
+                                  className="text-status-warning hover:underline text-[11px] font-bold"
+                                >
+                                  Add Addendum
+                                </button>
+                              </>
+                            )}
                           </td>
                         </>
                       )}
@@ -1371,7 +2985,9 @@ export default function ManpowerMasterPage() {
       {/* Add Modal */}
       {showAddModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-surface rounded-xl border border-outline-variant shadow-lg max-w-md w-full overflow-hidden">
+          <div className={`bg-surface rounded-xl border border-outline-variant shadow-lg overflow-hidden transition-all ${
+            (master === "clients" || (isSecurity && master === "contracts")) ? "max-w-5xl w-full" : "max-w-md w-full"
+          }`}>
             <div className="px-6 py-4 border-b border-outline-variant flex justify-between items-center bg-surface-container-low">
               <h3 className="text-sm font-bold text-primary">Add New {masterLabel.replace(/s$/, "")}</h3>
               <button onClick={() => setShowAddModal(false)} className="text-on-surface-variant hover:text-primary">
@@ -1379,7 +2995,9 @@ export default function ManpowerMasterPage() {
               </button>
             </div>
             <form onSubmit={handleAddSubmit}>
-              <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
+              <div className={`p-6 space-y-4 overflow-y-auto ${
+                (master === "clients" || (isSecurity && master === "contracts")) ? "max-h-[80vh]" : "max-h-[60vh]"
+              }`}>
                 {formError && (
                   <div className="p-3 bg-status-error/10 text-status-error text-xs rounded-lg font-bold">
                     {formError}
@@ -1387,88 +3005,69 @@ export default function ManpowerMasterPage() {
                 )}
 
                 {/* Form fields based on master list */}
-                {master === "clients" && (
-                  <>
-                    <div>
-                      <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Code</label>
-                      <input
-                        type="text"
-                        disabled
-                        placeholder="Auto-generated (SC-XXXX)"
-                        className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-xs text-on-surface-variant focus:outline-none"
-                        value={formData.code || ""}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Client Name</label>
-                      <input
-                        type="text"
-                        required
-                        className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary"
-                        value={formData.name || ""}
-                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      />
-                    </div>
-                  </>
-                )}
+                {master === "clients" && renderEnhancedCustomerForm(false)}
 
                 {master === "contracts" && (
-                  <>
-                    <div>
-                      <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Client</label>
-                      <select
-                        required
-                        className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary"
-                        value={formData.clientId || ""}
-                        onChange={(e) => setFormData({ ...formData, clientId: e.target.value })}
-                      >
-                        <option value="">Select Client...</option>
-                        {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Contract Number</label>
-                      <input
-                        type="text"
-                        disabled
-                        placeholder="Auto-generated (SCON-XXXX)"
-                        className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-xs text-on-surface-variant focus:outline-none"
-                        value={formData.contractNumber || ""}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Contract Title</label>
-                      <input
-                        type="text"
-                        required
-                        className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary"
-                        value={formData.title || ""}
-                        onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
+                  isSecurity ? (
+                    renderSecurityContractForm()
+                  ) : (
+                    <>
                       <div>
-                        <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Start Date</label>
-                        <input
-                          type="date"
+                        <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Client</label>
+                        <select
                           required
                           className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary"
-                          value={formData.startDate || ""}
-                          onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+                          value={formData.clientId || ""}
+                          onChange={(e) => setFormData({ ...formData, clientId: e.target.value })}
+                        >
+                          <option value="">Select Client...</option>
+                          {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Contract Number</label>
+                        <input
+                          type="text"
+                          disabled
+                          placeholder="Auto-generated (SCON-XXXX)"
+                          className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-xs text-on-surface-variant focus:outline-none"
+                          value={formData.contractNumber || ""}
                         />
                       </div>
                       <div>
-                        <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">End Date</label>
+                        <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Contract Title</label>
                         <input
-                          type="date"
+                          type="text"
                           required
                           className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary"
-                          value={formData.endDate || ""}
-                          onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+                          value={formData.title || ""}
+                          onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                         />
                       </div>
-                    </div>
-                  </>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Start Date</label>
+                          <input
+                            type="date"
+                            required
+                            className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary"
+                            value={formData.startDate || ""}
+                            onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">End Date</label>
+                          <input
+                            type="date"
+                            required
+                            className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary"
+                            value={formData.endDate || ""}
+                            onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+                          />
+                        </div>
+                      </div>
+                    </>
+                  )
                 )}
 
                 {master === "projects" && (
@@ -1996,70 +3595,68 @@ export default function ManpowerMasterPage() {
                   </>
                 )}
               </div>
-              <div className="px-6 py-4 border-t border-outline-variant flex justify-end gap-3 bg-surface-container-low">
-                <button
-                  type="button"
-                  onClick={() => setShowAddModal(false)}
-                  className="px-3 py-2 border border-outline-variant rounded-lg text-xs font-bold text-on-surface hover:bg-surface-container-high transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className={`px-3 py-2 text-white text-xs font-bold rounded-lg transition-colors ${
-                    isSecurity ? "bg-primary hover:bg-primary-container" : "bg-secondary hover:bg-secondary-container"
-                  }`}
-                >
-                  Create
-                </button>
-              </div>
+              {!(isSecurity && master === "contracts") && (
+                <div className="px-6 py-4 border-t border-outline-variant flex justify-end gap-3 bg-surface-container-low">
+                  <button
+                    type="button"
+                    onClick={() => setShowAddModal(false)}
+                    className="px-3 py-2 border border-outline-variant rounded-lg text-xs font-bold text-on-surface hover:bg-surface-container-high transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className={`px-3 py-2 text-white text-xs font-bold rounded-lg transition-colors ${
+                      isSecurity ? "bg-primary hover:bg-primary-container" : "bg-secondary hover:bg-secondary-container"
+                    }`}
+                  >
+                    Create
+                  </button>
+                </div>
+              )}
             </form>
           </div>
         </div>
       )}
       {/* Edit Modal */}
       {editItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-surface rounded-xl border border-outline-variant shadow-lg max-w-md w-full overflow-hidden">
-            <div className="px-6 py-4 border-b border-outline-variant flex justify-between items-center bg-surface-container-low">
-              <h3 className="text-sm font-bold text-primary">Edit {masterLabel.replace(/s$/, "")}</h3>
-              <button onClick={() => { setEditItem(null); setFormData({}); }} className="text-on-surface-variant hover:text-primary">
-                <span className="material-symbols-outlined text-[20px]">close</span>
-              </button>
+        (isSecurity && master === "contracts") ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+            <div className="bg-surface rounded-xl border border-outline-variant shadow-lg max-w-5xl w-full overflow-hidden">
+              <div className="px-6 py-4 border-b border-outline-variant flex justify-between items-center bg-surface-container-low">
+                <h3 className="text-sm font-bold text-primary">Edit Contract</h3>
+                <button onClick={() => { setEditItem(null); setFormData({}); }} className="text-on-surface-variant hover:text-primary">
+                  <span className="material-symbols-outlined text-[20px]">close</span>
+                </button>
+              </div>
+              <div className="p-6 overflow-y-auto max-h-[80vh]">
+                {renderSecurityContractForm()}
+              </div>
             </div>
-            <form onSubmit={handleEditSubmit}>
-              <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
-                {formError && (
-                  <div className="p-3 bg-status-error/10 text-status-error text-xs rounded-lg font-bold">
-                    {formError}
-                  </div>
-                )}
+          </div>
+        ) : (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+            <div className={`bg-surface rounded-xl border border-outline-variant shadow-lg overflow-hidden transition-all ${
+              master === "clients" ? "max-w-5xl w-full" : "max-w-md w-full"
+            }`}>
+              <div className="px-6 py-4 border-b border-outline-variant flex justify-between items-center bg-surface-container-low">
+                <h3 className="text-sm font-bold text-primary">Edit {masterLabel.replace(/s$/, "")}</h3>
+                <button onClick={() => { setEditItem(null); setFormData({}); }} className="text-on-surface-variant hover:text-primary">
+                  <span className="material-symbols-outlined text-[20px]">close</span>
+                </button>
+              </div>
+              <form onSubmit={handleEditSubmit}>
+                <div className={`p-6 space-y-4 overflow-y-auto ${
+                  master === "clients" ? "max-h-[80vh]" : "max-h-[60vh]"
+                }`}>
+                  {formError && (
+                    <div className="p-3 bg-status-error/10 text-status-error text-xs rounded-lg font-bold">
+                      {formError}
+                    </div>
+                  )}
 
-                {/* Form fields based on master list */}
-                {master === "clients" && (
-                  <>
-                    <div>
-                      <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Code</label>
-                      <input
-                        type="text"
-                        required
-                        disabled
-                        className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-xs text-on-surface-variant focus:outline-none"
-                        value={formData.code || ""}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Client Name</label>
-                      <input
-                        type="text"
-                        required
-                        className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary"
-                        value={formData.name || ""}
-                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      />
-                    </div>
-                  </>
-                )}
+                  {/* Form fields based on master list */}
+                  {master === "clients" && renderEnhancedCustomerForm(true)}
 
                 {master === "contracts" && (
                   <>
@@ -2398,6 +3995,477 @@ export default function ManpowerMasterPage() {
                   }`}
                 >
                   Save Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )
+    )}
+
+      {/* Client Detail Drawer */}
+      {selectedClientDetail && (
+        <div className="fixed inset-0 z-50 flex justify-end bg-black/50 p-0 transition-opacity">
+          <div className="bg-surface w-full max-w-2xl h-full shadow-2xl flex flex-col overflow-hidden text-on-surface">
+            <div className="px-6 py-4 border-b border-outline-variant flex justify-between items-center bg-surface-container-low">
+              <div>
+                <span className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded uppercase tracking-wider mr-2">
+                  {selectedClientDetail.customerType}
+                </span>
+                <h3 className="text-base font-bold text-primary inline-block">{selectedClientDetail.name} ({selectedClientDetail.code})</h3>
+              </div>
+              <button 
+                onClick={() => setSelectedClientDetail(null)} 
+                className="text-on-surface-variant hover:text-primary w-8 h-8 rounded-lg hover:bg-surface-container-high flex items-center justify-center"
+              >
+                <span className="material-symbols-outlined text-[20px]">close</span>
+              </button>
+            </div>
+            
+            <div className="p-6 space-y-6 flex-1 overflow-y-auto">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-surface-container-low border border-outline-variant p-4 rounded-xl space-y-2 text-xs">
+                  <h4 className="text-[10px] font-bold text-primary uppercase tracking-wider border-b border-outline-variant pb-1">Profile Details</h4>
+                  {selectedClientDetail.customerType === "COMPANY" ? (
+                    <>
+                      <p><span className="text-on-surface-variant font-medium">Trading Name:</span> <span className="font-semibold">{selectedClientDetail.tradingName || "N/A"}</span></p>
+                      <p><span className="text-on-surface-variant font-medium">Industry Type:</span> <span className="font-semibold">{selectedClientDetail.businessType || "N/A"}</span></p>
+                      <p><span className="text-on-surface-variant font-medium">CR Number:</span> <span className="font-semibold">{selectedClientDetail.crNumber || "N/A"}</span></p>
+                      <p><span className="text-on-surface-variant font-medium">CR Expiry:</span> <span className="font-semibold">{selectedClientDetail.crExpiryDate ? new Date(selectedClientDetail.crExpiryDate).toLocaleDateString() : "N/A"}</span></p>
+                      <p><span className="text-on-surface-variant font-medium">Establishment Card:</span> <span className="font-semibold">{selectedClientDetail.establishmentCardNumber || "N/A"}</span></p>
+                    </>
+                  ) : (
+                    <>
+                      <p><span className="text-on-surface-variant font-medium">Nationality:</span> <span className="font-semibold">{selectedClientDetail.nationality || "N/A"}</span></p>
+                      <p><span className="text-on-surface-variant font-medium">Date of Birth:</span> <span className="font-semibold">{selectedClientDetail.dateOfBirth ? new Date(selectedClientDetail.dateOfBirth).toLocaleDateString() : "N/A"}</span></p>
+                      <p><span className="text-on-surface-variant font-medium">QID Number:</span> <span className="font-semibold">{selectedClientDetail.qidNumber || "N/A"}</span></p>
+                      <p><span className="text-on-surface-variant font-medium">QID Expiry:</span> <span className="font-semibold">{selectedClientDetail.qidExpiryDate ? new Date(selectedClientDetail.qidExpiryDate).toLocaleDateString() : "N/A"}</span></p>
+                      <p><span className="text-on-surface-variant font-medium">Passport Number:</span> <span className="font-semibold">{selectedClientDetail.passportNumber || "N/A"}</span></p>
+                    </>
+                  )}
+                  <p><span className="text-on-surface-variant font-medium">Status:</span> 
+                    <span className={`ml-2 px-1.5 py-0.5 rounded text-[10px] font-bold ${selectedClientDetail.isActive ? "bg-status-success/15 text-status-success" : "bg-status-error/15 text-status-error"}`}>
+                      {selectedClientDetail.isActive ? "Active" : "Inactive"}
+                    </span>
+                  </p>
+                </div>
+                
+                <div className="bg-surface-container-low border border-outline-variant p-4 rounded-xl space-y-2 text-xs">
+                  <h4 className="text-[10px] font-bold text-primary uppercase tracking-wider border-b border-outline-variant pb-1">Main Contacts</h4>
+                  <p><span className="text-on-surface-variant font-medium">Phone:</span> <span className="font-semibold">{selectedClientDetail.mainPhone || "N/A"}</span></p>
+                  <p><span className="text-on-surface-variant font-medium">Email:</span> <span className="font-semibold">{selectedClientDetail.mainEmail || "N/A"}</span></p>
+                  {selectedClientDetail.customerType === "COMPANY" ? (
+                    <p><span className="text-on-surface-variant font-medium">Website:</span> <span className="font-semibold">{selectedClientDetail.website || "N/A"}</span></p>
+                  ) : (
+                    <p><span className="text-on-surface-variant font-medium">WhatsApp:</span> <span className="font-semibold">{selectedClientDetail.website || "N/A"}</span></p>
+                  )}
+                  <p><span className="text-on-surface-variant font-medium">PO Box:</span> <span className="font-semibold">{selectedClientDetail.poBox || "N/A"}</span></p>
+                  <p><span className="text-on-surface-variant font-medium">Address:</span> <span className="font-semibold">
+                    {[selectedClientDetail.addressLine1, selectedClientDetail.zone, selectedClientDetail.area, selectedClientDetail.city].filter(Boolean).join(", ") || "N/A"}
+                  </span></p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-surface-container-low border border-outline-variant p-4 rounded-xl space-y-2 text-xs">
+                  <h4 className="text-[10px] font-bold text-primary uppercase tracking-wider border-b border-outline-variant pb-1">Day-to-Day Operations Contact</h4>
+                  <p><span className="text-on-surface-variant font-medium">Name:</span> <span className="font-semibold">{selectedClientDetail.operationContactName || "N/A"}</span></p>
+                  <p><span className="text-on-surface-variant font-medium">Designation:</span> <span className="font-semibold">{selectedClientDetail.operationContactDesignation || "N/A"}</span></p>
+                  <p><span className="text-on-surface-variant font-medium">Mobile:</span> <span className="font-semibold">{selectedClientDetail.operationContactMobile || "N/A"}</span></p>
+                  <p><span className="text-on-surface-variant font-medium">Email:</span> <span className="font-semibold">{selectedClientDetail.operationContactEmail || "N/A"}</span></p>
+                </div>
+                
+                <div className="bg-surface-container-low border border-outline-variant p-4 rounded-xl space-y-2 text-xs">
+                  <h4 className="text-[10px] font-bold text-primary uppercase tracking-wider border-b border-outline-variant pb-1">Finance & Billing Contact</h4>
+                  <p><span className="text-on-surface-variant font-medium">Name:</span> <span className="font-semibold">{selectedClientDetail.financeContactName || "N/A"}</span></p>
+                  <p><span className="text-on-surface-variant font-medium">Mobile:</span> <span className="font-semibold">{selectedClientDetail.financeContactMobile || "N/A"}</span></p>
+                  <p><span className="text-on-surface-variant font-medium">Billing Email:</span> <span className="font-semibold">{selectedClientDetail.billingEmail || "N/A"}</span></p>
+                  <p><span className="text-on-surface-variant font-medium">Payment Terms:</span> <span className="font-semibold">{selectedClientDetail.paymentTerms || "N/A"}</span></p>
+                </div>
+              </div>
+
+              <div className="bg-surface-container-low border border-outline-variant p-4 rounded-xl space-y-2 text-xs">
+                <h4 className="text-[10px] font-bold text-primary uppercase tracking-wider border-b border-outline-variant pb-1">Internal Sales Person / Account Manager</h4>
+                <p><span className="text-on-surface-variant font-medium">Account Manager:</span> <span className="font-semibold">{selectedClientDetail.internalSalesPersonName || "N/A"}</span></p>
+                <p><span className="text-on-surface-variant font-medium">Mobile:</span> <span className="font-semibold">{selectedClientDetail.internalSalesPersonMobile || "N/A"}</span></p>
+              </div>
+
+              <div className="bg-surface-container-low border border-outline-variant p-4 rounded-xl space-y-3">
+                <h4 className="text-xs font-bold text-primary uppercase tracking-wider border-b border-outline-variant pb-1">Linked Contracts</h4>
+                {(!selectedClientDetail.contracts || selectedClientDetail.contracts.length === 0) ? (
+                  <p className="text-[11px] text-on-surface-variant italic">No contracts associated with this customer yet.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {selectedClientDetail.contracts.map((c: any) => (
+                      <div key={c.id} className="flex justify-between items-center bg-surface-container-lowest p-2 border border-outline-variant rounded-lg text-xs">
+                        <div>
+                          <p className="font-bold text-primary">{c.title} ({c.contractNumber})</p>
+                          <p className="text-[10px] text-on-surface-variant">Duration: {new Date(c.startDate).toLocaleDateString()} to {new Date(c.endDate).toLocaleDateString()}</p>
+                        </div>
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${c.status === "ACTIVE" ? "bg-status-success/15 text-status-success" : "bg-surface-container-high/40 text-on-surface-variant"}`}>
+                          {c.status}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="bg-surface-container-low border border-outline-variant p-4 rounded-xl space-y-3">
+                <h4 className="text-xs font-bold text-primary uppercase tracking-wider border-b border-outline-variant pb-1">Uploaded Document Metadata</h4>
+                {(!selectedClientDetail.documents || selectedClientDetail.documents.length === 0) ? (
+                  <p className="text-[11px] text-on-surface-variant italic">No documents attached.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead>
+                        <tr className="border-b border-outline-variant text-[10px] text-on-surface-variant font-bold uppercase tracking-wider">
+                          <th className="pb-2">Document Type</th>
+                          <th className="pb-2">File Name</th>
+                          <th className="pb-2">Expiry Date</th>
+                          <th className="pb-2">Remarks</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {selectedClientDetail.documents.map((d: any) => (
+                          <tr key={d.id} className="border-b border-outline-variant/30 hover:bg-surface-container-lowest">
+                            <td className="py-2 font-medium text-on-surface">{d.documentType}</td>
+                            <td className="py-2 text-on-surface-variant italic">{d.fileName}</td>
+                            <td className="py-2 text-on-surface-variant">{d.expiryDate ? new Date(d.expiryDate).toLocaleDateString() : "N/A"}</td>
+                            <td className="py-2 text-on-surface-variant">{d.remarks || "—"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="px-6 py-4 border-t border-outline-variant flex justify-end bg-surface-container-low">
+              <button 
+                onClick={() => setSelectedClientDetail(null)} 
+                className="px-4 py-2 bg-primary text-white text-xs font-bold rounded-lg hover:bg-primary-container transition-colors"
+              >
+                Close View
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Contract Detail Drawer */}
+      {selectedContractDetail && (
+        <div className="fixed inset-0 z-50 flex justify-end bg-black/50 p-0 transition-opacity">
+          <div className="bg-surface w-full max-w-2xl h-full shadow-2xl flex flex-col overflow-hidden text-on-surface">
+            <div className="px-6 py-4 border-b border-outline-variant flex justify-between items-center bg-surface-container-low">
+              <div>
+                <span className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded uppercase tracking-wider mr-2">
+                  Contract
+                </span>
+                <h3 className="text-base font-bold text-primary inline-block">{selectedContractDetail.title} ({selectedContractDetail.contractNumber})</h3>
+              </div>
+              <button 
+                onClick={() => setSelectedContractDetail(null)} 
+                className="text-on-surface-variant hover:text-primary w-8 h-8 rounded-lg hover:bg-surface-container-high flex items-center justify-center"
+              >
+                <span className="material-symbols-outlined text-[20px]">close</span>
+              </button>
+            </div>
+            
+            <div className="p-6 space-y-6 flex-1 overflow-y-auto text-xs">
+              <div className="bg-surface-container-low border border-outline-variant p-4 rounded-xl space-y-2">
+                <h4 className="text-[10px] font-bold text-primary uppercase tracking-wider border-b border-outline-variant pb-1">Contract Summary</h4>
+                <p><span className="text-on-surface-variant font-medium">Client:</span> <span className="font-semibold">{selectedContractDetail.client?.name || selectedContractDetail.clientId}</span></p>
+                <p><span className="text-on-surface-variant font-medium">Duration:</span> <span className="font-semibold">{new Date(selectedContractDetail.startDate).toLocaleDateString()} to {new Date(selectedContractDetail.endDate).toLocaleDateString()}</span></p>
+                <p><span className="text-on-surface-variant font-medium">Status:</span> 
+                  <span className={`ml-2 px-1.5 py-0.5 rounded text-[10px] font-bold ${selectedContractDetail.status === "ACTIVE" ? "bg-status-success/15 text-status-success" : "bg-surface-container-high/40 text-on-surface-variant"}`}>
+                    {selectedContractDetail.status}
+                  </span>
+                </p>
+                {selectedContractDetail.remarks && <p><span className="text-on-surface-variant font-medium">Remarks:</span> <span>{selectedContractDetail.remarks}</span></p>}
+              </div>
+
+              <div className="bg-surface-container-low border border-outline-variant p-4 rounded-xl space-y-3">
+                <h4 className="text-xs font-bold text-primary uppercase tracking-wider border-b border-outline-variant pb-1">Manpower Requirements</h4>
+                {(!selectedContractDetail.manpowerRequirements || selectedContractDetail.manpowerRequirements.length === 0) ? (
+                  <p className="text-[11px] text-on-surface-variant italic">No manpower requirements logged.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead>
+                        <tr className="border-b border-outline-variant text-[10px] text-on-surface-variant font-bold uppercase tracking-wider">
+                          <th className="pb-2">Position</th>
+                          <th className="pb-2">Quantity</th>
+                          <th className="pb-2">Deployment Type</th>
+                          <th className="pb-2">Remarks</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {selectedContractDetail.manpowerRequirements.map((mr: any) => (
+                          <tr key={mr.id} className="border-b border-outline-variant/30 hover:bg-surface-container-lowest">
+                            <td className="py-2 font-medium text-on-surface">{mr.position}</td>
+                            <td className="py-2 text-on-surface-variant font-bold">{mr.quantity}</td>
+                            <td className="py-2 text-on-surface-variant">{mr.deploymentType}</td>
+                            <td className="py-2 text-on-surface-variant">{mr.remarks || "—"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              <div className="bg-surface-container-low border border-outline-variant p-4 rounded-xl space-y-3">
+                <h4 className="text-xs font-bold text-primary uppercase tracking-wider border-b border-outline-variant pb-1">Reliever Requirements</h4>
+                {(!selectedContractDetail.relieverRequirements || selectedContractDetail.relieverRequirements.length === 0) ? (
+                  <p className="text-[11px] text-on-surface-variant italic">No reliever requirements logged.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead>
+                        <tr className="border-b border-outline-variant text-[10px] text-on-surface-variant font-bold uppercase tracking-wider">
+                          <th className="pb-2">Position</th>
+                          <th className="pb-2">Quantity</th>
+                          <th className="pb-2">Source Preference</th>
+                          <th className="pb-2">Remarks</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {selectedContractDetail.relieverRequirements.map((rr: any) => (
+                          <tr key={rr.id} className="border-b border-outline-variant/30 hover:bg-surface-container-lowest">
+                            <td className="py-2 font-medium text-on-surface">{rr.position}</td>
+                            <td className="py-2 text-on-surface-variant font-bold">{rr.quantity}</td>
+                            <td className="py-2 text-on-surface-variant">{rr.sourcePreference}</td>
+                            <td className="py-2 text-on-surface-variant">{rr.remarks || "—"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              <div className="bg-surface-container-low border border-outline-variant p-4 rounded-xl space-y-3">
+                <h4 className="text-xs font-bold text-primary uppercase tracking-wider border-b border-outline-variant pb-1">Shift Requirements</h4>
+                {(!selectedContractDetail.shiftRequirements || selectedContractDetail.shiftRequirements.length === 0) ? (
+                  <p className="text-[11px] text-on-surface-variant italic">No shift requirements logged.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead>
+                        <tr className="border-b border-outline-variant text-[10px] text-on-surface-variant font-bold uppercase tracking-wider">
+                          <th className="pb-2">Shift Name</th>
+                          <th className="pb-2">Times</th>
+                          <th className="pb-2">Posts Covered</th>
+                          <th className="pb-2">Days Pattern</th>
+                          <th className="pb-2">Remarks</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {selectedContractDetail.shiftRequirements.map((sr: any) => (
+                          <tr key={sr.id} className="border-b border-outline-variant/30 hover:bg-surface-container-lowest">
+                            <td className="py-2 font-medium text-on-surface">{sr.shiftName}</td>
+                            <td className="py-2 text-on-surface-variant">{sr.startTime} - {sr.endTime}</td>
+                            <td className="py-2 text-on-surface-variant font-bold">{sr.postsCovered}</td>
+                            <td className="py-2 text-on-surface-variant">{sr.daysPattern}</td>
+                            <td className="py-2 text-on-surface-variant">{sr.remarks || "—"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              <div className="bg-surface-container-low border border-outline-variant p-4 rounded-xl space-y-3">
+                <h4 className="text-xs font-bold text-primary uppercase tracking-wider border-b border-outline-variant pb-1">Contract Addendums / Revisions</h4>
+                {(!selectedContractDetail.addendums || selectedContractDetail.addendums.length === 0) ? (
+                  <p className="text-[11px] text-on-surface-variant italic">No addendums logged for this contract.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {selectedContractDetail.addendums.map((a: any) => (
+                      <div key={a.id} className="bg-surface-container-lowest border border-outline-variant p-3 rounded-lg space-y-2">
+                        <div className="flex justify-between items-center">
+                          <p className="font-bold text-primary">{a.title} ({a.addendumNumber})</p>
+                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${a.status === "ACTIVE" ? "bg-status-success/15 text-status-success" : "bg-surface-container-high/40 text-on-surface-variant"}`}>
+                            {a.status}
+                          </span>
+                        </div>
+                        <p><span className="text-on-surface-variant font-semibold">Type:</span> {a.addendumType}</p>
+                        <p><span className="text-on-surface-variant font-semibold">Effective From:</span> {new Date(a.effectiveFrom).toLocaleDateString()}</p>
+                        {a.commercialImpact && <p><span className="text-on-surface-variant font-semibold">Commercial Impact:</span> {a.commercialImpact}</p>}
+                        {a.description && <p className="text-on-surface-variant italic">{a.description}</p>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+            
+            <div className="px-6 py-4 border-t border-outline-variant flex justify-end bg-surface-container-low">
+              <button 
+                onClick={() => setSelectedContractDetail(null)} 
+                className="px-4 py-2 bg-primary text-white text-xs font-bold rounded-lg hover:bg-primary-container transition-colors"
+              >
+                Close View
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Contract Addendum Modal */}
+      {addendumContract && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-surface rounded-xl border border-outline-variant shadow-lg max-w-lg w-full overflow-hidden text-on-surface">
+            <div className="px-6 py-4 border-b border-outline-variant flex justify-between items-center bg-surface-container-low">
+              <h3 className="text-sm font-bold text-primary">Add Contract Addendum</h3>
+              <button onClick={() => setAddendumContract(null)} className="text-on-surface-variant hover:text-primary">
+                <span className="material-symbols-outlined text-[20px]">close</span>
+              </button>
+            </div>
+            
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              try {
+                const res = await fetch(`/api/v1/manpower/${business}/contracts/${addendumContract.id}/addendums`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    ...addendumForm,
+                    contractNumber: addendumContract.contractNumber
+                  })
+                });
+                if (res.ok) {
+                  setAddendumContract(null);
+                  setAddendumForm({
+                    title: "",
+                    addendumType: "Manpower Increase",
+                    addendumDate: new Date().toISOString().substring(0, 10),
+                    effectiveFrom: new Date().toISOString().substring(0, 10),
+                    description: "",
+                    commercialImpact: "",
+                    status: "DRAFT"
+                  });
+                  loadData();
+                } else {
+                  alert("Failed to save addendum");
+                }
+              } catch (err) {
+                alert("Network error");
+              }
+            }}>
+              <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto text-xs">
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Contract</label>
+                  <input
+                    type="text"
+                    disabled
+                    className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-on-surface-variant"
+                    value={`${addendumContract.title} (${addendumContract.contractNumber})`}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Addendum Title *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Revised Rate and Guard Count"
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 focus:outline-none focus:border-primary text-on-surface"
+                    value={addendumForm.title || ""}
+                    onChange={(e) => setAddendumForm({ ...addendumForm, title: e.target.value })}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Addendum Date *</label>
+                    <input
+                      type="date"
+                      required
+                      className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 focus:outline-none focus:border-primary text-on-surface"
+                      value={addendumForm.addendumDate || ""}
+                      onChange={(e) => setAddendumForm({ ...addendumForm, addendumDate: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Effective From *</label>
+                    <input
+                      type="date"
+                      required
+                      className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 focus:outline-none focus:border-primary text-on-surface"
+                      value={addendumForm.effectiveFrom || ""}
+                      onChange={(e) => setAddendumForm({ ...addendumForm, effectiveFrom: e.target.value })}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Addendum Type *</label>
+                  <select
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 focus:outline-none focus:border-primary text-on-surface"
+                    value={addendumForm.addendumType || "Manpower Increase"}
+                    onChange={(e) => setAddendumForm({ ...addendumForm, addendumType: e.target.value })}
+                  >
+                    <option value="Manpower Increase">Manpower Increase</option>
+                    <option value="Manpower Reduction">Manpower Reduction</option>
+                    <option value="Rate Change">Rate Change</option>
+                    <option value="Shift Change">Shift Change</option>
+                    <option value="Site Addition">Site Addition</option>
+                    <option value="Site Removal">Site Removal</option>
+                    <option value="Reliever Change">Reliever Change</option>
+                    <option value="Contract Extension">Contract Extension</option>
+                    <option value="Contract Termination">Contract Termination</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Description / Reason</label>
+                  <textarea
+                    placeholder="Provide details..."
+                    rows={3}
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 focus:outline-none focus:border-primary text-on-surface resize-none"
+                    value={addendumForm.description || ""}
+                    onChange={(e) => setAddendumForm({ ...addendumForm, description: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Commercial Impact / Revised Rates</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. +QAR 5,000 / month"
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 focus:outline-none focus:border-primary text-on-surface"
+                    value={addendumForm.commercialImpact || ""}
+                    onChange={(e) => setAddendumForm({ ...addendumForm, commercialImpact: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Status</label>
+                  <select
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 focus:outline-none focus:border-primary text-on-surface"
+                    value={addendumForm.status || "DRAFT"}
+                    onChange={(e) => setAddendumForm({ ...addendumForm, status: e.target.value })}
+                  >
+                    <option value="DRAFT">Draft</option>
+                    <option value="APPROVED">Approved</option>
+                    <option value="ACTIVE">Active</option>
+                    <option value="CANCELLED">Cancelled</option>
+                  </select>
+                </div>
+              </div>
+              
+              <div className="px-6 py-4 border-t border-outline-variant flex justify-end gap-3 bg-surface-container-low">
+                <button
+                  type="button"
+                  onClick={() => setAddendumContract(null)}
+                  className="px-3 py-2 border border-outline-variant rounded-lg text-xs font-bold text-on-surface hover:bg-surface-container-high transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-3 py-2 text-white bg-primary hover:bg-primary-container text-xs font-bold rounded-lg transition-colors"
+                >
+                  Save Addendum
                 </button>
               </div>
             </form>

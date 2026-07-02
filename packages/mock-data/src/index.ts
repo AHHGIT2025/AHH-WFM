@@ -206,6 +206,11 @@ let memoryDb: {
   securitySiteInspections: any[];
   manpowerContractMaterials: any[];
   manpowerProjectMaterialAllocations: any[];
+  contractManpowerRequirements: any[];
+  contractRelieverRequirements: any[];
+  contractShiftRequirements: any[];
+  manpowerClientDocuments: any[];
+  manpowerContractAddendums: any[];
 } = {
   companies: [
     { id: "COMP-001", companyCode: "AHH", companyName: "Al Hattab Holding", isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
@@ -469,7 +474,12 @@ let memoryDb: {
   securityProjectCoordinatorAssignments: [],
   securitySiteInspections: [],
   manpowerContractMaterials: [],
-  manpowerProjectMaterialAllocations: []
+  manpowerProjectMaterialAllocations: [],
+  contractManpowerRequirements: [],
+  contractRelieverRequirements: [],
+  contractShiftRequirements: [],
+  manpowerClientDocuments: [],
+  manpowerContractAddendums: []
 };
 
 // Seeding helper to pre-fill MySQL with mock data if it is empty
@@ -8646,35 +8656,282 @@ export const mockDb = {
       await seedMySQL();
       const where: any = {};
       if (operationType) where.operationType = operationType;
-      const res = await prismaClient.manpowerClient.findMany({ where, orderBy: { name: "asc" } });
-      return res.map((x: any) => ({ ...x, createdAt: x.createdAt?.toISOString(), updatedAt: x.updatedAt?.toISOString() }));
+      const res = await prismaClient.manpowerClient.findMany({ 
+        where, 
+        include: { documents: true, contracts: true },
+        orderBy: { name: "asc" } 
+      });
+      return res.map((x: any) => ({
+        ...x,
+        createdAt: x.createdAt?.toISOString(),
+        updatedAt: x.updatedAt?.toISOString(),
+        documentsCount: x.documents?.length || 0
+      }));
     }
     const db = readDb();
     let res = db.manpowerClients || [];
     if (operationType) res = res.filter((x: any) => x.operationType === operationType);
-    return res;
+    return res.map((x: any) => {
+      const documents = (db.manpowerClientDocuments || []).filter((d: any) => d.clientId === x.id);
+      const contracts = (db.manpowerContracts || []).filter((c: any) => c.clientId === x.id);
+      return {
+        ...x,
+        documents,
+        contracts,
+        documentsCount: documents.length
+      };
+    });
   },
   createManpowerClient: async (data: any): Promise<any> => {
-    const code = data.code || await getNextSequenceCode("SC");
-    const dataWithCode = { ...data, code };
+    const code = data.code || await getNextSequenceCode(data.operationType === "FACILITY_MANAGEMENT" ? "FC" : "SC");
+    const dataWithCode = { 
+      customerType: "COMPANY",
+      ...data, 
+      code 
+    };
+    const crExpiryDate = dataWithCode.crExpiryDate ? new Date(dataWithCode.crExpiryDate) : null;
+    const establishmentCardExpiryDate = dataWithCode.establishmentCardExpiryDate ? new Date(dataWithCode.establishmentCardExpiryDate) : null;
+    const qidExpiryDate = dataWithCode.qidExpiryDate ? new Date(dataWithCode.qidExpiryDate) : null;
+    const passportExpiryDate = dataWithCode.passportExpiryDate ? new Date(dataWithCode.passportExpiryDate) : null;
+    const dateOfBirth = dataWithCode.dateOfBirth ? new Date(dataWithCode.dateOfBirth) : null;
+    
+    const dbData = {
+      ...dataWithCode,
+      crExpiryDate,
+      establishmentCardExpiryDate,
+      qidExpiryDate,
+      passportExpiryDate,
+      dateOfBirth,
+      documents: undefined,
+      contracts: undefined
+    };
+    
     if (isDbConnected()) {
-      const res = await prismaClient.manpowerClient.create({ data: dataWithCode });
-      return { ...res, createdAt: res.createdAt?.toISOString(), updatedAt: res.updatedAt?.toISOString() };
+      const res = await prismaClient.manpowerClient.create({ data: dbData });
+      if (dataWithCode.documents && dataWithCode.documents.length > 0) {
+        await Promise.all(dataWithCode.documents.map((doc: any) => prismaClient.manpowerClientDocument.create({
+          data: {
+            clientId: res.id,
+            documentType: doc.documentType,
+            fileName: doc.fileName || "",
+            fileUrl: doc.fileUrl || "",
+            storagePath: doc.storagePath || "",
+            expiryDate: doc.expiryDate ? new Date(doc.expiryDate) : null,
+            remarks: doc.remarks || "",
+            uploadedBy: doc.uploadedBy || ""
+          }
+        })));
+      }
+      const updatedRes = await prismaClient.manpowerClient.findUnique({
+        where: { id: res.id },
+        include: { documents: true, contracts: true }
+      });
+      return {
+        ...updatedRes,
+        createdAt: updatedRes?.createdAt?.toISOString(),
+        updatedAt: updatedRes?.updatedAt?.toISOString()
+      };
     }
+    
     const db = readDb();
+    const clientId = dataWithCode.id || `mc-${Date.now()}`;
     const newRecord = {
-      id: dataWithCode.id || `mc-${Date.now()}`,
+      id: clientId,
       name: dataWithCode.name || "",
       code: dataWithCode.code || "",
       operationType: dataWithCode.operationType || "SECURITY_GUARDING",
       isActive: dataWithCode.isActive !== false,
+      customerType: dataWithCode.customerType || "COMPANY",
+      tradingName: dataWithCode.tradingName || "",
+      businessType: dataWithCode.businessType || "",
+      addressLine1: dataWithCode.addressLine1 || "",
+      addressLine2: dataWithCode.addressLine2 || "",
+      zone: dataWithCode.zone || "",
+      area: dataWithCode.area || "",
+      city: dataWithCode.city || "",
+      country: dataWithCode.country || "",
+      poBox: dataWithCode.poBox || "",
+      mapLocation: dataWithCode.mapLocation || "",
+      mainPhone: dataWithCode.mainPhone || "",
+      mainEmail: dataWithCode.mainEmail || "",
+      website: dataWithCode.website || "",
+      operationContactName: dataWithCode.operationContactName || "",
+      operationContactDesignation: dataWithCode.operationContactDesignation || "",
+      operationContactMobile: dataWithCode.operationContactMobile || "",
+      operationContactEmail: dataWithCode.operationContactEmail || "",
+      operationContactAltPhone: dataWithCode.operationContactAltPhone || "",
+      financeContactName: dataWithCode.financeContactName || "",
+      financeContactDesignation: dataWithCode.financeContactDesignation || "",
+      financeContactMobile: dataWithCode.financeContactMobile || "",
+      financeContactEmail: dataWithCode.financeContactEmail || "",
+      financeContactAltPhone: dataWithCode.financeContactAltPhone || "",
+      billingEmail: dataWithCode.billingEmail || "",
+      paymentTerms: dataWithCode.paymentTerms || "",
+      crNumber: dataWithCode.crNumber || "",
+      crExpiryDate: dataWithCode.crExpiryDate || null,
+      taxNumber: dataWithCode.taxNumber || "",
+      establishmentCardNumber: dataWithCode.establishmentCardNumber || "",
+      establishmentCardExpiryDate: dataWithCode.establishmentCardExpiryDate || null,
+      authorizedSignatoryName: dataWithCode.authorizedSignatoryName || "",
+      authorizedSignatoryQid: dataWithCode.authorizedSignatoryQid || "",
+      qidNumber: dataWithCode.qidNumber || "",
+      qidExpiryDate: dataWithCode.qidExpiryDate || null,
+      passportNumber: dataWithCode.passportNumber || "",
+      passportExpiryDate: dataWithCode.passportExpiryDate || null,
+      nationality: dataWithCode.nationality || "",
+      dateOfBirth: dataWithCode.dateOfBirth || null,
+      internalSalesPersonId: dataWithCode.internalSalesPersonId || "",
+      internalSalesPersonName: dataWithCode.internalSalesPersonName || "",
+      internalSalesPersonMobile: dataWithCode.internalSalesPersonMobile || "",
+      internalSalesPersonEmail: dataWithCode.internalSalesPersonEmail || "",
+      legalRemarks: dataWithCode.legalRemarks || "",
+      remarks: dataWithCode.remarks || "",
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
     db.manpowerClients = db.manpowerClients || [];
     db.manpowerClients.push(newRecord);
+    
+    const savedDocs: any[] = [];
+    if (dataWithCode.documents && dataWithCode.documents.length > 0) {
+      db.manpowerClientDocuments = db.manpowerClientDocuments || [];
+      dataWithCode.documents.forEach((doc: any) => {
+        const docRecord = {
+          id: doc.id || `mcd-${Date.now()}-${Math.random()}`,
+          clientId,
+          documentType: doc.documentType,
+          fileName: doc.fileName || "",
+          fileUrl: doc.fileUrl || "",
+          storagePath: doc.storagePath || "",
+          expiryDate: doc.expiryDate || null,
+          remarks: doc.remarks || "",
+          uploadedBy: doc.uploadedBy || "",
+          uploadedAt: new Date().toISOString(),
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+        db.manpowerClientDocuments.push(docRecord);
+        savedDocs.push(docRecord);
+      });
+    }
     writeDb(db);
-    return newRecord;
+    return { ...newRecord, documents: savedDocs, contracts: [] };
+  },
+  updateManpowerClient: async (id: string, data: any): Promise<any> => {
+    const crExpiryDate = data.crExpiryDate ? new Date(data.crExpiryDate) : null;
+    const establishmentCardExpiryDate = data.establishmentCardExpiryDate ? new Date(data.establishmentCardExpiryDate) : null;
+    const qidExpiryDate = data.qidExpiryDate ? new Date(data.qidExpiryDate) : null;
+    const passportExpiryDate = data.passportExpiryDate ? new Date(data.passportExpiryDate) : null;
+    const dateOfBirth = data.dateOfBirth ? new Date(data.dateOfBirth) : null;
+    
+    const dbData = {
+      ...data,
+      id: undefined,
+      createdAt: undefined,
+      updatedAt: undefined,
+      crExpiryDate,
+      establishmentCardExpiryDate,
+      qidExpiryDate,
+      passportExpiryDate,
+      dateOfBirth,
+      documents: undefined,
+      contracts: undefined
+    };
+    
+    if (isDbConnected()) {
+      await prismaClient.manpowerClient.update({ 
+        where: { id },
+        data: dbData 
+      });
+      if (data.documents !== undefined) {
+        await prismaClient.manpowerClientDocument.deleteMany({ where: { clientId: id } });
+        if (data.documents && data.documents.length > 0) {
+          await Promise.all(data.documents.map((doc: any) => prismaClient.manpowerClientDocument.create({
+            data: {
+              clientId: id,
+              documentType: doc.documentType,
+              fileName: doc.fileName || "",
+              fileUrl: doc.fileUrl || "",
+              storagePath: doc.storagePath || "",
+              expiryDate: doc.expiryDate ? new Date(doc.expiryDate) : null,
+              remarks: doc.remarks || "",
+              uploadedBy: doc.uploadedBy || ""
+            }
+          })));
+        }
+      }
+      const updatedRes = await prismaClient.manpowerClient.findUnique({
+        where: { id },
+        include: { documents: true, contracts: true }
+      });
+      return {
+        ...updatedRes,
+        createdAt: updatedRes?.createdAt?.toISOString(),
+        updatedAt: updatedRes?.updatedAt?.toISOString()
+      };
+    }
+    
+    const db = readDb();
+    const idx = (db.manpowerClients || []).findIndex((x: any) => x.id === id);
+    if (idx === -1) throw new Error("Client not found");
+    const existing = db.manpowerClients[idx];
+    const updatedRecord = {
+      ...existing,
+      ...dbData,
+      updatedAt: new Date().toISOString()
+    };
+    db.manpowerClients[idx] = updatedRecord;
+    
+    if (data.documents !== undefined) {
+      db.manpowerClientDocuments = (db.manpowerClientDocuments || []).filter((d: any) => d.clientId !== id);
+      if (data.documents && data.documents.length > 0) {
+        data.documents.forEach((doc: any) => {
+          db.manpowerClientDocuments.push({
+            id: doc.id || `mcd-${Date.now()}-${Math.random()}`,
+            clientId: id,
+            documentType: doc.documentType,
+            fileName: doc.fileName || "",
+            fileUrl: doc.fileUrl || "",
+            storagePath: doc.storagePath || "",
+            expiryDate: doc.expiryDate || null,
+            remarks: doc.remarks || "",
+            uploadedBy: doc.uploadedBy || "",
+            uploadedAt: new Date().toISOString(),
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          });
+        });
+      }
+    }
+    writeDb(db);
+    const documents = (db.manpowerClientDocuments || []).filter((d: any) => d.clientId === id);
+    const contracts = (db.manpowerContracts || []).filter((c: any) => c.clientId === id);
+    return { ...updatedRecord, documents, contracts };
+  },
+  getManpowerClient: async (id: string): Promise<any> => {
+    if (isDbConnected()) {
+      const res = await prismaClient.manpowerClient.findUnique({
+        where: { id },
+        include: { documents: true, contracts: { include: { manpowerRequirements: true, relieverRequirements: true, shiftRequirements: true } } }
+      });
+      if (!res) return null;
+      return {
+        ...res,
+        createdAt: res.createdAt?.toISOString(),
+        updatedAt: res.updatedAt?.toISOString()
+      };
+    }
+    const db = readDb();
+    const client = (db.manpowerClients || []).find((x: any) => x.id === id);
+    if (!client) return null;
+    const documents = (db.manpowerClientDocuments || []).filter((d: any) => d.clientId === id);
+    const contracts = (db.manpowerContracts || []).filter((c: any) => c.clientId === id).map((c: any) => {
+      const manpowerRequirements = (db.contractManpowerRequirements || []).filter((mr: any) => mr.contractId === c.id);
+      const relieverRequirements = (db.contractRelieverRequirements || []).filter((rr: any) => rr.contractId === c.id);
+      const shiftRequirements = (db.contractShiftRequirements || []).filter((sr: any) => sr.contractId === c.id);
+      return { ...c, manpowerRequirements, relieverRequirements, shiftRequirements };
+    });
+    return { ...client, documents, contracts };
   },
 
   // --- Manpower Contracts CRUD ---
@@ -8685,41 +8942,416 @@ export const mockDb = {
       if (operationType) where.operationType = operationType;
       const res = await prismaClient.manpowerContract.findMany({
         where,
-        include: { client: true },
+        include: {
+          client: true,
+          manpowerRequirements: true,
+          relieverRequirements: true,
+          shiftRequirements: true,
+          addendums: true
+        },
         orderBy: { contractNumber: "asc" }
       });
-      return res.map((x: any) => ({
-        ...x,
-        createdAt: x.createdAt?.toISOString(),
-        updatedAt: x.updatedAt?.toISOString(),
-        startDate: x.startDate?.toISOString(),
-        endDate: x.endDate?.toISOString()
-      }));
+      return res.map((x: any) => {
+        const manpowerRequirements = x.manpowerRequirements || [];
+        const relieverRequirements = x.relieverRequirements || [];
+        const shiftRequirements = x.shiftRequirements || [];
+        return {
+          ...x,
+          createdAt: x.createdAt?.toISOString(),
+          updatedAt: x.updatedAt?.toISOString(),
+          startDate: x.startDate?.toISOString(),
+          endDate: x.endDate?.toISOString(),
+          manpowerLineCount: manpowerRequirements.length,
+          totalManpower: manpowerRequirements.reduce((sum: number, r: any) => sum + (r.quantity || 0), 0),
+          relieverRequired: relieverRequirements.length > 0 ? "Yes" : "No",
+          totalRelievers: relieverRequirements.reduce((sum: number, r: any) => sum + (r.quantity || 0), 0),
+          shiftLineCount: shiftRequirements.length,
+          addendumsCount: x.addendums?.length || 0
+        };
+      });
     }
     const db = readDb();
     let res = db.manpowerContracts || [];
     if (operationType) res = res.filter((x: any) => x.operationType === operationType);
-    return res.map((x: any) => ({
-      ...x,
-      client: (db.manpowerClients || []).find((c: any) => c.id === x.clientId)
-    }));
+    return res.map((x: any) => {
+      const manpowerRequirements = (db.contractManpowerRequirements || []).filter((mr: any) => mr.contractId === x.id);
+      const relieverRequirements = (db.contractRelieverRequirements || []).filter((rr: any) => rr.contractId === x.id);
+      const shiftRequirements = (db.contractShiftRequirements || []).filter((sr: any) => sr.contractId === x.id);
+      const addendums = (db.manpowerContractAddendums || []).filter((a: any) => a.contractId === x.id);
+      return {
+        ...x,
+        client: (db.manpowerClients || []).find((c: any) => c.id === x.clientId),
+        manpowerRequirements,
+        relieverRequirements,
+        shiftRequirements,
+        addendums,
+        manpowerLineCount: manpowerRequirements.length,
+        totalManpower: manpowerRequirements.reduce((sum: number, r: any) => sum + (r.quantity || 0), 0),
+        relieverRequired: relieverRequirements.length > 0 ? "Yes" : "No",
+        totalRelievers: relieverRequirements.reduce((sum: number, r: any) => sum + (r.quantity || 0), 0),
+        shiftLineCount: shiftRequirements.length,
+        addendumsCount: addendums.length
+      };
+    });
+  },
+  updateManpowerContract: async (id: string, data: any): Promise<any> => {
+    const dbData = {
+      clientId: data.clientId,
+      title: data.title,
+      startDate: data.startDate ? new Date(data.startDate) : undefined,
+      endDate: data.endDate ? new Date(data.endDate) : undefined,
+      status: data.status,
+      remarks: data.remarks,
+      operationType: data.operationType,
+      defaultManpowerCount: data.defaultManpowerCount || 0,
+      defaultRelieverCount: data.defaultRelieverCount || 0,
+    };
+    if (isDbConnected()) {
+      await prismaClient.manpowerContract.update({
+        where: { id },
+        data: dbData
+      });
+      if (data.manpowerRequirements !== undefined) {
+        await prismaClient.contractManpowerRequirement.deleteMany({ where: { contractId: id } });
+        if (data.manpowerRequirements && data.manpowerRequirements.length > 0) {
+          await Promise.all(data.manpowerRequirements.map((mr: any) => prismaClient.contractManpowerRequirement.create({
+            data: {
+              contractId: id,
+              position: mr.position,
+              quantity: parseInt(mr.quantity, 10),
+              deploymentType: mr.deploymentType,
+              remarks: mr.remarks || ""
+            }
+          })));
+        }
+      }
+      if (data.relieverRequirements !== undefined) {
+        await prismaClient.contractRelieverRequirement.deleteMany({ where: { contractId: id } });
+        if (data.relieverRequirements && data.relieverRequirements.length > 0) {
+          await Promise.all(data.relieverRequirements.map((rr: any) => prismaClient.contractRelieverRequirement.create({
+            data: {
+              contractId: id,
+              position: rr.position,
+              quantity: parseInt(rr.quantity, 10),
+              sourcePreference: rr.sourcePreference,
+              remarks: rr.remarks || ""
+            }
+          })));
+        }
+      }
+      if (data.shiftRequirements !== undefined) {
+        await prismaClient.contractShiftRequirement.deleteMany({ where: { contractId: id } });
+        if (data.shiftRequirements && data.shiftRequirements.length > 0) {
+          await Promise.all(data.shiftRequirements.map((sr: any) => prismaClient.contractShiftRequirement.create({
+            data: {
+              contractId: id,
+              shiftName: sr.shiftName,
+              startTime: sr.startTime,
+              endTime: sr.endTime,
+              postsCovered: parseInt(sr.postsCovered, 10),
+              daysPattern: sr.daysPattern,
+              remarks: sr.remarks || ""
+            }
+          })));
+        }
+      }
+      const res = await prismaClient.manpowerContract.findUnique({
+        where: { id },
+        include: {
+          client: true,
+          manpowerRequirements: true,
+          relieverRequirements: true,
+          shiftRequirements: true,
+          addendums: true
+        }
+      });
+      if (!res) return null;
+      const mr = res.manpowerRequirements || [];
+      const rr = res.relieverRequirements || [];
+      const sr = res.shiftRequirements || [];
+      return {
+        ...res,
+        createdAt: res.createdAt?.toISOString(),
+        updatedAt: res.updatedAt?.toISOString(),
+        startDate: res.startDate?.toISOString(),
+        endDate: res.endDate?.toISOString(),
+        manpowerLineCount: mr.length,
+        totalManpower: mr.reduce((sum: number, x: any) => sum + (x.quantity || 0), 0),
+        relieverRequired: rr.length > 0 ? "Yes" : "No",
+        totalRelievers: rr.reduce((sum: number, x: any) => sum + (x.quantity || 0), 0),
+        shiftLineCount: sr.length
+      };
+    }
+    const db = readDb();
+    const idx = (db.manpowerContracts || []).findIndex((c: any) => c.id === id);
+    if (idx === -1) throw new Error("Contract not found");
+    const existing = db.manpowerContracts[idx];
+    const updatedRecord = {
+      ...existing,
+      clientId: dbData.clientId || existing.clientId,
+      title: dbData.title || existing.title,
+      startDate: data.startDate || existing.startDate,
+      endDate: data.endDate || existing.endDate,
+      status: dbData.status || existing.status,
+      remarks: data.remarks !== undefined ? data.remarks : existing.remarks,
+      operationType: dbData.operationType || existing.operationType,
+      updatedAt: new Date().toISOString()
+    };
+    db.manpowerContracts[idx] = updatedRecord;
+    
+    if (data.manpowerRequirements !== undefined) {
+      db.contractManpowerRequirements = (db.contractManpowerRequirements || []).filter((mr: any) => mr.contractId !== id);
+      data.manpowerRequirements.forEach((mr: any, index: number) => {
+        db.contractManpowerRequirements.push({
+          id: mr.id || `mr-${id}-${index}-${Date.now()}`,
+          contractId: id,
+          position: mr.position,
+          quantity: parseInt(mr.quantity, 10),
+          deploymentType: mr.deploymentType,
+          remarks: mr.remarks || "",
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        });
+      });
+    }
+    if (data.relieverRequirements !== undefined) {
+      db.contractRelieverRequirements = (db.contractRelieverRequirements || []).filter((rr: any) => rr.contractId !== id);
+      data.relieverRequirements.forEach((rr: any, index: number) => {
+        db.contractRelieverRequirements.push({
+          id: rr.id || `rr-${id}-${index}-${Date.now()}`,
+          contractId: id,
+          position: rr.position,
+          quantity: parseInt(rr.quantity, 10),
+          sourcePreference: rr.sourcePreference,
+          remarks: rr.remarks || "",
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        });
+      });
+    }
+    if (data.shiftRequirements !== undefined) {
+      db.contractShiftRequirements = (db.contractShiftRequirements || []).filter((sr: any) => sr.contractId !== id);
+      data.shiftRequirements.forEach((sr: any, index: number) => {
+        db.contractShiftRequirements.push({
+          id: sr.id || `sr-${id}-${index}-${Date.now()}`,
+          contractId: id,
+          shiftName: sr.shiftName,
+          startTime: sr.startTime,
+          endTime: sr.endTime,
+          postsCovered: parseInt(sr.postsCovered, 10),
+          daysPattern: sr.daysPattern,
+          remarks: sr.remarks || "",
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        });
+      });
+    }
+    writeDb(db);
+    const mr = (db.contractManpowerRequirements || []).filter((x: any) => x.contractId === id);
+    const rr = (db.contractRelieverRequirements || []).filter((x: any) => x.contractId === id);
+    const sr = (db.contractShiftRequirements || []).filter((x: any) => x.contractId === id);
+    return {
+      ...updatedRecord,
+      client: (db.manpowerClients || []).find((c: any) => c.id === updatedRecord.clientId),
+      manpowerRequirements: mr,
+      relieverRequirements: rr,
+      shiftRequirements: sr,
+      manpowerLineCount: mr.length,
+      totalManpower: mr.reduce((sum: number, x: any) => sum + (x.quantity || 0), 0),
+      relieverRequired: rr.length > 0 ? "Yes" : "No",
+      totalRelievers: rr.reduce((sum: number, x: any) => sum + (x.quantity || 0), 0),
+      shiftLineCount: sr.length
+    };
+  },
+  getManpowerContract: async (id: string): Promise<any> => {
+    if (isDbConnected()) {
+      const res = await prismaClient.manpowerContract.findUnique({
+        where: { id },
+        include: {
+          client: true,
+          manpowerRequirements: true,
+          relieverRequirements: true,
+          shiftRequirements: true,
+          addendums: true
+        }
+      });
+      if (!res) return null;
+      const mr = res.manpowerRequirements || [];
+      const rr = res.relieverRequirements || [];
+      const sr = res.shiftRequirements || [];
+      return {
+        ...res,
+        createdAt: res.createdAt?.toISOString(),
+        updatedAt: res.updatedAt?.toISOString(),
+        startDate: res.startDate?.toISOString(),
+        endDate: res.endDate?.toISOString(),
+        manpowerLineCount: mr.length,
+        totalManpower: mr.reduce((sum: number, x: any) => sum + (x.quantity || 0), 0),
+        relieverRequired: rr.length > 0 ? "Yes" : "No",
+        totalRelievers: rr.reduce((sum: number, x: any) => sum + (x.quantity || 0), 0),
+        shiftLineCount: sr.length
+      };
+    }
+    const db = readDb();
+    const contract = (db.manpowerContracts || []).find((c: any) => c.id === id);
+    if (!contract) return null;
+    const mr = (db.contractManpowerRequirements || []).filter((x: any) => x.contractId === id);
+    const rr = (db.contractRelieverRequirements || []).filter((x: any) => x.contractId === id);
+    const sr = (db.contractShiftRequirements || []).filter((x: any) => x.contractId === id);
+    const addendums = (db.manpowerContractAddendums || []).filter((x: any) => x.contractId === id);
+    return {
+      ...contract,
+      client: (db.manpowerClients || []).find((c: any) => c.id === contract.clientId),
+      manpowerRequirements: mr,
+      relieverRequirements: rr,
+      shiftRequirements: sr,
+      addendums,
+      manpowerLineCount: mr.length,
+      totalManpower: mr.reduce((sum: number, x: any) => sum + (x.quantity || 0), 0),
+      relieverRequired: rr.length > 0 ? "Yes" : "No",
+      totalRelievers: rr.reduce((sum: number, x: any) => sum + (x.quantity || 0), 0),
+      shiftLineCount: sr.length
+    };
+  },
+  getManpowerContractAddendums: async (contractId: string): Promise<any[]> => {
+    if (isDbConnected()) {
+      const res = await prismaClient.manpowerContractAddendum.findMany({
+        where: { contractId },
+        orderBy: { createdAt: "desc" }
+      });
+      return res.map((x: any) => ({
+        ...x,
+        addendumDate: x.addendumDate?.toISOString(),
+        effectiveFrom: x.effectiveFrom?.toISOString(),
+        effectiveTo: x.effectiveTo?.toISOString(),
+        createdAt: x.createdAt?.toISOString(),
+        updatedAt: x.updatedAt?.toISOString()
+      }));
+    }
+    const db = readDb();
+    return (db.manpowerContractAddendums || []).filter((x: any) => x.contractId === contractId);
+  },
+  createManpowerContractAddendum: async (data: any): Promise<any> => {
+    const nextCode = await getNextSequenceCode("ADD");
+    const addendumNumber = `${data.contractNumber || "CON"}-ADD-${nextCode}`;
+    const payload = {
+      contractId: data.contractId,
+      addendumNumber,
+      title: data.title,
+      addendumDate: data.addendumDate ? new Date(data.addendumDate) : new Date(),
+      effectiveFrom: data.effectiveFrom ? new Date(data.effectiveFrom) : new Date(),
+      effectiveTo: data.effectiveTo ? new Date(data.effectiveTo) : null,
+      addendumType: data.addendumType,
+      description: data.description || "",
+      commercialImpact: data.commercialImpact || "",
+      attachmentUrl: data.attachmentUrl || "",
+      status: data.status || "DRAFT"
+    };
+    if (isDbConnected()) {
+      const res = await prismaClient.manpowerContractAddendum.create({
+        data: payload
+      });
+      return {
+        ...res,
+        addendumDate: res.addendumDate?.toISOString(),
+        effectiveFrom: res.effectiveFrom?.toISOString(),
+        effectiveTo: res.effectiveTo?.toISOString(),
+        createdAt: res.createdAt?.toISOString(),
+        updatedAt: res.updatedAt?.toISOString()
+      };
+    }
+    const db = readDb();
+    const newRecord = {
+      id: `add-${Date.now()}`,
+      contractId: payload.contractId,
+      addendumNumber,
+      title: payload.title,
+      addendumDate: data.addendumDate || new Date().toISOString(),
+      effectiveFrom: data.effectiveFrom || new Date().toISOString(),
+      effectiveTo: data.effectiveTo || null,
+      addendumType: payload.addendumType,
+      description: payload.description,
+      commercialImpact: payload.commercialImpact,
+      attachmentUrl: payload.attachmentUrl,
+      status: payload.status,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    db.manpowerContractAddendums = db.manpowerContractAddendums || [];
+    db.manpowerContractAddendums.push(newRecord);
+    writeDb(db);
+    return newRecord;
   },
   createManpowerContract: async (data: any): Promise<any> => {
     const contractNumber = data.contractNumber || await getNextSequenceCode("SCON");
     const dataWithCode = { ...data, contractNumber };
+    const contractId = dataWithCode.id || `mcon-${Date.now()}`;
     if (isDbConnected()) {
       const res = await prismaClient.manpowerContract.create({
         data: {
-          ...dataWithCode,
+          id: contractId,
+          clientId: dataWithCode.clientId,
+          contractNumber: dataWithCode.contractNumber,
+          title: dataWithCode.title,
           startDate: new Date(dataWithCode.startDate),
-          endDate: new Date(dataWithCode.endDate)
+          endDate: new Date(dataWithCode.endDate),
+          operationType: dataWithCode.operationType || "SECURITY_GUARDING",
+          status: dataWithCode.status || "DRAFT",
+          defaultManpowerCount: dataWithCode.defaultManpowerCount || 0,
+          defaultRelieverCount: dataWithCode.defaultRelieverCount || 0,
+          manpowerRequirements: {
+            create: (dataWithCode.manpowerRequirements || []).map((mr: any) => ({
+              position: mr.position,
+              quantity: parseInt(mr.quantity, 10),
+              deploymentType: mr.deploymentType,
+              remarks: mr.remarks
+            }))
+          },
+          relieverRequirements: {
+            create: (dataWithCode.relieverRequirements || []).map((rr: any) => ({
+              position: rr.position,
+              quantity: parseInt(rr.quantity, 10),
+              sourcePreference: rr.sourcePreference,
+              remarks: rr.remarks
+            }))
+          },
+          shiftRequirements: {
+            create: (dataWithCode.shiftRequirements || []).map((sr: any) => ({
+              shiftName: sr.shiftName,
+              startTime: sr.startTime,
+              endTime: sr.endTime,
+              postsCovered: parseInt(sr.postsCovered, 10),
+              daysPattern: sr.daysPattern,
+              remarks: sr.remarks
+            }))
+          }
+        },
+        include: {
+          client: true,
+          manpowerRequirements: true,
+          relieverRequirements: true,
+          shiftRequirements: true
         }
       });
-      return { ...res, createdAt: res.createdAt?.toISOString(), updatedAt: res.updatedAt?.toISOString() };
+      const manpowerRequirements = res.manpowerRequirements || [];
+      const relieverRequirements = res.relieverRequirements || [];
+      const shiftRequirements = res.shiftRequirements || [];
+      return { 
+        ...res, 
+        createdAt: res.createdAt?.toISOString(), 
+        updatedAt: res.updatedAt?.toISOString(),
+        startDate: res.startDate?.toISOString(),
+        endDate: res.endDate?.toISOString(),
+        manpowerLineCount: manpowerRequirements.length,
+        totalManpower: manpowerRequirements.reduce((sum: number, r: any) => sum + (r.quantity || 0), 0),
+        relieverRequired: relieverRequirements.length > 0 ? "Yes" : "No",
+        totalRelievers: relieverRequirements.reduce((sum: number, r: any) => sum + (r.quantity || 0), 0),
+        shiftLineCount: shiftRequirements.length
+      };
     }
     const db = readDb();
     const newRecord = {
-      id: dataWithCode.id || `mcon-${Date.now()}`,
+      id: contractId,
       clientId: dataWithCode.clientId || "",
       contractNumber: dataWithCode.contractNumber || "",
       title: dataWithCode.title || "",
@@ -8732,8 +9364,57 @@ export const mockDb = {
     };
     db.manpowerContracts = db.manpowerContracts || [];
     db.manpowerContracts.push(newRecord);
+    db.contractManpowerRequirements = db.contractManpowerRequirements || [];
+    const newManpowerReqs = (dataWithCode.manpowerRequirements || []).map((mr: any, index: number) => ({
+      id: mr.id || `mr-${contractId}-${index}-${Date.now()}`,
+      contractId: contractId,
+      position: mr.position,
+      quantity: parseInt(mr.quantity, 10),
+      deploymentType: mr.deploymentType,
+      remarks: mr.remarks || "",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    }));
+    db.contractManpowerRequirements.push(...newManpowerReqs);
+    db.contractRelieverRequirements = db.contractRelieverRequirements || [];
+    const newRelieverReqs = (dataWithCode.relieverRequirements || []).map((rr: any, index: number) => ({
+      id: rr.id || `rr-${contractId}-${index}-${Date.now()}`,
+      contractId: contractId,
+      position: rr.position,
+      quantity: parseInt(rr.quantity, 10),
+      sourcePreference: rr.sourcePreference,
+      remarks: rr.remarks || "",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    }));
+    db.contractRelieverRequirements.push(...newRelieverReqs);
+    db.contractShiftRequirements = db.contractShiftRequirements || [];
+    const newShiftReqs = (dataWithCode.shiftRequirements || []).map((sr: any, index: number) => ({
+      id: sr.id || `sr-${contractId}-${index}-${Date.now()}`,
+      contractId: contractId,
+      shiftName: sr.shiftName,
+      startTime: sr.startTime,
+      endTime: sr.endTime,
+      postsCovered: parseInt(sr.postsCovered, 10),
+      daysPattern: sr.daysPattern,
+      remarks: sr.remarks || "",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    }));
+    db.contractShiftRequirements.push(...newShiftReqs);
     writeDb(db);
-    return newRecord;
+    return {
+      ...newRecord,
+      client: (db.manpowerClients || []).find((c: any) => c.id === newRecord.clientId),
+      manpowerRequirements: newManpowerReqs,
+      relieverRequirements: newRelieverReqs,
+      shiftRequirements: newShiftReqs,
+      manpowerLineCount: newManpowerReqs.length,
+      totalManpower: newManpowerReqs.reduce((sum: number, r: any) => sum + (r.quantity || 0), 0),
+      relieverRequired: newRelieverReqs.length > 0 ? "Yes" : "No",
+      totalRelievers: newRelieverReqs.reduce((sum: number, r: any) => sum + (r.quantity || 0), 0),
+      shiftLineCount: newShiftReqs.length
+    };
   },
 
   // --- Manpower Projects CRUD ---

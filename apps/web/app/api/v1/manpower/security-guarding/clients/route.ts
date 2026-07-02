@@ -31,8 +31,8 @@ export async function POST(request: Request) {
 
   try {
     const payload = await request.json();
-    if (!payload.name || !payload.code) {
-      return NextResponse.json({ error: "Client Name and Code are required" }, { status: 400 });
+    if (!payload.name) {
+      return NextResponse.json({ error: "Client Name is required" }, { status: 400 });
     }
     const client = await mockDb.createManpowerClient({
       ...payload,
@@ -41,5 +41,26 @@ export async function POST(request: Request) {
     return NextResponse.json(client);
   } catch (e: any) {
     return NextResponse.json({ error: e.message || "Failed to create client" }, { status: 500 });
+  }
+}
+
+export async function PATCH(request: Request) {
+  const auth = await checkApiAuth();
+  if (auth.error) return auth.error;
+
+  if (!hasPermission(auth.session?.user, "manpower.admin.full_access") &&
+      !hasPermission(auth.session?.user, "manpower.security.manage")) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  try {
+    const payload = await request.json();
+    if (!payload.id) {
+      return NextResponse.json({ error: "Client ID is required" }, { status: 400 });
+    }
+    const client = await mockDb.updateManpowerClient(payload.id, payload);
+    return NextResponse.json(client);
+  } catch (e: any) {
+    return NextResponse.json({ error: e.message || "Failed to update client" }, { status: 500 });
   }
 }
