@@ -6,8 +6,8 @@
 /login
 
 ## Test Credentials
-- Email: admin@example.com
-- Password: yourpasswordhere
+- Email: admin@alhattab.qa
+- Password: stored locally / not committed
 
 ## Never Automate
 - delete account
