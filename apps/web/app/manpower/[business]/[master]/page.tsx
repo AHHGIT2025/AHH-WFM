@@ -95,6 +95,9 @@ export default function ManpowerMasterPage() {
     setEditItem(item);
     setFormData({ ...item });
     setFormError("");
+    if (master === "contracts") {
+      setWorkflowLevels(item.workflowLevels || []);
+    }
   };
 
   const viewClientDetails = async (clientId: string) => {
@@ -201,7 +204,7 @@ export default function ManpowerMasterPage() {
         const res = await fetch(`/api/v1/manpower/${business}/sites`);
         if (res.ok) setSites(await res.json());
       }
-      if (master === "manpower") {
+      if (master === "manpower" || master === "contracts") {
         const [catRes, empRes] = await Promise.all([
           fetch(`/api/v1/manpower/${business}/categories`),
           fetch(`/api/v1/employees`)
@@ -1283,7 +1286,23 @@ export default function ManpowerMasterPage() {
         manpowerRequirements: normalizedManpower,
         relieverRequirements: normalizedRelievers,
         shiftRequirements: normalizedShifts,
-        materials: normalizedMaterials
+        materials: normalizedMaterials,
+        paymentTerms: formData.paymentTerms || "",
+        paymentCycle: formData.paymentCycle || "Monthly",
+        creditDays: formData.creditDays === "" || formData.creditDays === null || formData.creditDays === undefined ? null : parseInt(formData.creditDays, 10),
+        invoiceSubmissionDay: formData.invoiceSubmissionDay || "",
+        paymentRemarks: formData.paymentRemarks || "",
+        terminationClause: formData.terminationClause || "",
+        noticePeriodDays: formData.noticePeriodDays === "" || formData.noticePeriodDays === null || formData.noticePeriodDays === undefined ? null : parseInt(formData.noticePeriodDays, 10),
+        terminationPenalty: formData.terminationPenalty || "",
+        earlyTerminationAllowed: !!formData.earlyTerminationAllowed,
+        terminationRemarks: formData.terminationRemarks || "",
+        specialConditions: formData.specialConditions || "",
+        serviceLevelTerms: formData.serviceLevelTerms || "",
+        penaltyClause: formData.penaltyClause || "",
+        escalationMatrix: formData.escalationMatrix || "",
+        otherContractConditions: formData.otherContractConditions || "",
+        workflowLevels: workflowLevels
       };
 
       const url = isEditing ? `${apiBase}/${editItem.id}` : apiBase;
@@ -3239,6 +3258,9 @@ export default function ManpowerMasterPage() {
                 if (activeSubTab === "relieverPools" || activeSubTab === "overtimeLogs") {
                   return;
                 }
+              }
+              if (master === "contracts") {
+                setWorkflowLevels([]);
               }
               setFormData(master === "manpower" ? { mode: "promote", isActive: true } : master === "contracts" ? { status: "DRAFT", manpowerRequirements: [], relieverRequirements: [], shiftRequirements: [], relieverRequired: "No" } : {});
               setFormError("");
@@ -5435,7 +5457,7 @@ export default function ManpowerMasterPage() {
 
                 {selectedContractDetail.workflows?.[0] ? (
                   <div className="space-y-3 pt-2">
-                    {selectedContractDetail.workflows[0].levels.map((lvl: any) => {
+                    {[...selectedContractDetail.workflows[0].levels].sort((a: any, b: any) => (a.levelNumber || 0) - (b.levelNumber || 0)).map((lvl: any) => {
                       const isLvlApproved = lvl.approvalRule === "ANY_ONE" 
                         ? lvl.approvers?.some((ap: any) => ap.approvalStatus === "APPROVED")
                         : lvl.approvers?.every((ap: any) => ap.approvalStatus === "APPROVED");
@@ -5490,7 +5512,8 @@ export default function ManpowerMasterPage() {
                   <h4 className="text-xs font-bold text-primary uppercase tracking-wider border-b border-outline-variant pb-1">Perform Approval Action</h4>
                   
                   {(() => {
-                    const activePendingLevel = selectedContractDetail.workflows[0].levels.find((lvl: any) => {
+                    const sortedLevels = [...selectedContractDetail.workflows[0].levels].sort((a: any, b: any) => (a.levelNumber || 0) - (b.levelNumber || 0));
+                    const activePendingLevel = sortedLevels.find((lvl: any) => {
                       const isLvlApproved = lvl.approvalRule === "ANY_ONE" 
                         ? lvl.approvers?.some((ap: any) => ap.approvalStatus === "APPROVED")
                         : lvl.approvers?.every((ap: any) => ap.approvalStatus === "APPROVED");

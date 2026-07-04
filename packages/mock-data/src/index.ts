@@ -9087,9 +9087,30 @@ export const mockDb = {
     };
     
     if (isDbConnected()) {
+      const allowedKeys = [
+        "name", "code", "operationType", "isActive", "customerType", "tradingName",
+        "businessType", "addressLine1", "addressLine2", "zone", "area", "city",
+        "country", "poBox", "mapLocation", "mainPhone", "mainEmail", "website",
+        "operationContactName", "operationContactDesignation", "operationContactMobile",
+        "operationContactEmail", "operationContactAltPhone", "financeContactName",
+        "financeContactDesignation", "financeContactMobile", "financeContactEmail",
+        "financeContactAltPhone", "billingEmail", "paymentTerms", "crNumber",
+        "crExpiryDate", "taxNumber", "establishmentCardNumber", "establishmentCardExpiryDate",
+        "authorizedSignatoryName", "authorizedSignatoryQid", "qidNumber", "qidExpiryDate",
+        "passportNumber", "passportExpiryDate", "nationality", "dateOfBirth",
+        "internalSalesPersonId", "internalSalesPersonName", "internalSalesPersonMobile",
+        "internalSalesPersonEmail", "legalRemarks", "remarks", "tradeLicenseNumber",
+        "tradeLicenseIssueDate", "tradeLicenseExpiryDate", "tradeLicenseAuthority"
+      ];
+      const filteredDbData = Object.keys(dbData)
+        .filter(key => allowedKeys.includes(key))
+        .reduce((obj: any, key) => {
+          obj[key] = (dbData as any)[key];
+          return obj;
+        }, {});
       await prismaClient.manpowerClient.update({ 
         where: { id },
-        data: dbData 
+        data: filteredDbData 
       });
       if (data.documents !== undefined) {
         await prismaClient.manpowerClientDocument.deleteMany({ where: { clientId: id } });
@@ -9198,6 +9219,7 @@ export const mockDb = {
           workflows: {
             include: {
               levels: {
+                orderBy: { levelNumber: "asc" },
                 include: {
                   approvers: true
                 }
@@ -9224,7 +9246,7 @@ export const mockDb = {
         const levels = (db.contractApprovalLevels || []).filter((l: any) => l.workflowId === w.id).map((l: any) => {
           const approvers = (db.contractApprovalApprovers || []).filter((ap: any) => ap.levelId === l.id);
           return { ...l, approvers };
-        });
+        }).sort((a: any, b: any) => (a.levelNumber || 0) - (b.levelNumber || 0));
         return { ...w, levels };
       });
 
@@ -9641,6 +9663,7 @@ export const mockDb = {
           workflows: {
             include: {
               levels: {
+                orderBy: { levelNumber: "asc" },
                 include: {
                   approvers: true
                 }
@@ -9669,7 +9692,7 @@ export const mockDb = {
       const levels = (db.contractApprovalLevels || []).filter((l: any) => l.workflowId === w.id).map((l: any) => {
         const approvers = (db.contractApprovalApprovers || []).filter((ap: any) => ap.levelId === l.id);
         return { ...l, approvers };
-      });
+      }).sort((a: any, b: any) => (a.levelNumber || 0) - (b.levelNumber || 0));
       return { ...w, levels };
     });
 

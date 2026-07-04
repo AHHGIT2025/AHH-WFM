@@ -18,3 +18,13 @@ yarn-error.log*
 # Runtime uploaded files - do not commit
 apps/web/public/uploads/
 apps/mobile/public/uploads/
+
+# Local configuration & overrides
+*.local.md
+vibe.config.json
+.cursor/
+.vscode/
+.mcp.json
+.vibe/
+
+
