@@ -6,7 +6,7 @@ const cn = (...classes: (string | undefined | boolean)[]) => classes.filter(Bool
 // 1. Button Component
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: "primary" | "secondary" | "ghost" | "success" | "error" | "warning";
-  size?: "sm" | "md" | "lg";
+  size?: "xs" | "sm" | "md" | "lg";
   className?: string;
 }
 
@@ -18,6 +18,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         className={cn(
           "inline-flex items-center justify-center font-medium transition-all active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none rounded-lg",
           // Sizes
+          size === "xs" && "px-2 py-0.5 text-[10px] rounded",
           size === "sm" && "px-3 py-1 text-xs",
           size === "md" && "px-4 py-2 text-sm",
           size === "lg" && "px-6 py-3 text-base",
@@ -99,7 +100,7 @@ Card.displayName = "Card";
 
 // 4. Badge Component
 export interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
-  variant?: "success" | "error" | "warning" | "pending" | "info" | "neutral";
+  variant?: "success" | "error" | "warning" | "pending" | "info" | "neutral" | "primary" | "secondary";
   className?: string;
 }
 
@@ -114,6 +115,8 @@ export const Badge: React.FC<BadgeProps> = ({ variant = "info", className, child
         variant === "pending" && "bg-status-pending/10 text-status-pending border-status-pending/20",
         variant === "info" && "bg-secondary/10 text-secondary border-secondary/20",
         variant === "neutral" && "bg-surface-container-high text-on-surface-variant border-outline-variant",
+        variant === "primary" && "bg-primary/10 text-primary border-primary/20",
+        variant === "secondary" && "bg-surface-container-high text-on-surface-variant border-outline-variant",
         className
       )}
       {...props}
@@ -130,6 +133,7 @@ export interface ModalProps {
   onClose: () => void;
   title: string;
   children: React.ReactNode;
+  size?: string;
 }
 
 export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children }) => {

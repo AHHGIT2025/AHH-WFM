@@ -884,6 +884,7 @@ export interface UserOperationAccess {
 export interface ManpowerClientDocument {
   id: string;
   clientId: string;
+  contractId?: string | null;
   documentType: string;
   fileName?: string | null;
   fileUrl?: string | null;
@@ -909,7 +910,7 @@ export interface ManpowerContractAddendum {
   commercialImpact?: string | null;
   calculatedCommercialImpact?: number | null;
   attachmentUrl?: string | null;
-  status: "DRAFT" | "APPROVED" | "ACTIVE" | "CANCELLED" | string;
+  status: "DRAFT" | "ACTIVE" | "EXPIRED" | "TERMINATED" | string;
   createdAt?: string;
   updatedAt?: string;
   lineItems?: ManpowerContractAddendumLineItem[];
@@ -932,8 +933,8 @@ export interface ManpowerMaterialMaster {
 export interface ManpowerContractAddendumLineItem {
   id: string;
   addendumId: string;
-  itemType: "MANPOWER" | "MATERIAL" | string;
-  changeType: "ADD" | "REMOVE" | "MODIFY" | string;
+  itemType: "MANPOWER" | "MATERIAL";
+  changeType: "ADD" | "REMOVE" | "MODIFY";
   itemName: string;
   quantity: number;
   unitPrice?: number | null;
@@ -955,6 +956,10 @@ export interface ManpowerClient {
   updatedAt?: string;
   documents?: ManpowerClientDocument[];
   customerType?: "COMPANY" | "INDIVIDUAL" | string;
+  tradeLicenseNumber?: string | null;
+  tradeLicenseIssueDate?: string | null;
+  tradeLicenseExpiryDate?: string | null;
+  tradeLicenseAuthority?: string | null;
   tradingName?: string | null;
   businessType?: string | null;
   addressLine1?: string | null;
@@ -1032,6 +1037,79 @@ export interface ManpowerContract {
   relieverRequired?: "Yes" | "No";
   totalRelievers?: number;
   shiftLineCount?: number;
+  paymentTerms?: string | null;
+  paymentCycle?: string | null;
+  creditDays?: number | null;
+  invoiceSubmissionDay?: string | null;
+  paymentRemarks?: string | null;
+  terminationClause?: string | null;
+  noticePeriodDays?: number | null;
+  terminationPenalty?: string | null;
+  earlyTerminationAllowed?: boolean;
+  terminationRemarks?: string | null;
+  specialConditions?: string | null;
+  serviceLevelTerms?: string | null;
+  penaltyClause?: string | null;
+  escalationMatrix?: string | null;
+  otherContractConditions?: string | null;
+  approvalStatus?: string | null;
+  submittedForApprovalAt?: string | null;
+  approvedAt?: string | null;
+  activatedAt?: string | null;
+  activatedBy?: string | null;
+  rejectionRemarks?: string | null;
+  workflows?: ContractApprovalWorkflow[];
+  documents?: ManpowerClientDocument[];
+  daysToContractExpiry?: number | null;
+  contractExpiryStatus?: string | null;
+}
+
+export interface ContractApprovalWorkflow {
+  id: string;
+  contractId: string;
+  contract?: ManpowerContract;
+  workflowName?: string | null;
+  status: string;
+  submittedAt?: string | null;
+  submittedBy?: string | null;
+  approvedAt?: string | null;
+  rejectedAt?: string | null;
+  finalRemarks?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+  levels?: ContractApprovalLevel[];
+}
+
+export interface ContractApprovalLevel {
+  id: string;
+  workflowId: string;
+  workflow?: ContractApprovalWorkflow;
+  levelNumber: number;
+  levelName: string;
+  approvalRule: "ANY_ONE" | "ALL_REQUIRED" | string;
+  isMandatory: boolean;
+  escalationDays?: number | null;
+  remarks?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+  approvers?: ContractApprovalApprover[];
+}
+
+export interface ContractApprovalApprover {
+  id: string;
+  levelId: string;
+  level?: ContractApprovalLevel;
+  employeeId?: string | null;
+  employeeName?: string | null;
+  employeeCode?: string | null;
+  email?: string | null;
+  roleName?: string | null;
+  approvalStatus: "PENDING" | "APPROVED" | "REJECTED" | string;
+  approvedAt?: string | null;
+  rejectedAt?: string | null;
+  remarks?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface ManpowerProject {

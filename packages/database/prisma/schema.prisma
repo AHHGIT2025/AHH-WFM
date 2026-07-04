@@ -1227,6 +1227,10 @@ model ManpowerClient {
   internalSalesPersonEmail      String?
   legalRemarks                  String?
   remarks                       String?
+  tradeLicenseNumber            String?
+  tradeLicenseIssueDate         DateTime?
+  tradeLicenseExpiryDate        DateTime?
+  tradeLicenseAuthority         String?
 }
 
 model ManpowerContract {
@@ -1256,6 +1260,37 @@ model ManpowerContract {
   relieverRequirements ContractRelieverRequirement[]
   shiftRequirements    ContractShiftRequirement[]
   addendums            ManpowerContractAddendum[]
+  workflows            ContractApprovalWorkflow[]
+  documents            ManpowerClientDocument[]
+
+  // Payment Terms
+  paymentTerms                 String?
+  paymentCycle                 String?
+  creditDays                   Int?
+  invoiceSubmissionDay         String?
+  paymentRemarks               String?
+
+  // Termination Clause
+  terminationClause            String?
+  noticePeriodDays             Int?
+  terminationPenalty           String?
+  earlyTerminationAllowed      Boolean                    @default(false)
+  terminationRemarks           String?
+
+  // Special Conditions
+  specialConditions            String?
+  serviceLevelTerms            String?
+  penaltyClause                String?
+  escalationMatrix             String?
+  otherContractConditions      String?
+
+  // Approval status and logs
+  approvalStatus               String                     @default("DRAFT")
+  submittedForApprovalAt       DateTime?
+  approvedAt                   DateTime?
+  activatedAt                  DateTime?
+  activatedBy                  String?
+  rejectionRemarks             String?
 }
 
 model ManpowerProject {
@@ -1578,6 +1613,8 @@ model ManpowerClientDocument {
   id           String         @id @default(uuid())
   clientId     String
   client       ManpowerClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  contractId   String?
+  contract     ManpowerContract? @relation(fields: [contractId], references: [id], onDelete: Cascade)
   documentType String
   fileName     String?
   fileUrl      String?
@@ -1640,4 +1677,52 @@ model ManpowerContractAddendumLineItem {
   remarks          String?
   createdAt        DateTime                 @default(now())
   updatedAt        DateTime                 @updatedAt
+}
+
+model ContractApprovalWorkflow {
+  id           String                  @id @default(uuid())
+  contractId   String
+  contract     ManpowerContract        @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  workflowName String?
+  status       String                  @default("DRAFT") // DRAFT, PENDING, APPROVED, REJECTED
+  submittedAt  DateTime?
+  submittedBy  String?
+  approvedAt   DateTime?
+  rejectedAt   DateTime?
+  finalRemarks String?
+  createdAt    DateTime                @default(now())
+  updatedAt    DateTime                @updatedAt
+  levels       ContractApprovalLevel[]
+}
+
+model ContractApprovalLevel {
+  id             String                     @id @default(uuid())
+  workflowId     String
+  workflow       ContractApprovalWorkflow   @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  levelNumber    Int
+  levelName      String
+  approvalRule   String                     @default("ANY_ONE") // ANY_ONE | ALL_REQUIRED
+  isMandatory    Boolean                    @default(true)
+  escalationDays Int?
+  remarks        String?
+  createdAt      DateTime                   @default(now())
+  updatedAt      DateTime                   @updatedAt
+  approvers      ContractApprovalApprover[]
+}
+
+model ContractApprovalApprover {
+  id             String                @id @default(uuid())
+  levelId        String
+  level          ContractApprovalLevel @relation(fields: [levelId], references: [id], onDelete: Cascade)
+  employeeId     String?
+  employeeName   String?
+  employeeCode   String?
+  email          String?
+  roleName       String?
+  approvalStatus String                @default("PENDING") // PENDING, APPROVED, REJECTED
+  approvedAt     DateTime?
+  rejectedAt     DateTime?
+  remarks        String?
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
 }

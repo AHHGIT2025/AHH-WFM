@@ -14,6 +14,8 @@ export default function FacilityManagementDashboard() {
     shortages: 0
   });
   const [loading, setLoading] = useState(true);
+  const [clients, setClients] = useState<any[]>([]);
+  const [contracts, setContracts] = useState<any[]>([]);
 
   useEffect(() => {
     async function loadStats() {
@@ -31,6 +33,9 @@ export default function FacilityManagementDashboard() {
         const projects = await projectsRes.json();
         const sites = await sitesRes.json();
         const cleaners = await cleanersRes.json();
+
+        setClients(clients);
+        setContracts(contracts);
 
         setStats({
           activeClients: clients.filter((x: any) => x.isActive).length,
@@ -184,6 +189,79 @@ export default function FacilityManagementDashboard() {
                 <p className="text-[10px] text-on-surface-variant">Scope policies</p>
               </div>
             </Link>
+          </div>
+
+          {/* Expiry & Compliance Alerts Widget */}
+          <div className="bg-surface border border-outline-variant rounded-xl overflow-hidden shadow-sm mb-6">
+            <div className="px-4 py-3 border-b border-outline-variant bg-surface-container-low flex items-center justify-between">
+              <h3 className="text-xs font-bold text-status-warning flex items-center gap-2">
+                <span className="material-symbols-outlined text-[16px]">warning</span>
+                Document & Contract Expiry Alerts (30-Day Threshold)
+              </h3>
+              <div className="flex gap-4">
+                <Link href="/manpower/facility-management/contracts" className="text-[10px] text-primary font-bold hover:underline">
+                  View Contracts
+                </Link>
+                <Link href="/manpower/facility-management/clients" className="text-[10px] text-primary font-bold hover:underline">
+                  View Clients
+                </Link>
+              </div>
+            </div>
+            <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Expiring Contracts */}
+              <div>
+                <h4 className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant mb-2">Expiring / Expired Contracts</h4>
+                {(() => {
+                  const expiring = contracts.filter((c: any) => c.contractExpiryStatus === "EXPIRING_SOON" || c.contractExpiryStatus === "EXPIRED");
+                  if (expiring.length === 0) {
+                    return <p className="text-xs text-on-surface-variant italic py-2 text-center">No contracts expiring within 30 days.</p>;
+                  }
+                  return (
+                    <div className="space-y-2">
+                      {expiring.map((c: any) => (
+                        <div key={c.id} className="flex justify-between items-center text-xs p-2.5 rounded-lg bg-surface-container-lowest border border-outline-variant/60">
+                          <div>
+                            <div className="font-semibold text-on-surface">{c.title} ({c.contractNumber})</div>
+                            <div className="text-[10px] text-on-surface-variant">Client: {c.client?.name || c.clientId}</div>
+                          </div>
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-black ${c.contractExpiryStatus === "EXPIRED" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}>
+                            {c.contractExpiryStatus === "EXPIRED" ? "EXPIRED" : `${c.daysToContractExpiry} Days Left`}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* Expiring Client Documents */}
+              <div>
+                <h4 className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant mb-2">Expiring Client Documents / Trade Licenses</h4>
+                {(() => {
+                  const expiringClients = clients.filter((c: any) => c.documentAlertStatus === "EXPIRING_SOON" || c.documentAlertStatus === "EXPIRED");
+                  if (expiringClients.length === 0) {
+                    return <p className="text-xs text-on-surface-variant italic py-2 text-center">No client documents expiring within 30 days.</p>;
+                  }
+                  return (
+                    <div className="space-y-2">
+                      {expiringClients.map((c: any) => (
+                        <div key={c.id} className="flex justify-between items-center text-xs p-2.5 rounded-lg bg-surface-container-lowest border border-outline-variant/60">
+                          <div>
+                            <div className="font-semibold text-on-surface">{c.name} ({c.code})</div>
+                            <div className="text-[10px] text-on-surface-variant">
+                              {c.tradeLicenseExpiryDate ? `Trade License Expiry: ${new Date(c.tradeLicenseExpiryDate).toLocaleDateString()}` : "Document expiring"}
+                            </div>
+                          </div>
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-black ${c.documentAlertStatus === "EXPIRED" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}>
+                            {c.documentAlertStatus === "EXPIRED" ? "EXPIRED" : "EXPIRING SOON"}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
           </div>
         </>
       )}

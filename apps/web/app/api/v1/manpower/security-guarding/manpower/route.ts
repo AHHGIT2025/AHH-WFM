@@ -132,6 +132,7 @@ export async function POST(request: Request) {
         id: payload.id,
         name: payload.name,
         email: payload.email,
+        department: payload.department || "Operations",
         manpowerCategoryId: payload.manpowerCategoryId,
         companyId: "COMP-002",
         role: "EMPLOYEE",

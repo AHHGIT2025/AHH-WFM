@@ -187,8 +187,8 @@ export async function POST(request: Request, context: { params: { business: stri
 
       const hasLeave = leaves.some(l => {
         if (l.employeeId !== employeeId || l.status !== "APPROVED") return false;
-        const start = new Date(l.startDate);
-        const end = new Date(l.endDate);
+        const start = new Date(l.startDate || "");
+        const end = new Date(l.endDate || "");
         return start <= dateLte && end >= dateGte;
       });
 
@@ -200,7 +200,7 @@ export async function POST(request: Request, context: { params: { business: stri
 
       // 4. Deployability check
       const categories = await mockDb.getManpowerCategories(expectedType);
-      const empCategory = categories.find(c => c.name === employee.employeeCategory || c.code === employee.employeeCategory || c.id === employee.employeeCategoryId);
+      const empCategory = categories.find(c => c.name === employee.employeeCategory || c.code === employee.employeeCategory || c.id === employee.manpowerCategoryId);
       if (empCategory && empCategory.isDeployableInRoster === false) {
         return NextResponse.json({
           error: `Roster assignment blocked: Employee category '${employee.employeeCategory}' is not deployable in the roster.`
@@ -331,8 +331,8 @@ export async function POST(request: Request, context: { params: { business: stri
 
       const hasLeave = leaves.some(l => {
         if (l.employeeId !== relieverEmployeeId || l.status !== "APPROVED") return false;
-        const start = new Date(l.startDate);
-        const end = new Date(l.endDate);
+        const start = new Date(l.startDate || "");
+        const end = new Date(l.endDate || "");
         return start <= dateLte && end >= dateGte;
       });
 

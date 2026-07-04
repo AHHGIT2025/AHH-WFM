@@ -58,7 +58,7 @@ export async function getNextSequenceCode(prefix: string): Promise<string> {
     }
   } else {
     const db = readDb();
-    const records = db[config.dbKey] || [];
+    const records = (db as any)[config.dbKey] || [];
     existingCodes = records.map((r: any) => r[config.field] as string).filter(Boolean);
   }
 
@@ -79,6 +79,236 @@ export async function getNextSequenceCode(prefix: string): Promise<string> {
   const nextSeq = maxSeq + 1;
   const padded = String(nextSeq).padStart(4, "0");
   return `${prefix}-${padded}`;
+}
+
+// Expiry Helper Functions
+export function calculateDaysToExpiry(expiryDate: any): number | null {
+  if (!expiryDate) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const exp = new Date(expiryDate);
+  exp.setHours(0, 0, 0, 0);
+  const diffTime = exp.getTime() - today.getTime();
+  return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+}
+
+export function getExpiryStatus(expiryDate: any, thresholdDays: number = 30): string {
+  if (!expiryDate) return "NO_EXPIRY_DATE";
+  const days = calculateDaysToExpiry(expiryDate);
+  if (days === null) return "NO_EXPIRY_DATE";
+  if (days < 0) return "EXPIRED";
+  if (days <= thresholdDays) return "EXPIRING_SOON";
+  return "VALID";
+}
+
+export function getContractExpiryStatus(endDate: any, thresholdDays: number = 30): string {
+  if (!endDate) return "NO_END_DATE";
+  const days = calculateDaysToExpiry(endDate);
+  if (days === null) return "NO_END_DATE";
+  if (days < 0) return "EXPIRED";
+  if (days <= thresholdDays) return "EXPIRING_SOON";
+  return "VALID";
+}
+
+export function mapClientRecord(x: any) {
+  const docs = (x.documents || []).map((d: any) => {
+    const days = calculateDaysToExpiry(d.expiryDate);
+    const status = getExpiryStatus(d.expiryDate);
+    return {
+      ...d,
+      expiryDate: d.expiryDate?.toISOString ? d.expiryDate.toISOString() : d.expiryDate,
+      expiryStatus: status,
+      daysToExpiry: days
+    };
+  });
+  
+  // Find nearest document expiry
+  let nearestDate: string | null = null;
+  let nearestStatus = "NO_EXPIRY_DATE";
+  let minDays: number | null = null;
+  
+  docs.forEach((d: any) => {
+    if (d.daysToExpiry !== null) {
+      if (minDays === null || d.daysToExpiry < minDays) {
+        minDays = d.daysToExpiry;
+        nearestDate = d.expiryDate;
+        nearestStatus = d.expiryStatus;
+      }
+    }
+  });
+
+  return {
+    ...x,
+    createdAt: x.createdAt?.toISOString ? x.createdAt.toISOString() : x.createdAt,
+    updatedAt: x.updatedAt?.toISOString ? x.updatedAt.toISOString() : x.updatedAt,
+    tradeLicenseIssueDate: x.tradeLicenseIssueDate?.toISOString ? x.tradeLicenseIssueDate.toISOString() : x.tradeLicenseIssueDate,
+    tradeLicenseExpiryDate: x.tradeLicenseExpiryDate?.toISOString ? x.tradeLicenseExpiryDate.toISOString() : x.tradeLicenseExpiryDate,
+    documents: docs,
+    documentsCount: docs.length,
+    nearestDocumentExpiryDate: nearestDate,
+    nearestDocumentExpiryStatus: nearestStatus,
+    daysToNearestDocumentExpiry: minDays
+  };
+}
+
+export function mapContractRecord(c: any) {
+  const daysToContractExpiry = calculateDaysToExpiry(c.endDate);
+  const contractExpiryStatus = getContractExpiryStatus(c.endDate);
+  
+  const mr = c.manpowerRequirements || [];
+  const rr = c.relieverRequirements || [];
+  const sr = c.shiftRequirements || [];
+  const materials = c.materials || [];
+  const addendums = c.addendums || [];
+  const workflows = c.workflows || [];
+  const documents = (c.documents || []).map((d: any) => {
+    const days = calculateDaysToExpiry(d.expiryDate);
+    const status = getExpiryStatus(d.expiryDate);
+    return {
+      ...d,
+      expiryDate: d.expiryDate?.toISOString ? d.expiryDate.toISOString() : d.expiryDate,
+      expiryStatus: status,
+      daysToExpiry: days
+    };
+  });
+  
+  const totalManpowerValue = mr.reduce((sum: number, r: any) => {
+    if (r.isFoc) return sum;
+    return sum + ((r.quantity || 0) * (r.unitPrice || 0) * (r.billingPeriodCount || 1));
+  }, 0);
+  const totalMaterialValue = materials.reduce((sum: number, m: any) => {
+    if (m.isFoc) return sum;
+    return sum + ((m.quantity || 0) * (m.unitPrice || 0));
+  }, 0);
+  const totalContractValue = totalManpowerValue + totalMaterialValue;
+
+  return {
+    ...c,
+    createdAt: c.createdAt?.toISOString ? c.createdAt.toISOString() : c.createdAt,
+    updatedAt: c.updatedAt?.toISOString ? c.updatedAt.toISOString() : c.updatedAt,
+    startDate: c.startDate?.toISOString ? c.startDate.toISOString() : c.startDate,
+    endDate: c.endDate?.toISOString ? c.endDate.toISOString() : c.endDate,
+    submittedForApprovalAt: c.submittedForApprovalAt?.toISOString ? c.submittedForApprovalAt.toISOString() : c.submittedForApprovalAt,
+    approvedAt: c.approvedAt?.toISOString ? c.approvedAt.toISOString() : c.approvedAt,
+    activatedAt: c.activatedAt?.toISOString ? c.activatedAt.toISOString() : c.activatedAt,
+    manpowerLineCount: mr.length,
+    totalManpower: mr.reduce((sum: number, x: any) => sum + (x.quantity || 0), 0),
+    relieverRequired: rr.length > 0 ? "Yes" : "No",
+    totalRelievers: rr.reduce((sum: number, x: any) => sum + (x.quantity || 0), 0),
+    shiftLineCount: sr.length,
+    addendumsCount: addendums.length,
+    totalManpowerValue,
+    totalMaterialValue,
+    totalContractValue,
+    daysToContractExpiry,
+    contractExpiryStatus,
+    documents,
+    workflows
+  };
+}
+
+export async function saveWorkflowSetup(contractId: string, workflowLevels: any[]) {
+  if (!workflowLevels) return;
+  
+  let workflow = await prismaClient.contractApprovalWorkflow.findFirst({
+    where: { contractId }
+  });
+  
+  if (!workflow) {
+    workflow = await prismaClient.contractApprovalWorkflow.create({
+      data: {
+        contractId,
+        workflowName: "Contract Activation Workflow",
+        status: "DRAFT"
+      }
+    });
+  }
+  
+  await prismaClient.contractApprovalLevel.deleteMany({
+    where: { workflowId: workflow.id }
+  });
+  
+  for (const wl of workflowLevels) {
+    const level = await prismaClient.contractApprovalLevel.create({
+      data: {
+        workflowId: workflow.id,
+        levelNumber: parseInt(wl.levelNumber, 10) || 1,
+        levelName: wl.levelName || `Level ${wl.levelNumber}`,
+        approvalRule: wl.approvalRule || "ANY_ONE",
+        isMandatory: wl.isMandatory !== false,
+        remarks: wl.remarks || ""
+      }
+    });
+    
+    if (wl.approvers && wl.approvers.length > 0) {
+      await Promise.all(wl.approvers.map((ap: any) => prismaClient.contractApprovalApprover.create({
+        data: {
+          levelId: level.id,
+          employeeId: ap.employeeId || null,
+          employeeName: ap.employeeName || null,
+          employeeCode: ap.employeeCode || ap.employeeId || null,
+          email: ap.email || null,
+          roleName: ap.roleName || null,
+          approvalStatus: ap.approvalStatus || "PENDING"
+        }
+      })));
+    }
+  }
+}
+
+export function saveWorkflowSetupLocal(db: any, contractId: string, workflowLevels: any[]) {
+  if (!workflowLevels) return;
+  db.contractApprovalWorkflows = db.contractApprovalWorkflows || [];
+  db.contractApprovalLevels = db.contractApprovalLevels || [];
+  db.contractApprovalApprovers = db.contractApprovalApprovers || [];
+  
+  let wf = db.contractApprovalWorkflows.find((w: any) => w.contractId === contractId);
+  if (!wf) {
+    wf = {
+      id: `wf-${Date.now()}-${Math.random()}`,
+      contractId,
+      workflowName: "Contract Activation Workflow",
+      status: "DRAFT",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    db.contractApprovalWorkflows.push(wf);
+  }
+  
+  db.contractApprovalLevels = db.contractApprovalLevels.filter((l: any) => l.workflowId !== wf.id);
+  
+  workflowLevels.forEach((wl: any) => {
+    const levelId = `wfl-${Date.now()}-${Math.random()}`;
+    const level = {
+      id: levelId,
+      workflowId: wf.id,
+      levelNumber: parseInt(wl.levelNumber, 10) || 1,
+      levelName: wl.levelName || `Level ${wl.levelNumber}`,
+      approvalRule: wl.approvalRule || "ANY_ONE",
+      isMandatory: wl.isMandatory !== false,
+      remarks: wl.remarks || "",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    db.contractApprovalLevels.push(level);
+    
+    if (wl.approvers && wl.approvers.length > 0) {
+      wl.approvers.forEach((ap: any) => {
+        db.contractApprovalApprovers.push({
+          id: `wfa-${Date.now()}-${Math.random()}`,
+          levelId,
+          employeeId: ap.employeeId || null,
+          employeeName: ap.employeeName || null,
+          employeeCode: ap.employeeCode || ap.employeeId || null,
+          email: ap.email || null,
+          roleName: ap.roleName || null,
+          approvalStatus: ap.approvalStatus || "PENDING",
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        });
+      });
+    }
+  });
 }
 
 // Helper utilities for Leave Calculations
@@ -217,6 +447,9 @@ let memoryDb: {
   manpowerContractAddendums: any[];
   manpowerMaterialMasters: any[];
   manpowerContractAddendumLineItems: any[];
+  contractApprovalWorkflows: any[];
+  contractApprovalLevels: any[];
+  contractApprovalApprovers: any[];
 } = {
   companies: [
     { id: "COMP-001", companyCode: "AHH", companyName: "Al Hattab Holding", isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
@@ -240,8 +473,8 @@ let memoryDb: {
     { id: "SEC-1001", name: "Guard One", department: "Operations", departmentId: "DEPT-001", companyId: "COMP-002", manpowerCategoryId: "PM-CAT-SEC-02", operationType: "SECURITY_GUARDING", isActive: true, status: "Offline", role: "EMPLOYEE", employeeCategory: "BLUE_COLLAR", dutyStatus: "OFF_DUTY", email: "guard1@alhattabsecurity.qa", phone: "+974 7777 0001", dateOfJoining: "2024-01-01T00:00:00Z", qidNumber: "29032400001", qidExpiryDate: "2028-01-01T00:00:00Z", passportNumber: "P-SEC1001", passportIssueDate: "2024-01-01T00:00:00Z", passportExpiryDate: "2034-01-01T00:00:00Z", passportIssuingCountry: "India", sponsor: "Al Hattab Security", hasAccommodation: true, hasItAssets: false },
     { id: "SEC-1002", name: "Guard Two", department: "Operations", departmentId: "DEPT-001", companyId: "COMP-002", manpowerCategoryId: "PM-CAT-SEC-02", operationType: "SECURITY_GUARDING", isActive: true, status: "Offline", role: "EMPLOYEE", employeeCategory: "BLUE_COLLAR", dutyStatus: "OFF_DUTY", email: "guard2@alhattabsecurity.qa", phone: "+974 7777 0002", dateOfJoining: "2024-01-01T00:00:00Z", qidNumber: "29032400002", qidExpiryDate: "2028-01-01T00:00:00Z", passportNumber: "P-SEC1002", passportIssueDate: "2024-01-01T00:00:00Z", passportExpiryDate: "2034-01-01T00:00:00Z", passportIssuingCountry: "Nepal", sponsor: "Al Hattab Security", hasAccommodation: true, hasItAssets: false },
     { id: "SEC-1003", name: "CCTV Operator One", department: "Operations", departmentId: "DEPT-001", companyId: "COMP-002", manpowerCategoryId: "PM-CAT-SEC-02", operationType: "SECURITY_GUARDING", isActive: true, status: "Offline", role: "EMPLOYEE", employeeCategory: "BLUE_COLLAR", dutyStatus: "OFF_DUTY", email: "cctv1@alhattabsecurity.qa", phone: "+974 7777 0003", dateOfJoining: "2024-01-01T00:00:00Z", qidNumber: "29032400003", qidExpiryDate: "2028-01-01T00:00:00Z", passportNumber: "P-SEC1003", passportIssueDate: "2024-01-01T00:00:00Z", passportExpiryDate: "2034-01-01T00:00:00Z", passportIssuingCountry: "India", sponsor: "Al Hattab Security", hasAccommodation: true, hasItAssets: false },
-    { id: "SEC-WC-001", name: "Zaid Omar", department: "Operations", departmentId: "DEPT-001", companyId: "COMP-002", role: "EMPLOYEE", employeeCategory: "WHITE_COLLAR", isActive: true, email: "zaid@alhattabsecurity.qa", phone: "+974 7777 0004", dateOfJoining: "2024-01-01T00:00:00Z", qidNumber: "29032400004", qidExpiryDate: "2028-01-01T00:00:00Z", passportNumber: "P-SECWC01", passportIssueDate: "2024-01-01T00:00:00Z", passportExpiryDate: "2034-01-01T00:00:00Z", passportIssuingCountry: "Qatar", sponsor: "Al Hattab Security", hasAccommodation: false, hasItAssets: true },
-    { id: "SEC-WC-002", name: "Fatima Noor", department: "Operations", departmentId: "DEPT-001", companyId: "COMP-002", role: "EMPLOYEE", employeeCategory: "WHITE_COLLAR", isActive: true, email: "fatima@alhattabsecurity.qa", phone: "+974 7777 0005", dateOfJoining: "2024-01-01T00:00:00Z", qidNumber: "29032400005", qidExpiryDate: "2028-01-01T00:00:00Z", passportNumber: "P-SECWC02", passportIssueDate: "2024-01-01T00:00:00Z", passportExpiryDate: "2034-01-01T00:00:00Z", passportIssuingCountry: "Qatar", sponsor: "Al Hattab Security", hasAccommodation: false, hasItAssets: true },
+    { id: "SEC-WC-001", name: "Zaid Omar", department: "Operations", departmentId: "DEPT-001", companyId: "COMP-002", role: "EMPLOYEE", employeeCategory: "WHITE_COLLAR", status: "Active", isActive: true, email: "zaid@alhattabsecurity.qa", phone: "+974 7777 0004", dateOfJoining: "2024-01-01T00:00:00Z", qidNumber: "29032400004", qidExpiryDate: "2028-01-01T00:00:00Z", passportNumber: "P-SECWC01", passportIssueDate: "2024-01-01T00:00:00Z", passportExpiryDate: "2034-01-01T00:00:00Z", passportIssuingCountry: "Qatar", sponsor: "Al Hattab Security", hasAccommodation: false, hasItAssets: true },
+    { id: "SEC-WC-002", name: "Fatima Noor", department: "Operations", departmentId: "DEPT-001", companyId: "COMP-002", role: "EMPLOYEE", employeeCategory: "WHITE_COLLAR", status: "Active", isActive: true, email: "fatima@alhattabsecurity.qa", phone: "+974 7777 0005", dateOfJoining: "2024-01-01T00:00:00Z", qidNumber: "29032400005", qidExpiryDate: "2028-01-01T00:00:00Z", passportNumber: "P-SECWC02", passportIssueDate: "2024-01-01T00:00:00Z", passportExpiryDate: "2034-01-01T00:00:00Z", passportIssuingCountry: "Qatar", sponsor: "Al Hattab Security", hasAccommodation: false, hasItAssets: true },
     { id: "FM-1001", name: "Cleaner One", department: "Operations", departmentId: "DEPT-001", companyId: "COMP-003", designationId: "DES-001", role: "EMPLOYEE", status: "Active", email: "cleaner1@touchcleaning.qa", phone: "+974 6666 0001", shiftId: "GEN-001", passwordHash: defaultHash, isActive: true, dateOfJoining: "2024-01-01T00:00:00Z", qidNumber: "29032400011", qidExpiryDate: "2028-01-01T00:00:00Z", passportNumber: "P-FM1001", passportIssueDate: "2024-01-01T00:00:00Z", passportExpiryDate: "2034-01-01T00:00:00Z", passportIssuingCountry: "Nepal", sponsor: "Touch Cleaning & Hospitality", hasAccommodation: true, hasItAssets: false, employeeCategory: "BLUE_COLLAR", employmentStatus: "ACTIVE", operationType: "FACILITY_MANAGEMENT" },
     { id: "FM-1002", name: "Cleaner Two", department: "Operations", departmentId: "DEPT-001", companyId: "COMP-003", designationId: "DES-001", role: "EMPLOYEE", status: "Active", email: "cleaner2@touchcleaning.qa", phone: "+974 6666 0002", shiftId: "GEN-001", passwordHash: defaultHash, isActive: true, dateOfJoining: "2024-01-01T00:00:00Z", qidNumber: "29032400012", qidExpiryDate: "2028-01-01T00:00:00Z", passportNumber: "P-FM1002", passportIssueDate: "2024-01-01T00:00:00Z", passportExpiryDate: "2034-01-01T00:00:00Z", passportIssuingCountry: "Nepal", sponsor: "Touch Cleaning & Hospitality", hasAccommodation: true, hasItAssets: false, employeeCategory: "BLUE_COLLAR", employmentStatus: "ACTIVE", operationType: "WHITE_COLLAR" }
   ],
@@ -487,7 +720,10 @@ let memoryDb: {
   manpowerClientDocuments: [],
   manpowerContractAddendums: [],
   manpowerMaterialMasters: [],
-  manpowerContractAddendumLineItems: []
+  manpowerContractAddendumLineItems: [],
+  contractApprovalWorkflows: [],
+  contractApprovalLevels: [],
+  contractApprovalApprovers: []
 };
 
 // Seeding helper to pre-fill MySQL with mock data if it is empty
@@ -8669,12 +8905,7 @@ export const mockDb = {
         include: { documents: true, contracts: true },
         orderBy: { name: "asc" } 
       });
-      return res.map((x: any) => ({
-        ...x,
-        createdAt: x.createdAt?.toISOString(),
-        updatedAt: x.updatedAt?.toISOString(),
-        documentsCount: x.documents?.length || 0
-      }));
+      return res.map((x: any) => mapClientRecord(x));
     }
     const db = readDb();
     let res = db.manpowerClients || [];
@@ -8682,12 +8913,11 @@ export const mockDb = {
     return res.map((x: any) => {
       const documents = (db.manpowerClientDocuments || []).filter((d: any) => d.clientId === x.id);
       const contracts = (db.manpowerContracts || []).filter((c: any) => c.clientId === x.id);
-      return {
+      return mapClientRecord({
         ...x,
         documents,
-        contracts,
-        documentsCount: documents.length
-      };
+        contracts
+      });
     });
   },
   createManpowerClient: async (data: any): Promise<any> => {
@@ -8702,6 +8932,8 @@ export const mockDb = {
     const qidExpiryDate = dataWithCode.qidExpiryDate ? new Date(dataWithCode.qidExpiryDate) : null;
     const passportExpiryDate = dataWithCode.passportExpiryDate ? new Date(dataWithCode.passportExpiryDate) : null;
     const dateOfBirth = dataWithCode.dateOfBirth ? new Date(dataWithCode.dateOfBirth) : null;
+    const tradeLicenseIssueDate = dataWithCode.tradeLicenseIssueDate ? new Date(dataWithCode.tradeLicenseIssueDate) : null;
+    const tradeLicenseExpiryDate = dataWithCode.tradeLicenseExpiryDate ? new Date(dataWithCode.tradeLicenseExpiryDate) : null;
     
     const dbData = {
       ...dataWithCode,
@@ -8710,6 +8942,8 @@ export const mockDb = {
       qidExpiryDate,
       passportExpiryDate,
       dateOfBirth,
+      tradeLicenseIssueDate,
+      tradeLicenseExpiryDate,
       documents: undefined,
       contracts: undefined
     };
@@ -8720,6 +8954,7 @@ export const mockDb = {
         await Promise.all(dataWithCode.documents.map((doc: any) => prismaClient.manpowerClientDocument.create({
           data: {
             clientId: res.id,
+            contractId: doc.contractId || null,
             documentType: doc.documentType,
             fileName: doc.fileName || "",
             fileUrl: doc.fileUrl || "",
@@ -8807,6 +9042,7 @@ export const mockDb = {
         const docRecord = {
           id: doc.id || `mcd-${Date.now()}-${Math.random()}`,
           clientId,
+          contractId: doc.contractId || null,
           documentType: doc.documentType,
           fileName: doc.fileName || "",
           fileUrl: doc.fileUrl || "",
@@ -8831,6 +9067,8 @@ export const mockDb = {
     const qidExpiryDate = data.qidExpiryDate ? new Date(data.qidExpiryDate) : null;
     const passportExpiryDate = data.passportExpiryDate ? new Date(data.passportExpiryDate) : null;
     const dateOfBirth = data.dateOfBirth ? new Date(data.dateOfBirth) : null;
+    const tradeLicenseIssueDate = data.tradeLicenseIssueDate ? new Date(data.tradeLicenseIssueDate) : null;
+    const tradeLicenseExpiryDate = data.tradeLicenseExpiryDate ? new Date(data.tradeLicenseExpiryDate) : null;
     
     const dbData = {
       ...data,
@@ -8842,6 +9080,8 @@ export const mockDb = {
       qidExpiryDate,
       passportExpiryDate,
       dateOfBirth,
+      tradeLicenseIssueDate,
+      tradeLicenseExpiryDate,
       documents: undefined,
       contracts: undefined
     };
@@ -8857,6 +9097,7 @@ export const mockDb = {
           await Promise.all(data.documents.map((doc: any) => prismaClient.manpowerClientDocument.create({
             data: {
               clientId: id,
+              contractId: doc.contractId || null,
               documentType: doc.documentType,
               fileName: doc.fileName || "",
               fileUrl: doc.fileUrl || "",
@@ -8897,6 +9138,7 @@ export const mockDb = {
           db.manpowerClientDocuments.push({
             id: doc.id || `mcd-${Date.now()}-${Math.random()}`,
             clientId: id,
+            contractId: doc.contractId || null,
             documentType: doc.documentType,
             fileName: doc.fileName || "",
             fileUrl: doc.fileUrl || "",
@@ -8923,11 +9165,7 @@ export const mockDb = {
         include: { documents: true, contracts: { include: { manpowerRequirements: true, relieverRequirements: true, shiftRequirements: true } } }
       });
       if (!res) return null;
-      return {
-        ...res,
-        createdAt: res.createdAt?.toISOString(),
-        updatedAt: res.updatedAt?.toISOString()
-      };
+      return mapClientRecord(res);
     }
     const db = readDb();
     const client = (db.manpowerClients || []).find((x: any) => x.id === id);
@@ -8939,7 +9177,7 @@ export const mockDb = {
       const shiftRequirements = (db.contractShiftRequirements || []).filter((sr: any) => sr.contractId === c.id);
       return { ...c, manpowerRequirements, relieverRequirements, shiftRequirements };
     });
-    return { ...client, documents, contracts };
+    return mapClientRecord({ ...client, documents, contracts });
   },
 
   // --- Manpower Contracts CRUD ---
@@ -8956,49 +9194,21 @@ export const mockDb = {
           relieverRequirements: true,
           shiftRequirements: true,
           addendums: true,
-          materials: true
+          materials: true,
+          workflows: {
+            include: {
+              levels: {
+                include: {
+                  approvers: true
+                }
+              }
+            }
+          },
+          documents: true
         },
         orderBy: { contractNumber: "asc" }
       });
-      return res.map((x: any) => {
-        const manpowerRequirements = x.manpowerRequirements || [];
-        const relieverRequirements = x.relieverRequirements || [];
-        const shiftRequirements = x.shiftRequirements || [];
-        const materials = x.materials || [];
-        const addendums = x.addendums || [];
-
-        const totalManpowerValue = manpowerRequirements.reduce((sum: number, r: any) => {
-          if (r.isFoc) return sum;
-          return sum + ((r.quantity || 0) * (r.unitPrice || 0) * (r.billingPeriodCount || 1));
-        }, 0);
-        const totalMaterialValue = materials.reduce((sum: number, m: any) => {
-          if (m.isFoc) return sum;
-          return sum + ((m.quantity || 0) * (m.unitPrice || 0));
-        }, 0);
-        const totalContractValue = totalManpowerValue + totalMaterialValue;
-
-        const focManpowerCount = manpowerRequirements.filter((r: any) => r.isFoc).reduce((sum: number, r: any) => sum + (r.quantity || 0), 0);
-        const focMaterialCount = materials.filter((m: any) => m.isFoc).reduce((sum: number, m: any) => sum + (m.quantity || 0), 0);
-
-        return {
-          ...x,
-          createdAt: x.createdAt?.toISOString(),
-          updatedAt: x.updatedAt?.toISOString(),
-          startDate: x.startDate?.toISOString(),
-          endDate: x.endDate?.toISOString(),
-          manpowerLineCount: manpowerRequirements.length,
-          totalManpower: manpowerRequirements.reduce((sum: number, r: any) => sum + (r.quantity || 0), 0),
-          relieverRequired: relieverRequirements.length > 0 ? "Yes" : "No",
-          totalRelievers: relieverRequirements.reduce((sum: number, r: any) => sum + (r.quantity || 0), 0),
-          shiftLineCount: shiftRequirements.length,
-          addendumsCount: addendums.length,
-          totalManpowerValue,
-          totalMaterialValue,
-          totalContractValue,
-          focManpowerCount,
-          focMaterialCount
-        };
-      });
+      return res.map((x: any) => mapContractRecord(x));
     }
     const db = readDb();
     let res = db.manpowerContracts || [];
@@ -9009,21 +9219,16 @@ export const mockDb = {
       const shiftRequirements = (db.contractShiftRequirements || []).filter((sr: any) => sr.contractId === x.id);
       const addendums = (db.manpowerContractAddendums || []).filter((a: any) => a.contractId === x.id);
       const materials = (db.manpowerContractMaterials || []).filter((m: any) => m.contractId === x.id);
+      const documents = (db.manpowerClientDocuments || []).filter((d: any) => d.contractId === x.id);
+      const workflows = (db.contractApprovalWorkflows || []).filter((w: any) => w.contractId === x.id).map((w: any) => {
+        const levels = (db.contractApprovalLevels || []).filter((l: any) => l.workflowId === w.id).map((l: any) => {
+          const approvers = (db.contractApprovalApprovers || []).filter((ap: any) => ap.levelId === l.id);
+          return { ...l, approvers };
+        });
+        return { ...w, levels };
+      });
 
-      const totalManpowerValue = manpowerRequirements.reduce((sum: number, r: any) => {
-        if (r.isFoc) return sum;
-        return sum + ((r.quantity || 0) * (r.unitPrice || 0) * (r.billingPeriodCount || 1));
-      }, 0);
-      const totalMaterialValue = materials.reduce((sum: number, m: any) => {
-        if (m.isFoc) return sum;
-        return sum + ((m.quantity || 0) * (m.unitPrice || 0));
-      }, 0);
-      const totalContractValue = totalManpowerValue + totalMaterialValue;
-
-      const focManpowerCount = manpowerRequirements.filter((r: any) => r.isFoc).reduce((sum: number, r: any) => sum + (r.quantity || 0), 0);
-      const focMaterialCount = materials.filter((m: any) => m.isFoc).reduce((sum: number, m: any) => sum + (m.quantity || 0), 0);
-
-      return {
+      return mapContractRecord({
         ...x,
         client: (db.manpowerClients || []).find((c: any) => c.id === x.clientId),
         manpowerRequirements,
@@ -9031,18 +9236,9 @@ export const mockDb = {
         shiftRequirements,
         addendums,
         materials,
-        manpowerLineCount: manpowerRequirements.length,
-        totalManpower: manpowerRequirements.reduce((sum: number, r: any) => sum + (r.quantity || 0), 0),
-        relieverRequired: relieverRequirements.length > 0 ? "Yes" : "No",
-        totalRelievers: relieverRequirements.reduce((sum: number, r: any) => sum + (r.quantity || 0), 0),
-        shiftLineCount: shiftRequirements.length,
-        addendumsCount: addendums.length,
-        totalManpowerValue,
-        totalMaterialValue,
-        totalContractValue,
-        focManpowerCount,
-        focMaterialCount
-      };
+        documents,
+        workflows
+      });
     });
   },
   updateManpowerContract: async (id: string, data: any): Promise<any> => {
@@ -9125,6 +9321,10 @@ export const mockDb = {
     const totalMaterialValue = materialReqs.reduce((sum: number, mat: any) => sum + (mat.lineTotal || 0), 0);
     const totalContractValue = totalManpowerValue + totalMaterialValue;
 
+    const creditDays = data.creditDays !== undefined && data.creditDays !== "" && data.creditDays !== null ? parseInt(data.creditDays, 10) : null;
+    const noticePeriodDays = data.noticePeriodDays !== undefined && data.noticePeriodDays !== "" && data.noticePeriodDays !== null ? parseInt(data.noticePeriodDays, 10) : null;
+    const earlyTerminationAllowed = data.earlyTerminationAllowed === true || data.earlyTerminationAllowed === "true" || data.earlyTerminationAllowed === "Yes";
+
     const dbData: any = {
       title: data.title,
       startDate,
@@ -9138,7 +9338,29 @@ export const mockDb = {
       totalDurationDays: totalDurationDays !== undefined ? totalDurationDays : undefined,
       totalManpowerValue,
       totalMaterialValue,
-      totalContractValue
+      totalContractValue,
+
+      paymentTerms: data.paymentTerms || null,
+      paymentCycle: data.paymentCycle || null,
+      creditDays,
+      invoiceSubmissionDay: data.invoiceSubmissionDay || null,
+      paymentRemarks: data.paymentRemarks || null,
+      terminationClause: data.terminationClause || null,
+      noticePeriodDays,
+      terminationPenalty: data.terminationPenalty || null,
+      earlyTerminationAllowed,
+      terminationRemarks: data.terminationRemarks || null,
+      specialConditions: data.specialConditions || null,
+      serviceLevelTerms: data.serviceLevelTerms || null,
+      penaltyClause: data.penaltyClause || null,
+      escalationMatrix: data.escalationMatrix || null,
+      otherContractConditions: data.otherContractConditions || null,
+      approvalStatus: data.approvalStatus || undefined,
+      submittedForApprovalAt: data.submittedForApprovalAt ? new Date(data.submittedForApprovalAt) : undefined,
+      approvedAt: data.approvedAt ? new Date(data.approvedAt) : undefined,
+      activatedAt: data.activatedAt ? new Date(data.activatedAt) : undefined,
+      activatedBy: data.activatedBy || undefined,
+      rejectionRemarks: data.rejectionRemarks || null
     };
     if (data.clientId) {
       dbData.client = {
@@ -9151,6 +9373,9 @@ export const mockDb = {
           where: { id },
           data: dbData
         });
+        if (data.workflowLevels !== undefined) {
+          await saveWorkflowSetup(id, data.workflowLevels);
+        }
         if (data.manpowerRequirements !== undefined) {
           await prismaClient.contractManpowerRequirement.deleteMany({ where: { contractId: id } });
           if (manpowerReqs.length > 0) {
@@ -9260,7 +9485,7 @@ export const mockDb = {
     const db = readDb();
     const idx = (db.manpowerContracts || []).findIndex((c: any) => c.id === id);
     if (idx === -1) throw new Error("Contract not found");
-    const existing = db.manpowerContracts[idx];
+    const existing = db.manpowerContracts[idx] as any;
     const updatedRecord = {
       ...existing,
       clientId: dbData.clientId || existing.clientId,
@@ -9276,9 +9501,35 @@ export const mockDb = {
       totalManpowerValue,
       totalMaterialValue,
       totalContractValue,
+      
+      paymentTerms: dbData.paymentTerms !== undefined ? dbData.paymentTerms : existing.paymentTerms,
+      paymentCycle: dbData.paymentCycle !== undefined ? dbData.paymentCycle : existing.paymentCycle,
+      creditDays: dbData.creditDays !== undefined ? dbData.creditDays : existing.creditDays,
+      invoiceSubmissionDay: dbData.invoiceSubmissionDay !== undefined ? dbData.invoiceSubmissionDay : existing.invoiceSubmissionDay,
+      paymentRemarks: dbData.paymentRemarks !== undefined ? dbData.paymentRemarks : existing.paymentRemarks,
+      terminationClause: dbData.terminationClause !== undefined ? dbData.terminationClause : existing.terminationClause,
+      noticePeriodDays: dbData.noticePeriodDays !== undefined ? dbData.noticePeriodDays : existing.noticePeriodDays,
+      terminationPenalty: dbData.terminationPenalty !== undefined ? dbData.terminationPenalty : existing.terminationPenalty,
+      earlyTerminationAllowed: dbData.earlyTerminationAllowed !== undefined ? dbData.earlyTerminationAllowed : existing.earlyTerminationAllowed,
+      terminationRemarks: dbData.terminationRemarks !== undefined ? dbData.terminationRemarks : existing.terminationRemarks,
+      specialConditions: dbData.specialConditions !== undefined ? dbData.specialConditions : existing.specialConditions,
+      serviceLevelTerms: dbData.serviceLevelTerms !== undefined ? dbData.serviceLevelTerms : existing.serviceLevelTerms,
+      penaltyClause: dbData.penaltyClause !== undefined ? dbData.penaltyClause : existing.penaltyClause,
+      escalationMatrix: dbData.escalationMatrix !== undefined ? dbData.escalationMatrix : existing.escalationMatrix,
+      otherContractConditions: dbData.otherContractConditions !== undefined ? dbData.otherContractConditions : existing.otherContractConditions,
+      approvalStatus: dbData.approvalStatus !== undefined ? dbData.approvalStatus : existing.approvalStatus,
+      submittedForApprovalAt: dbData.submittedForApprovalAt !== undefined ? dbData.submittedForApprovalAt : existing.submittedForApprovalAt,
+      approvedAt: dbData.approvedAt !== undefined ? dbData.approvedAt : existing.approvedAt,
+      activatedAt: dbData.activatedAt !== undefined ? dbData.activatedAt : existing.activatedAt,
+      activatedBy: dbData.activatedBy !== undefined ? dbData.activatedBy : existing.activatedBy,
+      rejectionRemarks: dbData.rejectionRemarks !== undefined ? dbData.rejectionRemarks : existing.rejectionRemarks,
       updatedAt: new Date().toISOString()
     };
     db.manpowerContracts[idx] = updatedRecord;
+    
+    if (data.workflowLevels !== undefined) {
+      saveWorkflowSetupLocal(db, id, data.workflowLevels);
+    }
     
     if (data.manpowerRequirements !== undefined) {
       db.contractManpowerRequirements = (db.contractManpowerRequirements || []).filter((mr: any) => mr.contractId !== id);
@@ -9386,47 +9637,21 @@ export const mockDb = {
               lineItems: true
             }
           },
-          materials: true
+          materials: true,
+          workflows: {
+            include: {
+              levels: {
+                include: {
+                  approvers: true
+                }
+              }
+            }
+          },
+          documents: true
         }
       });
       if (!res) return null;
-      const mr = res.manpowerRequirements || [];
-      const rr = res.relieverRequirements || [];
-      const sr = res.shiftRequirements || [];
-      const materials = res.materials || [];
-      const addendums = res.addendums || [];
-
-      const totalManpowerValue = mr.reduce((sum: number, r: any) => {
-        if (r.isFoc) return sum;
-        return sum + ((r.quantity || 0) * (r.unitPrice || 0) * (r.billingPeriodCount || 1));
-      }, 0);
-      const totalMaterialValue = materials.reduce((sum: number, m: any) => {
-        if (m.isFoc) return sum;
-        return sum + ((m.quantity || 0) * (m.unitPrice || 0));
-      }, 0);
-      const totalContractValue = totalManpowerValue + totalMaterialValue;
-
-      const focManpowerCount = mr.filter((r: any) => r.isFoc).reduce((sum: number, r: any) => sum + (r.quantity || 0), 0);
-      const focMaterialCount = materials.filter((m: any) => m.isFoc).reduce((sum: number, m: any) => sum + (m.quantity || 0), 0);
-
-      return {
-        ...res,
-        createdAt: res.createdAt?.toISOString(),
-        updatedAt: res.updatedAt?.toISOString(),
-        startDate: res.startDate?.toISOString(),
-        endDate: res.endDate?.toISOString(),
-        manpowerLineCount: mr.length,
-        totalManpower: mr.reduce((sum: number, x: any) => sum + (x.quantity || 0), 0),
-        relieverRequired: rr.length > 0 ? "Yes" : "No",
-        totalRelievers: rr.reduce((sum: number, x: any) => sum + (x.quantity || 0), 0),
-        shiftLineCount: sr.length,
-        addendumsCount: addendums.length,
-        totalManpowerValue,
-        totalMaterialValue,
-        totalContractValue,
-        focManpowerCount,
-        focMaterialCount
-      };
+      return mapContractRecord(res);
     }
     const db = readDb();
     const contract = (db.manpowerContracts || []).find((c: any) => c.id === id);
@@ -9439,21 +9664,16 @@ export const mockDb = {
       return { ...a, lineItems };
     });
     const materials = (db.manpowerContractMaterials || []).filter((x: any) => x.contractId === id);
+    const documents = (db.manpowerClientDocuments || []).filter((d: any) => d.contractId === id);
+    const workflows = (db.contractApprovalWorkflows || []).filter((w: any) => w.contractId === id).map((w: any) => {
+      const levels = (db.contractApprovalLevels || []).filter((l: any) => l.workflowId === w.id).map((l: any) => {
+        const approvers = (db.contractApprovalApprovers || []).filter((ap: any) => ap.levelId === l.id);
+        return { ...l, approvers };
+      });
+      return { ...w, levels };
+    });
 
-    const totalManpowerValue = mr.reduce((sum: number, r: any) => {
-      if (r.isFoc) return sum;
-      return sum + ((r.quantity || 0) * (r.unitPrice || 0) * (r.billingPeriodCount || 1));
-    }, 0);
-    const totalMaterialValue = materials.reduce((sum: number, m: any) => {
-      if (m.isFoc) return sum;
-      return sum + ((m.quantity || 0) * (m.unitPrice || 0));
-    }, 0);
-    const totalContractValue = totalManpowerValue + totalMaterialValue;
-
-    const focManpowerCount = mr.filter((r: any) => r.isFoc).reduce((sum: number, r: any) => sum + (r.quantity || 0), 0);
-    const focMaterialCount = materials.filter((m: any) => m.isFoc).reduce((sum: number, m: any) => sum + (m.quantity || 0), 0);
-
-    return {
+    return mapContractRecord({
       ...contract,
       client: (db.manpowerClients || []).find((c: any) => c.id === contract.clientId),
       manpowerRequirements: mr,
@@ -9461,18 +9681,9 @@ export const mockDb = {
       shiftRequirements: sr,
       addendums,
       materials,
-      manpowerLineCount: mr.length,
-      totalManpower: mr.reduce((sum: number, x: any) => sum + (x.quantity || 0), 0),
-      relieverRequired: rr.length > 0 ? "Yes" : "No",
-      totalRelievers: rr.reduce((sum: number, x: any) => sum + (x.quantity || 0), 0),
-      shiftLineCount: sr.length,
-      addendumsCount: addendums.length,
-      totalManpowerValue,
-      totalMaterialValue,
-      totalContractValue,
-      focManpowerCount,
-      focMaterialCount
-    };
+      documents,
+      workflows
+    });
   },
   getManpowerContractAddendums: async (contractId: string): Promise<any[]> => {
     if (isDbConnected()) {
@@ -9614,6 +9825,7 @@ export const mockDb = {
     const prefix = operationType === "FACILITY_MANAGEMENT" ? "FCON" : "SCON";
     const contractNumber = data.contractNumber || await getNextSequenceCode(prefix);
     const contractId = data.id || `mcon-${Date.now()}`;
+    const dataWithCode = { ...data, contractNumber, id: contractId };
 
     // Normalize dates
     const startDate = data.startDate ? new Date(data.startDate) : new Date();
@@ -9692,6 +9904,10 @@ export const mockDb = {
     const totalMaterialValue = materialReqs.reduce((sum: number, mat: any) => sum + (mat.lineTotal || 0), 0);
     const totalContractValue = totalManpowerValue + totalMaterialValue;
 
+    const creditDays = data.creditDays !== undefined && data.creditDays !== "" && data.creditDays !== null ? parseInt(data.creditDays, 10) : null;
+    const noticePeriodDays = data.noticePeriodDays !== undefined && data.noticePeriodDays !== "" && data.noticePeriodDays !== null ? parseInt(data.noticePeriodDays, 10) : null;
+    const earlyTerminationAllowed = data.earlyTerminationAllowed === true || data.earlyTerminationAllowed === "true" || data.earlyTerminationAllowed === "Yes";
+
     if (isDbConnected()) {
       const res = await prismaClient.manpowerContract.create({
         data: {
@@ -9711,6 +9927,24 @@ export const mockDb = {
           totalManpowerValue,
           totalMaterialValue,
           totalContractValue,
+          
+          paymentTerms: data.paymentTerms || null,
+          paymentCycle: data.paymentCycle || null,
+          creditDays,
+          invoiceSubmissionDay: data.invoiceSubmissionDay || null,
+          paymentRemarks: data.paymentRemarks || null,
+          terminationClause: data.terminationClause || null,
+          noticePeriodDays,
+          terminationPenalty: data.terminationPenalty || null,
+          earlyTerminationAllowed,
+          terminationRemarks: data.terminationRemarks || null,
+          specialConditions: data.specialConditions || null,
+          serviceLevelTerms: data.serviceLevelTerms || null,
+          penaltyClause: data.penaltyClause || null,
+          escalationMatrix: data.escalationMatrix || null,
+          otherContractConditions: data.otherContractConditions || null,
+          approvalStatus: data.status || "DRAFT",
+
           manpowerRequirements: {
             create: manpowerReqs.map((mr: any) => ({
               position: mr.position,
@@ -9756,35 +9990,10 @@ export const mockDb = {
               operationType
             }))
           }
-        },
-        include: {
-          client: true,
-          manpowerRequirements: true,
-          relieverRequirements: true,
-          shiftRequirements: true,
-          materials: true
         }
       });
-      const manpowerRequirements = res.manpowerRequirements || [];
-      const relieverRequirements = res.relieverRequirements || [];
-      const shiftRequirements = res.shiftRequirements || [];
-      const materials = res.materials || [];
-      return { 
-        ...res, 
-        createdAt: res.createdAt?.toISOString(), 
-        updatedAt: res.updatedAt?.toISOString(),
-        startDate: res.startDate?.toISOString(),
-        endDate: res.endDate?.toISOString(),
-        manpowerLineCount: manpowerRequirements.length,
-        totalManpower: manpowerRequirements.reduce((sum: number, r: any) => sum + (r.quantity || 0), 0),
-        relieverRequired: relieverRequirements.length > 0 ? "Yes" : "No",
-        totalRelievers: relieverRequirements.reduce((sum: number, r: any) => sum + (r.quantity || 0), 0),
-        shiftLineCount: shiftRequirements.length,
-        materials,
-        totalManpowerValue,
-        totalMaterialValue,
-        totalContractValue
-      };
+      await saveWorkflowSetup(contractId, data.workflowLevels);
+      return await mockDb.getManpowerContract(contractId);
     }
     const db = readDb();
     const newRecord = {
@@ -9802,11 +10011,33 @@ export const mockDb = {
       totalManpowerValue,
       totalMaterialValue,
       totalContractValue,
+      
+      paymentTerms: dataWithCode.paymentTerms || null,
+      paymentCycle: dataWithCode.paymentCycle || null,
+      creditDays,
+      invoiceSubmissionDay: dataWithCode.invoiceSubmissionDay || null,
+      paymentRemarks: dataWithCode.paymentRemarks || null,
+      terminationClause: dataWithCode.terminationClause || null,
+      noticePeriodDays,
+      terminationPenalty: dataWithCode.terminationPenalty || null,
+      earlyTerminationAllowed,
+      terminationRemarks: dataWithCode.terminationRemarks || null,
+      specialConditions: dataWithCode.specialConditions || null,
+      serviceLevelTerms: dataWithCode.serviceLevelTerms || null,
+      penaltyClause: dataWithCode.penaltyClause || null,
+      escalationMatrix: dataWithCode.escalationMatrix || null,
+      otherContractConditions: dataWithCode.otherContractConditions || null,
+      approvalStatus: dataWithCode.status || "DRAFT",
+      
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
     db.manpowerContracts = db.manpowerContracts || [];
     db.manpowerContracts.push(newRecord);
+    
+    if (data.workflowLevels !== undefined) {
+      saveWorkflowSetupLocal(db, contractId, data.workflowLevels);
+    }
     db.contractManpowerRequirements = db.contractManpowerRequirements || [];
     const newManpowerReqs = (dataWithCode.manpowerRequirements || []).map((mr: any, index: number) => ({
       id: mr.id || `mr-${contractId}-${index}-${Date.now()}`,
@@ -11235,6 +11466,255 @@ export const mockDb = {
     db.manpowerMaterialMasters[idx] = updated;
     writeDb(db);
     return updated;
+  },
+  submitContractWorkflow: async (id: string, submittedBy?: string): Promise<any> => {
+    if (isDbConnected()) {
+      const workflow = await prismaClient.contractApprovalWorkflow.findFirst({
+        where: { contractId: id }
+      });
+      if (!workflow) throw new Error("Approval workflow configuration not found for this contract. Please configure workflow levels first.");
+      
+      await prismaClient.contractApprovalWorkflow.update({
+        where: { id: workflow.id },
+        data: {
+          status: "PENDING",
+          submittedAt: new Date(),
+          submittedBy: submittedBy || "System"
+        }
+      });
+      await prismaClient.manpowerContract.update({
+        where: { id },
+        data: {
+          status: "PENDING_APPROVAL",
+          approvalStatus: "PENDING_APPROVAL",
+          submittedForApprovalAt: new Date()
+        }
+      });
+      
+      const firstLevel = await prismaClient.contractApprovalLevel.findFirst({
+        where: { workflowId: workflow.id },
+        orderBy: { levelNumber: "asc" }
+      });
+      if (firstLevel) {
+        await prismaClient.contractApprovalApprover.updateMany({
+          where: { levelId: firstLevel.id },
+          data: { approvalStatus: "PENDING" }
+        });
+      }
+      
+      return await mockDb.getManpowerContract(id);
+    }
+    
+    const db = readDb();
+    const wf = (db.contractApprovalWorkflows || []).find((w: any) => w.contractId === id);
+    if (!wf) throw new Error("Approval workflow configuration not found for this contract. Please configure workflow levels first.");
+    wf.status = "PENDING";
+    wf.submittedAt = new Date().toISOString();
+    wf.submittedBy = submittedBy || "System";
+    
+    const contract = (db.manpowerContracts || []).find((c: any) => c.id === id);
+    if (contract) {
+      contract.status = "PENDING_APPROVAL";
+      contract.approvalStatus = "PENDING_APPROVAL";
+      contract.submittedForApprovalAt = new Date().toISOString();
+    }
+    writeDb(db);
+    return await mockDb.getManpowerContract(id);
+  },
+  approveContractWorkflowLevel: async (id: string, levelId: string, employeeId: string, remarks?: string): Promise<any> => {
+    if (isDbConnected()) {
+      const approver = await prismaClient.contractApprovalApprover.findFirst({
+        where: { levelId, employeeId }
+      });
+      if (!approver) throw new Error("You are not authorized to approve this workflow level.");
+      
+      await prismaClient.contractApprovalApprover.update({
+        where: { id: approver.id },
+        data: {
+          approvalStatus: "APPROVED",
+          approvedAt: new Date(),
+          remarks: remarks || ""
+        }
+      });
+      
+      const level = await prismaClient.contractApprovalLevel.findUnique({
+        where: { id: levelId },
+        include: { approvers: true, workflow: true }
+      });
+      if (!level) throw new Error("Level not found");
+      
+      const allApprovers = level.approvers || [];
+      let isLevelApproved = false;
+      
+      if (level.approvalRule === "ANY_ONE") {
+        isLevelApproved = allApprovers.some((ap: any) => ap.approvalStatus === "APPROVED");
+      } else { 
+        isLevelApproved = allApprovers.every((ap: any) => ap.approvalStatus === "APPROVED");
+      }
+      
+      if (isLevelApproved) {
+        const nextLevel = await prismaClient.contractApprovalLevel.findFirst({
+          where: { 
+            workflowId: level.workflowId,
+            levelNumber: { gt: level.levelNumber }
+          },
+          orderBy: { levelNumber: "asc" }
+        });
+        
+        if (!nextLevel) {
+          await prismaClient.contractApprovalWorkflow.update({
+            where: { id: level.workflowId },
+            data: {
+              status: "APPROVED",
+              approvedAt: new Date()
+            }
+          });
+          await prismaClient.manpowerContract.update({
+            where: { id },
+            data: {
+              status: "APPROVED",
+              approvalStatus: "APPROVED",
+              approvedAt: new Date()
+            }
+          });
+        }
+      }
+      
+      return await mockDb.getManpowerContract(id);
+    }
+    
+    const db = readDb();
+    const approver = (db.contractApprovalApprovers || []).find((ap: any) => ap.levelId === levelId && ap.employeeId === employeeId);
+    if (!approver) throw new Error("You are not authorized to approve this workflow level.");
+    approver.approvalStatus = "APPROVED";
+    approver.approvedAt = new Date().toISOString();
+    approver.remarks = remarks || "";
+    
+    const levels = (db.contractApprovalLevels || []).filter((l: any) => l.workflowId === (db.contractApprovalLevels.find((x: any) => x.id === levelId)?.workflowId));
+    const level = levels.find((l: any) => l.id === levelId);
+    if (level) {
+      const levelApprovers = (db.contractApprovalApprovers || []).filter((ap: any) => ap.levelId === level.id);
+      let isLevelApproved = false;
+      if (level.approvalRule === "ANY_ONE") {
+        isLevelApproved = levelApprovers.some((ap: any) => ap.approvalStatus === "APPROVED");
+      } else {
+        isLevelApproved = levelApprovers.every((ap: any) => ap.approvalStatus === "APPROVED");
+      }
+      
+      if (isLevelApproved) {
+        const nextLevel = levels.filter((l: any) => l.levelNumber > level.levelNumber).sort((a: any, b: any) => a.levelNumber - b.levelNumber)[0];
+        if (!nextLevel) {
+          const wf = (db.contractApprovalWorkflows || []).find((w: any) => w.id === level.workflowId);
+          if (wf) wf.status = "APPROVED";
+          
+          const contract = (db.manpowerContracts || []).find((c: any) => c.id === id);
+          if (contract) {
+            contract.status = "APPROVED";
+            contract.approvalStatus = "APPROVED";
+            contract.approvedAt = new Date().toISOString();
+          }
+        }
+      }
+    }
+    writeDb(db);
+    return await mockDb.getManpowerContract(id);
+  },
+  rejectContractWorkflowLevel: async (id: string, levelId: string, employeeId: string, remarks?: string): Promise<any> => {
+    if (isDbConnected()) {
+      const approver = await prismaClient.contractApprovalApprover.findFirst({
+        where: { levelId, employeeId }
+      });
+      if (!approver) throw new Error("You are not authorized to reject this workflow level.");
+      
+      await prismaClient.contractApprovalApprover.update({
+        where: { id: approver.id },
+        data: {
+          approvalStatus: "REJECTED",
+          rejectedAt: new Date(),
+          remarks: remarks || ""
+        }
+      });
+      
+      const level = await prismaClient.contractApprovalLevel.findUnique({
+        where: { id: levelId }
+      });
+      if (level) {
+        await prismaClient.contractApprovalWorkflow.update({
+          where: { id: level.workflowId },
+          data: {
+            status: "REJECTED",
+            rejectedAt: new Date(),
+            finalRemarks: remarks || ""
+          }
+        });
+      }
+      
+      await prismaClient.manpowerContract.update({
+        where: { id },
+        data: {
+          status: "REJECTED",
+          approvalStatus: "REJECTED",
+          rejectionRemarks: remarks || ""
+        }
+      });
+      
+      return await mockDb.getManpowerContract(id);
+    }
+    
+    const db = readDb();
+    const approver = (db.contractApprovalApprovers || []).find((ap: any) => ap.levelId === levelId && ap.employeeId === employeeId);
+    if (!approver) throw new Error("You are not authorized to reject this workflow level.");
+    approver.approvalStatus = "REJECTED";
+    approver.rejectedAt = new Date().toISOString();
+    approver.remarks = remarks || "";
+    
+    const level = (db.contractApprovalLevels || []).find((l: any) => l.id === levelId);
+    if (level) {
+      const wf = (db.contractApprovalWorkflows || []).find((w: any) => w.id === level.workflowId);
+      if (wf) {
+        wf.status = "REJECTED";
+        wf.rejectedAt = new Date().toISOString();
+        wf.finalRemarks = remarks || "";
+      }
+    }
+    const contract = (db.manpowerContracts || []).find((c: any) => c.id === id);
+    if (contract) {
+      contract.status = "REJECTED";
+      contract.approvalStatus = "REJECTED";
+      contract.rejectionRemarks = remarks || "";
+    }
+    writeDb(db);
+    return await mockDb.getManpowerContract(id);
+  },
+  activateContract: async (id: string, activatedBy?: string): Promise<any> => {
+    if (isDbConnected()) {
+      const contract = await prismaClient.manpowerContract.findUnique({
+        where: { id }
+      });
+      if (!contract) throw new Error("Contract not found");
+      
+      await prismaClient.manpowerContract.update({
+        where: { id },
+        data: {
+          status: "ACTIVE",
+          approvalStatus: "ACTIVE",
+          activatedAt: new Date(),
+          activatedBy: activatedBy || "Admin"
+        }
+      });
+      
+      return await mockDb.getManpowerContract(id);
+    }
+    
+    const db = readDb();
+    const contract = (db.manpowerContracts || []).find((c: any) => c.id === id);
+    if (!contract) throw new Error("Contract not found");
+    contract.status = "ACTIVE";
+    contract.approvalStatus = "ACTIVE";
+    contract.activatedAt = new Date().toISOString();
+    contract.activatedBy = activatedBy || "Admin";
+    writeDb(db);
+    return await mockDb.getManpowerContract(id);
   }
 };
 

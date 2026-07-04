@@ -33,6 +33,7 @@ export default function ManpowerMasterPage() {
   const [locationUnits, setLocationUnits] = useState<any[]>([]);
   const [workforceEmployees, setWorkforceEmployees] = useState<any[]>([]);
   const [materialsList, setMaterialsList] = useState<any[]>([]);
+  const [workflowLevels, setWorkflowLevels] = useState<any[]>([]);
 
   // Security Guarding compliance states
   const [activeSubTab, setActiveSubTab] = useState("directory");
@@ -106,6 +107,27 @@ export default function ManpowerMasterPage() {
       }
     } catch (e) {
       alert("Failed to connect to server");
+    }
+  };
+
+  const handleWorkflowAction = async (action: "submit" | "approve" | "reject" | "activate", payload: any = {}) => {
+    try {
+      const url = `/api/v1/manpower/${business}/contracts/${selectedContractDetail.id}/workflow/${action}`;
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      if (res.ok) {
+        const updatedContract = await res.json();
+        setSelectedContractDetail(updatedContract);
+        loadData();
+      } else {
+        const err = await res.json();
+        alert(err.error || `Failed to perform workflow action: ${action}`);
+      }
+    } catch (e) {
+      alert("Server connection failed");
     }
   };
 
@@ -2003,6 +2025,328 @@ export default function ManpowerMasterPage() {
           )}
         </div>
 
+        {/* Contract Clauses & Legal Terms Form Section */}
+        <div className="bg-surface-container-low border border-outline-variant p-4 rounded-xl space-y-4">
+          <h4 className="text-xs font-bold text-primary uppercase tracking-wider border-b border-outline-variant/60 pb-1">Contract Clauses & Legal Terms</h4>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-3">
+              <div>
+                <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Payment Terms</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Standard Net 30"
+                  className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                  value={formData.paymentTerms || ""}
+                  onChange={(e) => setFormData({ ...formData, paymentTerms: e.target.value })}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[9px] font-bold text-on-surface-variant uppercase mb-1">Payment Cycle</label>
+                  <select
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-primary text-on-surface"
+                    value={formData.paymentCycle || "Monthly"}
+                    onChange={(e) => setFormData({ ...formData, paymentCycle: e.target.value })}
+                  >
+                    <option value="Monthly">Monthly</option>
+                    <option value="Quarterly">Quarterly</option>
+                    <option value="Weekly">Weekly</option>
+                    <option value="Bi-Weekly">Bi-Weekly</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[9px] font-bold text-on-surface-variant uppercase mb-1">Credit Days</label>
+                  <input
+                    type="number"
+                    min="0"
+                    placeholder="e.g. 30"
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-primary text-on-surface"
+                    value={formData.creditDays !== undefined && formData.creditDays !== null ? formData.creditDays : ""}
+                    onChange={(e) => setFormData({ ...formData, creditDays: e.target.value === "" ? 0 : parseInt(e.target.value, 10) })}
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Invoice Submission Day / Date</label>
+                <input
+                  type="text"
+                  placeholder="e.g. 5th of each month"
+                  className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                  value={formData.invoiceSubmissionDay || ""}
+                  onChange={(e) => setFormData({ ...formData, invoiceSubmissionDay: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Payment Remarks</label>
+                <textarea
+                  placeholder="Payment remarks..."
+                  rows={2}
+                  className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface resize-none"
+                  value={formData.paymentRemarks || ""}
+                  onChange={(e) => setFormData({ ...formData, paymentRemarks: e.target.value })}
+                />
+              </div>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Termination Clause Description</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Notice period required for termination"
+                  className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                  value={formData.terminationClause || ""}
+                  onChange={(e) => setFormData({ ...formData, terminationClause: e.target.value })}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[9px] font-bold text-on-surface-variant uppercase mb-1">Notice Period (Days)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    placeholder="e.g. 90"
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-primary text-on-surface"
+                    value={formData.noticePeriodDays !== undefined && formData.noticePeriodDays !== null ? formData.noticePeriodDays : ""}
+                    onChange={(e) => setFormData({ ...formData, noticePeriodDays: e.target.value === "" ? 0 : parseInt(e.target.value, 10) })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[9px] font-bold text-on-surface-variant uppercase mb-1">Termination Penalty</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 1 month billing"
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-2 py-1.5 text-xs focus:outline-none focus:border-primary text-on-surface"
+                    value={formData.terminationPenalty || ""}
+                    onChange={(e) => setFormData({ ...formData, terminationPenalty: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div className="flex items-center gap-2 pt-2">
+                <input
+                  type="checkbox"
+                  id="earlyTerminationCheck"
+                  checked={!!formData.earlyTerminationAllowed}
+                  onChange={(e) => setFormData({ ...formData, earlyTerminationAllowed: e.target.checked })}
+                  className="rounded text-primary focus:ring-primary h-4 w-4"
+                />
+                <label htmlFor="earlyTerminationCheck" className="text-xs font-semibold text-on-surface cursor-pointer">Early Termination Allowed without Cause</label>
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Termination Remarks</label>
+                <textarea
+                  placeholder="Termination remarks..."
+                  rows={2}
+                  className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface resize-none"
+                  value={formData.terminationRemarks || ""}
+                  onChange={(e) => setFormData({ ...formData, terminationRemarks: e.target.value })}
+                />
+              </div>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4 border-t border-outline-variant/40 pt-3">
+            <div>
+              <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Special Conditions</label>
+              <textarea
+                placeholder="Enter special conditions..."
+                rows={2}
+                className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface resize-none"
+                value={formData.specialConditions || ""}
+                onChange={(e) => setFormData({ ...formData, specialConditions: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Service Level Terms (SLAs)</label>
+              <textarea
+                placeholder="Enter service level terms..."
+                rows={2}
+                className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface resize-none"
+                value={formData.serviceLevelTerms || ""}
+                onChange={(e) => setFormData({ ...formData, serviceLevelTerms: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Penalty Clauses</label>
+              <textarea
+                placeholder="Enter penalty clauses..."
+                rows={2}
+                className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface resize-none"
+                value={formData.penaltyClause || ""}
+                onChange={(e) => setFormData({ ...formData, penaltyClause: e.target.value })}
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Escalation Matrix</label>
+              <textarea
+                placeholder="Enter escalation matrix..."
+                rows={2}
+                className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface resize-none"
+                value={formData.escalationMatrix || ""}
+                onChange={(e) => setFormData({ ...formData, escalationMatrix: e.target.value })}
+              />
+            </div>
+          </div>
+          <div>
+            <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Other Contract Conditions</label>
+            <textarea
+              placeholder="Enter other contract conditions..."
+              rows={2}
+              className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface resize-none"
+              value={formData.otherContractConditions || ""}
+              onChange={(e) => setFormData({ ...formData, otherContractConditions: e.target.value })}
+            />
+          </div>
+        </div>
+
+        {/* Contract Approval Workflow Configuration */}
+        <div className="bg-surface-container-low border border-outline-variant p-4 rounded-xl space-y-4">
+          <div className="flex justify-between items-center border-b border-outline-variant/60 pb-1">
+            <h4 className="text-xs font-bold text-primary uppercase tracking-wider">Approval Workflow Levels</h4>
+            <button
+              type="button"
+              onClick={() => {
+                const nextLvlNum = workflowLevels.length + 1;
+                setWorkflowLevels([
+                  ...workflowLevels,
+                  {
+                    levelNumber: nextLvlNum,
+                    levelName: `Approval Level ${nextLvlNum}`,
+                    approvalRule: "ANY_ONE",
+                    approvers: []
+                  }
+                ]);
+              }}
+              className="px-2 py-1 bg-primary text-white text-[10px] font-bold rounded flex items-center gap-1 hover:bg-primary-container transition-colors"
+            >
+              <span className="material-symbols-outlined text-[12px]">add</span> Add Level
+            </button>
+          </div>
+          {workflowLevels.length === 0 ? (
+            <p className="text-[11px] text-on-surface-variant italic py-2">No custom workflow levels configured. The contract will use a direct approval flow by default.</p>
+          ) : (
+            <div className="space-y-4">
+              {workflowLevels.map((lvl, lIdx) => (
+                <div key={lIdx} className="bg-surface-container-lowest border border-outline-variant p-3 rounded-lg space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="font-bold text-xs">Level {lvl.levelNumber}</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const updated = workflowLevels.filter((_, idx) => idx !== lIdx).map((l, i) => ({
+                          ...l,
+                          levelNumber: i + 1
+                        }));
+                        setWorkflowLevels(updated);
+                      }}
+                      className="text-status-error hover:bg-status-error/10 p-1 rounded"
+                    >
+                      <span className="material-symbols-outlined text-[16px]">delete</span>
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[9px] font-bold text-on-surface-variant uppercase mb-1">Level Name</label>
+                      <input
+                        type="text"
+                        value={lvl.levelName || ""}
+                        onChange={(e) => {
+                          const updated = [...workflowLevels];
+                          updated[lIdx].levelName = e.target.value;
+                          setWorkflowLevels(updated);
+                        }}
+                        className="w-full bg-surface-container-lowest border border-outline-variant rounded px-2.5 py-1 text-xs focus:outline-none text-on-surface"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[9px] font-bold text-on-surface-variant uppercase mb-1">Approval Rule</label>
+                      <select
+                        value={lvl.approvalRule || "ANY_ONE"}
+                        onChange={(e) => {
+                          const updated = [...workflowLevels];
+                          updated[lIdx].approvalRule = e.target.value;
+                          setWorkflowLevels(updated);
+                        }}
+                        className="w-full bg-surface-container-lowest border border-outline-variant rounded px-2.5 py-1.5 text-xs focus:outline-none text-on-surface"
+                      >
+                        <option value="ANY_ONE">Any one approver (ANY_ONE)</option>
+                        <option value="ALL_REQUIRED">All approvers required (ALL_REQUIRED)</option>
+                      </select>
+                    </div>
+                  </div>
+                  
+                  {/* Approvers for this level */}
+                  <div className="space-y-2 pt-2 border-t border-outline-variant/30">
+                    <div className="flex justify-between items-center">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">Approvers list</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const updated = [...workflowLevels];
+                          updated[lIdx].approvers = [
+                            ...(updated[lIdx].approvers || []),
+                            { employeeId: "", employeeName: "", roleName: "Approver" }
+                          ];
+                          setWorkflowLevels(updated);
+                        }}
+                        className="px-1.5 py-0.5 border border-primary text-primary text-[9px] font-bold rounded hover:bg-primary/5"
+                      >
+                        Add Approver
+                      </button>
+                    </div>
+                    {(!lvl.approvers || lvl.approvers.length === 0) ? (
+                      <p className="text-[9px] text-on-surface-variant italic font-medium">No approvers specified for this level.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {lvl.approvers.map((ap: any, aIdx: number) => (
+                          <div key={aIdx} className="flex gap-2 items-center">
+                            <select
+                              value={ap.employeeId || ""}
+                              onChange={(e) => {
+                                const emp = workforceEmployees.find(x => x.id === e.target.value);
+                                const updated = [...workflowLevels];
+                                updated[lIdx].approvers[aIdx].employeeId = e.target.value;
+                                updated[lIdx].approvers[aIdx].employeeName = emp ? (emp.name || `${emp.firstName} ${emp.lastName}`) : "";
+                                setWorkflowLevels(updated);
+                              }}
+                              className="flex-1 bg-surface-container-lowest border border-outline-variant rounded px-2 py-1 text-xs focus:outline-none text-on-surface"
+                            >
+                              <option value="">Select Employee...</option>
+                              {workforceEmployees.map(emp => (
+                                <option key={emp.id} value={emp.id}>{emp.name || `${emp.firstName} ${emp.lastName}`} ({emp.employeeCode || emp.id})</option>
+                              ))}
+                            </select>
+                            <input
+                              type="text"
+                              placeholder="Role / Title"
+                              value={ap.roleName || ""}
+                              onChange={(e) => {
+                                const updated = [...workflowLevels];
+                                updated[lIdx].approvers[aIdx].roleName = e.target.value;
+                                setWorkflowLevels(updated);
+                              }}
+                              className="w-32 bg-surface-container-lowest border border-outline-variant rounded px-2 py-1 text-xs focus:outline-none text-on-surface"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const updated = [...workflowLevels];
+                                updated[lIdx].approvers = updated[lIdx].approvers.filter((_: any, idx: number) => idx !== aIdx);
+                                setWorkflowLevels(updated);
+                              }}
+                              className="text-status-error hover:bg-status-error/10 p-1 rounded"
+                            >
+                              <span className="material-symbols-outlined text-[16px]">close</span>
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
         {/* Contract Totals Summary Card (Both SG and FM) */}
         <div className="bg-primary/5 border border-primary/20 p-5 rounded-2xl grid grid-cols-3 gap-6 shadow-sm">
           <div className="col-span-2 space-y-4">
@@ -2222,6 +2566,44 @@ export default function ManpowerMasterPage() {
                     className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
                     value={formData.remarks || ""}
                     onChange={(e) => setFormData({ ...formData, remarks: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Trade License Number</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 123456"
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                    value={formData.tradeLicenseNumber || ""}
+                    onChange={(e) => setFormData({ ...formData, tradeLicenseNumber: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Trade License Authority</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. MOCI"
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                    value={formData.tradeLicenseAuthority || ""}
+                    onChange={(e) => setFormData({ ...formData, tradeLicenseAuthority: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Trade License Issue Date</label>
+                  <input
+                    type="date"
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                    value={formData.tradeLicenseIssueDate ? formData.tradeLicenseIssueDate.substring(0, 10) : ""}
+                    onChange={(e) => setFormData({ ...formData, tradeLicenseIssueDate: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Trade License Expiry Date</label>
+                  <input
+                    type="date"
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                    value={formData.tradeLicenseExpiryDate ? formData.tradeLicenseExpiryDate.substring(0, 10) : ""}
+                    onChange={(e) => setFormData({ ...formData, tradeLicenseExpiryDate: e.target.value })}
                   />
                 </div>
               </div>
@@ -3174,8 +3556,17 @@ export default function ManpowerMasterPage() {
                               </div>
                             ) : "—"}
                           </td>
-                          <td className="px-4 py-3 text-xs text-on-surface font-bold">
-                            {item.documentsCount || (item.documents?.length) || 0} docs
+                          <td className="px-4 py-3 text-xs text-on-surface">
+                            <div className="font-bold">{item.documentsCount || (item.documents?.length) || 0} docs</div>
+                            {item.documentAlertStatus && item.documentAlertStatus !== "NO_EXPIRY_DATE" && (
+                              <span className={`mt-1 inline-block px-1.5 py-0.2 rounded text-[9px] font-bold ${
+                                item.documentAlertStatus === "EXPIRED" ? "bg-red-100 text-red-700" :
+                                item.documentAlertStatus === "EXPIRING_SOON" ? "bg-amber-100 text-amber-700" :
+                                "bg-green-100 text-green-700"
+                              }`}>
+                                {item.documentAlertStatus === "EXPIRING_SOON" ? "Expiring Soon" : item.documentAlertStatus}
+                              </span>
+                            )}
                           </td>
                           <td className="px-4 py-3 text-xs">
                             <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${item.isActive ? "bg-status-success/15 text-status-success" : "bg-status-error/15 text-status-error"}`}>
@@ -3267,7 +3658,18 @@ export default function ManpowerMasterPage() {
                             {item.addendumsCount || (item.addendums?.length) || 0} addendums
                           </td>
                           <td className="px-4 py-3 text-xs text-on-surface-variant">{item.startDate ? new Date(item.startDate).toLocaleDateString() : ""}</td>
-                          <td className="px-4 py-3 text-xs text-on-surface-variant">{item.endDate ? new Date(item.endDate).toLocaleDateString() : ""}</td>
+                          <td className="px-4 py-3 text-xs text-on-surface-variant">
+                            <div>{item.endDate ? new Date(item.endDate).toLocaleDateString() : ""}</div>
+                            {item.contractExpiryStatus && item.contractExpiryStatus !== "NO_EXPIRY_DATE" && (
+                              <span className={`mt-1 inline-block px-1.5 py-0.2 rounded text-[9px] font-bold ${
+                                item.contractExpiryStatus === "EXPIRED" ? "bg-red-100 text-red-700" :
+                                item.contractExpiryStatus === "EXPIRING_SOON" ? "bg-amber-100 text-amber-700" :
+                                "bg-green-100 text-green-700"
+                              }`}>
+                                {item.contractExpiryStatus === "EXPIRING_SOON" ? `Expiring (${item.daysToContractExpiry}d)` : item.contractExpiryStatus}
+                              </span>
+                            )}
+                          </td>
                           <td className="px-4 py-3 text-xs">
                             <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${item.status === "ACTIVE" ? "bg-status-success/15 text-status-success" : "bg-surface-container-high/40 text-on-surface-variant"}`}>
                               {item.status}
@@ -4971,9 +5373,215 @@ export default function ManpowerMasterPage() {
                   </div>
                 )}
               </div>
+
+              {/* Contract Clauses & Legal Terms */}
+              <div className="bg-surface-container-low border border-outline-variant p-4 rounded-xl space-y-3">
+                <h4 className="text-xs font-bold text-primary uppercase tracking-wider border-b border-outline-variant pb-1">Contract Clauses & Legal Terms</h4>
+                <div className="grid grid-cols-2 gap-4 text-[11px]">
+                  <div>
+                    <p><span className="text-on-surface-variant font-medium">Payment Terms:</span> <span className="font-semibold">{selectedContractDetail.paymentTerms || "Not specified"}</span></p>
+                    <p><span className="text-on-surface-variant font-medium">Payment Cycle:</span> <span className="font-semibold">{selectedContractDetail.paymentCycle || "Monthly"}</span></p>
+                    <p><span className="text-on-surface-variant font-medium">Credit Days:</span> <span className="font-semibold">{selectedContractDetail.creditDays !== null && selectedContractDetail.creditDays !== undefined ? `${selectedContractDetail.creditDays} days` : "Not specified"}</span></p>
+                    <p><span className="text-on-surface-variant font-medium">Invoice Submission Day:</span> <span className="font-semibold">{selectedContractDetail.invoiceSubmissionDay || "Not specified"}</span></p>
+                    {selectedContractDetail.paymentRemarks && <p><span className="text-on-surface-variant font-medium">Payment Remarks:</span> <span className="italic">{selectedContractDetail.paymentRemarks}</span></p>}
+                  </div>
+                  <div>
+                    <p><span className="text-on-surface-variant font-medium">Termination Clause:</span> <span className="font-semibold">{selectedContractDetail.terminationClause || "Not specified"}</span></p>
+                    <p><span className="text-on-surface-variant font-medium">Notice Period:</span> <span className="font-semibold">{selectedContractDetail.noticePeriodDays !== null && selectedContractDetail.noticePeriodDays !== undefined ? `${selectedContractDetail.noticePeriodDays} days` : "Not specified"}</span></p>
+                    <p><span className="text-on-surface-variant font-medium">Termination Penalty:</span> <span className="font-semibold">{selectedContractDetail.terminationPenalty || "None"}</span></p>
+                    <p><span className="text-on-surface-variant font-medium">Early Termination Allowed:</span> <span className="font-semibold">{selectedContractDetail.earlyTerminationAllowed ? "Yes" : "No"}</span></p>
+                    {selectedContractDetail.terminationRemarks && <p><span className="text-on-surface-variant font-medium">Termination Remarks:</span> <span className="italic">{selectedContractDetail.terminationRemarks}</span></p>}
+                  </div>
+                </div>
+                {selectedContractDetail.specialConditions && (
+                  <div className="pt-2 border-t border-outline-variant/40 text-[11px]">
+                    <p><span className="text-on-surface-variant font-medium">Special Conditions:</span> <span>{selectedContractDetail.specialConditions}</span></p>
+                  </div>
+                )}
+                {selectedContractDetail.serviceLevelTerms && (
+                  <div className="pt-1 text-[11px]">
+                    <p><span className="text-on-surface-variant font-medium">Service Level Terms (SLAs):</span> <span>{selectedContractDetail.serviceLevelTerms}</span></p>
+                  </div>
+                )}
+                {selectedContractDetail.penaltyClause && (
+                  <div className="pt-1 text-[11px]">
+                    <p><span className="text-on-surface-variant font-medium">Penalty Clauses:</span> <span>{selectedContractDetail.penaltyClause}</span></p>
+                  </div>
+                )}
+              </div>
+
+              {/* Contract Approval Workflow Status */}
+              <div className="bg-surface-container-low border border-outline-variant p-4 rounded-xl space-y-3">
+                <h4 className="text-xs font-bold text-primary uppercase tracking-wider border-b border-outline-variant pb-1">Approval Workflow & Status</h4>
+                
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-on-surface-variant">Workflow Status:</span>
+                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                    selectedContractDetail.approvalStatus === "ACTIVE" || selectedContractDetail.status === "ACTIVE" ? "bg-status-success/15 text-status-success" :
+                    selectedContractDetail.approvalStatus === "APPROVED" || selectedContractDetail.status === "APPROVED" ? "bg-blue-100 text-blue-700" :
+                    selectedContractDetail.approvalStatus === "PENDING_APPROVAL" ? "bg-amber-100 text-amber-700" :
+                    selectedContractDetail.approvalStatus === "REJECTED" ? "bg-red-100 text-red-700" :
+                    "bg-gray-100 text-gray-700"
+                  }`}>
+                    {selectedContractDetail.approvalStatus || selectedContractDetail.status || "DRAFT"}
+                  </span>
+                </div>
+                
+                {selectedContractDetail.rejectionRemarks && (
+                  <div className="bg-red-50 border border-red-200 p-2 rounded-lg text-xs text-red-700">
+                    <span className="font-bold">Rejection Reason:</span> {selectedContractDetail.rejectionRemarks}
+                  </div>
+                )}
+
+                {selectedContractDetail.workflows?.[0] ? (
+                  <div className="space-y-3 pt-2">
+                    {selectedContractDetail.workflows[0].levels.map((lvl: any) => {
+                      const isLvlApproved = lvl.approvalRule === "ANY_ONE" 
+                        ? lvl.approvers?.some((ap: any) => ap.approvalStatus === "APPROVED")
+                        : lvl.approvers?.every((ap: any) => ap.approvalStatus === "APPROVED");
+                        
+                      const isLvlRejected = lvl.approvers?.some((ap: any) => ap.approvalStatus === "REJECTED");
+
+                      return (
+                        <div key={lvl.id} className={`p-3 rounded-lg border text-xs ${
+                          isLvlApproved ? "bg-green-50/50 border-green-200" :
+                          isLvlRejected ? "bg-red-50/50 border-red-200" :
+                          "bg-surface-container-lowest border-outline-variant"
+                        }`}>
+                          <div className="flex justify-between items-center mb-2">
+                            <span className="font-bold">Level {lvl.levelNumber}: {lvl.levelName}</span>
+                            <span className={`text-[9px] font-semibold px-1.5 py-0.2 rounded ${
+                              isLvlApproved ? "bg-green-100 text-green-800" :
+                              isLvlRejected ? "bg-red-100 text-red-800" :
+                              "bg-amber-100 text-amber-800"
+                            }`}>
+                              {isLvlApproved ? "Approved" : isLvlRejected ? "Rejected" : "Pending"}
+                            </span>
+                          </div>
+                          
+                          <p className="text-[10px] text-on-surface-variant mb-2">Rule: {lvl.approvalRule === "ANY_ONE" ? "Any one approver" : "All approvers required"}</p>
+                          
+                          <div className="space-y-1.5">
+                            {lvl.approvers?.map((ap: any) => (
+                              <div key={ap.id} className="flex justify-between items-center text-[10px]">
+                                <span>{ap.employeeName} ({ap.roleName || "Approver"})</span>
+                                <span className={`font-semibold ${
+                                  ap.approvalStatus === "APPROVED" ? "text-green-600" :
+                                  ap.approvalStatus === "REJECTED" ? "text-red-600" :
+                                  "text-amber-600"
+                                }`}>
+                                  {ap.approvalStatus} {ap.remarks ? `(${ap.remarks})` : ""}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-[10px] text-on-surface-variant italic">No approval workflow configured for this contract.</p>
+                )}
+              </div>
+
+              {/* Workflow Action Panel */}
+              {selectedContractDetail.workflows?.[0] && selectedContractDetail.status === "PENDING_APPROVAL" && (
+                <div className="bg-surface-container-low border border-outline-variant p-4 rounded-xl space-y-3">
+                  <h4 className="text-xs font-bold text-primary uppercase tracking-wider border-b border-outline-variant pb-1">Perform Approval Action</h4>
+                  
+                  {(() => {
+                    const activePendingLevel = selectedContractDetail.workflows[0].levels.find((lvl: any) => {
+                      const isLvlApproved = lvl.approvalRule === "ANY_ONE" 
+                        ? lvl.approvers?.some((ap: any) => ap.approvalStatus === "APPROVED")
+                        : lvl.approvers?.every((ap: any) => ap.approvalStatus === "APPROVED");
+                      return !isLvlApproved;
+                    });
+                    
+                    if (!activePendingLevel) return null;
+
+                    const pendingApprovers = activePendingLevel.approvers?.filter((ap: any) => ap.approvalStatus === "PENDING") || [];
+
+                    return (
+                      <div className="space-y-3">
+                        <p className="text-xs text-on-surface-variant">Acting on <span className="font-semibold text-primary">Level {activePendingLevel.levelNumber}: {activePendingLevel.levelName}</span></p>
+                        
+                        <div>
+                          <label className="block text-[9px] font-bold text-on-surface-variant uppercase mb-1">Select Approver Entity</label>
+                          <select
+                            id="workflowActAsSelect"
+                            className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-2.5 py-1.5 text-xs text-on-surface"
+                          >
+                            {pendingApprovers.map((ap: any) => (
+                              <option key={ap.id} value={`${activePendingLevel.id}:${ap.employeeId}`}>{ap.employeeName}</option>
+                            ))}
+                          </select>
+                        </div>
+                        
+                        <div>
+                          <label className="block text-[9px] font-bold text-on-surface-variant uppercase mb-1">Remarks / Comments</label>
+                          <textarea
+                            id="workflowRemarksTextarea"
+                            placeholder="Enter remarks..."
+                            rows={2}
+                            className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-2.5 py-1.5 text-xs text-on-surface resize-none"
+                          />
+                        </div>
+                        
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => {
+                              const select = document.getElementById("workflowActAsSelect") as HTMLSelectElement;
+                              const remarks = (document.getElementById("workflowRemarksTextarea") as HTMLTextAreaElement)?.value || "";
+                              if (select?.value) {
+                                const [levelId, employeeId] = select.value.split(":");
+                                handleWorkflowAction("approve", { levelId, employeeId, remarks });
+                              }
+                            }}
+                            className="flex-1 py-1.5 bg-status-success text-white text-xs font-bold rounded-lg hover:opacity-90 transition-opacity"
+                          >
+                            Approve Level
+                          </button>
+                          <button
+                            onClick={() => {
+                              const select = document.getElementById("workflowActAsSelect") as HTMLSelectElement;
+                              const remarks = (document.getElementById("workflowRemarksTextarea") as HTMLTextAreaElement)?.value || "";
+                              if (select?.value) {
+                                const [levelId, employeeId] = select.value.split(":");
+                                handleWorkflowAction("reject", { levelId, employeeId, remarks });
+                              }
+                            }}
+                            className="flex-1 py-1.5 bg-status-error text-white text-xs font-bold rounded-lg hover:opacity-90 transition-opacity"
+                          >
+                            Reject Level
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
             </div>
             
-            <div className="px-6 py-4 border-t border-outline-variant flex justify-end bg-surface-container-low">
+            <div className="px-6 py-4 border-t border-outline-variant flex justify-between bg-surface-container-low">
+              <div className="flex gap-2">
+                {(selectedContractDetail.status === "DRAFT" || selectedContractDetail.status === "REJECTED") && (
+                  <button 
+                    onClick={() => handleWorkflowAction("submit")} 
+                    className="px-4 py-2 bg-amber-600 text-white text-xs font-bold rounded-lg hover:bg-amber-700 transition-colors"
+                  >
+                    Submit for Approval
+                  </button>
+                )}
+                {selectedContractDetail.status === "APPROVED" && (
+                  <button 
+                    onClick={() => handleWorkflowAction("activate")} 
+                    className="px-4 py-2 bg-green-600 text-white text-xs font-bold rounded-lg hover:bg-green-700 transition-colors"
+                  >
+                    Activate Contract
+                  </button>
+                )}
+              </div>
+              
               <button 
                 onClick={() => setSelectedContractDetail(null)} 
                 className="px-4 py-2 bg-primary text-white text-xs font-bold rounded-lg hover:bg-primary-container transition-colors"
