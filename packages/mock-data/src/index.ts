@@ -1774,6 +1774,7 @@ function buildEmployeePrismaData(input: any, isUpdate: boolean) {
     { key: "departmentId", relationName: "departmentRef" },
     { key: "costCenterId", relationName: "costCenterRef" },
     { key: "defaultLocationId", relationName: "defaultLocation" },
+    { key: "officeLocationId", relationName: "officeLocation" },
     { key: "designationId", relationName: "designation" },
     { key: "tradeClassificationId", relationName: "tradeClassification" },
     { key: "defaultPunchLocationId", relationName: "defaultPunchLocation" },

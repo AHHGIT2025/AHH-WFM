@@ -616,11 +616,13 @@ export default function WorkforcePage() {
       setValidationError("Role is required");
       return false;
     }
-    if (empEmployeeCategory === "BLUE_COLLAR") {
+    if (empEmployeeCategory === "WHITE_COLLAR") {
       if (!empDesignationId) {
-        setValidationError("Designation is required for Blue Collar employees");
+        setValidationError("Designation is required for White Collar employees");
         return false;
       }
+    }
+    if (empEmployeeCategory === "BLUE_COLLAR") {
       if (!empTradeClassificationId) {
         setValidationError("Trade Classification is required for Blue Collar employees");
         return false;
@@ -1692,7 +1694,7 @@ export default function WorkforcePage() {
       </Modal>
 
       {/* Add Employee Modal */}
-      <Modal isOpen={isAddEmpOpen} onClose={() => setIsAddEmpOpen(false)} title="Register New Employee">
+      <Modal isOpen={isAddEmpOpen} onClose={() => setIsAddEmpOpen(false)} title="Register New Employee" size="6xl">
         <form onSubmit={handleAddEmployee} className="space-y-4">
           {validationError && (
             <div className="p-3 bg-status-error/10 border border-status-error/20 text-status-error text-xs font-semibold rounded-lg">
@@ -1848,19 +1850,21 @@ export default function WorkforcePage() {
                       <option value="NGT-201">Night Shift (10 PM - 6 AM)</option>
                     </select>
                   </div>
-                  <div className="space-y-1">
-                    <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Designation</label>
-                    <select
-                      className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                      value={empDesignationId}
-                      onChange={(e) => setEmpDesignationId(e.target.value)}
-                    >
-                      <option value="">Select Designation</option>
-                      {designations.map((d) => (
-                        <option key={d.id} value={d.id}>{formatDesignationLabel(d)}</option>
-                      ))}
-                    </select>
-                  </div>
+                  {empEmployeeCategory === "WHITE_COLLAR" && (
+                    <div className="space-y-1">
+                      <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Designation *</label>
+                      <select
+                        className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                        value={empDesignationId}
+                        onChange={(e) => setEmpDesignationId(e.target.value)}
+                      >
+                        <option value="">Select Designation</option>
+                        {designations.map((d) => (
+                          <option key={d.id} value={d.id}>{formatDesignationLabel(d)}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1933,12 +1937,14 @@ export default function WorkforcePage() {
                 <p className="text-[10px] font-bold text-primary uppercase tracking-wider">Location & Allocation Settings</p>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
-                    <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Default Location *</label>
+                    <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">
+                      Default Location {empEmployeeCategory === "WHITE_COLLAR" ? "*" : "(Optional)"}
+                    </label>
                     <select
                       className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
                       value={empDefaultLocationId}
                       onChange={(e) => setEmpDefaultLocationId(e.target.value)}
-                      required={empEmploymentStatus === 'ACTIVE'}
+                      required={empEmploymentStatus === 'ACTIVE' && empEmployeeCategory === 'WHITE_COLLAR'}
                     >
                       <option value="">Select Location</option>
                       {locations.filter(l => !empCompanyId || !l.companyId || l.companyId === empCompanyId).length === 0 ? (
@@ -2421,7 +2427,7 @@ export default function WorkforcePage() {
       </Modal>
 
       {/* Edit Employee Modal */}
-      <Modal isOpen={isEditEmpOpen} onClose={() => setIsEditEmpOpen(false)} title="Edit Employee Profile">
+      <Modal isOpen={isEditEmpOpen} onClose={() => setIsEditEmpOpen(false)} title="Edit Employee Profile" size="6xl">
         {selectedEmp ? (
           <form onSubmit={handleEditEmployee} className="space-y-4">
             {validationError && (
@@ -2639,18 +2645,20 @@ export default function WorkforcePage() {
                   </div>
                 </div>
 
-                <div className="p-4 bg-surface-container border border-outline-variant/30 rounded-xl space-y-3">
-                  <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">General Designation</p>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1">
-                      <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Designation</label>
-                      <select className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-2.5 py-2 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" value={empDesignationId} onChange={(e) => setEmpDesignationId(e.target.value)}>
-                        <option value="">Select Designation</option>
-                        {designations.map((d) => <option key={d.id} value={d.id}>{formatDesignationLabel(d)}</option>)}
-                      </select>
+                {empEmployeeCategory === "WHITE_COLLAR" && (
+                  <div className="p-4 bg-surface-container border border-outline-variant/30 rounded-xl space-y-3">
+                    <p className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">General Designation</p>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Designation *</label>
+                        <select className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-2.5 py-2 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" value={empDesignationId} onChange={(e) => setEmpDesignationId(e.target.value)}>
+                          <option value="">Select Designation</option>
+                          {designations.map((d) => <option key={d.id} value={d.id}>{formatDesignationLabel(d)}</option>)}
+                        </select>
+                      </div>
                     </div>
                   </div>
-                </div>
+                )}
   
                 {empEmployeeCategory === "BLUE_COLLAR" && (
                   <div className="p-4 bg-secondary/5 border border-secondary/10 rounded-xl space-y-3">
@@ -2693,8 +2701,10 @@ export default function WorkforcePage() {
                   <p className="text-[10px] font-bold text-primary uppercase tracking-wider">Location & Allocation Settings</p>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1">
-                      <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">Default Location *</label>
-                      <select className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" value={empDefaultLocationId} onChange={(e) => setEmpDefaultLocationId(e.target.value)} required={empEmploymentStatus === 'ACTIVE'}>
+                      <label className="block text-xs font-bold text-on-surface-variant uppercase tracking-wider">
+                        Default Location {empEmployeeCategory === "WHITE_COLLAR" ? "*" : "(Optional)"}
+                      </label>
+                      <select className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-sm text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" value={empDefaultLocationId} onChange={(e) => setEmpDefaultLocationId(e.target.value)} required={empEmploymentStatus === 'ACTIVE' && empEmployeeCategory === 'WHITE_COLLAR'}>
                         <option value="">Select Location</option>
                         {locations.filter(l => !empCompanyId || !l.companyId || l.companyId === empCompanyId).length === 0 ? (
                           <option value="" disabled>No locations found for selected company</option>

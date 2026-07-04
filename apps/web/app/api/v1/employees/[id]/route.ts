@@ -157,7 +157,7 @@ export async function PATCH(request: Request, { params }: RouteParams) {
       name, email, role, departmentId, status, phone, shiftId, 
       employmentStatus, dutyStatus, employeeCategory,
       positionCategoryId, defaultProjectId, defaultSiteId,
-      designationId, tradeClassificationId, costCenterId, defaultLocationId,
+      designationId, tradeClassificationId, costCenterId, defaultLocationId, officeLocationId,
       isRelieverEligible, isStandbyEligible,
       immediateSupervisorId, reportingManagerId, projectSupervisorId, siteSupervisorId,
       isSupervisor, supervisorScopeType,
@@ -221,13 +221,29 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     const targetStatus = employmentStatus !== undefined ? employmentStatus : currentEmp.employmentStatus;
     const targetCompanyId = companyId !== undefined ? companyId : currentEmp.companyId;
     const targetDefaultLocationId = defaultLocationId !== undefined ? defaultLocationId : currentEmp.defaultLocationId;
+    const targetCategory = employeeCategory !== undefined ? employeeCategory : currentEmp.employeeCategory;
 
     if (targetStatus === "ACTIVE") {
       if (!targetCompanyId || targetCompanyId.trim() === "") {
         return NextResponse.json({ error: "Company is required." }, { status: 400 });
       }
-      if (!targetDefaultLocationId || targetDefaultLocationId.trim() === "") {
-        return NextResponse.json({ error: "Default Location is required." }, { status: 400 });
+      if (targetCategory === "WHITE_COLLAR") {
+        if (!targetDefaultLocationId || targetDefaultLocationId.trim() === "") {
+          return NextResponse.json({ error: "Default Location is required for White Collar employees." }, { status: 400 });
+        }
+      }
+    }
+
+    const targetDesignationId = designationId !== undefined ? designationId : currentEmp.designationId;
+    const targetTradeClassificationId = tradeClassificationId !== undefined ? tradeClassificationId : currentEmp.tradeClassificationId;
+
+    if (targetCategory === "WHITE_COLLAR") {
+      if (!targetDesignationId || (typeof targetDesignationId === "string" && targetDesignationId.trim() === "")) {
+        return NextResponse.json({ error: "Designation is required for White Collar employees." }, { status: 400 });
+      }
+    } else if (targetCategory === "BLUE_COLLAR") {
+      if (!targetTradeClassificationId || (typeof targetTradeClassificationId === "string" && targetTradeClassificationId.trim() === "")) {
+        return NextResponse.json({ error: "Trade Classification is required for Blue Collar employees." }, { status: 400 });
       }
     }
 
@@ -277,6 +293,7 @@ export async function PATCH(request: Request, { params }: RouteParams) {
       ...(tradeClassificationId !== undefined ? { tradeClassificationId: tradeClassificationId || null } : {}),
       ...(costCenterId !== undefined ? { costCenterId: costCenterId || null } : {}),
       ...(defaultLocationId !== undefined ? { defaultLocationId: defaultLocationId || null } : {}),
+      ...(officeLocationId !== undefined ? { officeLocationId: officeLocationId || null } : {}),
       ...(isRelieverEligible !== undefined ? { isRelieverEligible } : {}),
       ...(isStandbyEligible !== undefined ? { isStandbyEligible } : {}),
       ...(immediateSupervisorId !== undefined ? { immediateSupervisorId: immediateSupervisorId || null } : {}),

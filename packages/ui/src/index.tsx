@@ -136,8 +136,27 @@ export interface ModalProps {
   size?: string;
 }
 
-export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children }) => {
+export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, size }) => {
   if (!isOpen) return null;
+
+  let sizeClasses = "max-w-lg w-full"; // default
+  if (size === "md") {
+    sizeClasses = "max-w-md w-full";
+  } else if (size === "lg") {
+    sizeClasses = "max-w-lg w-full";
+  } else if (size === "xl") {
+    sizeClasses = "max-w-xl w-full";
+  } else if (size === "2xl") {
+    sizeClasses = "max-w-2xl w-full";
+  } else if (size === "4xl") {
+    sizeClasses = "max-w-4xl w-full";
+  } else if (size === "6xl") {
+    sizeClasses = "max-w-6xl w-[92vw]";
+  } else if (size === "7xl") {
+    sizeClasses = "max-w-7xl w-[92vw]";
+  } else if (size) {
+    sizeClasses = size;
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -145,7 +164,7 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children }
       <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
       
       {/* Content */}
-      <div className="relative bg-surface-container-lowest border border-outline-variant rounded-xl shadow-2xl max-w-lg w-full max-h-[85vh] flex flex-col z-10 overflow-hidden">
+      <div className={`relative bg-surface-container-lowest border border-outline-variant rounded-xl shadow-2xl ${sizeClasses} max-h-[90vh] flex flex-col z-10 overflow-hidden`}>
         <header className="flex justify-between items-center p-4 md:p-6 border-b border-outline-variant bg-surface-container-low">
           <h3 className="text-lg font-bold text-primary">{title}</h3>
           <button onClick={onClose} className="p-1 rounded-full hover:bg-surface-container-high text-on-surface-variant transition-colors">

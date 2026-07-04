@@ -138,7 +138,7 @@ export async function POST(request: Request) {
       id, name, email, role, departmentId, phone, shiftId, password, defaultPassword,
       employmentStatus, dutyStatus, employeeCategory, positionCategoryId, 
       defaultProjectId, defaultSiteId, designationId, tradeClassificationId, 
-      costCenterId, defaultLocationId, isRelieverEligible, isStandbyEligible,
+      costCenterId, defaultLocationId, officeLocationId, isRelieverEligible, isStandbyEligible,
       immediateSupervisorId, reportingManagerId, projectSupervisorId, siteSupervisorId,
       isSupervisor, supervisorScopeType,
       username, authMode, ssoProvider, ssoSubject, isLoginEnabled, mustChangePassword, isLocked,
@@ -185,8 +185,20 @@ export async function POST(request: Request) {
       if (!companyId || companyId.trim() === "") {
         return NextResponse.json({ error: "Company is required" }, { status: 400 });
       }
-      if (!defaultLocationId || defaultLocationId.trim() === "") {
-        return NextResponse.json({ error: "Default Location is required" }, { status: 400 });
+      if (employeeCategory === "WHITE_COLLAR") {
+        if (!defaultLocationId || defaultLocationId.trim() === "") {
+          return NextResponse.json({ error: "Default Location is required for White Collar employees" }, { status: 400 });
+        }
+      }
+    }
+
+    if (employeeCategory === "WHITE_COLLAR") {
+      if (!designationId || designationId.trim() === "") {
+        return NextResponse.json({ error: "Designation is required for White Collar employees" }, { status: 400 });
+      }
+    } else if (employeeCategory === "BLUE_COLLAR") {
+      if (!tradeClassificationId || tradeClassificationId.trim() === "") {
+        return NextResponse.json({ error: "Trade Classification is required for Blue Collar employees" }, { status: 400 });
       }
     }
 
@@ -254,29 +266,30 @@ export async function POST(request: Request) {
       name: name.trim(),
       email: email.trim().toLowerCase(),
       role: role.trim(),
-      departmentId: departmentId || undefined,
+      departmentId: departmentId || null,
       department: "", // Will be auto-resolved by broker based on departmentId
       status: dutyStatus || "Offline",
-      phone: phone ? phone.trim() : undefined,
-      shiftId: shiftId || undefined,
-      password: password || defaultPassword || undefined,
+      phone: phone ? phone.trim() : null,
+      shiftId: shiftId || null,
+      password: password || defaultPassword || null,
       employmentStatus: employmentStatus || "ACTIVE",
       dutyStatus: dutyStatus || "OFF_DUTY",
       employeeCategory: employeeCategory || "WHITE_COLLAR",
       isActive: employmentStatus ? (employmentStatus === "ACTIVE") : true,
-      positionCategoryId: positionCategoryId || undefined,
-      defaultProjectId: defaultProjectId || undefined,
-      defaultSiteId: defaultSiteId || undefined,
-      designationId: designationId || undefined,
-      tradeClassificationId: tradeClassificationId || undefined,
-      costCenterId: costCenterId || undefined,
-      defaultLocationId: defaultLocationId || undefined,
+      positionCategoryId: positionCategoryId || null,
+      defaultProjectId: defaultProjectId || null,
+      defaultSiteId: defaultSiteId || null,
+      designationId: designationId || null,
+      tradeClassificationId: tradeClassificationId || null,
+      costCenterId: costCenterId || null,
+      defaultLocationId: defaultLocationId || null,
+      officeLocationId: officeLocationId || null,
       isRelieverEligible: isRelieverEligible || false,
       isStandbyEligible: isStandbyEligible || false,
-      immediateSupervisorId: immediateSupervisorId || undefined,
-      reportingManagerId: reportingManagerId || undefined,
-      projectSupervisorId: projectSupervisorId || undefined,
-      siteSupervisorId: siteSupervisorId || undefined,
+      immediateSupervisorId: immediateSupervisorId || null,
+      reportingManagerId: reportingManagerId || null,
+      projectSupervisorId: projectSupervisorId || null,
+      siteSupervisorId: siteSupervisorId || null,
       isSupervisor: isSupervisor || false,
       supervisorScopeType: supervisorScopeType || "DIRECT_REPORTS",
       username: generatedUsername ? generatedUsername.trim() : undefined,
