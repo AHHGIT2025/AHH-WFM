@@ -6,7 +6,9 @@ import { prisma } from "@ahh-wfm/database";
 export async function GET() {
   try {
     const session = await getServerSession(authOptions);
-    if (!(session?.user as any)?.id) {
+    const sessionUserId = (session?.user as any)?.id;
+    console.log("[DASHBOARD] session.user.id:", sessionUserId);
+    if (!sessionUserId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -15,7 +17,7 @@ export async function GET() {
 
     // Get employee details — include BOTH defaultLocation and officeLocation
     const employee = await prisma.employee.findUnique({
-      where: { id: (session?.user as any)?.id },
+      where: { id: sessionUserId },
       include: {
         company: true,
         defaultProject: true,
@@ -26,6 +28,9 @@ export async function GET() {
         tradeClassification: true
       }
     });
+
+    console.log("[DASHBOARD] employee found:", !!employee, "| id:", employee?.id, "| category:", employee?.employeeCategory, "| defaultLocationId:", (employee as any)?.defaultLocationId, "| defaultLocation:", (employee as any)?.defaultLocation?.locationName);
+
 
     if (!employee) {
       return NextResponse.json({ error: "Employee not found" }, { status: 404 });
@@ -108,8 +113,18 @@ export async function GET() {
 
     if (isWhiteCollar) {
       // White Collar — work location comes from Default Location in Employee Profile
-      const loc = employee.defaultLocation as any;
+      let loc = employee.defaultLocation as any;
+
+      // Fallback: if relation wasn't populated but FK exists, query directly
+      if (!loc && (employee as any).defaultLocationId) {
+        console.log("[DASHBOARD] defaultLocation relation not loaded — querying by ID:", (employee as any).defaultLocationId);
+        loc = await prisma.locationMaster.findUnique({
+          where: { id: (employee as any).defaultLocationId }
+        });
+      }
+
       if (loc) {
+
         const displayName = loc.locationCode
           ? `${loc.locationCode} \u2014 ${loc.locationName}`
           : loc.locationName;
@@ -201,6 +216,8 @@ export async function GET() {
         assignmentType = "OFFICE";
       }
     }
+
+    console.log("[DASHBOARD] currentDuty:", JSON.stringify(currentDuty));
 
     return NextResponse.json({
       employeeName: employee.name,
