@@ -13,13 +13,14 @@ export async function GET() {
     const today = new Date();
     const todayStr = today.toISOString().split("T")[0];
 
-    // Get employee details with default locations
+    // Get employee details — include BOTH defaultLocation and officeLocation
     const employee = await prisma.employee.findUnique({
       where: { id: (session?.user as any)?.id },
       include: {
         company: true,
         defaultProject: true,
         defaultSite: true,
+        defaultLocation: true,
         officeLocation: true,
         designation: true,
         tradeClassification: true
@@ -30,7 +31,7 @@ export async function GET() {
       return NextResponse.json({ error: "Employee not found" }, { status: 404 });
     }
 
-    // 1. Get Active Deployment (if any)
+    // 1. Get Active Deployment (for Blue Collar)
     const activeDeployment = await prisma.employeeDeployment.findFirst({
       where: {
         employeeId: employee.id,
@@ -43,13 +44,11 @@ export async function GET() {
       }
     });
 
-    // 2. Get Active Shift
+    // 2. Get Active Shift Assignment
     const activeShift = await prisma.shiftAssignment.findFirst({
       where: {
         employeeId: employee.id,
-        assignmentStatus: "ACTIVE",
-        // Using createdAt as a proxy for date since date is missing in ShiftAssignment
-        // In real app, we'd join with ShiftTemplate or have a specific date field
+        assignmentStatus: "ACTIVE"
       },
       orderBy: { createdAt: "desc" },
       include: {
@@ -57,7 +56,7 @@ export async function GET() {
       }
     });
 
-    // 3. Get Active On-Call Assignment
+    // 3. Get Active On-Call Assignment (for Blue Collar)
     const activeOnCall = await prisma.onCallAssignment.findFirst({
       where: {
         employeeId: employee.id,
@@ -71,10 +70,10 @@ export async function GET() {
       }
     });
 
-    // 4. Get Today's Attendance Record (if any open)
+    // 4. Get Today's Attendance Record
     const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
     const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59, 999);
-    
+
     const todaysAttendance = await prisma.attendanceRecord.findFirst({
       where: {
         employeeId: employee.id,
@@ -86,35 +85,121 @@ export async function GET() {
       orderBy: { checkIn: "desc" }
     });
 
-    // Determine current logical assignment based on priority:
-    // 1. Deployment
-    // 2. OnCall
-    // 3. Shift
-    // 4. Office
-    let currentAssignment = null;
+    // ─────────────────────────────────────────────────────
+    // CURRENT DUTY LOGIC — differentiated by employee category
+    // ─────────────────────────────────────────────────────
+    const isWhiteCollar = employee.employeeCategory === "WHITE_COLLAR";
+
+    type DutySource = "DEFAULT_LOCATION" | "SHIFT_PLANNER" | "DEPLOYMENT" | "ON_CALL" | "NONE";
+
+    let currentDuty: {
+      source: DutySource;
+      locationId: string | null;
+      locationCode: string | null;
+      locationName: string | null;
+      worksiteName: string | null;
+      siteName: string | null;
+      displayName: string;
+    };
+
+    // Legacy fields kept for backward compatibility with existing UI
+    let currentAssignment: { name: string; site: string | null | undefined; type: string } | null = null;
     let assignmentType = "OFFICE";
 
-    if (activeDeployment) {
-      currentAssignment = {
-        name: activeDeployment.project.projectName,
-        site: activeDeployment.site.siteName,
-        type: "PROJECT_SITE"
-      };
-      assignmentType = "DEPLOYMENT";
-    } else if (activeOnCall) {
-      currentAssignment = {
-        name: activeOnCall.project?.projectName || "On-Call Duty",
-        site: activeOnCall.site?.siteName || activeOnCall.allowedPunchLocation?.name,
-        type: "ON_CALL"
-      };
-      assignmentType = "ON_CALL";
-
+    if (isWhiteCollar) {
+      // White Collar — work location comes from Default Location in Employee Profile
+      const loc = employee.defaultLocation as any;
+      if (loc) {
+        const displayName = loc.locationCode
+          ? `${loc.locationCode} \u2014 ${loc.locationName}`
+          : loc.locationName;
+        currentDuty = {
+          source: "DEFAULT_LOCATION",
+          locationId: loc.id,
+          locationCode: loc.locationCode ?? null,
+          locationName: loc.locationName,
+          worksiteName: null,
+          siteName: null,
+          displayName
+        };
+        currentAssignment = {
+          name: loc.locationName,
+          site: loc.locationCode ?? null,
+          type: "OFFICE"
+        };
+        assignmentType = "OFFICE";
+      } else {
+        // No default location configured for this White Collar employee
+        currentDuty = {
+          source: "NONE",
+          locationId: null,
+          locationCode: null,
+          locationName: null,
+          worksiteName: null,
+          siteName: null,
+          displayName: "Not Assigned"
+        };
+        currentAssignment = null;
+        assignmentType = "OFFICE";
+      }
     } else {
-      currentAssignment = {
-        name: employee.officeLocation?.locationName || employee.company?.companyName || "Default Office",
-        site: "HQ",
-        type: "OFFICE"
-      };
+      // Blue Collar — location comes from dynamic Shift Planner / Deployment / On-Call
+      if (activeDeployment) {
+        const displayName = activeDeployment.site?.siteName
+          ? `${activeDeployment.project.projectName} \u2014 ${activeDeployment.site.siteName}`
+          : activeDeployment.project.projectName;
+
+        currentDuty = {
+          source: "DEPLOYMENT",
+          locationId: null,
+          locationCode: null,
+          locationName: null,
+          worksiteName: activeDeployment.project.projectName,
+          siteName: activeDeployment.site?.siteName ?? null,
+          displayName
+        };
+        currentAssignment = {
+          name: activeDeployment.project.projectName,
+          site: activeDeployment.site?.siteName,
+          type: "PROJECT_SITE"
+        };
+        assignmentType = "DEPLOYMENT";
+      } else if (activeOnCall) {
+        const displayName =
+          activeOnCall.site?.siteName ||
+          activeOnCall.allowedPunchLocation?.name ||
+          activeOnCall.project?.projectName ||
+          "On-Call Duty";
+
+        currentDuty = {
+          source: "ON_CALL",
+          locationId: null,
+          locationCode: null,
+          locationName: null,
+          worksiteName: activeOnCall.project?.projectName ?? null,
+          siteName: activeOnCall.site?.siteName ?? null,
+          displayName
+        };
+        currentAssignment = {
+          name: activeOnCall.project?.projectName || "On-Call Duty",
+          site: activeOnCall.site?.siteName || activeOnCall.allowedPunchLocation?.name,
+          type: "ON_CALL"
+        };
+        assignmentType = "ON_CALL";
+      } else {
+        // No active deployment/on-call — Blue Collar shows Not Assigned
+        currentDuty = {
+          source: "NONE",
+          locationId: null,
+          locationCode: null,
+          locationName: null,
+          worksiteName: null,
+          siteName: null,
+          displayName: "Not Assigned"
+        };
+        currentAssignment = null;
+        assignmentType = "OFFICE";
+      }
     }
 
     return NextResponse.json({
@@ -122,10 +207,15 @@ export async function GET() {
       employeeCategory: employee.employeeCategory,
       designation: employee.designation?.name,
       dutyStatus: employee.dutyStatus,
-      currentAssignment,
+      // New structured currentDuty object for richer consumers
+      currentDuty,
+      // Legacy currentAssignment fields — kept for backward-compat with existing UI
+      currentAssignment: currentAssignment ?? { name: currentDuty.displayName, site: null, type: "NONE" },
       assignmentType,
       todayShift: activeShift?.shiftTemplate?.name || "Standard Shift",
-      attendanceStatus: todaysAttendance ? (todaysAttendance.checkOut ? "COMPLETED" : "CHECKED_IN") : "NOT_CHECKED_IN",
+      attendanceStatus: todaysAttendance
+        ? (todaysAttendance.checkOut ? "COMPLETED" : "CHECKED_IN")
+        : "NOT_CHECKED_IN",
       todaysAttendance
     });
 
@@ -134,3 +224,4 @@ export async function GET() {
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }
 }
+

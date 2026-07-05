@@ -75,6 +75,7 @@ export async function GET() {
       dutyStatus: employee.dutyStatus,
       defaultLocation: employee.defaultLocation ? {
         id: employee.defaultLocation.id,
+        code: (employee.defaultLocation as any).locationCode ?? null,
         name: employee.defaultLocation.locationName
       } : null,
       defaultSite: employee.defaultSite ? {
