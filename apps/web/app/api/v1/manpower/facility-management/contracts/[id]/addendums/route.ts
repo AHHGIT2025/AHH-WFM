@@ -30,6 +30,15 @@ export async function POST(request: Request, { params }: { params: { id: string 
   }
 
   try {
+    const contract = await mockDb.getManpowerContract(params.id);
+    if (!contract) {
+      return NextResponse.json({ error: "Contract not found" }, { status: 404 });
+    }
+
+    if (contract.status !== "ACTIVE") {
+      return NextResponse.json({ error: "Addendum can be created only for active contracts." }, { status: 400 });
+    }
+
     const payload = await request.json();
     if (!payload.title || !payload.addendumType) {
       return NextResponse.json({ error: "Addendum Title and Type are required" }, { status: 400 });

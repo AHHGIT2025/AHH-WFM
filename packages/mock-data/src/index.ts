@@ -450,6 +450,10 @@ let memoryDb: {
   contractApprovalWorkflows: any[];
   contractApprovalLevels: any[];
   contractApprovalApprovers: any[];
+  workflowTemplates: any[];
+  workflowTemplateLevels: any[];
+  workflowTemplateApprovers: any[];
+  workflowDelegations: any[];
 } = {
   companies: [
     { id: "COMP-001", companyCode: "AHH", companyName: "Al Hattab Holding", isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
@@ -723,7 +727,11 @@ let memoryDb: {
   manpowerContractAddendumLineItems: [],
   contractApprovalWorkflows: [],
   contractApprovalLevels: [],
-  contractApprovalApprovers: []
+  contractApprovalApprovers: [],
+  workflowTemplates: [],
+  workflowTemplateLevels: [],
+  workflowTemplateApprovers: [],
+  workflowDelegations: []
 };
 
 // Seeding helper to pre-fill MySQL with mock data if it is empty
@@ -9391,6 +9399,11 @@ export const mockDb = {
       };
     }
     if (isDbConnected()) {
+      const currentContract = await prismaClient.manpowerContract.findUnique({ where: { id } });
+      if (!currentContract) throw new Error("Contract not found");
+      if (currentContract.status !== "DRAFT" && currentContract.status !== "REJECTED") {
+        throw new Error("Only draft or rejected contracts can be edited. Active or approved contracts must be changed through addendum.");
+      }
       try {
         await prismaClient.manpowerContract.update({
           where: { id },
@@ -9509,6 +9522,9 @@ export const mockDb = {
     const idx = (db.manpowerContracts || []).findIndex((c: any) => c.id === id);
     if (idx === -1) throw new Error("Contract not found");
     const existing = db.manpowerContracts[idx] as any;
+    if (existing.status !== "DRAFT" && existing.status !== "REJECTED") {
+      throw new Error("Only draft or rejected contracts can be edited. Active or approved contracts must be changed through addendum.");
+    }
     const updatedRecord = {
       ...existing,
       clientId: dbData.clientId || existing.clientId,
@@ -11320,6 +11336,26 @@ export const mockDb = {
     writeDb(db);
     return true;
   },
+  deleteManpowerContract: async (id: string): Promise<boolean> => {
+    if (isDbConnected()) {
+      const contract = await prismaClient.manpowerContract.findUnique({ where: { id } });
+      if (!contract) throw new Error("Contract not found");
+      if (contract.status !== "DRAFT") {
+        throw new Error("Only draft contracts can be deleted.");
+      }
+      await prismaClient.manpowerContract.delete({ where: { id } });
+      return true;
+    }
+    const db = readDb();
+    const contract = (db.manpowerContracts || []).find((x: any) => x.id === id);
+    if (!contract) throw new Error("Contract not found");
+    if (contract.status !== "DRAFT") {
+      throw new Error("Only draft contracts can be deleted.");
+    }
+    db.manpowerContracts = (db.manpowerContracts || []).filter((x: any) => x.id !== id);
+    writeDb(db);
+    return true;
+  },
 
   // --- Manpower Project Material Allocations CRUD ---
   getManpowerProjectMaterialAllocations: async (projectId?: string, contractMaterialId?: string): Promise<any[]> => {
@@ -11493,19 +11529,82 @@ export const mockDb = {
   },
   submitContractWorkflow: async (id: string, submittedBy?: string): Promise<any> => {
     if (isDbConnected()) {
-      const workflow = await prismaClient.contractApprovalWorkflow.findFirst({
+      const contract = await prismaClient.manpowerContract.findUnique({
+        where: { id }
+      });
+      if (!contract) throw new Error("Contract not found");
+
+      if (contract.status !== "DRAFT" && contract.status !== "REJECTED") {
+        throw new Error("Only draft or rejected contracts can be submitted for approval.");
+      }
+
+      const moduleType = contract.operationType === "SECURITY_GUARDING" ? "SECURITY_GUARDING_CONTRACT" : "FACILITY_MANAGEMENT_CONTRACT";
+      let template = await prismaClient.workflowTemplate.findFirst({
+        where: { moduleType, isActive: true, appliesTo: "ACTIVATION", isDefault: true },
+        include: {
+          levels: {
+            orderBy: { levelNumber: "asc" },
+            include: { approvers: true }
+          }
+        }
+      });
+      if (!template) {
+        template = await prismaClient.workflowTemplate.findFirst({
+          where: { moduleType, isActive: true, appliesTo: "ACTIVATION" },
+          include: {
+            levels: {
+              orderBy: { levelNumber: "asc" },
+              include: { approvers: true }
+            }
+          }
+        });
+      }
+      if (!template) {
+        throw new Error("No active default approval workflow configured for this contract type.");
+      }
+
+      // Delete any existing workflow instances for this contract
+      await prismaClient.contractApprovalWorkflow.deleteMany({
         where: { contractId: id }
       });
-      if (!workflow) throw new Error("Approval workflow configuration not found for this contract. Please configure workflow levels first.");
-      
-      await prismaClient.contractApprovalWorkflow.update({
-        where: { id: workflow.id },
+
+      const workflow = await prismaClient.contractApprovalWorkflow.create({
         data: {
+          contractId: id,
+          workflowName: template.workflowName,
+          appliesTo: "ACTIVATION",
           status: "PENDING",
           submittedAt: new Date(),
           submittedBy: submittedBy || "System"
         }
       });
+
+      for (const tLvl of template.levels) {
+        const level = await prismaClient.contractApprovalLevel.create({
+          data: {
+            workflowId: workflow.id,
+            levelNumber: tLvl.levelNumber,
+            levelName: tLvl.levelName,
+            approvalRule: tLvl.approvalRule,
+            isMandatory: tLvl.isMandatory,
+            remarks: tLvl.remarks || ""
+          }
+        });
+        if (tLvl.approvers && tLvl.approvers.length > 0) {
+          await Promise.all(tLvl.approvers.map((ap: any) => prismaClient.contractApprovalApprover.create({
+            data: {
+              levelId: level.id,
+              employeeId: ap.employeeId,
+              employeeName: ap.employeeName,
+              employeeCode: ap.employeeCode,
+              email: ap.email,
+              roleName: ap.roleName,
+              approvalStatus: "PENDING"
+            }
+          })));
+        }
+      }
+
       await prismaClient.manpowerContract.update({
         where: { id },
         data: {
@@ -11514,125 +11613,297 @@ export const mockDb = {
           submittedForApprovalAt: new Date()
         }
       });
-      
-      const firstLevel = await prismaClient.contractApprovalLevel.findFirst({
-        where: { workflowId: workflow.id },
-        orderBy: { levelNumber: "asc" }
-      });
-      if (firstLevel) {
-        await prismaClient.contractApprovalApprover.updateMany({
-          where: { levelId: firstLevel.id },
-          data: { approvalStatus: "PENDING" }
-        });
-      }
-      
+
       return await mockDb.getManpowerContract(id);
     }
-    
+
     const db = readDb();
-    const wf = (db.contractApprovalWorkflows || []).find((w: any) => w.contractId === id);
-    if (!wf) throw new Error("Approval workflow configuration not found for this contract. Please configure workflow levels first.");
-    wf.status = "PENDING";
-    wf.submittedAt = new Date().toISOString();
-    wf.submittedBy = submittedBy || "System";
-    
     const contract = (db.manpowerContracts || []).find((c: any) => c.id === id);
-    if (contract) {
-      contract.status = "PENDING_APPROVAL";
-      contract.approvalStatus = "PENDING_APPROVAL";
-      contract.submittedForApprovalAt = new Date().toISOString();
+    if (!contract) throw new Error("Contract not found");
+
+    if (contract.status !== "DRAFT" && contract.status !== "REJECTED") {
+      throw new Error("Only draft or rejected contracts can be submitted for approval.");
     }
+
+    const moduleType = contract.operationType === "SECURITY_GUARDING" ? "SECURITY_GUARDING_CONTRACT" : "FACILITY_MANAGEMENT_CONTRACT";
+    let template = (db.workflowTemplates || []).find((t: any) => t.moduleType === moduleType && t.isActive && t.isDefault && t.appliesTo === "ACTIVATION");
+    if (!template) {
+      template = (db.workflowTemplates || []).find((t: any) => t.moduleType === moduleType && t.isActive && t.appliesTo === "ACTIVATION");
+    }
+    if (!template) {
+      throw new Error("No active default approval workflow configured for this contract type.");
+    }
+
+    // Cascade delete any existing workflows for this contract in local DB
+    const existingWfs = (db.contractApprovalWorkflows || []).filter((w: any) => w.contractId === id);
+    const existingWfIds = existingWfs.map((w: any) => w.id);
+    db.contractApprovalWorkflows = (db.contractApprovalWorkflows || []).filter((w: any) => w.contractId !== id);
+    const existingLevels = (db.contractApprovalLevels || []).filter((l: any) => existingWfIds.includes(l.workflowId));
+    const existingLevelIds = existingLevels.map((l: any) => l.id);
+    db.contractApprovalLevels = (db.contractApprovalLevels || []).filter((l: any) => !existingWfIds.includes(l.workflowId));
+    db.contractApprovalApprovers = (db.contractApprovalApprovers || []).filter((ap: any) => !existingLevelIds.includes(ap.levelId));
+
+    const wfId = uuid();
+    db.contractApprovalWorkflows = db.contractApprovalWorkflows || [];
+    db.contractApprovalWorkflows.push({
+      id: wfId,
+      contractId: id,
+      workflowName: template.workflowName,
+      appliesTo: "ACTIVATION",
+      status: "PENDING",
+      submittedAt: new Date().toISOString(),
+      submittedBy: submittedBy || "System",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    });
+
+    db.contractApprovalLevels = db.contractApprovalLevels || [];
+    db.contractApprovalApprovers = db.contractApprovalApprovers || [];
+
+    const tLevels = (db.workflowTemplateLevels || []).filter((l: any) => l.templateId === template.id);
+    tLevels.forEach((tLvl: any) => {
+      const lvlId = uuid();
+      db.contractApprovalLevels.push({
+        id: lvlId,
+        workflowId: wfId,
+        levelNumber: tLvl.levelNumber,
+        levelName: tLvl.levelName,
+        approvalRule: tLvl.approvalRule,
+        isMandatory: tLvl.isMandatory,
+        remarks: tLvl.remarks || "",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      });
+
+      const tApprovers = (db.workflowTemplateApprovers || []).filter((ap: any) => ap.levelId === tLvl.id);
+      tApprovers.forEach((ap: any) => {
+        db.contractApprovalApprovers.push({
+          id: uuid(),
+          levelId: lvlId,
+          employeeId: ap.employeeId,
+          employeeName: ap.employeeName,
+          employeeCode: ap.employeeCode,
+          email: ap.email,
+          roleName: ap.roleName,
+          approvalStatus: "PENDING",
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        });
+      });
+    });
+
+    contract.status = "PENDING_APPROVAL";
+    contract.approvalStatus = "PENDING_APPROVAL";
+    contract.submittedForApprovalAt = new Date().toISOString();
     writeDb(db);
     return await mockDb.getManpowerContract(id);
   },
   approveContractWorkflowLevel: async (id: string, levelId: string, employeeId: string, remarks?: string): Promise<any> => {
+    const now = new Date();
     if (isDbConnected()) {
-      const approver = await prismaClient.contractApprovalApprover.findFirst({
+      const currentLevel = await prismaClient.contractApprovalLevel.findUnique({
+        where: { id: levelId },
+        include: { workflow: true }
+      });
+      if (!currentLevel) throw new Error("Workflow level not found.");
+
+      // Check level ordering: all previous levels must be approved
+      const allLevels = await prismaClient.contractApprovalLevel.findMany({
+        where: { workflowId: currentLevel.workflowId },
+        orderBy: { levelNumber: "asc" },
+        include: { approvers: true }
+      });
+
+      for (const lvl of allLevels) {
+        if (lvl.levelNumber < currentLevel.levelNumber) {
+          let isLvlApproved = false;
+          if (lvl.approvalRule === "ANY_ONE") {
+            isLvlApproved = lvl.approvers.some((ap: any) => ap.approvalStatus === "APPROVED");
+          } else {
+            isLvlApproved = lvl.approvers.every((ap: any) => ap.approvalStatus === "APPROVED");
+          }
+          if (!isLvlApproved) {
+            throw new Error(`Cannot approve this level before previous level "${lvl.levelName}" is approved.`);
+          }
+        }
+      }
+
+      // Find the approver record for this level
+      let approver = await prismaClient.contractApprovalApprover.findFirst({
         where: { levelId, employeeId }
       });
+
+      let delegationRemarks = "";
+      if (!approver) {
+        // Check active delegation
+        const levelApprovers = await prismaClient.contractApprovalApprover.findMany({
+          where: { levelId }
+        });
+        
+        for (const la of levelApprovers) {
+          if (la.employeeId) {
+            const delegation = await prismaClient.workflowDelegation.findFirst({
+              where: {
+                originalApproverEmployeeId: la.employeeId,
+                delegatedApproverEmployeeId: employeeId,
+                isActive: true,
+                effectiveFrom: { lte: now },
+                effectiveTo: { gte: now }
+              }
+            });
+            if (delegation) {
+              approver = la;
+              delegationRemarks = `[Approved by ${delegation.delegatedApproverName || employeeId} on behalf of ${delegation.originalApproverName || la.employeeName || "Original Approver"}] `;
+              break;
+            }
+          }
+        }
+      }
+
       if (!approver) throw new Error("You are not authorized to approve this workflow level.");
-      
+
       await prismaClient.contractApprovalApprover.update({
         where: { id: approver.id },
         data: {
           approvalStatus: "APPROVED",
-          approvedAt: new Date(),
-          remarks: remarks || ""
+          approvedAt: now,
+          remarks: `${delegationRemarks}${remarks || ""}`
         }
       });
-      
-      const level = await prismaClient.contractApprovalLevel.findUnique({
+
+      const updatedLevel = await prismaClient.contractApprovalLevel.findUnique({
         where: { id: levelId },
-        include: { approvers: true, workflow: true }
+        include: { approvers: true }
       });
-      if (!level) throw new Error("Level not found");
-      
-      const allApprovers = level.approvers || [];
+      const allApprovers = updatedLevel?.approvers || [];
       let isLevelApproved = false;
-      
-      if (level.approvalRule === "ANY_ONE") {
+      if (currentLevel.approvalRule === "ANY_ONE") {
         isLevelApproved = allApprovers.some((ap: any) => ap.approvalStatus === "APPROVED");
-      } else { 
+      } else {
         isLevelApproved = allApprovers.every((ap: any) => ap.approvalStatus === "APPROVED");
       }
-      
+
       if (isLevelApproved) {
         const nextLevel = await prismaClient.contractApprovalLevel.findFirst({
-          where: { 
-            workflowId: level.workflowId,
-            levelNumber: { gt: level.levelNumber }
+          where: {
+            workflowId: currentLevel.workflowId,
+            levelNumber: { gt: currentLevel.levelNumber }
           },
           orderBy: { levelNumber: "asc" }
         });
-        
+
         if (!nextLevel) {
           await prismaClient.contractApprovalWorkflow.update({
-            where: { id: level.workflowId },
+            where: { id: currentLevel.workflowId },
             data: {
               status: "APPROVED",
-              approvedAt: new Date()
+              approvedAt: now
             }
           });
-          await prismaClient.manpowerContract.update({
-            where: { id },
-            data: {
-              status: "APPROVED",
-              approvalStatus: "APPROVED",
-              approvedAt: new Date()
-            }
-          });
+          const contract = await prismaClient.manpowerContract.findUnique({ where: { id } });
+          if (contract?.terminationStatus === "PENDING_APPROVAL") {
+            await prismaClient.manpowerContract.update({
+              where: { id },
+              data: {
+                status: "TERMINATED",
+                terminationStatus: "APPROVED",
+                terminatedAt: now,
+                terminatedBy: employeeId
+              }
+            });
+          } else {
+            await prismaClient.manpowerContract.update({
+              where: { id },
+              data: {
+                status: "APPROVED",
+                approvalStatus: "APPROVED",
+                approvedAt: now
+              }
+            });
+          }
         }
       }
-      
+
       return await mockDb.getManpowerContract(id);
     }
-    
+
     const db = readDb();
-    const approver = (db.contractApprovalApprovers || []).find((ap: any) => ap.levelId === levelId && ap.employeeId === employeeId);
+    const currentLevel = (db.contractApprovalLevels || []).find((l: any) => l.id === levelId);
+    if (!currentLevel) throw new Error("Workflow level not found.");
+
+    const allLevels = (db.contractApprovalLevels || [])
+      .filter((l: any) => l.workflowId === currentLevel.workflowId)
+      .sort((a: any, b: any) => a.levelNumber - b.levelNumber);
+
+    for (const lvl of allLevels) {
+      if (lvl.levelNumber < currentLevel.levelNumber) {
+        const lvlApprovers = (db.contractApprovalApprovers || []).filter((ap: any) => ap.levelId === lvl.id);
+        let isLvlApproved = false;
+        if (lvl.approvalRule === "ANY_ONE") {
+          isLvlApproved = lvlApprovers.some((ap: any) => ap.approvalStatus === "APPROVED");
+        } else {
+          isLvlApproved = lvlApprovers.every((ap: any) => ap.approvalStatus === "APPROVED");
+        }
+        if (!isLvlApproved) {
+          throw new Error(`Cannot approve this level before previous level "${lvl.levelName}" is approved.`);
+        }
+      }
+    }
+
+    let approver = (db.contractApprovalApprovers || []).find((ap: any) => ap.levelId === levelId && ap.employeeId === employeeId);
+    let delegationRemarks = "";
+
+    if (!approver) {
+      const levelApprovers = (db.contractApprovalApprovers || []).filter((ap: any) => ap.levelId === levelId);
+      const isoNow = new Date().toISOString();
+      for (const la of levelApprovers) {
+        if (la.employeeId) {
+          const delegation = (db.workflowDelegations || []).find((d: any) => 
+            d.originalApproverEmployeeId === la.employeeId &&
+            d.delegatedApproverEmployeeId === employeeId &&
+            d.isActive &&
+            d.effectiveFrom <= isoNow &&
+            d.effectiveTo >= isoNow
+          );
+          if (delegation) {
+            approver = la;
+            delegationRemarks = `[Approved by ${delegation.delegatedApproverName || employeeId} on behalf of ${delegation.originalApproverName || la.employeeName || "Original Approver"}] `;
+            break;
+          }
+        }
+      }
+    }
+
     if (!approver) throw new Error("You are not authorized to approve this workflow level.");
+
     approver.approvalStatus = "APPROVED";
     approver.approvedAt = new Date().toISOString();
-    approver.remarks = remarks || "";
-    
-    const levels = (db.contractApprovalLevels || []).filter((l: any) => l.workflowId === (db.contractApprovalLevels.find((x: any) => x.id === levelId)?.workflowId));
-    const level = levels.find((l: any) => l.id === levelId);
-    if (level) {
-      const levelApprovers = (db.contractApprovalApprovers || []).filter((ap: any) => ap.levelId === level.id);
-      let isLevelApproved = false;
-      if (level.approvalRule === "ANY_ONE") {
-        isLevelApproved = levelApprovers.some((ap: any) => ap.approvalStatus === "APPROVED");
-      } else {
-        isLevelApproved = levelApprovers.every((ap: any) => ap.approvalStatus === "APPROVED");
-      }
-      
-      if (isLevelApproved) {
-        const nextLevel = levels.filter((l: any) => l.levelNumber > level.levelNumber).sort((a: any, b: any) => a.levelNumber - b.levelNumber)[0];
-        if (!nextLevel) {
-          const wf = (db.contractApprovalWorkflows || []).find((w: any) => w.id === level.workflowId);
-          if (wf) wf.status = "APPROVED";
-          
-          const contract = (db.manpowerContracts || []).find((c: any) => c.id === id);
-          if (contract) {
+    approver.remarks = `${delegationRemarks}${remarks || ""}`;
+
+    const levelApprovers = (db.contractApprovalApprovers || []).filter((ap: any) => ap.levelId === levelId);
+    let isLevelApproved = false;
+    if (currentLevel.approvalRule === "ANY_ONE") {
+      isLevelApproved = levelApprovers.some((ap: any) => ap.approvalStatus === "APPROVED");
+    } else {
+      isLevelApproved = levelApprovers.every((ap: any) => ap.approvalStatus === "APPROVED");
+    }
+
+    if (isLevelApproved) {
+      const nextLevel = allLevels.filter((l: any) => l.levelNumber > currentLevel.levelNumber).sort((a: any, b: any) => a.levelNumber - b.levelNumber)[0];
+      if (!nextLevel) {
+        const wf = (db.contractApprovalWorkflows || []).find((w: any) => w.id === currentLevel.workflowId);
+        if (wf) {
+          wf.status = "APPROVED";
+          wf.approvedAt = new Date().toISOString();
+        }
+        const contract = (db.manpowerContracts || []).find((c: any) => c.id === id);
+        if (contract) {
+          if (contract.terminationStatus === "PENDING_APPROVAL") {
+            contract.status = "TERMINATED";
+            contract.terminationStatus = "APPROVED";
+            contract.terminatedAt = new Date().toISOString();
+            contract.terminatedBy = employeeId;
+          } else {
             contract.status = "APPROVED";
             contract.approvalStatus = "APPROVED";
             contract.approvedAt = new Date().toISOString();
@@ -11640,73 +11911,128 @@ export const mockDb = {
         }
       }
     }
+
     writeDb(db);
     return await mockDb.getManpowerContract(id);
   },
   rejectContractWorkflowLevel: async (id: string, levelId: string, employeeId: string, remarks?: string): Promise<any> => {
+    const now = new Date();
     if (isDbConnected()) {
-      const approver = await prismaClient.contractApprovalApprover.findFirst({
+      const currentLevel = await prismaClient.contractApprovalLevel.findUnique({
+        where: { id: levelId }
+      });
+      if (!currentLevel) throw new Error("Workflow level not found.");
+
+      let approver = await prismaClient.contractApprovalApprover.findFirst({
         where: { levelId, employeeId }
       });
+
+      let delegationRemarks = "";
+      if (!approver) {
+        const levelApprovers = await prismaClient.contractApprovalApprover.findMany({
+          where: { levelId }
+        });
+        
+        for (const la of levelApprovers) {
+          if (la.employeeId) {
+            const delegation = await prismaClient.workflowDelegation.findFirst({
+              where: {
+                originalApproverEmployeeId: la.employeeId,
+                delegatedApproverEmployeeId: employeeId,
+                isActive: true,
+                effectiveFrom: { lte: now },
+                effectiveTo: { gte: now }
+              }
+            });
+            if (delegation) {
+              approver = la;
+              delegationRemarks = `[Rejected by ${delegation.delegatedApproverName || employeeId} on behalf of ${delegation.originalApproverName || la.employeeName || "Original Approver"}] `;
+              break;
+            }
+          }
+        }
+      }
+
       if (!approver) throw new Error("You are not authorized to reject this workflow level.");
-      
+
       await prismaClient.contractApprovalApprover.update({
         where: { id: approver.id },
         data: {
           approvalStatus: "REJECTED",
-          rejectedAt: new Date(),
-          remarks: remarks || ""
+          rejectedAt: now,
+          remarks: `${delegationRemarks}${remarks || ""}`
         }
       });
-      
-      const level = await prismaClient.contractApprovalLevel.findUnique({
-        where: { id: levelId }
+
+      await prismaClient.contractApprovalWorkflow.update({
+        where: { id: currentLevel.workflowId },
+        data: {
+          status: "REJECTED",
+          rejectedAt: now,
+          finalRemarks: `${delegationRemarks}${remarks || ""}`
+        }
       });
-      if (level) {
-        await prismaClient.contractApprovalWorkflow.update({
-          where: { id: level.workflowId },
-          data: {
-            status: "REJECTED",
-            rejectedAt: new Date(),
-            finalRemarks: remarks || ""
-          }
-        });
-      }
-      
+
       await prismaClient.manpowerContract.update({
         where: { id },
         data: {
           status: "REJECTED",
           approvalStatus: "REJECTED",
-          rejectionRemarks: remarks || ""
+          rejectionRemarks: `${delegationRemarks}${remarks || ""}`
         }
       });
-      
+
       return await mockDb.getManpowerContract(id);
     }
-    
+
     const db = readDb();
-    const approver = (db.contractApprovalApprovers || []).find((ap: any) => ap.levelId === levelId && ap.employeeId === employeeId);
-    if (!approver) throw new Error("You are not authorized to reject this workflow level.");
-    approver.approvalStatus = "REJECTED";
-    approver.rejectedAt = new Date().toISOString();
-    approver.remarks = remarks || "";
-    
-    const level = (db.contractApprovalLevels || []).find((l: any) => l.id === levelId);
-    if (level) {
-      const wf = (db.contractApprovalWorkflows || []).find((w: any) => w.id === level.workflowId);
-      if (wf) {
-        wf.status = "REJECTED";
-        wf.rejectedAt = new Date().toISOString();
-        wf.finalRemarks = remarks || "";
+    const currentLevel = (db.contractApprovalLevels || []).find((l: any) => l.id === levelId);
+    if (!currentLevel) throw new Error("Workflow level not found.");
+
+    let approver = (db.contractApprovalApprovers || []).find((ap: any) => ap.levelId === levelId && ap.employeeId === employeeId);
+    let delegationRemarks = "";
+
+    if (!approver) {
+      const levelApprovers = (db.contractApprovalApprovers || []).filter((ap: any) => ap.levelId === levelId);
+      const isoNow = new Date().toISOString();
+      for (const la of levelApprovers) {
+        if (la.employeeId) {
+          const delegation = (db.workflowDelegations || []).find((d: any) => 
+            d.originalApproverEmployeeId === la.employeeId &&
+            d.delegatedApproverEmployeeId === employeeId &&
+            d.isActive &&
+            d.effectiveFrom <= isoNow &&
+            d.effectiveTo >= isoNow
+          );
+          if (delegation) {
+            approver = la;
+            delegationRemarks = `[Rejected by ${delegation.delegatedApproverName || employeeId} on behalf of ${delegation.originalApproverName || la.employeeName || "Original Approver"}] `;
+            break;
+          }
+        }
       }
     }
+
+    if (!approver) throw new Error("You are not authorized to reject this workflow level.");
+
+    approver.approvalStatus = "REJECTED";
+    approver.rejectedAt = new Date().toISOString();
+    approver.remarks = `${delegationRemarks}${remarks || ""}`;
+
+    const wf = (db.contractApprovalWorkflows || []).find((w: any) => w.id === currentLevel.workflowId);
+    if (wf) {
+      wf.status = "REJECTED";
+      wf.rejectedAt = new Date().toISOString();
+      wf.finalRemarks = `${delegationRemarks}${remarks || ""}`;
+    }
+
     const contract = (db.manpowerContracts || []).find((c: any) => c.id === id);
     if (contract) {
       contract.status = "REJECTED";
       contract.approvalStatus = "REJECTED";
-      contract.rejectionRemarks = remarks || "";
+      contract.rejectionRemarks = `${delegationRemarks}${remarks || ""}`;
     }
+
     writeDb(db);
     return await mockDb.getManpowerContract(id);
   },
@@ -11737,6 +12063,590 @@ export const mockDb = {
     contract.approvalStatus = "ACTIVE";
     contract.activatedAt = new Date().toISOString();
     contract.activatedBy = activatedBy || "Admin";
+    writeDb(db);
+    return await mockDb.getManpowerContract(id);
+  },
+
+  getWorkflowTemplates: async (moduleType?: string): Promise<any[]> => {
+    if (isDbConnected()) {
+      const where: any = {};
+      if (moduleType) where.moduleType = moduleType;
+      return await prismaClient.workflowTemplate.findMany({
+        where,
+        include: {
+          levels: {
+            orderBy: { levelNumber: "asc" },
+            include: { approvers: true }
+          }
+        }
+      });
+    }
+    const db = readDb();
+    let list = db.workflowTemplates || [];
+    if (moduleType) {
+      list = list.filter((t: any) => t.moduleType === moduleType);
+    }
+    return list.map((t: any) => {
+      const levels = (db.workflowTemplateLevels || [])
+        .filter((l: any) => l.templateId === t.id)
+        .map((l: any) => {
+          const approvers = (db.workflowTemplateApprovers || []).filter((ap: any) => ap.levelId === l.id);
+          return { ...l, approvers };
+        })
+        .sort((a: any, b: any) => a.levelNumber - b.levelNumber);
+      return { ...t, levels };
+    });
+  },
+
+  getWorkflowTemplate: async (id: string): Promise<any> => {
+    if (isDbConnected()) {
+      return await prismaClient.workflowTemplate.findUnique({
+        where: { id },
+        include: {
+          levels: {
+            orderBy: { levelNumber: "asc" },
+            include: { approvers: true }
+          }
+        }
+      });
+    }
+    const db = readDb();
+    const t = (db.workflowTemplates || []).find((x: any) => x.id === id);
+    if (!t) return null;
+    const levels = (db.workflowTemplateLevels || [])
+      .filter((l: any) => l.templateId === t.id)
+      .map((l: any) => {
+        const approvers = (db.workflowTemplateApprovers || []).filter((ap: any) => ap.levelId === l.id);
+        return { ...l, approvers };
+      })
+      .sort((a: any, b: any) => a.levelNumber - b.levelNumber);
+    return { ...t, levels };
+  },
+
+  createWorkflowTemplate: async (data: any): Promise<any> => {
+    const templateId = uuid();
+    const templateName = data.workflowName || "New Workflow";
+    const moduleType = data.moduleType;
+    const operationType = data.operationType || null;
+    const appliesTo = data.appliesTo || "ACTIVATION";
+    const isDefault = data.isDefault === true;
+    const isActive = data.isActive !== false;
+    const remarks = data.remarks || null;
+
+    if (isDbConnected()) {
+      if (isDefault) {
+        await prismaClient.workflowTemplate.updateMany({
+          where: { moduleType, isDefault: true },
+          data: { isDefault: false }
+        });
+      }
+      const t = await prismaClient.workflowTemplate.create({
+        data: {
+          id: templateId,
+          workflowName: templateName,
+          moduleType,
+          operationType,
+          appliesTo,
+          isDefault,
+          isActive,
+          remarks
+        }
+      });
+
+      const levels = data.levels || [];
+      for (const lvl of levels) {
+        const levelId = uuid();
+        const level = await prismaClient.workflowTemplateLevel.create({
+          data: {
+            id: levelId,
+            templateId,
+            levelNumber: parseInt(lvl.levelNumber, 10) || 1,
+            levelName: lvl.levelName || `Level ${lvl.levelNumber}`,
+            approvalRule: lvl.approvalRule || "ANY_ONE",
+            isMandatory: lvl.isMandatory !== false,
+            remarks: lvl.remarks || null
+          }
+        });
+
+        const approvers = lvl.approvers || [];
+        for (const ap of approvers) {
+          await prismaClient.workflowTemplateApprover.create({
+            data: {
+              levelId,
+              approverType: ap.approverType || "SPECIFIC_EMPLOYEE",
+              employeeId: ap.employeeId || null,
+              employeeName: ap.employeeName || null,
+              employeeCode: ap.employeeCode || null,
+              email: ap.email || null,
+              roleName: ap.roleName || null
+            }
+          });
+        }
+      }
+      return await mockDb.getWorkflowTemplate(templateId);
+    }
+
+    const db = readDb();
+    db.workflowTemplates = db.workflowTemplates || [];
+    db.workflowTemplateLevels = db.workflowTemplateLevels || [];
+    db.workflowTemplateApprovers = db.workflowTemplateApprovers || [];
+
+    if (isDefault) {
+      db.workflowTemplates.forEach((x: any) => {
+        if (x.moduleType === moduleType) x.isDefault = false;
+      });
+    }
+
+    const newTemplate = {
+      id: templateId,
+      workflowName: templateName,
+      moduleType,
+      operationType,
+      appliesTo,
+      isDefault,
+      isActive,
+      remarks,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    db.workflowTemplates.push(newTemplate);
+
+    const levels = data.levels || [];
+    levels.forEach((lvl: any) => {
+      const levelId = uuid();
+      db.workflowTemplateLevels.push({
+        id: levelId,
+        templateId,
+        levelNumber: parseInt(lvl.levelNumber, 10) || 1,
+        levelName: lvl.levelName || `Level ${lvl.levelNumber}`,
+        approvalRule: lvl.approvalRule || "ANY_ONE",
+        isMandatory: lvl.isMandatory !== false,
+        remarks: lvl.remarks || null,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      });
+
+      const approvers = lvl.approvers || [];
+      approvers.forEach((ap: any) => {
+        db.workflowTemplateApprovers.push({
+          id: uuid(),
+          levelId,
+          approverType: ap.approverType || "SPECIFIC_EMPLOYEE",
+          employeeId: ap.employeeId || null,
+          employeeName: ap.employeeName || null,
+          employeeCode: ap.employeeCode || null,
+          email: ap.email || null,
+          roleName: ap.roleName || null,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        });
+      });
+    });
+
+    writeDb(db);
+    return newTemplate;
+  },
+
+  updateWorkflowTemplate: async (id: string, data: any): Promise<any> => {
+    const templateName = data.workflowName || "Updated Workflow";
+    const moduleType = data.moduleType;
+    const operationType = data.operationType || null;
+    const appliesTo = data.appliesTo || "ACTIVATION";
+    const isDefault = data.isDefault === true;
+    const isActive = data.isActive !== false;
+    const remarks = data.remarks || null;
+
+    if (isDbConnected()) {
+      if (isDefault) {
+        await prismaClient.workflowTemplate.updateMany({
+          where: { moduleType, isDefault: true },
+          data: { isDefault: false }
+        });
+      }
+      await prismaClient.workflowTemplate.update({
+        where: { id },
+        data: {
+          workflowName: templateName,
+          moduleType,
+          operationType,
+          appliesTo,
+          isDefault,
+          isActive,
+          remarks
+        }
+      });
+
+      await prismaClient.workflowTemplateLevel.deleteMany({
+        where: { templateId: id }
+      });
+
+      const levels = data.levels || [];
+      for (const lvl of levels) {
+        const levelId = uuid();
+        await prismaClient.workflowTemplateLevel.create({
+          data: {
+            id: levelId,
+            templateId: id,
+            levelNumber: parseInt(lvl.levelNumber, 10) || 1,
+            levelName: lvl.levelName || `Level ${lvl.levelNumber}`,
+            approvalRule: lvl.approvalRule || "ANY_ONE",
+            isMandatory: lvl.isMandatory !== false,
+            remarks: lvl.remarks || null
+          }
+        });
+
+        const approvers = lvl.approvers || [];
+        for (const ap of approvers) {
+          await prismaClient.workflowTemplateApprover.create({
+            data: {
+              levelId,
+              approverType: ap.approverType || "SPECIFIC_EMPLOYEE",
+              employeeId: ap.employeeId || null,
+              employeeName: ap.employeeName || null,
+              employeeCode: ap.employeeCode || null,
+              email: ap.email || null,
+              roleName: ap.roleName || null
+            }
+          });
+        }
+      }
+      return await mockDb.getWorkflowTemplate(id);
+    }
+
+    const db = readDb();
+    const idx = (db.workflowTemplates || []).findIndex((x: any) => x.id === id);
+    if (idx === -1) throw new Error("Template not found");
+
+    if (isDefault) {
+      db.workflowTemplates.forEach((x: any) => {
+        if (x.moduleType === moduleType) x.isDefault = false;
+      });
+    }
+
+    const updated = {
+      ...db.workflowTemplates[idx],
+      workflowName: templateName,
+      moduleType,
+      operationType,
+      appliesTo,
+      isDefault,
+      isActive,
+      remarks,
+      updatedAt: new Date().toISOString()
+    };
+    db.workflowTemplates[idx] = updated;
+
+    const templateLevels = (db.workflowTemplateLevels || []).filter((l: any) => l.templateId === id);
+    const levelIds = templateLevels.map((l: any) => l.id);
+    db.workflowTemplateLevels = (db.workflowTemplateLevels || []).filter((l: any) => l.templateId !== id);
+    db.workflowTemplateApprovers = (db.workflowTemplateApprovers || []).filter((ap: any) => !levelIds.includes(ap.levelId));
+
+    const levels = data.levels || [];
+    levels.forEach((lvl: any) => {
+      const levelId = uuid();
+      db.workflowTemplateLevels.push({
+        id: levelId,
+        templateId: id,
+        levelNumber: parseInt(lvl.levelNumber, 10) || 1,
+        levelName: lvl.levelName || `Level ${lvl.levelNumber}`,
+        approvalRule: lvl.approvalRule || "ANY_ONE",
+        isMandatory: lvl.isMandatory !== false,
+        remarks: lvl.remarks || null,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      });
+
+      const approvers = lvl.approvers || [];
+      approvers.forEach((ap: any) => {
+        db.workflowTemplateApprovers.push({
+          id: uuid(),
+          levelId,
+          approverType: ap.approverType || "SPECIFIC_EMPLOYEE",
+          employeeId: ap.employeeId || null,
+          employeeName: ap.employeeName || null,
+          employeeCode: ap.employeeCode || null,
+          email: ap.email || null,
+          roleName: ap.roleName || null,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        });
+      });
+    });
+
+    writeDb(db);
+    return updated;
+  },
+
+  deleteWorkflowTemplate: async (id: string): Promise<boolean> => {
+    if (isDbConnected()) {
+      await prismaClient.workflowTemplate.delete({ where: { id } });
+      return true;
+    }
+    const db = readDb();
+    db.workflowTemplates = (db.workflowTemplates || []).filter((x: any) => x.id !== id);
+    const levels = (db.workflowTemplateLevels || []).filter((l: any) => l.templateId === id);
+    const levelIds = levels.map((l: any) => l.id);
+    db.workflowTemplateLevels = (db.workflowTemplateLevels || []).filter((l: any) => l.templateId !== id);
+    db.workflowTemplateApprovers = (db.workflowTemplateApprovers || []).filter((ap: any) => !levelIds.includes(ap.levelId));
+    writeDb(db);
+    return true;
+  },
+
+  getWorkflowDelegations: async (): Promise<any[]> => {
+    if (isDbConnected()) {
+      return await prismaClient.workflowDelegation.findMany({
+        orderBy: { createdAt: "desc" }
+      });
+    }
+    const db = readDb();
+    return db.workflowDelegations || [];
+  },
+
+  createWorkflowDelegation: async (data: any): Promise<any> => {
+    const id = uuid();
+    const payload = {
+      id,
+      moduleType: data.moduleType || null,
+      operationType: data.operationType || null,
+      originalApproverEmployeeId: data.originalApproverEmployeeId,
+      originalApproverName: data.originalApproverName || null,
+      delegatedApproverEmployeeId: data.delegatedApproverEmployeeId,
+      delegatedApproverName: data.delegatedApproverName || null,
+      effectiveFrom: new Date(data.effectiveFrom),
+      effectiveTo: new Date(data.effectiveTo),
+      reason: data.reason || null,
+      isActive: data.isActive !== false,
+      createdBy: data.createdBy || "Admin"
+    };
+
+    if (isDbConnected()) {
+      return await prismaClient.workflowDelegation.create({
+        data: payload
+      });
+    }
+
+    const db = readDb();
+    db.workflowDelegations = db.workflowDelegations || [];
+    const formatted = {
+      ...payload,
+      effectiveFrom: payload.effectiveFrom.toISOString(),
+      effectiveTo: payload.effectiveTo.toISOString(),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    db.workflowDelegations.push(formatted);
+    writeDb(db);
+    return formatted;
+  },
+
+  updateWorkflowDelegation: async (id: string, data: any): Promise<any> => {
+    if (isDbConnected()) {
+      return await prismaClient.workflowDelegation.update({
+        where: { id },
+        data: {
+          moduleType: data.moduleType,
+          operationType: data.operationType,
+          originalApproverEmployeeId: data.originalApproverEmployeeId,
+          originalApproverName: data.originalApproverName,
+          delegatedApproverEmployeeId: data.delegatedApproverEmployeeId,
+          delegatedApproverName: data.delegatedApproverName,
+          effectiveFrom: new Date(data.effectiveFrom),
+          effectiveTo: new Date(data.effectiveTo),
+          reason: data.reason,
+          isActive: data.isActive !== false
+        }
+      });
+    }
+    const db = readDb();
+    const idx = (db.workflowDelegations || []).findIndex((x: any) => x.id === id);
+    if (idx === -1) throw new Error("Delegation not found");
+    const updated = {
+      ...db.workflowDelegations[idx],
+      moduleType: data.moduleType,
+      operationType: data.operationType,
+      originalApproverEmployeeId: data.originalApproverEmployeeId,
+      originalApproverName: data.originalApproverName,
+      delegatedApproverEmployeeId: data.delegatedApproverEmployeeId,
+      delegatedApproverName: data.delegatedApproverName,
+      effectiveFrom: new Date(data.effectiveFrom).toISOString(),
+      effectiveTo: new Date(data.effectiveTo).toISOString(),
+      reason: data.reason,
+      isActive: data.isActive !== false,
+      updatedAt: new Date().toISOString()
+    };
+    db.workflowDelegations[idx] = updated;
+    writeDb(db);
+    return updated;
+  },
+
+  deleteWorkflowDelegation: async (id: string): Promise<boolean> => {
+    if (isDbConnected()) {
+      await prismaClient.workflowDelegation.delete({ where: { id } });
+      return true;
+    }
+    const db = readDb();
+    db.workflowDelegations = (db.workflowDelegations || []).filter((x: any) => x.id !== id);
+    writeDb(db);
+    return true;
+  },
+
+  requestContractTermination: async (id: string, requestedBy: string, reason: string): Promise<any> => {
+    if (isDbConnected()) {
+      const contract = await prismaClient.manpowerContract.findUnique({
+        where: { id }
+      });
+      if (!contract) throw new Error("Contract not found");
+      if (contract.status !== "ACTIVE") {
+        throw new Error("Termination can be requested only for active contracts.");
+      }
+
+      const moduleType = contract.operationType === "SECURITY_GUARDING" ? "SECURITY_GUARDING_CONTRACT" : "FACILITY_MANAGEMENT_CONTRACT";
+      
+      let template = await prismaClient.workflowTemplate.findFirst({
+        where: { moduleType, isActive: true, appliesTo: "TERMINATION", isDefault: true },
+        include: {
+          levels: {
+            orderBy: { levelNumber: "asc" },
+            include: { approvers: true }
+          }
+        }
+      });
+      if (!template) {
+        template = await prismaClient.workflowTemplate.findFirst({
+          where: { moduleType, isActive: true, appliesTo: "TERMINATION" },
+          include: {
+            levels: {
+              orderBy: { levelNumber: "asc" },
+              include: { approvers: true }
+            }
+          }
+        });
+      }
+      if (!template) {
+        throw new Error("Termination workflow is not configured.");
+      }
+
+      // Create workflow instance for termination
+      const workflow = await prismaClient.contractApprovalWorkflow.create({
+        data: {
+          contractId: id,
+          workflowName: template.workflowName || "Contract Termination Workflow",
+          appliesTo: "TERMINATION",
+          status: "PENDING",
+          submittedAt: new Date(),
+          submittedBy: requestedBy
+        }
+      });
+
+      for (const tLvl of template.levels) {
+        const level = await prismaClient.contractApprovalLevel.create({
+          data: {
+            workflowId: workflow.id,
+            levelNumber: tLvl.levelNumber,
+            levelName: tLvl.levelName,
+            approvalRule: tLvl.approvalRule,
+            isMandatory: tLvl.isMandatory,
+            remarks: tLvl.remarks || ""
+          }
+        });
+        if (tLvl.approvers && tLvl.approvers.length > 0) {
+          await Promise.all(tLvl.approvers.map((ap: any) => prismaClient.contractApprovalApprover.create({
+            data: {
+              levelId: level.id,
+              employeeId: ap.employeeId,
+              employeeName: ap.employeeName,
+              employeeCode: ap.employeeCode,
+              email: ap.email,
+              roleName: ap.roleName,
+              approvalStatus: "PENDING"
+            }
+          })));
+        }
+      }
+
+      await prismaClient.manpowerContract.update({
+        where: { id },
+        data: {
+          terminationRequestedAt: new Date(),
+          terminationRequestedBy: requestedBy,
+          terminationReason: reason,
+          terminationStatus: "PENDING_APPROVAL"
+        }
+      });
+
+      return await mockDb.getManpowerContract(id);
+    }
+
+    const db = readDb();
+    const contract = (db.manpowerContracts || []).find((c: any) => c.id === id);
+    if (!contract) throw new Error("Contract not found");
+    if (contract.status !== "ACTIVE") {
+      throw new Error("Termination can be requested only for active contracts.");
+    }
+
+    const moduleType = contract.operationType === "SECURITY_GUARDING" ? "SECURITY_GUARDING_CONTRACT" : "FACILITY_MANAGEMENT_CONTRACT";
+    let template = (db.workflowTemplates || []).find((t: any) => t.moduleType === moduleType && t.isActive && t.appliesTo === "TERMINATION" && t.isDefault);
+    if (!template) {
+      template = (db.workflowTemplates || []).find((t: any) => t.moduleType === moduleType && t.isActive && t.appliesTo === "TERMINATION");
+    }
+    if (!template) {
+      throw new Error("Termination workflow is not configured.");
+    }
+
+    const wfId = uuid();
+    db.contractApprovalWorkflows = db.contractApprovalWorkflows || [];
+    db.contractApprovalWorkflows.push({
+      id: wfId,
+      contractId: id,
+      workflowName: template.workflowName || "Contract Termination Workflow",
+      appliesTo: "TERMINATION",
+      status: "PENDING",
+      submittedAt: new Date().toISOString(),
+      submittedBy: requestedBy,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    });
+
+    db.contractApprovalLevels = db.contractApprovalLevels || [];
+    db.contractApprovalApprovers = db.contractApprovalApprovers || [];
+
+    const tLevels = (db.workflowTemplateLevels || []).filter((l: any) => l.templateId === template.id);
+    tLevels.forEach((tLvl: any) => {
+      const lvlId = uuid();
+      db.contractApprovalLevels.push({
+        id: lvlId,
+        workflowId: wfId,
+        levelNumber: tLvl.levelNumber,
+        levelName: tLvl.levelName,
+        approvalRule: tLvl.approvalRule,
+        isMandatory: tLvl.isMandatory,
+        remarks: tLvl.remarks || "",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      });
+
+      const tApprovers = (db.workflowTemplateApprovers || []).filter((ap: any) => ap.levelId === tLvl.id);
+      tApprovers.forEach((ap: any) => {
+        db.contractApprovalApprovers.push({
+          id: uuid(),
+          levelId: lvlId,
+          employeeId: ap.employeeId,
+          employeeName: ap.employeeName,
+          employeeCode: ap.employeeCode,
+          email: ap.email,
+          roleName: ap.roleName,
+          approvalStatus: "PENDING",
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        });
+      });
+    });
+
+    contract.terminationRequestedAt = new Date().toISOString();
+    contract.terminationRequestedBy = requestedBy;
+    contract.terminationReason = reason;
+    contract.terminationStatus = "PENDING_APPROVAL";
+
     writeDb(db);
     return await mockDb.getManpowerContract(id);
   }

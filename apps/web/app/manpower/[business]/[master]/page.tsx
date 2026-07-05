@@ -32,6 +32,7 @@ export default function ManpowerMasterPage() {
   const [shiftsList, setShiftsList] = useState<any[]>([]);
   const [locationUnits, setLocationUnits] = useState<any[]>([]);
   const [workforceEmployees, setWorkforceEmployees] = useState<any[]>([]);
+  const [delegations, setDelegations] = useState<any[]>([]);
   const [materialsList, setMaterialsList] = useState<any[]>([]);
   const [workflowLevels, setWorkflowLevels] = useState<any[]>([]);
 
@@ -205,12 +206,14 @@ export default function ManpowerMasterPage() {
         if (res.ok) setSites(await res.json());
       }
       if (master === "manpower" || master === "contracts") {
-        const [catRes, empRes] = await Promise.all([
+        const [catRes, empRes, delRes] = await Promise.all([
           fetch(`/api/v1/manpower/${business}/categories`),
-          fetch(`/api/v1/employees`)
+          fetch(`/api/v1/employees`),
+          fetch(`/api/v1/settings/workflow-delegations`).catch(() => null)
         ]);
         if (catRes.ok) setCategories(await catRes.json());
         if (empRes.ok) setWorkforceEmployees(await empRes.json());
+        if (delRes && delRes.ok) setDelegations(await delRes.json());
       }
       if (master === "coordinators") {
         const [projRes, empRes] = await Promise.all([
@@ -2216,154 +2219,14 @@ export default function ManpowerMasterPage() {
           </div>
         </div>
 
-        {/* Contract Approval Workflow Configuration */}
-        <div className="bg-surface-container-low border border-outline-variant p-4 rounded-xl space-y-4">
-          <div className="flex justify-between items-center border-b border-outline-variant/60 pb-1">
-            <h4 className="text-xs font-bold text-primary uppercase tracking-wider">Approval Workflow Levels</h4>
-            <button
-              type="button"
-              onClick={() => {
-                const nextLvlNum = workflowLevels.length + 1;
-                setWorkflowLevels([
-                  ...workflowLevels,
-                  {
-                    levelNumber: nextLvlNum,
-                    levelName: `Approval Level ${nextLvlNum}`,
-                    approvalRule: "ANY_ONE",
-                    approvers: []
-                  }
-                ]);
-              }}
-              className="px-2 py-1 bg-primary text-white text-[10px] font-bold rounded flex items-center gap-1 hover:bg-primary-container transition-colors"
-            >
-              <span className="material-symbols-outlined text-[12px]">add</span> Add Level
-            </button>
-          </div>
-          {workflowLevels.length === 0 ? (
-            <p className="text-[11px] text-on-surface-variant italic py-2">No custom workflow levels configured. The contract will use a direct approval flow by default.</p>
-          ) : (
-            <div className="space-y-4">
-              {workflowLevels.map((lvl, lIdx) => (
-                <div key={lIdx} className="bg-surface-container-lowest border border-outline-variant p-3 rounded-lg space-y-3">
-                  <div className="flex justify-between items-center">
-                    <span className="font-bold text-xs">Level {lvl.levelNumber}</span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const updated = workflowLevels.filter((_, idx) => idx !== lIdx).map((l, i) => ({
-                          ...l,
-                          levelNumber: i + 1
-                        }));
-                        setWorkflowLevels(updated);
-                      }}
-                      className="text-status-error hover:bg-status-error/10 p-1 rounded"
-                    >
-                      <span className="material-symbols-outlined text-[16px]">delete</span>
-                    </button>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-[9px] font-bold text-on-surface-variant uppercase mb-1">Level Name</label>
-                      <input
-                        type="text"
-                        value={lvl.levelName || ""}
-                        onChange={(e) => {
-                          const updated = [...workflowLevels];
-                          updated[lIdx].levelName = e.target.value;
-                          setWorkflowLevels(updated);
-                        }}
-                        className="w-full bg-surface-container-lowest border border-outline-variant rounded px-2.5 py-1 text-xs focus:outline-none text-on-surface"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[9px] font-bold text-on-surface-variant uppercase mb-1">Approval Rule</label>
-                      <select
-                        value={lvl.approvalRule || "ANY_ONE"}
-                        onChange={(e) => {
-                          const updated = [...workflowLevels];
-                          updated[lIdx].approvalRule = e.target.value;
-                          setWorkflowLevels(updated);
-                        }}
-                        className="w-full bg-surface-container-lowest border border-outline-variant rounded px-2.5 py-1.5 text-xs focus:outline-none text-on-surface"
-                      >
-                        <option value="ANY_ONE">Any one approver (ANY_ONE)</option>
-                        <option value="ALL_REQUIRED">All approvers required (ALL_REQUIRED)</option>
-                      </select>
-                    </div>
-                  </div>
-                  
-                  {/* Approvers for this level */}
-                  <div className="space-y-2 pt-2 border-t border-outline-variant/30">
-                    <div className="flex justify-between items-center">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">Approvers list</span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const updated = [...workflowLevels];
-                          updated[lIdx].approvers = [
-                            ...(updated[lIdx].approvers || []),
-                            { employeeId: "", employeeName: "", roleName: "Approver" }
-                          ];
-                          setWorkflowLevels(updated);
-                        }}
-                        className="px-1.5 py-0.5 border border-primary text-primary text-[9px] font-bold rounded hover:bg-primary/5"
-                      >
-                        Add Approver
-                      </button>
-                    </div>
-                    {(!lvl.approvers || lvl.approvers.length === 0) ? (
-                      <p className="text-[9px] text-on-surface-variant italic font-medium">No approvers specified for this level.</p>
-                    ) : (
-                      <div className="space-y-2">
-                        {lvl.approvers.map((ap: any, aIdx: number) => (
-                          <div key={aIdx} className="flex gap-2 items-center">
-                            <select
-                              value={ap.employeeId || ""}
-                              onChange={(e) => {
-                                const emp = workforceEmployees.find(x => x.id === e.target.value);
-                                const updated = [...workflowLevels];
-                                updated[lIdx].approvers[aIdx].employeeId = e.target.value;
-                                updated[lIdx].approvers[aIdx].employeeName = emp ? (emp.name || `${emp.firstName} ${emp.lastName}`) : "";
-                                setWorkflowLevels(updated);
-                              }}
-                              className="flex-1 bg-surface-container-lowest border border-outline-variant rounded px-2 py-1 text-xs focus:outline-none text-on-surface"
-                            >
-                              <option value="">Select Employee...</option>
-                              {workforceEmployees.map(emp => (
-                                <option key={emp.id} value={emp.id}>{emp.name || `${emp.firstName} ${emp.lastName}`} ({emp.employeeCode || emp.id})</option>
-                              ))}
-                            </select>
-                            <input
-                              type="text"
-                              placeholder="Role / Title"
-                              value={ap.roleName || ""}
-                              onChange={(e) => {
-                                const updated = [...workflowLevels];
-                                updated[lIdx].approvers[aIdx].roleName = e.target.value;
-                                setWorkflowLevels(updated);
-                              }}
-                              className="w-32 bg-surface-container-lowest border border-outline-variant rounded px-2 py-1 text-xs focus:outline-none text-on-surface"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const updated = [...workflowLevels];
-                                updated[lIdx].approvers = updated[lIdx].approvers.filter((_: any, idx: number) => idx !== aIdx);
-                                setWorkflowLevels(updated);
-                              }}
-                              className="text-status-error hover:bg-status-error/10 p-1 rounded"
-                            >
-                              <span className="material-symbols-outlined text-[16px]">close</span>
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+        {/* Centralized Approval Workflow Notice */}
+        <div className="bg-surface-container-low border border-outline-variant p-4 rounded-xl space-y-2">
+          <h4 className="text-xs font-bold text-primary uppercase tracking-wider flex items-center gap-1">
+            <span className="material-symbols-outlined text-[16px]">flowsheet</span> Approval Workflow
+          </h4>
+          <p className="text-[11px] text-on-surface-variant font-medium">
+            This contract will automatically route through the centralized approval workflow template configured in Settings.
+          </p>
         </div>
 
         {/* Contract Totals Summary Card (Both SG and FM) */}
@@ -3709,25 +3572,53 @@ export default function ManpowerMasterPage() {
                             </button>
                             {canManage && (
                               <>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    startEdit(item);
-                                  }}
-                                  className="text-secondary hover:underline text-[11px] font-bold mr-3"
-                                >
-                                  Edit
-                                </button>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setAddendumContract(item);
-                                    setAddFormLineItems([]);
-                                  }}
-                                  className="text-status-warning hover:underline text-[11px] font-bold"
-                                >
-                                  Add Addendum
-                                </button>
+                                {(item.status === "DRAFT" || item.status === "REJECTED") && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      startEdit(item);
+                                    }}
+                                    className="text-secondary hover:underline text-[11px] font-bold mr-3"
+                                  >
+                                    Edit
+                                  </button>
+                                )}
+                                {item.status === "DRAFT" && (
+                                  <button
+                                    onClick={async (e) => {
+                                      e.stopPropagation();
+                                      if (confirm("Are you sure you want to delete this draft contract?")) {
+                                        try {
+                                          const res = await fetch(`/api/v1/manpower/${business}/contracts/${item.id}`, { method: "DELETE" });
+                                          if (res.ok) {
+                                            loadData();
+                                          } else {
+                                            const err = await res.json();
+                                            alert(err.error || "Failed to delete contract");
+                                          }
+                                        } catch (e) {
+                                          console.error(e);
+                                          alert("Failed to connect to server");
+                                        }
+                                      }
+                                    }}
+                                    className="text-status-error hover:underline text-[11px] font-bold mr-3"
+                                  >
+                                    Delete
+                                  </button>
+                                )}
+                                {item.status === "ACTIVE" && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setAddendumContract(item);
+                                      setAddFormLineItems([]);
+                                    }}
+                                    className="text-status-warning hover:underline text-[11px] font-bold"
+                                  >
+                                    Add Addendum
+                                  </button>
+                                )}
                               </>
                             )}
                           </td>
@@ -5455,6 +5346,35 @@ export default function ManpowerMasterPage() {
                   </div>
                 )}
 
+                {(selectedContractDetail.status === "APPROVED" || selectedContractDetail.status === "ACTIVE") && (
+                  <div className="bg-amber-50 border border-amber-200 p-3 rounded-lg text-xs text-amber-800">
+                    <span className="font-bold flex items-center gap-1">
+                      <span className="material-symbols-outlined text-sm">info</span>
+                      Important Notice
+                    </span>
+                    Approved or active contracts cannot be edited directly. Please create an Addendum for changes.
+                  </div>
+                )}
+
+                {selectedContractDetail.terminationStatus && (
+                  <div className="bg-surface-container-lowest border border-outline-variant p-3 rounded-lg text-xs space-y-2">
+                    <h5 className="font-bold text-primary flex items-center gap-1">
+                      <span className="material-symbols-outlined text-sm">cancel</span>
+                      Termination Details
+                    </h5>
+                    <p><span className="text-on-surface-variant font-medium">Status:</span> <span className="font-bold">{selectedContractDetail.terminationStatus}</span></p>
+                    {selectedContractDetail.terminationRequestedAt && (
+                      <p><span className="text-on-surface-variant font-medium">Requested:</span> {new Date(selectedContractDetail.terminationRequestedAt).toLocaleString()} by {selectedContractDetail.terminationRequestedBy}</p>
+                    )}
+                    {selectedContractDetail.terminationReason && (
+                      <p><span className="text-on-surface-variant font-medium">Reason:</span> {selectedContractDetail.terminationReason}</p>
+                    )}
+                    {selectedContractDetail.terminatedAt && (
+                      <p><span className="text-on-surface-variant font-medium">Terminated:</span> {new Date(selectedContractDetail.terminatedAt).toLocaleString()} by {selectedContractDetail.terminatedBy}</p>
+                    )}
+                  </div>
+                )}
+
                 {selectedContractDetail.workflows?.[0] ? (
                   <div className="space-y-3 pt-2">
                     {[...selectedContractDetail.workflows[0].levels].sort((a: any, b: any) => (a.levelNumber || 0) - (b.levelNumber || 0)).map((lvl: any) => {
@@ -5534,9 +5454,36 @@ export default function ManpowerMasterPage() {
                             id="workflowActAsSelect"
                             className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-2.5 py-1.5 text-xs text-on-surface"
                           >
-                            {pendingApprovers.map((ap: any) => (
-                              <option key={ap.id} value={`${activePendingLevel.id}:${ap.employeeId}`}>{ap.employeeName}</option>
-                            ))}
+                            {(() => {
+                              const options: any[] = [];
+                              const now = new Date();
+                              
+                              pendingApprovers.forEach((ap: any) => {
+                                // Original option
+                                options.push({
+                                  value: `${activePendingLevel.id}:${ap.employeeId}`,
+                                  label: ap.employeeName || "Approver"
+                                });
+                                
+                                // Check if there is an active delegation for this pending approver
+                                const activeDel = (delegations || []).find((d: any) => 
+                                  d.originalApproverEmployeeId === ap.employeeId &&
+                                  d.isActive &&
+                                  new Date(d.effectiveFrom) <= now &&
+                                  now <= new Date(d.effectiveTo)
+                                );
+                                if (activeDel) {
+                                  options.push({
+                                    value: `${activePendingLevel.id}:${activeDel.delegatedApproverEmployeeId}`,
+                                    label: `${activeDel.delegatedApproverName} (on behalf of ${ap.employeeName})`
+                                  });
+                                }
+                              });
+                              
+                              return options.map((opt, oIdx) => (
+                                <option key={oIdx} value={opt.value}>{opt.label}</option>
+                              ));
+                            })()}
                           </select>
                         </div>
                         
@@ -5601,6 +5548,37 @@ export default function ManpowerMasterPage() {
                     className="px-4 py-2 bg-green-600 text-white text-xs font-bold rounded-lg hover:bg-green-700 transition-colors"
                   >
                     Activate Contract
+                  </button>
+                )}
+                {selectedContractDetail.status === "ACTIVE" && (
+                  <button 
+                    onClick={async () => {
+                      const reason = prompt("Enter reason for contract termination:");
+                      if (reason) {
+                        try {
+                          const res = await fetch(`/api/v1/manpower/${business}/contracts/${selectedContractDetail.id}/workflow/terminate-request`, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ reason })
+                          });
+                          if (res.ok) {
+                            alert("Termination requested successfully!");
+                            const updatedRes = await fetch(`/api/v1/manpower/${business}/contracts/${selectedContractDetail.id}`);
+                            if (updatedRes.ok) setSelectedContractDetail(await updatedRes.json());
+                            loadData();
+                          } else {
+                            const err = await res.json();
+                            alert(err.error || "Failed to request termination");
+                          }
+                        } catch (e) {
+                          console.error(e);
+                          alert("Connection error requesting termination");
+                        }
+                      }
+                    }} 
+                    className="px-4 py-2 bg-status-error text-white text-xs font-bold rounded-lg hover:opacity-90 transition-opacity"
+                  >
+                    Terminate Contract
                   </button>
                 )}
               </div>

@@ -4,6 +4,8 @@ import React, { useState, useEffect } from "react";
 import { Card, Button, Input, Modal, Badge } from "@ahh-wfm/ui/src";
 import { useSession } from "next-auth/react";
 import { Employee } from "@ahh-wfm/types";
+import { WorkflowManagementTab } from "./components/WorkflowManagementTab";
+import { WorkflowDelegationsTab } from "./components/WorkflowDelegationsTab";
 
 interface SystemRole {
   id: string;
@@ -57,9 +59,9 @@ export default function SettingsPage() {
   const [offlineSyncInterval, setOfflineSyncInterval] = useState("60");
   const [geofencingRadius, setGeofencingRadius] = useState("100");
 
-  // Tabs: "employeeLogin" | "operationalUsers" | "rolesPermissions" | "operationAccess" | "itAdminAccess" | "general"
+  // Tabs: "employeeLogin" | "operationalUsers" | "rolesPermissions" | "operationAccess" | "itAdminAccess" | "general" | "workflowManagement" | "workflowDelegations"
   const [activeTab, setActiveTab] = useState<
-    "employeeLogin" | "operationalUsers" | "rolesPermissions" | "operationAccess" | "itAdminAccess" | "general"
+    "employeeLogin" | "operationalUsers" | "rolesPermissions" | "operationAccess" | "itAdminAccess" | "general" | "workflowManagement" | "workflowDelegations"
   >("employeeLogin");
 
   // Loaded DB data
@@ -68,6 +70,7 @@ export default function SettingsPage() {
   const [rolePermissions, setRolePermissions] = useState<RolePermission[]>([]);
   const [assignments, setAssignments] = useState<UserRoleAssignment[]>([]);
   const [employees, setEmployees] = useState<Employee[]>([]);
+  const [workforceEmployees, setWorkforceEmployees] = useState<any[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
 
   // UI state
@@ -129,10 +132,11 @@ export default function SettingsPage() {
     setLoading(true);
     setError(null);
     try {
-      const [settingsRes, accountsRes, companiesRes] = await Promise.all([
+      const [settingsRes, accountsRes, companiesRes, employeesRes] = await Promise.all([
         fetch("/api/v1/admin/roles"),
         fetch("/api/v1/admin/user-accounts"),
-        fetch("/api/v1/companies").catch(() => null)
+        fetch("/api/v1/companies").catch(() => null),
+        fetch("/api/v1/employees").catch(() => null)
       ]);
 
       if (!settingsRes.ok || !accountsRes.ok) {
@@ -142,12 +146,14 @@ export default function SettingsPage() {
       const settingsData = await settingsRes.json();
       const accountsData = await accountsRes.json();
       const companiesData = companiesRes && companiesRes.ok ? await companiesRes.json() : [];
+      const workforceData = employeesRes && employeesRes.ok ? await employeesRes.json() : [];
 
       setRoles(settingsData.roles || []);
       setPermissions(settingsData.permissions || []);
       setRolePermissions(settingsData.rolePermissions || []);
       setAssignments(settingsData.assignments || []);
       setEmployees(accountsData || []);
+      setWorkforceEmployees(workforceData || []);
 
       setCompanies(companiesData.length > 0 ? companiesData : [
         { id: "comp-1", companyCode: "AHH", companyName: "AHH Corporate Services", isActive: true },
@@ -857,6 +863,28 @@ export default function SettingsPage() {
         >
           <span className="material-symbols-outlined text-sm">settings</span>
           General Settings
+        </button>
+        <button
+          onClick={() => { setActiveTab("workflowManagement"); setSaveSuccess(null); setError(null); }}
+          className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-black rounded-t-lg transition-all border-b-2 uppercase tracking-wider ${
+            activeTab === "workflowManagement"
+              ? "border-primary text-primary bg-surface-container-low"
+              : "border-transparent text-on-surface-variant hover:text-primary"
+          }`}
+        >
+          <span className="material-symbols-outlined text-sm">flowsheet</span>
+          Approval Workflows
+        </button>
+        <button
+          onClick={() => { setActiveTab("workflowDelegations"); setSaveSuccess(null); setError(null); }}
+          className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-black rounded-t-lg transition-all border-b-2 uppercase tracking-wider ${
+            activeTab === "workflowDelegations"
+              ? "border-primary text-primary bg-surface-container-low"
+              : "border-transparent text-on-surface-variant hover:text-primary"
+          }`}
+        >
+          <span className="material-symbols-outlined text-sm">assignment_ind</span>
+          Workflow Delegations
         </button>
       </div>
 
@@ -1659,6 +1687,36 @@ export default function SettingsPage() {
                 </Button>
               </div>
             </div>
+          )}
+
+          {activeTab === "workflowManagement" && (
+            <WorkflowManagementTab
+              employees={workforceEmployees}
+              onShowMessage={(type, text) => {
+                if (type === "success") {
+                  setSaveSuccess(text);
+                  setError(null);
+                } else {
+                  setError(text);
+                  setSaveSuccess(null);
+                }
+              }}
+            />
+          )}
+
+          {activeTab === "workflowDelegations" && (
+            <WorkflowDelegationsTab
+              employees={workforceEmployees}
+              onShowMessage={(type, text) => {
+                if (type === "success") {
+                  setSaveSuccess(text);
+                  setError(null);
+                } else {
+                  setError(text);
+                  setSaveSuccess(null);
+                }
+              }}
+            />
           )}
 
         </div>

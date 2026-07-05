@@ -1291,6 +1291,14 @@ model ManpowerContract {
   activatedAt                  DateTime?
   activatedBy                  String?
   rejectionRemarks             String?
+
+  // Termination details
+  terminationRequestedAt DateTime?
+  terminationRequestedBy String?
+  terminationReason      String?
+  terminatedAt           DateTime?
+  terminatedBy           String?
+  terminationStatus      String? // e.g. "PENDING_APPROVAL", "APPROVED"
 }
 
 model ManpowerProject {
@@ -1684,6 +1692,7 @@ model ContractApprovalWorkflow {
   contractId   String
   contract     ManpowerContract        @relation(fields: [contractId], references: [id], onDelete: Cascade)
   workflowName String?
+  appliesTo    String                  @default("ACTIVATION") // ACTIVATION, TERMINATION
   status       String                  @default("DRAFT") // DRAFT, PENDING, APPROVED, REJECTED
   submittedAt  DateTime?
   submittedBy  String?
@@ -1725,4 +1734,64 @@ model ContractApprovalApprover {
   remarks        String?
   createdAt      DateTime              @default(now())
   updatedAt      DateTime              @updatedAt
+}
+
+model WorkflowTemplate {
+  id            String                  @id @default(uuid())
+  workflowName  String
+  moduleType    String                  // e.g. "SECURITY_GUARDING_CONTRACT", "FACILITY_MANAGEMENT_CONTRACT", "LEAVE_REQUEST"
+  operationType String?                 // e.g. "SECURITY_GUARDING", "FACILITY_MANAGEMENT", "WHITE_COLLAR", "GLOBAL"
+  appliesTo     String                  // e.g. "ACTIVATION", "TERMINATION"
+  isDefault     Boolean                 @default(false)
+  isActive      Boolean                 @default(true)
+  remarks       String?
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
+  levels        WorkflowTemplateLevel[]
+}
+
+model WorkflowTemplateLevel {
+  id             String                     @id @default(uuid())
+  templateId     String
+  template       WorkflowTemplate           @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  levelNumber    Int
+  levelName      String
+  approvalRule   String                     @default("ANY_ONE") // ANY_ONE | ALL_REQUIRED
+  isMandatory    Boolean                    @default(true)
+  escalationDays Int?
+  remarks        String?
+  approvers      WorkflowTemplateApprover[]
+  createdAt      DateTime                   @default(now())
+  updatedAt      DateTime                   @updatedAt
+}
+
+model WorkflowTemplateApprover {
+  id           String                @id @default(uuid())
+  levelId      String
+  level        WorkflowTemplateLevel @relation(fields: [levelId], references: [id], onDelete: Cascade)
+  approverType String                // "SPECIFIC_EMPLOYEE" | "ROLE_BASED" | "DEPT_HEAD" | "REPORTING_MANAGER" | "CONTRACT_ADMIN"
+  employeeId   String?
+  employeeName String?
+  employeeCode String?
+  email        String?
+  roleName     String?
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
+}
+
+model WorkflowDelegation {
+  id                          String   @id @default(uuid())
+  moduleType                  String?
+  operationType               String?
+  originalApproverEmployeeId  String
+  originalApproverName        String?
+  delegatedApproverEmployeeId String
+  delegatedApproverName       String?
+  effectiveFrom               DateTime
+  effectiveTo                 DateTime
+  reason                      String?
+  isActive                    Boolean  @default(true)
+  createdBy                   String?
+  createdAt                   DateTime @default(now())
+  updatedAt                   DateTime @updatedAt
 }

@@ -33,7 +33,25 @@ export async function PUT(request: Request, { params }: { params: { id: string }
   }
 
   try {
+    const currentContract = await mockDb.getManpowerContract(params.id);
+    if (!currentContract) {
+      return NextResponse.json({ error: "Contract not found" }, { status: 404 });
+    }
+
+    if (currentContract.status !== "DRAFT" && currentContract.status !== "REJECTED") {
+      return NextResponse.json({
+        error: "Only draft or rejected contracts can be edited. Active or approved contracts must be changed through addendum."
+      }, { status: 400 });
+    }
+
     const payload = await request.json();
+    
+    // If rejected, edit transitions status back to DRAFT
+    if (currentContract.status === "REJECTED") {
+      payload.status = "DRAFT";
+      payload.approvalStatus = "DRAFT";
+    }
+
     const contract = await mockDb.updateManpowerContract(params.id, payload);
     return NextResponse.json(contract);
   } catch (error: any) {
@@ -44,3 +62,30 @@ export async function PUT(request: Request, { params }: { params: { id: string }
     );
   }
 }
+
+export async function DELETE(request: Request, { params }: { params: { id: string } }) {
+  const auth = await checkApiAuth();
+  if (auth.error) return auth.error;
+
+  if (!hasPermission(auth.session?.user, "manpower.admin.full_access") &&
+      !hasPermission(auth.session?.user, "manpower.fm.manage")) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  try {
+    const currentContract = await mockDb.getManpowerContract(params.id);
+    if (!currentContract) {
+      return NextResponse.json({ error: "Contract not found" }, { status: 404 });
+    }
+
+    if (currentContract.status !== "DRAFT") {
+      return NextResponse.json({ error: "Only draft contracts can be deleted." }, { status: 400 });
+    }
+
+    await mockDb.deleteManpowerContract(params.id);
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    return NextResponse.json({ error: "Failed to delete contract", details: String(error) }, { status: 500 });
+  }
+}
+

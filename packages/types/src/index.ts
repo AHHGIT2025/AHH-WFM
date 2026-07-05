@@ -1062,6 +1062,12 @@ export interface ManpowerContract {
   documents?: ManpowerClientDocument[];
   daysToContractExpiry?: number | null;
   contractExpiryStatus?: string | null;
+  terminationRequestedAt?: string | null;
+  terminationRequestedBy?: string | null;
+  terminationReason?: string | null;
+  terminationStatus?: string | null;
+  terminatedAt?: string | null;
+  terminatedBy?: string | null;
 }
 
 export interface ContractApprovalWorkflow {
@@ -1069,6 +1075,7 @@ export interface ContractApprovalWorkflow {
   contractId: string;
   contract?: ManpowerContract;
   workflowName?: string | null;
+  appliesTo?: string | null;
   status: string;
   submittedAt?: string | null;
   submittedBy?: string | null;
