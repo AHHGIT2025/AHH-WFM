@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, Suspense } from "react";
 import { Card, Button, Input, Modal, Badge } from "@ahh-wfm/ui/src";
 import { useSession } from "next-auth/react";
 import { Employee } from "@ahh-wfm/types";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { WorkflowManagementTab } from "./components/WorkflowManagementTab";
 import { WorkflowDelegationsTab } from "./components/WorkflowDelegationsTab";
 
@@ -51,18 +52,32 @@ interface Company {
   isActive: boolean;
 }
 
-export default function SettingsPage() {
+function SettingsContent() {
   const { data: session, update: updateSession } = useSession();
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   
   // General configurations
   const [latencyThreshold, setLatencyThreshold] = useState("200");
   const [offlineSyncInterval, setOfflineSyncInterval] = useState("60");
   const [geofencingRadius, setGeofencingRadius] = useState("100");
 
-  // Tabs: "employeeLogin" | "operationalUsers" | "rolesPermissions" | "operationAccess" | "itAdminAccess" | "general" | "workflowManagement" | "workflowDelegations"
-  const [activeTab, setActiveTab] = useState<
-    "employeeLogin" | "operationalUsers" | "rolesPermissions" | "operationAccess" | "itAdminAccess" | "general" | "workflowManagement" | "workflowDelegations"
-  >("employeeLogin");
+  const activeTab = (searchParams.get("tab") || "employeeLogin") as
+    | "employeeLogin"
+    | "operationalUsers"
+    | "rolesPermissions"
+    | "operationAccess"
+    | "itAdminAccess"
+    | "general"
+    | "workflowManagement"
+    | "workflowDelegations";
+
+  const setActiveTab = (tab: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("tab", tab);
+    router.replace(`${pathname}?${params.toString()}`);
+  };
 
   // Loaded DB data
   const [roles, setRoles] = useState<SystemRole[]>([]);
@@ -737,6 +752,29 @@ export default function SettingsPage() {
 
   // Filters candidates for IT/Admin who are NOT currently admins
   const nonAdminEmployees = employees.filter(e => e.isLoginEnabled && !isUserAdmin(e));
+  const getHeaderInfo = () => {
+    if (activeTab === "general") {
+      return {
+        title: "General Settings",
+        description: "Configure system-wide parameters, geofencing, and network policies.",
+        icon: "settings"
+      };
+    }
+    if (activeTab === "workflowManagement" || activeTab === "workflowDelegations") {
+      return {
+        title: "Workflow Setup",
+        description: "Manage approval workflows, templates, levels, and delegations.",
+        icon: "flowsheet"
+      };
+    }
+    return {
+      title: "User Access Management Console",
+      description: "Configure employee login attributes, manage operational boundaries, define granular role privileges, and supervise IT admin access.",
+      icon: "admin_panel_settings"
+    };
+  };
+
+  const headerInfo = getHeaderInfo();
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto px-4 py-8">
@@ -744,11 +782,11 @@ export default function SettingsPage() {
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-gradient-to-r from-primary-container via-surface-container-high to-surface border border-outline-variant rounded-2xl p-6 shadow-md">
         <div>
           <h1 className="text-2xl font-black text-primary flex items-center gap-2 tracking-tight">
-            <span className="material-symbols-outlined text-secondary text-3xl">admin_panel_settings</span>
-            <span>User Access Management Console</span>
+            <span className="material-symbols-outlined text-secondary text-3xl">{headerInfo.icon}</span>
+            <span>{headerInfo.title}</span>
           </h1>
           <p className="text-xs text-on-surface-variant font-medium mt-1">
-            Configure employee login attributes, manage operational boundaries, define granular role privileges, and supervise IT admin access.
+            {headerInfo.description}
           </p>
         </div>
         <div className="flex gap-2">
@@ -797,96 +835,92 @@ export default function SettingsPage() {
       )}
 
       {/* Access Management Sub-Tabs */}
-      <div className="flex border-b border-outline-variant gap-2 overflow-x-auto pb-1">
-        <button
-          onClick={() => { setActiveTab("employeeLogin"); setSaveSuccess(null); setError(null); }}
-          className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-black rounded-t-lg transition-all border-b-2 uppercase tracking-wider ${
-            activeTab === "employeeLogin"
-              ? "border-primary text-primary bg-surface-container-low"
-              : "border-transparent text-on-surface-variant hover:text-primary"
-          }`}
-        >
-          <span className="material-symbols-outlined text-sm">login</span>
-          Employee Login Access
-        </button>
-        <button
-          onClick={() => { setActiveTab("operationalUsers"); setSaveSuccess(null); setError(null); }}
-          className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-black rounded-t-lg transition-all border-b-2 uppercase tracking-wider ${
-            activeTab === "operationalUsers"
-              ? "border-primary text-primary bg-surface-container-low"
-              : "border-transparent text-on-surface-variant hover:text-primary"
-          }`}
-        >
-          <span className="material-symbols-outlined text-sm">engineering</span>
-          Operational Users
-        </button>
-        <button
-          onClick={() => { setActiveTab("rolesPermissions"); setSaveSuccess(null); setError(null); }}
-          className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-black rounded-t-lg transition-all border-b-2 uppercase tracking-wider ${
-            activeTab === "rolesPermissions"
-              ? "border-primary text-primary bg-surface-container-low"
-              : "border-transparent text-on-surface-variant hover:text-primary"
-          }`}
-        >
-          <span className="material-symbols-outlined text-sm">shield_person</span>
-          Roles & Permissions
-        </button>
-        <button
-          onClick={() => { setActiveTab("operationAccess"); setSaveSuccess(null); setError(null); }}
-          className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-black rounded-t-lg transition-all border-b-2 uppercase tracking-wider ${
-            activeTab === "operationAccess"
-              ? "border-primary text-primary bg-surface-container-low"
-              : "border-transparent text-on-surface-variant hover:text-primary"
-          }`}
-        >
-          <span className="material-symbols-outlined text-sm">domain_verification</span>
-          Operation Access
-        </button>
-        <button
-          onClick={() => { setActiveTab("itAdminAccess"); setSaveSuccess(null); setError(null); }}
-          className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-black rounded-t-lg transition-all border-b-2 uppercase tracking-wider ${
-            activeTab === "itAdminAccess"
-              ? "border-primary text-primary bg-surface-container-low"
-              : "border-transparent text-on-surface-variant hover:text-primary"
-          }`}
-        >
-          <span className="material-symbols-outlined text-sm">admin_panel_settings</span>
-          IT / Admin Access
-        </button>
-        <button
-          onClick={() => { setActiveTab("general"); setSaveSuccess(null); setError(null); }}
-          className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-black rounded-t-lg transition-all border-b-2 uppercase tracking-wider ${
-            activeTab === "general"
-              ? "border-primary text-primary bg-surface-container-low"
-              : "border-transparent text-on-surface-variant hover:text-primary"
-          }`}
-        >
-          <span className="material-symbols-outlined text-sm">settings</span>
-          General Settings
-        </button>
-        <button
-          onClick={() => { setActiveTab("workflowManagement"); setSaveSuccess(null); setError(null); }}
-          className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-black rounded-t-lg transition-all border-b-2 uppercase tracking-wider ${
-            activeTab === "workflowManagement"
-              ? "border-primary text-primary bg-surface-container-low"
-              : "border-transparent text-on-surface-variant hover:text-primary"
-          }`}
-        >
-          <span className="material-symbols-outlined text-sm">flowsheet</span>
-          Approval Workflows
-        </button>
-        <button
-          onClick={() => { setActiveTab("workflowDelegations"); setSaveSuccess(null); setError(null); }}
-          className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-black rounded-t-lg transition-all border-b-2 uppercase tracking-wider ${
-            activeTab === "workflowDelegations"
-              ? "border-primary text-primary bg-surface-container-low"
-              : "border-transparent text-on-surface-variant hover:text-primary"
-          }`}
-        >
-          <span className="material-symbols-outlined text-sm">assignment_ind</span>
-          Workflow Delegations
-        </button>
-      </div>
+      {["employeeLogin", "operationalUsers", "rolesPermissions", "operationAccess", "itAdminAccess"].includes(activeTab) && (
+        <div className="flex border-b border-outline-variant gap-2 overflow-x-auto pb-1">
+          <button
+            onClick={() => { setActiveTab("employeeLogin"); setSaveSuccess(null); setError(null); }}
+            className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-black rounded-t-lg transition-all border-b-2 uppercase tracking-wider ${
+              activeTab === "employeeLogin"
+                ? "border-primary text-primary bg-surface-container-low"
+                : "border-transparent text-on-surface-variant hover:text-primary"
+            }`}
+          >
+            <span className="material-symbols-outlined text-sm">login</span>
+            Employee Login Access
+          </button>
+          <button
+            onClick={() => { setActiveTab("operationalUsers"); setSaveSuccess(null); setError(null); }}
+            className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-black rounded-t-lg transition-all border-b-2 uppercase tracking-wider ${
+              activeTab === "operationalUsers"
+                ? "border-primary text-primary bg-surface-container-low"
+                : "border-transparent text-on-surface-variant hover:text-primary"
+            }`}
+          >
+            <span className="material-symbols-outlined text-sm">engineering</span>
+            Operational Users
+          </button>
+          <button
+            onClick={() => { setActiveTab("rolesPermissions"); setSaveSuccess(null); setError(null); }}
+            className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-black rounded-t-lg transition-all border-b-2 uppercase tracking-wider ${
+              activeTab === "rolesPermissions"
+                ? "border-primary text-primary bg-surface-container-low"
+                : "border-transparent text-on-surface-variant hover:text-primary"
+            }`}
+          >
+            <span className="material-symbols-outlined text-sm">shield_person</span>
+            Roles & Permissions
+          </button>
+          <button
+            onClick={() => { setActiveTab("operationAccess"); setSaveSuccess(null); setError(null); }}
+            className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-black rounded-t-lg transition-all border-b-2 uppercase tracking-wider ${
+              activeTab === "operationAccess"
+                ? "border-primary text-primary bg-surface-container-low"
+                : "border-transparent text-on-surface-variant hover:text-primary"
+            }`}
+          >
+            <span className="material-symbols-outlined text-sm">domain_verification</span>
+            Operation Access
+          </button>
+          <button
+            onClick={() => { setActiveTab("itAdminAccess"); setSaveSuccess(null); setError(null); }}
+            className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-black rounded-t-lg transition-all border-b-2 uppercase tracking-wider ${
+              activeTab === "itAdminAccess"
+                ? "border-primary text-primary bg-surface-container-low"
+                : "border-transparent text-on-surface-variant hover:text-primary"
+            }`}
+          >
+            <span className="material-symbols-outlined text-sm">admin_panel_settings</span>
+            IT / Admin Access
+          </button>
+        </div>
+      )}
+
+      {["workflowManagement", "workflowDelegations"].includes(activeTab) && (
+        <div className="flex border-b border-outline-variant gap-2 overflow-x-auto pb-1">
+          <button
+            onClick={() => { setActiveTab("workflowManagement"); setSaveSuccess(null); setError(null); }}
+            className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-black rounded-t-lg transition-all border-b-2 uppercase tracking-wider ${
+              activeTab === "workflowManagement"
+                ? "border-primary text-primary bg-surface-container-low"
+                : "border-transparent text-on-surface-variant hover:text-primary"
+            }`}
+          >
+            <span className="material-symbols-outlined text-sm">flowsheet</span>
+            Approval Workflows
+          </button>
+          <button
+            onClick={() => { setActiveTab("workflowDelegations"); setSaveSuccess(null); setError(null); }}
+            className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-black rounded-t-lg transition-all border-b-2 uppercase tracking-wider ${
+              activeTab === "workflowDelegations"
+                ? "border-primary text-primary bg-surface-container-low"
+                : "border-transparent text-on-surface-variant hover:text-primary"
+            }`}
+          >
+            <span className="material-symbols-outlined text-sm">assignment_ind</span>
+            Workflow Delegations
+          </button>
+        </div>
+      )}
 
       {loading ? (
         <div className="flex justify-center items-center py-20">
@@ -2183,5 +2217,17 @@ export default function SettingsPage() {
       )}
 
     </div>
+  );
+}
+
+export default function SettingsPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex justify-center items-center py-20">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    }>
+      <SettingsContent />
+    </Suspense>
   );
 }

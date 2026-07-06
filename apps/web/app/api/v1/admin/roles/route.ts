@@ -35,6 +35,16 @@ const DEFAULT_PERMISSIONS = [
   // Reports
   { key: "reports.view", label: "View Analytics Hub", module: "Reports" },
   { key: "reports.export", label: "Export Secure CSV/JSON Data", module: "Reports" },
+  { key: "reports.manage", label: "Manage Reports Permissions", module: "Reports" },
+  { key: "reports.executive.view", label: "View Executive Dashboard Report", module: "Reports" },
+  { key: "reports.attendance.view", label: "View Attendance Report", module: "Reports" },
+  { key: "reports.leave.view", label: "View Leave Report", module: "Reports" },
+  { key: "reports.overtime.view", label: "View Overtime Report", module: "Reports" },
+  { key: "reports.shiftRoster.view", label: "View Shift Roster Report", module: "Reports" },
+  { key: "reports.sapSync.view", label: "View SAP Sync Report", module: "Reports" },
+  { key: "reports.audit.view", label: "View Audit Report", module: "Reports" },
+  { key: "reports.backup.view", label: "View Backup/Restore Report", module: "Reports" },
+  { key: "reports.productionReadiness.view", label: "View Production Readiness Report", module: "Reports" },
 
   // SAP Integration
   { key: "sap.view", label: "View SuccessFactors Sync Dashboard", module: "SAP Integration" },
@@ -63,6 +73,12 @@ const DEFAULT_PERMISSIONS = [
   { key: "masterdata.manage", label: "Modify Master Data References", module: "Master Data" },
   { key: "integration.view", label: "View Integration Gateways", module: "Integration" },
   { key: "integration.manage", label: "Configure Integration Gateways", module: "Integration" },
+  { key: "settings.audit.view", label: "View User Action Audits in Settings", module: "Settings" },
+  { key: "settings.backup.view", label: "View Backup & Restore in Settings", module: "Settings" },
+  { key: "settings.backup.manage", label: "Manage Backup & Restore in Settings", module: "Settings" },
+  { key: "settings.productionReadiness.view", label: "View Production Readiness in Settings", module: "Settings" },
+  { key: "settings.integration.view", label: "View Integration Hub in Settings", module: "Settings" },
+  { key: "settings.integration.manage", label: "Manage Integration Hub in Settings", module: "Settings" },
 
   // Manpower General
   { key: "manpower.view", label: "Access Manpower Module", module: "Manpower General" },

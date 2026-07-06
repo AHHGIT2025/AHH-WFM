@@ -3,7 +3,8 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "dashboard.view", "employees.view", "employees.create", "employees.edit", "employees.delete", "employees.bulkUpload",
     "attendance.view", "attendance.edit", "attendance.approveCorrection",
     "leaves.view", "leaves.approve", "shifts.view", "shifts.edit",
-    "overtime.view", "overtime.approve", "reports.view", "reports.export",
+    "overtime.view", "overtime.approve", "reports.view", "reports.export", "reports.manage",
+    "reports.executive.view", "reports.attendance.view", "reports.leave.view", "reports.overtime.view", "reports.shiftRoster.view", "reports.sapSync.view", "reports.audit.view", "reports.backup.view", "reports.productionReadiness.view",
     "sap.view", "sap.sync", "sap.mapping",
     "backup.view", "backup.create", "backup.download", "backup.delete",
     "settings.view", "settings.roles.manage", "masters.view", "masters.manage",
@@ -14,13 +15,15 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "security.view", "security.manage", "security.coordinators.view", "security.coordinators.manage",
     "security.patrols.view", "security.patrols.create", "security.patrols.manage",
     "self.profile.view", "self.attendance.view", "self.attendance.punch", "self.leave.view", "self.leave.apply", "self.announcements.view", "self.password.change",
-    "settings.manage", "system.config.view", "system.config.manage", "masterdata.view", "masterdata.manage", "audit.export", "integration.view", "integration.manage"
+    "settings.manage", "system.config.view", "system.config.manage", "masterdata.view", "masterdata.manage", "audit.export", "integration.view", "integration.manage",
+    "settings.audit.view", "settings.backup.view", "settings.backup.manage", "settings.productionReadiness.view", "settings.integration.view", "settings.integration.manage"
   ],
   ADMIN: [
     "dashboard.view", "employees.view", "employees.create", "employees.edit", "employees.bulkUpload",
     "attendance.view", "attendance.edit", "attendance.approveCorrection",
     "leaves.view", "leaves.approve", "shifts.view", "shifts.edit",
-    "overtime.view", "overtime.approve", "reports.view", "reports.export",
+    "overtime.view", "overtime.approve", "reports.view", "reports.export", "reports.manage",
+    "reports.executive.view", "reports.attendance.view", "reports.leave.view", "reports.overtime.view", "reports.shiftRoster.view", "reports.sapSync.view", "reports.audit.view", "reports.backup.view", "reports.productionReadiness.view",
     "sap.view", "sap.sync", "sap.mapping",
     "backup.view", "backup.create", "backup.download",
     "settings.view", "masters.view", "masters.manage",
@@ -31,7 +34,8 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "security.view", "security.manage", "security.coordinators.view", "security.coordinators.manage",
     "security.patrols.view", "security.patrols.create", "security.patrols.manage",
     "self.profile.view", "self.attendance.view", "self.attendance.punch", "self.leave.view", "self.leave.apply", "self.announcements.view", "self.password.change",
-    "settings.manage", "system.config.view", "system.config.manage", "masterdata.view", "masterdata.manage", "audit.export", "integration.view", "integration.manage"
+    "settings.manage", "system.config.view", "system.config.manage", "masterdata.view", "masterdata.manage", "audit.export", "integration.view", "integration.manage",
+    "settings.audit.view", "settings.backup.view", "settings.backup.manage", "settings.productionReadiness.view", "settings.integration.view", "settings.integration.manage"
   ],
   SYSTEM_ADMIN: [
     "settings.view", "settings.manage", "users.view", "users.manage", "roles.view", "roles.manage",

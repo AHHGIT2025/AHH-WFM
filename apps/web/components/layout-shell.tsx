@@ -18,17 +18,14 @@ export interface NavItem {
 const navItems: NavItem[] = [
   { label: "Dashboard", path: "/", icon: "dashboard" },
   { label: "Workforce Directory", path: "/workforce", icon: "group" },
-  { label: "Manpower Operations", path: "/manpower", icon: "hail" },
   { label: "Security Guarding", path: "/manpower/security-guarding/dashboard", icon: "security" },
   { label: "Facility Management", path: "/manpower/facility-management/dashboard", icon: "business" },
   { label: "Attendance Monitor", path: "/attendance", icon: "fact_check" },
   { label: "Leave Management", path: "/leave", icon: "event_busy" },
   { label: "Clearance Management", path: "/clearance", icon: "task" },
   { label: "Reports Hub", path: "/reports", icon: "analytics" },
-  { label: "Integration Hub", path: "/sap", icon: "hub" },
   { label: "Shift Master", path: "/shifts", icon: "schedule" },
-  { label: "Master Data Hub", path: "/admin/masters", icon: "database" },
-  { label: "Backup & Restore", path: "/admin/backup", icon: "settings_backup_restore" },
+  { label: "Master Data Hub", path: "/settings/masters", icon: "database" },
   { label: "Settings", path: "/settings", icon: "settings" }
 ];
 
@@ -45,7 +42,7 @@ export const LayoutShell: React.FC<{ children: React.ReactNode }> = ({ children 
 
   if (isSecurityGuarding) {
     currentNavItems = [
-      { label: "← Back to Main Menu", path: "/manpower", icon: "arrow_back" },
+      { label: "← Back to Main Menu", path: "/", icon: "arrow_back" },
       { label: "Security Dashboard", path: "/manpower/security-guarding/dashboard", icon: "dashboard" },
       { label: "Clients", path: "/manpower/security-guarding/clients", icon: "handshake" },
       { label: "Contracts", path: "/manpower/security-guarding/contracts", icon: "description" },
@@ -62,7 +59,7 @@ export const LayoutShell: React.FC<{ children: React.ReactNode }> = ({ children 
     sidebarSubtitle = "Operations & Compliance";
   } else if (isFacilityManagement) {
     currentNavItems = [
-      { label: "← Back to Main Menu", path: "/manpower", icon: "arrow_back" },
+      { label: "← Back to Main Menu", path: "/", icon: "arrow_back" },
       { label: "FM Dashboard", path: "/manpower/facility-management/dashboard", icon: "dashboard" },
       { label: "Clients", path: "/manpower/facility-management/clients", icon: "handshake" },
       { label: "Contracts", path: "/manpower/facility-management/contracts", icon: "description" },
@@ -115,6 +112,19 @@ export const LayoutShell: React.FC<{ children: React.ReactNode }> = ({ children 
     if (path === "/manpower") {
       return pathname === "/manpower";
     }
+    if (path === "/settings/masters") {
+      return pathname === "/settings/masters" || pathname === "/admin/masters";
+    }
+    if (path === "/settings") {
+      if (pathname === "/settings/masters" || pathname === "/admin/masters") {
+        return false;
+      }
+      return pathname.startsWith("/settings") || 
+             pathname === "/sap" || 
+             pathname.startsWith("/admin/backup") || 
+             pathname.startsWith("/admin/production") || 
+             pathname.startsWith("/reports/audit");
+    }
     return pathname.startsWith(path);
   };
 
@@ -150,34 +160,16 @@ export const LayoutShell: React.FC<{ children: React.ReactNode }> = ({ children 
           >
             <span className="material-symbols-outlined">menu</span>
           </button>
-          <span className="text-xl font-bold tracking-tight text-primary flex items-center gap-2">
+          <Link href="/" className="text-xl font-bold tracking-tight text-primary flex items-center gap-2 hover:opacity-90 transition-opacity">
             <span className="material-symbols-outlined text-secondary">domain</span>
             AHH WFM
-          </span>
+          </Link>
           <nav className="hidden md:flex items-center gap-6 h-full text-sm font-medium">
             <Link
               href="/"
               className={pathname === "/" || pathname === "/dashboard" ? "text-primary border-b-2 border-primary pb-1 font-bold" : "text-on-surface-variant hover:text-primary transition-colors pb-1"}
             >
               Overview
-            </Link>
-            <Link
-              href="/sap"
-              className={pathname.startsWith("/sap") ? "text-primary border-b-2 border-primary pb-1 font-bold" : "text-on-surface-variant hover:text-primary transition-colors pb-1"}
-            >
-              SAP Integration
-            </Link>
-            <Link
-              href="/shifts"
-              className={pathname.startsWith("/shifts") ? "text-primary border-b-2 border-primary pb-1 font-bold" : "text-on-surface-variant hover:text-primary transition-colors pb-1"}
-            >
-              Rotations
-            </Link>
-            <Link
-              href="/reports"
-              className={pathname.startsWith("/reports") ? "text-primary border-b-2 border-primary pb-1 font-bold" : "text-on-surface-variant hover:text-primary transition-colors pb-1"}
-            >
-              Reports
             </Link>
           </nav>
         </div>

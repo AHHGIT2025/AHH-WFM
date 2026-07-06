@@ -4,32 +4,42 @@ import React, { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { LayoutShell } from "@/components/layout-shell";
 import Link from "next/link";
+import { hasPermission, isAdminUser } from "@/lib/permissions";
 
 export default function ReportsHubPage() {
   const { data: session, status } = useSession();
-  const userRole = (session?.user as any)?.role || "EMPLOYEE";
-  const userId = (session?.user as any)?.id || "";
+  const user = session?.user as any;
+  const userRole = user?.role || "EMPLOYEE";
+  const userId = user?.id || "";
 
-  // Dynamic Tabs based on Role
+  // Dynamic Tabs based on Permissions
   const availableTabs = [];
-  if (["ADMIN", "HR", "FINANCE"].includes(userRole)) {
-    availableTabs.push({ id: "executive", label: "Executive Dashboard", icon: "dashboard" });
-  }
-  if (["ADMIN", "HR", "SUPERVISOR", "EMPLOYEE"].includes(userRole)) {
-    availableTabs.push({ id: "attendance", label: "Attendance Report", icon: "fact_check" });
-    availableTabs.push({ id: "leaves", label: "Leave Report", icon: "event_busy" });
-  }
-  if (["ADMIN", "FINANCE", "SUPERVISOR", "EMPLOYEE"].includes(userRole)) {
-    availableTabs.push({ id: "overtime", label: "Overtime Report", icon: "payments" });
-  }
-  if (["ADMIN", "HR", "SUPERVISOR", "EMPLOYEE"].includes(userRole)) {
-    availableTabs.push({ id: "shifts", label: "Shift Roster Report", icon: "schedule" });
-  }
-  if (["ADMIN", "HR", "FINANCE"].includes(userRole)) {
-    availableTabs.push({ id: "sap", label: "SAP Sync Report", icon: "sync_alt" });
+  if (session) {
+    if (isAdminUser(user) || hasPermission(user, "reports.executive.view")) {
+      availableTabs.push({ id: "executive", label: "Executive Dashboard", icon: "dashboard" });
+    }
+    if (isAdminUser(user) || hasPermission(user, "reports.attendance.view")) {
+      availableTabs.push({ id: "attendance", label: "Attendance Report", icon: "fact_check" });
+      availableTabs.push({ id: "leaves", label: "Leave Report", icon: "event_busy" });
+    }
+    if (isAdminUser(user) || hasPermission(user, "reports.overtime.view")) {
+      availableTabs.push({ id: "overtime", label: "Overtime Report", icon: "payments" });
+    }
+    if (isAdminUser(user) || hasPermission(user, "reports.shiftRoster.view")) {
+      availableTabs.push({ id: "shifts", label: "Shift Roster Report", icon: "schedule" });
+    }
+    if (isAdminUser(user) || hasPermission(user, "reports.sapSync.view")) {
+      availableTabs.push({ id: "sap", label: "SAP Sync Report", icon: "sync_alt" });
+    }
   }
 
-  const [activeTab, setActiveTab] = useState(availableTabs[0]?.id || "attendance");
+  const [activeTab, setActiveTab] = useState("");
+
+  useEffect(() => {
+    if (availableTabs.length > 0 && !activeTab) {
+      setActiveTab(availableTabs[0].id);
+    }
+  }, [availableTabs, activeTab]);
   const [loading, setLoading] = useState(true);
 
   // Filter States
@@ -77,7 +87,7 @@ export default function ReportsHubPage() {
     if (filterStatus) queryParams.append("status", filterStatus);
 
     try {
-      if (activeTab === "executive" && ["ADMIN", "HR", "FINANCE"].includes(userRole)) {
+      if (activeTab === "executive" && (isAdminUser(user) || hasPermission(user, "reports.executive.view"))) {
         const res = await fetch(`/api/v1/reports/executive?${queryParams.toString()}`);
         if (res.ok) setExecutiveData(await res.json());
       } else if (activeTab === "attendance") {
@@ -184,34 +194,6 @@ export default function ReportsHubPage() {
           <p className="text-xs text-on-surface-variant mt-1">
             Access operations dashboards, audit metrics lists, and run CSV/JSON secure exports.
           </p>
-        </div>
-        
-        <div className="flex gap-2">
-          {userRole === "ADMIN" && (
-            <>
-              <Link
-                href="/reports/audit"
-                className="bg-surface-container-high border border-border-subtle hover:bg-surface-container-highest text-primary font-bold text-xs px-4 py-2 rounded-lg flex items-center gap-2 transition-all"
-              >
-                <span className="material-symbols-outlined text-[16px]">history_toggle_off</span>
-                User Action Audits
-              </Link>
-              <Link
-                href="/admin/backup"
-                className="bg-surface-container-high border border-border-subtle hover:bg-surface-container-highest text-primary font-bold text-xs px-4 py-2 rounded-lg flex items-center gap-2 transition-all"
-              >
-                <span className="material-symbols-outlined text-[16px]">cloud_sync</span>
-                System Backups
-              </Link>
-              <Link
-                href="/admin/production"
-                className="bg-surface-container-high border border-border-subtle hover:bg-surface-container-highest text-primary font-bold text-xs px-4 py-2 rounded-lg flex items-center gap-2 transition-all"
-              >
-                <span className="material-symbols-outlined text-[16px]">fact_check</span>
-                Production Readiness
-              </Link>
-            </>
-          )}
         </div>
       </div>
 
