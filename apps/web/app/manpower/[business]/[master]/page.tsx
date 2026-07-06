@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
-import { hasPermission } from "../../../../lib/permissions";
+import { hasPermission, isAdminUser } from "../../../../lib/permissions";
 
 interface ChecklistItem {
   itemCode: string;
@@ -255,9 +255,11 @@ export default function ManpowerMasterPage() {
   };
 
   // Permission Checks
-  const canView = hasPermission(session?.user as any, "manpower.admin.full_access") ||
+  const canView = isAdminUser(session?.user as any) ||
+                  hasPermission(session?.user as any, "manpower.admin.full_access") ||
                   hasPermission(session?.user as any, isSecurity ? "manpower.security.view" : "manpower.fm.view");
-  const canManage = hasPermission(session?.user as any, "manpower.admin.full_access") ||
+  const canManage = isAdminUser(session?.user as any) ||
+                    hasPermission(session?.user as any, "manpower.admin.full_access") ||
                     hasPermission(session?.user as any, isSecurity ? "manpower.security.manage" : "manpower.fm.manage");
 
   const apiBase = master === "coordinators"

@@ -1,7 +1,7 @@
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "./auth";
 import { NextResponse } from "next/server";
-import { hasPermission } from "./permissions";
+import { hasPermission, isAdminUser } from "./permissions";
 
 export async function checkApiAuth(
   allowedRoles?: string[],
@@ -21,10 +21,15 @@ export async function checkApiAuth(
   const userPermissions = user.permissions || [];
   const operationAccess = user.operationAccess || {};
 
-  const isSuperAdmin = userRole?.toUpperCase().replace(/\s+/g, "_") === "SUPER_ADMIN";
+  // Safe server-side console logs behind debug/dev flags
+  if (process.env.NODE_ENV !== "production" || process.env.DEBUG === "true") {
+    console.log(`[API Auth Debug] user=${user.id}, role=${userRole}, permissionsCount=${userPermissions.length}, operationAccess=${JSON.stringify(operationAccess)}`);
+  }
 
-  // 1. Check Super Admin Override (Super Admin bypasses permission/role checks)
-  if (!isSuperAdmin) {
+  const isAdmin = isAdminUser(user);
+
+  // 1. Check Admin Override (Admin and Super Admin bypass permission/role checks)
+  if (!isAdmin) {
     // 2. Validate Roles (if specified)
     if (allowedRoles && !allowedRoles.includes(userRole)) {
       return { error: NextResponse.json({ error: "Forbidden: Role restricted" }, { status: 403 }), session: null };
@@ -49,8 +54,8 @@ export async function checkApiAuth(
     }
   }
 
-  // 5. Validate Operation Scope (Applies to everyone, except Super Admin who has global bypass)
-  if (options?.requiredOperation && !isSuperAdmin) {
+  // 5. Validate Operation Scope (Applies to everyone, except Admin/Super Admin who have global bypass)
+  if (options?.requiredOperation && !isAdmin) {
     const requiredOps = Array.isArray(options.requiredOperation) ? options.requiredOperation : [options.requiredOperation];
     
     let hasOpAccess = false;
@@ -66,7 +71,7 @@ export async function checkApiAuth(
   // 6. Validate Self Service Only (to make sure employee-only user cannot access other employees' data)
   const isSelfServiceOnly = userRole?.toUpperCase().replace(/\s+/g, "_") === "EMPLOYEE_SELF_SERVICE" || 
                             userRole?.toUpperCase().replace(/\s+/g, "_") === "EMPLOYEE" || 
-                            (!isSuperAdmin && !userPermissions.some((p: string) => !p.startsWith("self.") && p !== "dashboard.view"));
+                            (!isAdmin && !userPermissions.some((p: string) => !p.startsWith("self.") && p !== "dashboard.view"));
   
   if (isSelfServiceOnly) {
     // If self-service user tries to query another employee's ID:

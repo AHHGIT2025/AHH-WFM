@@ -14,16 +14,23 @@ async function fetchUserRBAC(userId: string, defaultRole: string) {
     // 2. Fetch all system roles to find their name & active status
     const roles = await mockDb.getSystemRoles();
     
-    // Check if the user is a super admin
+    // Check if the user is a super admin or admin
     const isSuperAdmin = defaultRole === "SUPER_ADMIN" || userAssignments.some(a => {
       const r = roles.find(x => x.id === a.roleId);
       return r && r.name === "SUPER_ADMIN";
+    });
+
+    const isAdmin = defaultRole === "ADMIN" || userAssignments.some(a => {
+      const r = roles.find(x => x.id === a.roleId);
+      return r && r.name === "ADMIN";
     });
 
     let permissions: string[] = [];
 
     if (isSuperAdmin) {
       permissions = [...DEFAULT_ROLE_PERMISSIONS.SUPER_ADMIN];
+    } else if (isAdmin) {
+      permissions = [...DEFAULT_ROLE_PERMISSIONS.ADMIN];
     } else {
       // Fetch role permissions
       const allRolePermissions = await mockDb.getRolePermissions();

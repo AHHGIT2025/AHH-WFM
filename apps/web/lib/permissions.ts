@@ -11,6 +11,8 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "manpower.view", "manpower.manage", "manpower.admin.full_access",
     "manpower.security.view", "manpower.security.manage", "manpower.security.reports.view", "manpower.security.reports.export",
     "manpower.fm.view", "manpower.fm.manage", "manpower.fm.reports.view", "manpower.fm.reports.export",
+    "security.view", "security.manage", "security.coordinators.view", "security.coordinators.manage",
+    "security.patrols.view", "security.patrols.create", "security.patrols.manage",
     "self.profile.view", "self.attendance.view", "self.attendance.punch", "self.leave.view", "self.leave.apply", "self.announcements.view", "self.password.change",
     "settings.manage", "system.config.view", "system.config.manage", "masterdata.view", "masterdata.manage", "audit.export", "integration.view", "integration.manage"
   ],
@@ -26,6 +28,8 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "manpower.view", "manpower.manage",
     "manpower.security.view", "manpower.security.manage", "manpower.security.reports.view", "manpower.security.reports.export",
     "manpower.fm.view", "manpower.fm.manage", "manpower.fm.reports.view", "manpower.fm.reports.export",
+    "security.view", "security.manage", "security.coordinators.view", "security.coordinators.manage",
+    "security.patrols.view", "security.patrols.create", "security.patrols.manage",
     "self.profile.view", "self.attendance.view", "self.attendance.punch", "self.leave.view", "self.leave.apply", "self.announcements.view", "self.password.change",
     "settings.manage", "system.config.view", "system.config.manage", "masterdata.view", "masterdata.manage", "audit.export", "integration.view", "integration.manage"
   ],
@@ -173,14 +177,66 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "dashboard.view", "manpower.fm.view", "manpower.fm.clients.view", "manpower.fm.contracts.view",
     "manpower.fm.projects.view", "manpower.fm.sites.view", "manpower.fm.areas.view", "manpower.fm.manpower.view",
     "manpower.fm.shifts.view", "manpower.fm.deployments.view", "manpower.fm.relievers.view", "manpower.fm.reports.view"
+  ],
+  OPERATIONS_MANAGER: [
+    "dashboard.view", "employees.view", "attendance.view", "leaves.view", "shifts.view",
+    "reports.view", "reports.export",
+    "manpower.view", "manpower.manage",
+    "manpower.security.view", "manpower.security.manage",
+    "manpower.fm.view", "manpower.fm.manage",
+    "security.view", "security.manage", "security.coordinators.view", "security.coordinators.manage",
+    "security.patrols.view", "security.patrols.create", "security.patrols.manage",
+    "self.profile.view", "self.attendance.view", "self.leave.view", "self.password.change"
+  ],
+  SECURITY_GUARDING_MANAGER: [
+    "dashboard.view", "employees.view", "attendance.view", "leaves.view", "shifts.view",
+    "reports.view", "reports.export",
+    "manpower.view", "manpower.manage",
+    "manpower.security.view", "manpower.security.manage",
+    "security.view", "security.manage", "security.coordinators.view", "security.coordinators.manage",
+    "security.patrols.view", "security.patrols.create", "security.patrols.manage",
+    "self.profile.view", "self.attendance.view", "self.leave.view", "self.password.change"
+  ],
+  OPERATIONS_COORDINATOR: [
+    "dashboard.view", "employees.view", "attendance.view", "leaves.view", "shifts.view",
+    "manpower.view", "manpower.manage",
+    "manpower.security.view", "manpower.security.manage",
+    "manpower.fm.view", "manpower.fm.manage",
+    "security.view", "security.manage", "security.coordinators.view", "security.coordinators.manage",
+    "security.patrols.view", "security.patrols.create", "security.patrols.manage",
+    "self.profile.view", "self.attendance.view", "self.leave.view", "self.password.change"
+  ],
+  PROJECT_SUPERVISOR: [
+    "dashboard.view", "manpower.security.view", "manpower.security.manage",
+    "security.view", "security.manage",
+    "security.patrols.view", "security.patrols.create", "security.patrols.manage",
+    "self.profile.view", "self.attendance.view", "self.leave.view", "self.password.change"
+  ],
+  PATROLLING_SUPERVISOR: [
+    "dashboard.view", "manpower.security.view", "manpower.security.manage",
+    "security.view", "security.manage",
+    "security.patrols.view", "security.patrols.create", "security.patrols.manage",
+    "self.profile.view", "self.attendance.view", "self.leave.view", "self.password.change"
+  ],
+  SECURITY_COORDINATOR: [
+    "dashboard.view", "manpower.security.view", "manpower.security.manage",
+    "security.view", "security.manage", "security.coordinators.view", "security.coordinators.manage",
+    "security.patrols.view", "security.patrols.create", "security.patrols.manage",
+    "self.profile.view", "self.attendance.view", "self.leave.view", "self.password.change"
   ]
 };
+
+export function isAdminUser(user: { role?: string } | null | undefined): boolean {
+  if (!user || !user.role) return false;
+  const role = user.role.toUpperCase().replace(/\s+/g, "_");
+  return role === "ADMIN" || role === "SUPER_ADMIN";
+}
 
 export function hasPermission(user: { role?: string; permissions?: string[] } | null | undefined, permissionKey: string): boolean {
   if (!user) return false;
 
-  // SUPER_ADMIN override (must always bypass everything for safety)
-  if (user.role && user.role.toUpperCase().replace(/\s+/g, "_") === "SUPER_ADMIN") {
+  // Admin bypass
+  if (isAdminUser(user)) {
     return true;
   }
 
@@ -200,8 +256,9 @@ export function hasPermission(user: { role?: string; permissions?: string[] } | 
 export function getUserPermissions(user: { role?: string; permissions?: string[] } | null | undefined): string[] {
   if (!user) return [];
 
-  if (user.role && user.role.toUpperCase().replace(/\s+/g, "_") === "SUPER_ADMIN") {
-    return DEFAULT_ROLE_PERMISSIONS.SUPER_ADMIN;
+  if (isAdminUser(user)) {
+    const role = user.role!.toUpperCase().replace(/\s+/g, "_");
+    return DEFAULT_ROLE_PERMISSIONS[role] || [];
   }
 
   if (user.permissions && Array.isArray(user.permissions)) {
