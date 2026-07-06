@@ -6,6 +6,48 @@ import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { hasPermission } from "../../../../lib/permissions";
 
+interface ChecklistItem {
+  itemCode: string;
+  itemLabel: string;
+  requiresGuardViolationDetails: boolean;
+  isActive: boolean;
+  sortOrder: number;
+}
+
+interface ChecklistSection {
+  sectionName: string;
+  items: ChecklistItem[];
+}
+
+const DEFAULT_CHECKLIST_CONFIG: ChecklistSection[] = [
+  {
+    sectionName: "Site Access / Security Control",
+    items: [
+      { itemCode: "SEC_GATE_CHECKED", itemLabel: "Main gate / entry-exit point checked", requiresGuardViolationDetails: false, isActive: true, sortOrder: 1 },
+      { itemCode: "SEC_VISITOR_CONTROL", itemLabel: "Visitor / vehicle movement controlled", requiresGuardViolationDetails: false, isActive: true, sortOrder: 2 },
+      { itemCode: "SEC_POST_ORDERS", itemLabel: "Post orders followed", requiresGuardViolationDetails: false, isActive: true, sortOrder: 3 }
+    ]
+  },
+  {
+    sectionName: "Guard Behavior",
+    items: [
+      { itemCode: "BEH_ALERT_ACTIVE", itemLabel: "Guard alert and active", requiresGuardViolationDetails: true, isActive: true, sortOrder: 4 },
+      { itemCode: "BEH_NOT_SLEEPING", itemLabel: "Guard not sleeping", requiresGuardViolationDetails: true, isActive: true, sortOrder: 5 },
+      { itemCode: "BEH_PHONE_USE", itemLabel: "Guard not using mobile unnecessarily", requiresGuardViolationDetails: true, isActive: true, sortOrder: 6 },
+      { itemCode: "BEH_AWAY_POST", itemLabel: "Guard not away from post without approval", requiresGuardViolationDetails: true, isActive: true, sortOrder: 7 },
+      { itemCode: "BEH_CLIENT_INSTRUCT", itemLabel: "Guard following client instructions", requiresGuardViolationDetails: true, isActive: true, sortOrder: 8 }
+    ]
+  },
+  {
+    sectionName: "Documents & Equipment",
+    items: [
+      { itemCode: "DOC_CONTRACT_EQUIP", itemLabel: "Required equipment available as per contract", requiresGuardViolationDetails: false, isActive: true, sortOrder: 9 },
+      { itemCode: "DOC_LOGBOOK_AVAIL", itemLabel: "Site logbook available", requiresGuardViolationDetails: false, isActive: true, sortOrder: 10 },
+      { itemCode: "DOC_VISITOR_REG", itemLabel: "Visitor register available", requiresGuardViolationDetails: false, isActive: true, sortOrder: 11 }
+    ]
+  }
+];
+
 export default function ManpowerMasterPage() {
   const params = useParams();
   const router = useRouter();
@@ -63,6 +105,15 @@ export default function ManpowerMasterPage() {
   // Form states inside Patrol Drawer
   const [verificationRecords, setVerificationRecords] = useState<Record<string, any>>({});
   const [checklistAnswers, setChecklistAnswers] = useState<Record<string, { status: "OK" | "NOT_OK" | "NA"; remarks: string }>>({});
+  const [guardViolations, setGuardViolations] = useState<Record<string, Array<{
+    id: string;
+    employeeCode: string;
+    employeeName: string;
+    postName: string;
+    remarks: string;
+    actionTaken: string;
+    errorMsg?: string;
+  }>>>({});
   const [incidentForm, setIncidentForm] = useState<any>({
     severity: "Medium",
     type: "Security breach",
@@ -3191,6 +3242,89 @@ export default function ManpowerMasterPage() {
     }
   };
 
+  const lookupGuardName = (code: string): { name: string; error?: string } => {
+    if (!code || code.trim() === "") return { name: "" };
+    const normalized = code.trim().toLowerCase();
+    
+    // 1. Search in workforceEmployees (which holds the security-guarding synced directory)
+    const foundInDirectory = workforceEmployees.find((emp: any) => 
+      emp.id?.toLowerCase() === normalized ||
+      emp.employeeCode?.toLowerCase() === normalized ||
+      emp.username?.toLowerCase() === normalized
+    );
+    if (foundInDirectory) {
+      return { name: foundInDirectory.name };
+    }
+
+    // 2. Search in deploymentsList assignments
+    for (const dep of deploymentsList) {
+      if (dep.assignments) {
+        for (const asg of dep.assignments) {
+          const emp = asg.employee;
+          if (emp) {
+            if (
+              emp.id?.toLowerCase() === normalized ||
+              emp.employeeCode?.toLowerCase() === normalized ||
+              emp.username?.toLowerCase() === normalized
+            ) {
+              return { name: emp.name };
+            }
+          }
+        }
+      }
+    }
+
+    return { 
+      name: "", 
+      error: "Guard not found in Security Guarding manpower directory or today’s deployment." 
+    };
+  };
+
+  const addViolationRow = (itemCode: string) => {
+    const currentList = guardViolations[itemCode] || [];
+    const newRow = {
+      id: Math.random().toString(36).substring(2, 9),
+      employeeCode: "",
+      employeeName: "",
+      postName: "",
+      remarks: "",
+      actionTaken: "",
+      errorMsg: undefined
+    };
+    setGuardViolations({
+      ...guardViolations,
+      [itemCode]: [...currentList, newRow]
+    });
+  };
+
+  const removeViolationRow = (itemCode: string, rowId: string) => {
+    const currentList = guardViolations[itemCode] || [];
+    setGuardViolations({
+      ...guardViolations,
+      [itemCode]: currentList.filter(row => row.id !== rowId)
+    });
+  };
+
+  const updateViolationRow = (itemCode: string, rowId: string, fields: any) => {
+    const currentList = guardViolations[itemCode] || [];
+    const updatedList = currentList.map(row => {
+      if (row.id === rowId) {
+        const merged = { ...row, ...fields };
+        if (fields.hasOwnProperty("employeeCode")) {
+          const lookup = lookupGuardName(fields.employeeCode);
+          merged.employeeName = lookup.name;
+          merged.errorMsg = lookup.error;
+        }
+        return merged;
+      }
+      return row;
+    });
+    setGuardViolations({
+      ...guardViolations,
+      [itemCode]: updatedList
+    });
+  };
+
   async function handleSavePatrolVisit(site: any) {
     if (!site) return;
     try {
@@ -3201,6 +3335,7 @@ export default function ManpowerMasterPage() {
         coordinatorName: session?.user?.name || "Patrolling Supervisor",
         verifications: verificationRecords,
         checklist: checklistAnswers,
+        guardViolations: guardViolations,
         incidents: Object.keys(incidentForm).some(k => incidentForm[k]) ? [incidentForm] : [],
         replacements: Object.keys(replacementForm).some(k => replacementForm[k]) ? [replacementForm] : [],
         clientNotes: Object.keys(clientNoteForm).some(k => clientNoteForm[k]) ? [clientNoteForm] : [],
@@ -3219,6 +3354,7 @@ export default function ManpowerMasterPage() {
         loadPatrolData();
         setVerificationRecords({});
         setChecklistAnswers({});
+        setGuardViolations({});
         setIncidentForm({
           severity: "Medium",
           type: "Security breach",
@@ -3485,7 +3621,7 @@ export default function ManpowerMasterPage() {
 
         {showPatrolDrawer && selectedPatrolSite && (
           <div className="fixed inset-0 bg-black/55 backdrop-blur-sm z-50 flex justify-end">
-            <div className="w-full max-w-4xl h-full bg-surface shadow-2xl flex flex-col border-l border-outline-variant animate-in slide-in-from-right duration-250">
+            <div className="w-full lg:w-[90%] max-w-none h-full bg-surface shadow-2xl flex flex-col border-l border-outline-variant animate-in slide-in-from-right duration-250">
               <div className="p-4 border-b border-outline-variant bg-surface-container-low flex justify-between items-center">
                 <div>
                   <h3 className="text-sm font-bold text-primary">{selectedPatrolSite.name}</h3>
@@ -3654,47 +3790,157 @@ export default function ManpowerMasterPage() {
                 )}
 
                 {patrolActiveTab === "checklist" && (
-                  <div className="space-y-6">
+                  <div className="space-y-6 animate-in fade-in duration-200">
                     <h4 className="text-xs font-bold uppercase tracking-wider text-primary border-b pb-1">Site Patrol Inspection Checklist</h4>
-                    {checklistSections.map((sec, sidx) => (
+                    {DEFAULT_CHECKLIST_CONFIG.map((sec, sidx) => (
                       <div key={sidx} className="space-y-3">
-                        <h5 className="text-xs font-bold text-on-surface-variant border-b border-outline-variant/40 pb-1">{sec.title}</h5>
-                        <div className="space-y-2.5">
-                          {sec.items.map((item, iidx) => {
-                            const current = checklistAnswers[item] || { status: "OK", remarks: "" };
+                        <h5 className="text-xs font-bold text-on-surface-variant border-b border-outline-variant/40 pb-1">{sec.sectionName}</h5>
+                        <div className="space-y-3">
+                          {sec.items.map((item) => {
+                            const current = checklistAnswers[item.itemCode] || { status: "OK", remarks: "" };
                             const updateItem = (fields: Partial<typeof current>) => {
                               setChecklistAnswers({
                                 ...checklistAnswers,
-                                [item]: { ...current, ...fields }
+                                [item.itemCode]: { ...current, ...fields }
                               });
                             };
 
+                            const violations = guardViolations[item.itemCode] || [];
+
                             return (
-                              <div key={iidx} className="flex flex-col md:flex-row md:items-center justify-between p-3 border border-outline-variant/60 rounded-lg bg-surface gap-3">
-                                <span className="text-xs font-semibold text-on-surface md:w-1/2">{item}</span>
-                                <div className="flex gap-3 text-xs items-center">
-                                  {["OK", "NOT_OK", "NA"].map(st => (
-                                    <label key={st} className="flex items-center gap-1 cursor-pointer">
-                                      <input
-                                        type="radio"
-                                        name={`check-${item}`}
-                                        checked={current.status === st}
-                                        onChange={() => updateItem({ status: st as any })}
-                                        className="text-primary focus:ring-primary"
-                                      />
-                                      <span className={`text-[11px] font-bold ${
-                                        st === "OK" ? "text-emerald-600" : st === "NOT_OK" ? "text-rose-600" : "text-on-surface-variant"
-                                      }`}>{st}</span>
-                                    </label>
-                                  ))}
+                              <div key={item.itemCode} className="flex flex-col p-4 border border-outline-variant/60 rounded-xl bg-surface shadow-sm gap-4">
+                                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                                  <span className="text-xs font-bold text-on-surface md:w-1/2">{item.itemLabel}</span>
+                                  <div className="flex gap-4 text-xs items-center">
+                                    {[
+                                      { value: "OK", label: "OK" },
+                                      { value: "NOT_OK", label: "Not OK" },
+                                      { value: "NA", label: "N/A" }
+                                    ].map(st => (
+                                      <label key={st.value} className="flex items-center gap-1.5 cursor-pointer">
+                                        <input
+                                          type="radio"
+                                          name={`check-${item.itemCode}`}
+                                          checked={current.status === st.value}
+                                          onChange={() => updateItem({ status: st.value as any })}
+                                          className="text-primary focus:ring-primary"
+                                        />
+                                        <span className={`text-[11px] font-bold ${
+                                          st.value === "OK" ? "text-emerald-600" : st.value === "NOT_OK" ? "text-rose-600" : "text-on-surface-variant"
+                                        }`}>{st.label}</span>
+                                      </label>
+                                    ))}
+                                  </div>
+                                  <input
+                                    type="text"
+                                    placeholder="Remarks..."
+                                    value={current.remarks}
+                                    onChange={(e) => updateItem({ remarks: e.target.value })}
+                                    className="bg-surface border border-outline-variant rounded px-2.5 py-1 text-xs text-on-surface md:w-1/3"
+                                  />
                                 </div>
-                                <input
-                                  type="text"
-                                  placeholder="Remarks (if NOT OK)..."
-                                  value={current.remarks}
-                                  onChange={(e) => updateItem({ remarks: e.target.value })}
-                                  className="bg-surface border border-outline-variant rounded px-2 py-1 text-xs text-on-surface md:w-1/3"
-                                />
+
+                                {item.requiresGuardViolationDetails && current.status === "NOT_OK" && (
+                                  <div className="p-4 border border-dashed border-outline-variant/60 bg-surface-container-lowest rounded-xl">
+                                    <div className="flex justify-between items-center mb-3">
+                                      <span className="text-xs font-bold text-rose-600 flex items-center gap-1">
+                                        <span className="material-symbols-outlined text-[16px]">warning</span>
+                                        Guard Behavior Violations Log
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => addViolationRow(item.itemCode)}
+                                        className="px-2.5 py-1 bg-[#0058be] hover:bg-[#004bb3] text-white text-[11px] font-bold rounded-lg flex items-center gap-1 transition-colors"
+                                      >
+                                        <span className="material-symbols-outlined text-[13px]">add</span>
+                                        Add Guard Violation Row
+                                      </button>
+                                    </div>
+                                    {violations.length === 0 ? (
+                                      <div className="text-center py-4 text-xs text-on-surface-variant italic">
+                                        No violations logged. Click button to log a guard behavior issue.
+                                      </div>
+                                    ) : (
+                                      <div className="overflow-x-auto">
+                                        <table className="w-full text-left text-xs border-collapse">
+                                          <thead>
+                                            <tr className="border-b border-outline-variant/60 text-on-surface-variant font-bold text-[10px] uppercase tracking-wider">
+                                              <th className="pb-2 w-[18%]">Guard Code / Clock No.</th>
+                                              <th className="pb-2 w-[22%]">Guard Name</th>
+                                              <th className="pb-2 w-[18%]">Post / Gate / Zone</th>
+                                              <th className="pb-2 w-[22%]">Specific Violation / Remarks</th>
+                                              <th className="pb-2 w-[15%]">Action / Corrective Action</th>
+                                              <th className="pb-2 text-right w-[5%]">Remove</th>
+                                            </tr>
+                                          </thead>
+                                          <tbody className="divide-y divide-outline-variant/30">
+                                            {violations.map((row) => (
+                                              <tr key={row.id} className="align-top">
+                                                <td className="py-2.5 pr-2">
+                                                  <input
+                                                    type="text"
+                                                    placeholder="E.g. SEC-1001"
+                                                    value={row.employeeCode}
+                                                    onChange={(e) => updateViolationRow(item.itemCode, row.id, { employeeCode: e.target.value })}
+                                                    className="w-full bg-surface border border-outline-variant rounded px-2 py-1 text-xs text-on-surface focus:border-primary focus:outline-none"
+                                                  />
+                                                  {row.errorMsg && (
+                                                    <p className="text-rose-600 font-bold mt-1 text-[9px] leading-tight">{row.errorMsg}</p>
+                                                  )}
+                                                </td>
+                                                <td className="py-2.5 pr-2">
+                                                  <input
+                                                    type="text"
+                                                    readOnly
+                                                    placeholder="Auto-populated"
+                                                    value={row.employeeName}
+                                                    className="w-full bg-surface-container-low border border-outline-variant rounded px-2 py-1 text-xs text-on-surface-variant focus:outline-none font-bold"
+                                                  />
+                                                </td>
+                                                <td className="py-2.5 pr-2">
+                                                  <input
+                                                    type="text"
+                                                    placeholder="Gate 1 / Zone A"
+                                                    value={row.postName}
+                                                    onChange={(e) => updateViolationRow(item.itemCode, row.id, { postName: e.target.value })}
+                                                    className="w-full bg-surface border border-outline-variant rounded px-2 py-1 text-xs text-on-surface focus:border-primary focus:outline-none"
+                                                  />
+                                                </td>
+                                                <td className="py-2.5 pr-2">
+                                                  <input
+                                                    type="text"
+                                                    placeholder="Details of behavior..."
+                                                    value={row.remarks}
+                                                    onChange={(e) => updateViolationRow(item.itemCode, row.id, { remarks: e.target.value })}
+                                                    className="w-full bg-surface border border-outline-variant rounded px-2 py-1 text-xs text-on-surface focus:border-primary focus:outline-none"
+                                                  />
+                                                </td>
+                                                <td className="py-2.5 pr-2">
+                                                  <input
+                                                    type="text"
+                                                    placeholder="Action taken..."
+                                                    value={row.actionTaken}
+                                                    onChange={(e) => updateViolationRow(item.itemCode, row.id, { actionTaken: e.target.value })}
+                                                    className="w-full bg-surface border border-outline-variant rounded px-2 py-1 text-xs text-on-surface focus:border-primary focus:outline-none"
+                                                  />
+                                                </td>
+                                                <td className="py-2.5 text-right">
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => removeViolationRow(item.itemCode, row.id)}
+                                                    className="w-7 h-7 rounded-lg hover:bg-rose-500/10 text-rose-600 transition-colors flex items-center justify-center ml-auto"
+                                                  >
+                                                    <span className="material-symbols-outlined text-[18px]">delete</span>
+                                                  </button>
+                                                </td>
+                                              </tr>
+                                            ))}
+                                          </tbody>
+                                        </table>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
                               </div>
                             );
                           })}
@@ -4039,75 +4285,144 @@ export default function ManpowerMasterPage() {
                   </div>
                 )}
 
-                {patrolActiveTab === "report" && (
-                  <div className="space-y-6">
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-primary border-b pb-1">Site Patrol Summary Report Preview</h4>
-                    <div className="p-4 border border-outline-variant rounded-xl bg-surface shadow-sm space-y-4">
-                      <div className="grid grid-cols-2 gap-4 text-xs border-b border-outline-variant/60 pb-3 font-bold">
-                        <div>
-                          <span className="text-on-surface-variant">Site Name:</span>
-                          <span className="text-on-surface ml-2">{selectedPatrolSite.name}</span>
-                        </div>
-                        <div>
-                          <span className="text-on-surface-variant">Date:</span>
-                          <span className="text-on-surface ml-2">{new Date().toLocaleDateString()}</span>
-                        </div>
-                        <div>
-                          <span className="text-on-surface-variant">Patrolling Supervisor:</span>
-                          <span className="text-on-surface ml-2">{session?.user?.name || "Patrol Coordinator"}</span>
-                        </div>
-                        <div>
-                          <span className="text-on-surface-variant">Visit Time:</span>
-                          <span className="text-on-surface ml-2">{new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                        </div>
-                      </div>
+                {patrolActiveTab === "report" && (() => {
+                  const allViolations = Object.entries(guardViolations).flatMap(([itemCode, rows]) => {
+                    const itemLabel = DEFAULT_CHECKLIST_CONFIG
+                      .flatMap(sec => sec.items)
+                      .find(it => it.itemCode === itemCode)?.itemLabel || itemCode;
+                    return rows.map(r => ({ ...r, itemLabel }));
+                  });
 
-                      <div className="space-y-2 text-xs">
-                        <h5 className="font-bold text-on-surface">Inspected Guards:</h5>
-                        <ul className="list-disc pl-5 space-y-1">
-                          {getPlannedGuardsForSite(selectedPatrolSite.id).map((g: any) => {
-                            const rec = verificationRecords[g.id] || { status: "Present" };
-                            return (
-                              <li key={g.id}>
-                                <span className="font-bold">{g.employeeName}</span> ({g.employeeId}) — Status:
-                                <span className={`ml-1 font-bold ${
-                                  rec.status === "Present" ? "text-emerald-600" : "text-rose-600"
-                                }`}>{rec.status}</span>
-                              </li>
-                            );
-                          })}
-                        </ul>
-                      </div>
+                  const docIssues = DEFAULT_CHECKLIST_CONFIG
+                    .find(sec => sec.sectionName === "Documents & Equipment")
+                    ?.items.filter(it => checklistAnswers[it.itemCode]?.status === "NOT_OK")
+                    .map(it => ({
+                      label: it.itemLabel,
+                      remarks: checklistAnswers[it.itemCode]?.remarks
+                    })) || [];
 
-                      <div className="space-y-2 text-xs">
-                        <h5 className="font-bold text-on-surface">Inspection Checklist Summary:</h5>
-                        <div className="grid grid-cols-2 gap-2 text-[11px]">
-                          <div>OK Checklist items: <span className="text-emerald-600 font-bold">{Object.values(checklistAnswers).filter(a => a.status === "OK").length}</span></div>
-                          <div>Not OK items: <span className="text-rose-600 font-bold">{Object.values(checklistAnswers).filter(a => a.status === "NOT_OK").length}</span></div>
+                  return (
+                    <div className="space-y-6">
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-primary border-b pb-1">Site Patrol Summary Report Preview</h4>
+                      <div className="p-4 border border-outline-variant rounded-xl bg-surface shadow-sm space-y-4">
+                        <div className="grid grid-cols-2 gap-4 text-xs border-b border-outline-variant/60 pb-3 font-bold">
+                          <div>
+                            <span className="text-on-surface-variant">Site Name:</span>
+                            <span className="text-on-surface ml-2">{selectedPatrolSite.name}</span>
+                          </div>
+                          <div>
+                            <span className="text-on-surface-variant">Date:</span>
+                            <span className="text-on-surface ml-2">{new Date().toLocaleDateString()}</span>
+                          </div>
+                          <div>
+                            <span className="text-on-surface-variant">Patrolling Supervisor:</span>
+                            <span className="text-on-surface ml-2">{session?.user?.name || "Patrol Coordinator"}</span>
+                          </div>
+                          <div>
+                            <span className="text-on-surface-variant">Visit Time:</span>
+                            <span className="text-on-surface ml-2">{new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                          </div>
                         </div>
-                      </div>
 
-                      {incidentForm.description && (
-                        <div className="space-y-2 text-xs bg-rose-500/5 p-3 rounded-lg border border-rose-500/10">
-                          <h5 className="font-bold text-rose-600 flex items-center gap-1">
-                            <span className="material-symbols-outlined text-[15px]">report</span>
-                            Reported Incident:
-                          </h5>
-                          <div>Type: <span className="font-bold">{incidentForm.type}</span> ({incidentForm.severity})</div>
-                          <div className="italic text-on-surface-variant mt-1">"{incidentForm.description}"</div>
+                        <div className="space-y-2 text-xs">
+                          <h5 className="font-bold text-on-surface">Inspected Guards:</h5>
+                          <ul className="list-disc pl-5 space-y-1">
+                            {getPlannedGuardsForSite(selectedPatrolSite.id).map((g: any) => {
+                              const rec = verificationRecords[g.id] || { status: "Present" };
+                              return (
+                                <li key={g.id}>
+                                  <span className="font-bold">{g.employeeName}</span> ({g.employeeId}) — Status:
+                                  <span className={`ml-1 font-bold ${
+                                    rec.status === "Present" ? "text-emerald-600" : "text-rose-600"
+                                  }`}>{rec.status}</span>
+                                </li>
+                              );
+                            })}
+                          </ul>
                         </div>
-                      )}
 
-                      {replacementForm.originalGuard && (
-                        <div className="space-y-2 text-xs bg-amber-500/5 p-3 rounded-lg border border-amber-500/10">
-                          <h5 className="font-bold text-amber-600 flex items-center gap-1">
-                            <span className="material-symbols-outlined text-[15px]">swap_horiz</span>
-                            Replacement Request:
-                          </h5>
-                          <div>Original: <span className="font-bold">{replacementForm.originalGuard}</span> ➔ Replacement: <span className="font-bold">{replacementForm.replacementGuard || "TBD"}</span></div>
-                          <div>Status: <span className="font-bold">{replacementForm.status}</span></div>
+                        <div className="space-y-2 text-xs">
+                          <h5 className="font-bold text-on-surface">Inspection Checklist Summary:</h5>
+                          <div className="grid grid-cols-3 gap-2 text-[11px] font-bold">
+                            <div className="text-emerald-600">OK Checklist items: <span>{Object.values(checklistAnswers).filter(a => a.status === "OK").length}</span></div>
+                            <div className="text-rose-600">Not OK items: <span>{Object.values(checklistAnswers).filter(a => a.status === "NOT_OK").length}</span></div>
+                            <div className="text-on-surface-variant">N/A items: <span>{Object.values(checklistAnswers).filter(a => a.status === "NA").length}</span></div>
+                          </div>
                         </div>
-                      )}
+
+                        {allViolations.length > 0 && (
+                          <div className="space-y-2 text-xs bg-rose-500/5 p-3 rounded-lg border border-rose-500/10">
+                            <h5 className="font-bold text-rose-600 flex items-center gap-1">
+                              <span className="material-symbols-outlined text-[15px]">report_problem</span>
+                              Logged Guard Behavior Violations:
+                            </h5>
+                            <div className="overflow-x-auto mt-2">
+                              <table className="w-full text-left text-[11px] border-collapse">
+                                <thead>
+                                  <tr className="border-b border-outline-variant text-[10px] text-on-surface-variant font-bold uppercase">
+                                    <th className="pb-1">Checklist Item</th>
+                                    <th className="pb-1">Guard Code</th>
+                                    <th className="pb-1">Guard Name</th>
+                                    <th className="pb-1">Post / Gate</th>
+                                    <th className="pb-1">Remarks</th>
+                                    <th className="pb-1">Action Taken</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {allViolations.map((violation, idx) => (
+                                    <tr key={idx} className="border-b border-outline-variant/30 py-1">
+                                      <td className="py-1.5 font-bold text-on-surface-variant pr-2">{violation.itemLabel}</td>
+                                      <td className="py-1.5 font-mono pr-2">{violation.employeeCode}</td>
+                                      <td className="py-1.5 font-bold pr-2">{violation.employeeName}</td>
+                                      <td className="py-1.5 pr-2">{violation.postName}</td>
+                                      <td className="py-1.5 pr-2 italic">"{violation.remarks}"</td>
+                                      <td className="py-1.5 pr-2">{violation.actionTaken}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        )}
+
+                        {docIssues.length > 0 && (
+                          <div className="space-y-2 text-xs bg-amber-500/5 p-3 rounded-lg border border-amber-500/10">
+                            <h5 className="font-bold text-amber-600 flex items-center gap-1">
+                              <span className="material-symbols-outlined text-[15px]">construction</span>
+                              Documents & Equipment Issues:
+                            </h5>
+                            <ul className="list-disc pl-5 space-y-1">
+                              {docIssues.map((issue, idx) => (
+                                <li key={idx}>
+                                  <span className="font-bold">{issue.label}</span>
+                                  {issue.remarks ? ` — Remarks: "${issue.remarks}"` : ""}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+
+                        {incidentForm.description && (
+                          <div className="space-y-2 text-xs bg-rose-500/5 p-3 rounded-lg border border-rose-500/10">
+                            <h5 className="font-bold text-rose-600 flex items-center gap-1">
+                              <span className="material-symbols-outlined text-[15px]">report</span>
+                              Reported Incident:
+                            </h5>
+                            <div>Type: <span className="font-bold">{incidentForm.type}</span> ({incidentForm.severity})</div>
+                            <div className="italic text-on-surface-variant mt-1">"{incidentForm.description}"</div>
+                          </div>
+                        )}
+
+                        {replacementForm.originalGuard && (
+                          <div className="space-y-2 text-xs bg-amber-500/5 p-3 rounded-lg border border-amber-500/10">
+                            <h5 className="font-bold text-amber-600 flex items-center gap-1">
+                              <span className="material-symbols-outlined text-[15px]">swap_horiz</span>
+                              Replacement Request:
+                            </h5>
+                            <div>Original: <span className="font-bold">{replacementForm.originalGuard}</span> ➔ Replacement: <span className="font-bold">{replacementForm.replacementGuard || "TBD"}</span></div>
+                            <div>Status: <span className="font-bold">{replacementForm.status}</span></div>
+                          </div>
+                        )}
                     </div>
 
                     <div className="p-3 bg-surface-container-low rounded-xl text-xs text-on-surface-variant flex items-center gap-2 border border-outline-variant">
@@ -4115,7 +4430,8 @@ export default function ManpowerMasterPage() {
                       <span>Exporting PDF and sending notifications to operations is currently disabled (coming in Phase 2).</span>
                     </div>
                   </div>
-                )}
+                );
+              })()}
               </div>
 
               <div className="p-4 border-t border-outline-variant flex justify-between items-center bg-surface-container-low">
