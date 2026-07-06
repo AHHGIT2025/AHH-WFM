@@ -9,10 +9,6 @@ export default withAuth(
       return NextResponse.redirect(new URL("/change-password", req.url));
     }
 
-    // Block standard employees from accessing Web Admin dashboards
-    if (token && token.role !== "ADMIN" && token.role !== "SUPERVISOR") {
-      return NextResponse.redirect(new URL("/login?error=UnauthorizedAccess", req.url));
-    }
   },
   {
     callbacks: {

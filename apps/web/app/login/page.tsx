@@ -27,6 +27,19 @@ function LoginForm() {
     setLoginError("");
 
     try {
+      // Pre-check credentials for explicit error messaging
+      const checkRes = await fetch("/api/v1/auth/pre-check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+      const checkData = await checkRes.json();
+      if (!checkData.success) {
+        setLoginError(checkData.error || "Invalid username or password.");
+        setLoading(false);
+        return;
+      }
+
       const res = await signIn("credentials", {
         email,
         password,
@@ -34,11 +47,7 @@ function LoginForm() {
       });
 
       if (res?.error) {
-        if (res.error === "CredentialsSignin") {
-          setLoginError("Invalid email/username or password. Please try again.");
-        } else {
-          setLoginError(res.error);
-        }
+        setLoginError("Invalid username or password.");
       } else {
         router.push("/");
         router.refresh();

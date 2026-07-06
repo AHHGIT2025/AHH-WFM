@@ -116,7 +116,7 @@ export const authOptions: NextAuthOptions = {
 
           if (employee) {
             if (employee.isActive === false) {
-              throw new Error("Your account is inactive. Please contact HR/Admin.");
+              throw new Error("Your account is inactive. Please contact administrator.");
             }
 
             if (employee.isLoginEnabled === false) {
@@ -129,7 +129,7 @@ export const authOptions: NextAuthOptions = {
             }
 
             if (employee.webAccessEnabled === false) {
-              throw new Error("Your web access is disabled. Please contact HR/Admin.");
+              throw new Error("Web access is not enabled for this user.");
             }
             
             if (employee.isLocked) {

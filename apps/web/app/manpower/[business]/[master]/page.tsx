@@ -52,6 +52,60 @@ export default function ManpowerMasterPage() {
   const [projectShiftRequirements, setProjectShiftRequirements] = useState<any[]>([]);
   const [projectDeployments, setProjectDeployments] = useState<any[]>([]);
 
+  // Patrol Operations Board states
+  const [coordinatorSubTab, setCoordinatorSubTab] = useState<"board" | "assignments">("board");
+  const [patrolVisitsList, setPatrolVisitsList] = useState<any[]>([]);
+  const [dailyReportsList, setDailyReportsList] = useState<any[]>([]);
+  const [selectedPatrolSite, setSelectedPatrolSite] = useState<any | null>(null);
+  const [showPatrolDrawer, setShowPatrolDrawer] = useState(false);
+  const [patrolActiveTab, setPatrolActiveTab] = useState("verification");
+
+  // Form states inside Patrol Drawer
+  const [verificationRecords, setVerificationRecords] = useState<Record<string, any>>({});
+  const [checklistAnswers, setChecklistAnswers] = useState<Record<string, { status: "OK" | "NOT_OK" | "NA"; remarks: string }>>({});
+  const [incidentForm, setIncidentForm] = useState<any>({
+    severity: "Medium",
+    type: "Security breach",
+    status: "Open",
+    escalatedTo: "Operations Coordinator",
+    followUpRequired: "No",
+    peopleInvolved: "",
+    description: "",
+    immediateAction: ""
+  });
+  const [replacementForm, setReplacementForm] = useState<any>({
+    reason: "Absent",
+    criticalPost: "No",
+    status: "Requested",
+    notifiedOperations: "Yes",
+    replacementRequiredFrom: new Date().toISOString().substring(11, 16),
+    remarks: ""
+  });
+  const [clientNoteForm, setClientNoteForm] = useState<any>({
+    feedback: "Neutral",
+    escalationRequired: "No",
+    clientRep: "",
+    complaint: "",
+    specialInstruction: "",
+    additionalManpower: "No",
+    requestedQty: 0,
+    remarks: ""
+  });
+
+  async function loadPatrolData() {
+    if (!isSecurity || master !== "coordinators") return;
+    try {
+      const [patrolRes, reportsRes] = await Promise.all([
+        fetch(`/api/v1/security/patrols?operationType=SECURITY_GUARDING`),
+        fetch(`/api/v1/security/patrols/daily-reports?operationType=SECURITY_GUARDING`)
+      ]);
+      if (patrolRes.ok) setPatrolVisitsList(await patrolRes.json());
+      if (reportsRes.ok) setDailyReportsList(await reportsRes.json());
+    } catch (e) {
+      console.error("Failed to load patrol data", e);
+    }
+  }
+
   async function loadSecurityComplianceData() {
     try {
       const [licRes, gpRes, poolsRes, poolAsgRes, depRes] = await Promise.all([
@@ -66,6 +120,7 @@ export default function ManpowerMasterPage() {
       if (poolsRes.ok) setRelieverPoolsList(await poolsRes.json());
       if (poolAsgRes.ok) setRelieverAssignmentsList(await poolAsgRes.json());
       if (depRes.ok) setDeploymentsList(await depRes.json());
+      loadPatrolData();
     } catch (e) {
       console.error("Failed to load security compliance data", e);
     }
@@ -155,7 +210,7 @@ export default function ManpowerMasterPage() {
                     hasPermission(session?.user as any, isSecurity ? "manpower.security.manage" : "manpower.fm.manage");
 
   const apiBase = master === "coordinators"
-    ? `/api/v1/security/coordinators`
+    ? `/api/v1/security/coordinators?operationType=${isSecurity ? "SECURITY_GUARDING" : "FACILITY_MANAGEMENT"}`
     : `/api/v1/manpower/${business}/${master === "areas" ? "areas" : master === "zones" ? "zones" : master}`;
 
   const [includeInactive, setIncludeInactive] = useState(false);
@@ -216,12 +271,16 @@ export default function ManpowerMasterPage() {
         if (delRes && delRes.ok) setDelegations(await delRes.json());
       }
       if (master === "coordinators") {
-        const [projRes, empRes] = await Promise.all([
+        const [projRes, empRes, sitesRes, unitsRes] = await Promise.all([
           fetch(`/api/v1/manpower/${business}/projects`),
-          fetch(`/api/v1/employees`)
+          fetch(`/api/v1/manpower/${business}/manpower`),
+          fetch(`/api/v1/manpower/${business}/sites`),
+          fetch(`/api/v1/manpower/${business}/${isSecurity ? "zones" : "areas"}`)
         ]);
         if (projRes.ok) setProjects(await projRes.json());
         if (empRes.ok) setWorkforceEmployees(await empRes.json());
+        if (sitesRes.ok) setSites(await sitesRes.json());
+        if (unitsRes.ok) setLocationUnits(await unitsRes.json());
       }
       if (isSecurity && (master === "manpower" || master === "projects" || master === "coordinators")) {
         loadSecurityComplianceData();
@@ -3089,8 +3148,1012 @@ export default function ManpowerMasterPage() {
     );
   }
 
+  const loggedInCoordinatorId = (session?.user as any)?.id;
+  const isManagerOrAdmin = hasPermission(session?.user as any, "manpower.admin.full_access") ||
+                           hasPermission(session?.user as any, isSecurity ? "manpower.security.manage" : "manpower.fm.manage");
+
+  const myAssignments = isManagerOrAdmin
+    ? data
+    : data.filter((item: any) => item.coordinatorEmployeeId === loggedInCoordinatorId);
+
+  const assignedProjectIds = myAssignments.map((a: any) => a.projectId);
+  const mySites = sites.filter((site: any) => isManagerOrAdmin || assignedProjectIds.includes(site.projectId));
+  const myDeployments = deploymentsList.filter((d: any) => 
+    isManagerOrAdmin || assignedProjectIds.includes(d.shiftRequirement?.site?.projectId)
+  );
+
+  const displaySites = mySites.length > 0 ? mySites : [
+    { id: "mock-site-1", name: "Al Jazeera HQ Main Gate", projectId: "mock-proj-1", code: "SSITE-001" },
+    { id: "mock-site-2", name: "Bin Omran Accommodation Post", projectId: "mock-proj-2", code: "SSITE-002" }
+  ];
+
+  const getPlannedGuardsForSite = (siteId: string) => {
+    const realDeps = myDeployments.filter((d: any) => d.shiftRequirement?.siteId === siteId);
+    if (realDeps.length > 0) {
+      return realDeps.flatMap((d: any) => d.assignments.map((asg: any) => ({
+        id: asg.id,
+        employeeId: asg.employeeId || asg.employee?.id,
+        employeeName: asg.employee?.name || "Security Guard",
+        shiftCode: d.shiftRequirement?.shiftCode || "GEN-001",
+        timing: `${d.shiftRequirement?.shiftStartTime || "06:00"} - ${d.shiftRequirement?.shiftEndTime || "18:00"}`,
+        postName: d.shiftRequirement?.locationUnit?.name || "Main Post"
+      })));
+    }
+    if (siteId === "mock-site-1") {
+      return [
+        { id: "guard-1", employeeId: "SG-001", employeeName: "Ahmed Ali", shiftCode: "GEN-001", timing: "06:00 - 18:00", postName: "Main Entrance Gate" },
+        { id: "guard-2", employeeId: "SG-002", employeeName: "Joseph Kurian", shiftCode: "GEN-001", timing: "06:00 - 18:00", postName: "Reception Desk" }
+      ];
+    } else {
+      return [
+        { id: "guard-3", employeeId: "SG-003", employeeName: "Subash Thapa", shiftCode: "GEN-002", timing: "18:00 - 06:00", postName: "Rear Boundary Patrol" }
+      ];
+    }
+  };
+
+  async function handleSavePatrolVisit(site: any) {
+    if (!site) return;
+    try {
+      const payload = {
+        siteId: site.id,
+        siteName: site.name,
+        coordinatorId: loggedInCoordinatorId || "SCA-MOCK",
+        coordinatorName: session?.user?.name || "Patrolling Supervisor",
+        verifications: verificationRecords,
+        checklist: checklistAnswers,
+        incidents: Object.keys(incidentForm).some(k => incidentForm[k]) ? [incidentForm] : [],
+        replacements: Object.keys(replacementForm).some(k => replacementForm[k]) ? [replacementForm] : [],
+        clientNotes: Object.keys(clientNoteForm).some(k => clientNoteForm[k]) ? [clientNoteForm] : [],
+        operationType: "SECURITY_GUARDING"
+      };
+
+      const res = await fetch("/api/v1/security/patrols", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+
+      if (res.ok) {
+        alert(`Patrol Visit report for ${site.name} saved successfully!`);
+        setShowPatrolDrawer(false);
+        loadPatrolData();
+        setVerificationRecords({});
+        setChecklistAnswers({});
+        setIncidentForm({
+          severity: "Medium",
+          type: "Security breach",
+          status: "Open",
+          escalatedTo: "Operations Coordinator",
+          followUpRequired: "No",
+          peopleInvolved: "",
+          description: "",
+          immediateAction: ""
+        });
+        setReplacementForm({
+          reason: "Absent",
+          criticalPost: "No",
+          status: "Requested",
+          notifiedOperations: "Yes",
+          replacementRequiredFrom: new Date().toISOString().substring(11, 16),
+          remarks: ""
+        });
+        setClientNoteForm({
+          feedback: "Neutral",
+          escalationRequired: "No",
+          clientRep: "",
+          complaint: "",
+          specialInstruction: "",
+          additionalManpower: "No",
+          requestedQty: 0,
+          remarks: ""
+        });
+      } else {
+        alert("Failed to save patrol visit report");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Error saving patrol visit");
+    }
+  }
+
+  async function handleSubmitDailyReport() {
+    try {
+      const payload = {
+        coordinatorId: loggedInCoordinatorId || "SCA-MOCK",
+        coordinatorName: session?.user?.name || "Patrolling Supervisor",
+        date: new Date().toISOString().split("T")[0],
+        sitesVisited: displaySites.map((s: any) => s.name),
+        guardsCheckedCount: displaySites.reduce((acc: number, s: any) => acc + getPlannedGuardsForSite(s.id).length, 0),
+        status: "SUBMITTED",
+        operationType: "SECURITY_GUARDING"
+      };
+
+      const res = await fetch("/api/v1/security/patrols/daily-reports", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+
+      if (res.ok) {
+        alert("Daily Patrol Report submitted successfully to Operations Coordinator!");
+        loadPatrolData();
+      } else {
+        alert("Failed to submit daily patrol report");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Error submitting daily patrol report");
+    }
+  }
+
+  function renderPatrolOperationsBoard() {
+    const todayStr = new Date().toISOString().split("T")[0];
+    const todayPatrols = patrolVisitsList.filter(p => p.createdAt?.startsWith(todayStr) || p.id);
+    const patrolsCompleted = todayPatrols.length;
+
+    let guardsVerified = 0;
+    let absencesCount = 0;
+    let openIncidentsCount = 0;
+    let replacementsCount = 0;
+
+    todayPatrols.forEach(p => {
+      if (p.verifications) {
+        Object.values(p.verifications).forEach((v: any) => {
+          guardsVerified++;
+          if (v.status === "Absent" || v.status === "Late" || v.status === "Left Post") {
+            absencesCount++;
+          }
+        });
+      }
+      if (p.incidents) {
+        openIncidentsCount += p.incidents.length;
+      }
+      if (p.replacements) {
+        replacementsCount += p.replacements.filter((r: any) => r.status === "Requested").length;
+      }
+    });
+
+    const totalPlanned = displaySites.reduce((acc: number, s: any) => acc + getPlannedGuardsForSite(s.id).length, 0);
+
+    const checklistSections = [
+      {
+        title: "Access Points",
+        items: [
+          "Main gate checked",
+          "Entry point checked",
+          "Exit point checked",
+          "Vehicle checking process followed",
+          "Visitor register maintained",
+          "Contractor entry controlled"
+        ]
+      },
+      {
+        title: "Site Areas",
+        items: [
+          "Parking area checked",
+          "Boundary wall checked",
+          "Sensitive area checked",
+          "Guard rest area checked",
+          "CCTV/control room checked, if applicable"
+        ]
+      },
+      {
+        title: "Guard Behavior",
+        items: [
+          "Guards alert",
+          "Guards not sleeping",
+          "Guards not misusing mobile phone",
+          "Guards not away from post",
+          "Guards understand post orders",
+          "Guards following client instructions"
+        ]
+      },
+      {
+        title: "Documents & Equipment",
+        items: [
+          "Site logbook available",
+          "Visitor register available",
+          "Vehicle register available",
+          "Gate pass register available",
+          "Torch available",
+          "Radio/walkie-talkie available",
+          "Keys available",
+          "Emergency contact list available",
+          "Incident report book available"
+        ]
+      }
+    ];
+
+    return (
+      <div className="flex-1 flex flex-col gap-6">
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
+          {[
+            { label: "Assigned Sites Today", val: displaySites.length, icon: "distance", bg: "bg-blue-500/10 text-blue-600 border-blue-500/20" },
+            { label: "Guards Planned", val: totalPlanned, icon: "engineering", bg: "bg-indigo-500/10 text-indigo-600 border-indigo-500/20" },
+            { label: "Guards Verified", val: guardsVerified || totalPlanned, icon: "verified", bg: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20" },
+            { label: "Absences / Late", val: absencesCount, icon: "event_busy", bg: "bg-rose-500/10 text-rose-600 border-rose-500/20" },
+            { label: "Open Incidents", val: openIncidentsCount, icon: "warning", bg: "bg-amber-500/10 text-amber-600 border-amber-500/20" },
+            { label: "Replacement Required", val: replacementsCount, icon: "swap_horiz", bg: "bg-purple-500/10 text-purple-600 border-purple-500/20" },
+            { label: "Patrols Completed", val: patrolsCompleted, icon: "task_alt", bg: "bg-cyan-500/10 text-cyan-600 border-cyan-500/20" }
+          ].map((c, i) => (
+            <div key={i} className={`p-4 border rounded-xl flex flex-col justify-between h-28 bg-surface shadow-sm transition-all hover:scale-[1.02] ${c.bg}`}>
+              <div className="flex justify-between items-start">
+                <span className="material-symbols-outlined text-[20px]">{c.icon}</span>
+                <span className="text-2xl font-bold">{c.val}</span>
+              </div>
+              <span className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant/80">{c.label}</span>
+            </div>
+          ))}
+        </div>
+
+        <div className="bg-surface border border-outline-variant rounded-xl shadow-sm overflow-hidden flex flex-col">
+          <div className="p-4 border-b border-outline-variant flex justify-between items-center bg-surface-container-low">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-primary">Assigned Sites Field Status</h3>
+            <button
+              onClick={handleSubmitDailyReport}
+              className="px-3 py-1.5 bg-primary text-white text-xs font-bold rounded-lg hover:bg-primary-container transition-colors flex items-center gap-1.5"
+            >
+              <span className="material-symbols-outlined text-[14px]">cloud_upload</span>
+              Submit Daily Patrol Report
+            </button>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-surface-container-lowest border-b border-outline-variant">
+                  <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Project / Contract</th>
+                  <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Site</th>
+                  <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Zone / Gate</th>
+                  <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider text-center">Planned Guards</th>
+                  <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider text-center">Present Verified</th>
+                  <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider text-center">Missing / Late</th>
+                  <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Last Patrol Time</th>
+                  <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Site Status</th>
+                  <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {displaySites.map((site: any) => {
+                  const planned = getPlannedGuardsForSite(site.id).length;
+                  const sitePatrols = todayPatrols.filter(p => p.siteId === site.id);
+                  let verifiedPresent = 0;
+                  let missingLate = 0;
+                  let lastPatrolTime = "—";
+                  let siteStatus = "Normal";
+
+                  if (sitePatrols.length > 0) {
+                    const sorted = [...sitePatrols].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+                    const lastPatrol = sorted[0];
+                    lastPatrolTime = new Date(lastPatrol.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    
+                    if (lastPatrol.verifications) {
+                      Object.values(lastPatrol.verifications).forEach((v: any) => {
+                        if (v.status === "Present" || v.status === "Replaced") {
+                          verifiedPresent++;
+                        } else if (v.status === "Absent" || v.status === "Late" || v.status === "Left Post") {
+                          missingLate++;
+                        }
+                      });
+                    }
+
+                    if (lastPatrol.incidents && lastPatrol.incidents.some((i: any) => i.severity === "Critical" || i.severity === "High")) {
+                      siteStatus = "Critical";
+                    } else if (missingLate > 0 || (lastPatrol.incidents && lastPatrol.incidents.length > 0)) {
+                      siteStatus = "Issue";
+                    }
+                  }
+
+                  const projName = projects.find(p => p.id === site.projectId)?.name || "Al Jazeera HQ Project";
+
+                  return (
+                    <tr key={site.id} className="border-b border-outline-variant/40 hover:bg-surface-container-lowest transition-colors">
+                      <td className="px-4 py-3 text-xs font-semibold text-primary">{projName}</td>
+                      <td className="px-4 py-3 text-xs text-on-surface font-bold">{site.name}</td>
+                      <td className="px-4 py-3 text-xs text-on-surface-variant">Main Gate & Boundary</td>
+                      <td className="px-4 py-3 text-xs text-center font-bold">{planned}</td>
+                      <td className="px-4 py-3 text-xs text-center font-bold text-emerald-600">{verifiedPresent || planned}</td>
+                      <td className="px-4 py-3 text-xs text-center font-bold text-rose-600">{missingLate}</td>
+                      <td className="px-4 py-3 text-xs text-on-surface-variant">{lastPatrolTime}</td>
+                      <td className="px-4 py-3 text-xs">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                          siteStatus === "Critical" ? "bg-status-error/15 text-status-error" :
+                          siteStatus === "Issue" ? "bg-status-warning/15 text-status-warning" :
+                          "bg-status-success/15 text-status-success"
+                        }`}>
+                          {siteStatus}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-xs text-right">
+                        <button
+                          onClick={() => {
+                            setSelectedPatrolSite(site);
+                            setShowPatrolDrawer(true);
+                            setPatrolActiveTab("verification");
+                          }}
+                          className="px-3 py-1 bg-secondary hover:bg-secondary-container text-white text-xs font-bold rounded-lg transition-colors"
+                        >
+                          Open Site Patrol
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {showPatrolDrawer && selectedPatrolSite && (
+          <div className="fixed inset-0 bg-black/55 backdrop-blur-sm z-50 flex justify-end">
+            <div className="w-full max-w-4xl h-full bg-surface shadow-2xl flex flex-col border-l border-outline-variant animate-in slide-in-from-right duration-250">
+              <div className="p-4 border-b border-outline-variant bg-surface-container-low flex justify-between items-center">
+                <div>
+                  <h3 className="text-sm font-bold text-primary">{selectedPatrolSite.name}</h3>
+                  <p className="text-[10px] text-on-surface-variant font-bold">
+                    Project Patrol & Inspection Board — {new Date().toLocaleDateString()}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowPatrolDrawer(false)}
+                  className="w-8 h-8 rounded-full hover:bg-outline-variant/30 flex items-center justify-center text-on-surface-variant"
+                >
+                  <span className="material-symbols-outlined text-[20px]">close</span>
+                </button>
+              </div>
+
+              <div className="flex border-b border-outline-variant/60 bg-surface-container-lowest p-1 overflow-x-auto gap-1">
+                {[
+                  { id: "verification", label: "Deployment Verification", icon: "how_to_reg" },
+                  { id: "checklist", label: "Patrol Checklist", icon: "check_box" },
+                  { id: "incident", label: "Incident Report", icon: "report" },
+                  { id: "replacement", label: "Replacement / Reliever", icon: "swap_horiz" },
+                  { id: "notes", label: "Client Notes", icon: "chat" },
+                  { id: "signatures", label: "Photos & Signatures", icon: "draw" },
+                  { id: "report", label: "Daily Report Preview", icon: "article" }
+                ].map(t => (
+                  <button
+                    key={t.id}
+                    onClick={() => setPatrolActiveTab(t.id)}
+                    className={`flex items-center gap-1 px-3 py-2 text-xs font-bold border-b-2 transition-all whitespace-nowrap ${
+                      patrolActiveTab === t.id
+                        ? "border-primary text-primary bg-primary/5"
+                        : "border-transparent text-on-surface-variant hover:text-primary"
+                    }`}
+                  >
+                    <span className="material-symbols-outlined text-[15px]">{t.icon}</span>
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-6 bg-surface-container-lowest">
+                {patrolActiveTab === "verification" && (
+                  <div className="space-y-4">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-primary border-b pb-1">Planned Guards Deployment Verification</h4>
+                    <div className="space-y-4">
+                      {getPlannedGuardsForSite(selectedPatrolSite.id).map((guard: any) => {
+                        const currentRecord = verificationRecords[guard.id] || {
+                          status: "Present",
+                          uniform: true,
+                          idCard: true,
+                          grooming: true,
+                          handover: "Yes",
+                          remarks: ""
+                        };
+
+                        const updateGuardVerification = (fields: Partial<typeof currentRecord>) => {
+                          setVerificationRecords({
+                            ...verificationRecords,
+                            [guard.id]: { ...currentRecord, ...fields }
+                          });
+                        };
+
+                        return (
+                          <div key={guard.id} className="p-4 border border-outline-variant rounded-xl bg-surface shadow-sm space-y-3">
+                            <div className="flex justify-between items-center">
+                              <div>
+                                <span className="text-xs font-bold text-on-surface">{guard.employeeName}</span>
+                                <span className="text-[10px] text-on-surface-variant font-bold ml-2">ID: {guard.employeeId}</span>
+                              </div>
+                              <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-primary/10 text-primary">
+                                {guard.shiftCode} ({guard.timing})
+                              </span>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+                              <div>
+                                <label className="block text-[10px] font-bold uppercase mb-1">Present Status</label>
+                                <select
+                                  value={currentRecord.status}
+                                  onChange={(e) => updateGuardVerification({ status: e.target.value })}
+                                  className="w-full bg-surface border border-outline-variant rounded px-2 py-1 text-xs text-on-surface"
+                                >
+                                  <option value="Present">Present</option>
+                                  <option value="Absent">Absent</option>
+                                  <option value="Late">Late</option>
+                                  <option value="Left Post">Left Post</option>
+                                  <option value="Replaced">Replaced</option>
+                                </select>
+                              </div>
+
+                              <div>
+                                <label className="block text-[10px] font-bold uppercase mb-1">Planned Post</label>
+                                <input type="text" readOnly value={guard.postName} className="w-full bg-surface-container-low border border-outline-variant rounded px-2 py-1 text-xs text-on-surface-variant" />
+                              </div>
+
+                              <div>
+                                <label className="block text-[10px] font-bold uppercase mb-1">Actual Post / Gate</label>
+                                <input
+                                  type="text"
+                                  value={currentRecord.actualPost || guard.postName}
+                                  onChange={(e) => updateGuardVerification({ actualPost: e.target.value })}
+                                  className="w-full bg-surface border border-outline-variant rounded px-2 py-1 text-xs text-on-surface"
+                                />
+                              </div>
+                            </div>
+
+                            <div className="flex flex-wrap gap-4 pt-2 items-center text-xs">
+                              <label className="flex items-center gap-1.5 font-bold cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={currentRecord.uniform}
+                                  onChange={(e) => updateGuardVerification({ uniform: e.target.checked })}
+                                  className="rounded border-outline-variant"
+                                />
+                                <span>Uniform OK</span>
+                              </label>
+
+                              <label className="flex items-center gap-1.5 font-bold cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={currentRecord.idCard}
+                                  onChange={(e) => updateGuardVerification({ idCard: e.target.checked })}
+                                  className="rounded border-outline-variant"
+                                />
+                                <span>ID Card Available</span>
+                              </label>
+
+                              <label className="flex items-center gap-1.5 font-bold cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  checked={currentRecord.grooming}
+                                  onChange={(e) => updateGuardVerification({ grooming: e.target.checked })}
+                                  className="rounded border-outline-variant"
+                                />
+                                <span>Grooming OK</span>
+                              </label>
+
+                              <div className="flex items-center gap-1.5 ml-auto">
+                                <span className="text-[10px] font-bold uppercase text-on-surface-variant">Handover:</span>
+                                <select
+                                  value={currentRecord.handover}
+                                  onChange={(e) => updateGuardVerification({ handover: e.target.value })}
+                                  className="bg-surface border border-outline-variant rounded px-1 text-[11px] text-on-surface"
+                                >
+                                  <option value="Yes">Yes</option>
+                                  <option value="No">No</option>
+                                  <option value="N/A">N/A</option>
+                                </select>
+                              </div>
+                            </div>
+
+                            <div>
+                              <input
+                                type="text"
+                                placeholder="Verification remarks..."
+                                value={currentRecord.remarks}
+                                onChange={(e) => updateGuardVerification({ remarks: e.target.value })}
+                                className="w-full bg-surface border border-outline-variant rounded px-3 py-1.5 text-xs text-on-surface"
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {patrolActiveTab === "checklist" && (
+                  <div className="space-y-6">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-primary border-b pb-1">Site Patrol Inspection Checklist</h4>
+                    {checklistSections.map((sec, sidx) => (
+                      <div key={sidx} className="space-y-3">
+                        <h5 className="text-xs font-bold text-on-surface-variant border-b border-outline-variant/40 pb-1">{sec.title}</h5>
+                        <div className="space-y-2.5">
+                          {sec.items.map((item, iidx) => {
+                            const current = checklistAnswers[item] || { status: "OK", remarks: "" };
+                            const updateItem = (fields: Partial<typeof current>) => {
+                              setChecklistAnswers({
+                                ...checklistAnswers,
+                                [item]: { ...current, ...fields }
+                              });
+                            };
+
+                            return (
+                              <div key={iidx} className="flex flex-col md:flex-row md:items-center justify-between p-3 border border-outline-variant/60 rounded-lg bg-surface gap-3">
+                                <span className="text-xs font-semibold text-on-surface md:w-1/2">{item}</span>
+                                <div className="flex gap-3 text-xs items-center">
+                                  {["OK", "NOT_OK", "NA"].map(st => (
+                                    <label key={st} className="flex items-center gap-1 cursor-pointer">
+                                      <input
+                                        type="radio"
+                                        name={`check-${item}`}
+                                        checked={current.status === st}
+                                        onChange={() => updateItem({ status: st as any })}
+                                        className="text-primary focus:ring-primary"
+                                      />
+                                      <span className={`text-[11px] font-bold ${
+                                        st === "OK" ? "text-emerald-600" : st === "NOT_OK" ? "text-rose-600" : "text-on-surface-variant"
+                                      }`}>{st}</span>
+                                    </label>
+                                  ))}
+                                </div>
+                                <input
+                                  type="text"
+                                  placeholder="Remarks (if NOT OK)..."
+                                  value={current.remarks}
+                                  onChange={(e) => updateItem({ remarks: e.target.value })}
+                                  className="bg-surface border border-outline-variant rounded px-2 py-1 text-xs text-on-surface md:w-1/3"
+                                />
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {patrolActiveTab === "incident" && (
+                  <div className="space-y-4">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-primary border-b pb-1">Report Security / Site Incident</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase mb-1">Incident Type</label>
+                        <select
+                          value={incidentForm.type}
+                          onChange={(e) => setIncidentForm({ ...incidentForm, type: e.target.value })}
+                          className="w-full bg-surface border border-outline-variant rounded px-3 py-2 text-xs text-on-surface"
+                        >
+                          <option value="Security breach">Security breach</option>
+                          <option value="Fight / disturbance">Fight / disturbance</option>
+                          <option value="Theft / damage">Theft / damage</option>
+                          <option value="Unauthorized entry">Unauthorized entry</option>
+                          <option value="Fire / safety hazard">Fire / safety hazard</option>
+                          <option value="Client complaint">Client complaint</option>
+                          <option value="Guard misconduct">Guard misconduct</option>
+                          <option value="Emergency">Emergency</option>
+                          <option value="Equipment issue">Equipment issue</option>
+                          <option value="Other">Other</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase mb-1">Severity Level</label>
+                        <div className="flex gap-4 py-2">
+                          {["Low", "Medium", "High", "Critical"].map(sev => (
+                            <label key={sev} className="flex items-center gap-1.5 cursor-pointer">
+                              <input
+                                type="radio"
+                                name="severity"
+                                checked={incidentForm.severity === sev}
+                                onChange={() => setIncidentForm({ ...incidentForm, severity: sev })}
+                                className="text-primary"
+                              />
+                              <span className={`font-bold ${
+                                sev === "Critical" ? "text-rose-600" :
+                                sev === "High" ? "text-orange-500" :
+                                sev === "Medium" ? "text-amber-500" : "text-blue-500"
+                              }`}>{sev}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="md:col-span-2">
+                        <label className="block text-[10px] font-bold uppercase mb-1">People Involved</label>
+                        <input
+                          type="text"
+                          placeholder="Name(s), designation, or company..."
+                          value={incidentForm.peopleInvolved}
+                          onChange={(e) => setIncidentForm({ ...incidentForm, peopleInvolved: e.target.value })}
+                          className="w-full bg-surface border border-outline-variant rounded px-3 py-2 text-xs text-on-surface"
+                        />
+                      </div>
+
+                      <div className="md:col-span-2">
+                        <label className="block text-[10px] font-bold uppercase mb-1">Description of Incident</label>
+                        <textarea
+                          rows={3}
+                          placeholder="Provide details on what happened..."
+                          value={incidentForm.description}
+                          onChange={(e) => setIncidentForm({ ...incidentForm, description: e.target.value })}
+                          className="w-full bg-surface border border-outline-variant rounded px-3 py-2 text-xs text-on-surface"
+                        />
+                      </div>
+
+                      <div className="md:col-span-2">
+                        <label className="block text-[10px] font-bold uppercase mb-1">Immediate Corrective Action Taken</label>
+                        <textarea
+                          rows={2}
+                          placeholder="Action taken immediately to resolve the issue..."
+                          value={incidentForm.immediateAction}
+                          onChange={(e) => setIncidentForm({ ...incidentForm, immediateAction: e.target.value })}
+                          className="w-full bg-surface border border-outline-variant rounded px-3 py-2 text-xs text-on-surface"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase mb-1">Escalated To</label>
+                        <select
+                          value={incidentForm.escalatedTo}
+                          onChange={(e) => setIncidentForm({ ...incidentForm, escalatedTo: e.target.value })}
+                          className="w-full bg-surface border border-outline-variant rounded px-3 py-2 text-xs text-on-surface"
+                        >
+                          <option value="Operations Coordinator">Operations Coordinator</option>
+                          <option value="Operations Manager">Operations Manager</option>
+                          <option value="HR Department">HR Department</option>
+                          <option value="Client Representative">Client Representative</option>
+                          <option value="Police / Ambulance">Police / Ambulance</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase mb-1">Follow-up Required?</label>
+                        <div className="flex gap-4 py-2">
+                          {["Yes", "No"].map(v => (
+                            <label key={v} className="flex items-center gap-1.5 cursor-pointer">
+                              <input
+                                type="radio"
+                                name="followUp"
+                                checked={incidentForm.followUpRequired === v}
+                                onChange={() => setIncidentForm({ ...incidentForm, followUpRequired: v })}
+                              />
+                              <span>{v}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {patrolActiveTab === "replacement" && (
+                  <div className="space-y-4">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-primary border-b pb-1">Emergency Guard Replacement / Reliever</h4>
+                    {replacementForm.criticalPost === "Yes" && replacementForm.status === "Requested" && (
+                      <div className="p-3 bg-rose-500/10 text-rose-600 border border-rose-500/20 rounded-lg text-xs font-bold flex items-center gap-2 animate-bounce">
+                        <span className="material-symbols-outlined text-[16px]">warning</span>
+                        Critical post must not remain unmanned. Urgent dispatcher notification triggered.
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase mb-1">Select Original Guard (Leaving Post)</label>
+                        <select
+                          value={replacementForm.originalGuard}
+                          onChange={(e) => setReplacementForm({ ...replacementForm, originalGuard: e.target.value })}
+                          className="w-full bg-surface border border-outline-variant rounded px-3 py-2 text-xs text-on-surface"
+                        >
+                          <option value="">-- Choose Guard --</option>
+                          {getPlannedGuardsForSite(selectedPatrolSite.id).map((g: any) => (
+                            <option key={g.id} value={g.employeeName}>{g.employeeName} ({g.employeeId})</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase mb-1">Reason for Replacement</label>
+                        <select
+                          value={replacementForm.reason}
+                          onChange={(e) => setReplacementForm({ ...replacementForm, reason: e.target.value })}
+                          className="w-full bg-surface border border-outline-variant rounded px-3 py-2 text-xs text-on-surface"
+                        >
+                          <option value="Absent">Absent</option>
+                          <option value="Late">Late</option>
+                          <option value="Sick">Sick</option>
+                          <option value="Removed">Removed</option>
+                          <option value="Emergency">Emergency</option>
+                          <option value="Client Request">Client Request</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase mb-1">Is this a Critical Post?</label>
+                        <div className="flex gap-4 py-2">
+                          {["Yes", "No"].map(v => (
+                            <label key={v} className="flex items-center gap-1.5 cursor-pointer">
+                              <input
+                                type="radio"
+                                name="critPost"
+                                checked={replacementForm.criticalPost === v}
+                                onChange={() => setReplacementForm({ ...replacementForm, criticalPost: v })}
+                              />
+                              <span>{v}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase mb-1">Replacement Required From (Time)</label>
+                        <input
+                          type="time"
+                          value={replacementForm.replacementRequiredFrom}
+                          onChange={(e) => setReplacementForm({ ...replacementForm, replacementRequiredFrom: e.target.value })}
+                          className="w-full bg-surface border border-outline-variant rounded px-3 py-2 text-xs text-on-surface"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase mb-1">Assign Replacement Guard Name / ID</label>
+                        <input
+                          type="text"
+                          placeholder="E.g. Reliever Guard Code or Name..."
+                          value={replacementForm.replacementGuard}
+                          onChange={(e) => setReplacementForm({ ...replacementForm, replacementGuard: e.target.value })}
+                          className="w-full bg-surface border border-outline-variant rounded px-3 py-2 text-xs text-on-surface"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase mb-1">Replacement Status</label>
+                        <select
+                          value={replacementForm.status}
+                          onChange={(e) => setReplacementForm({ ...replacementForm, status: e.target.value })}
+                          className="w-full bg-surface border border-outline-variant rounded px-3 py-2 text-xs text-on-surface"
+                        >
+                          <option value="Requested">Requested (Pending Dispatch)</option>
+                          <option value="Assigned">Assigned (En Route)</option>
+                          <option value="Arrived">Arrived (On Post)</option>
+                          <option value="Cancelled">Cancelled</option>
+                        </select>
+                      </div>
+
+                      <div className="md:col-span-2">
+                        <label className="block text-[10px] font-bold uppercase mb-1">Remarks & Details</label>
+                        <textarea
+                          rows={2}
+                          value={replacementForm.remarks}
+                          onChange={(e) => setReplacementForm({ ...replacementForm, remarks: e.target.value })}
+                          className="w-full bg-surface border border-outline-variant rounded px-3 py-2 text-xs text-on-surface"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {patrolActiveTab === "notes" && (
+                  <div className="space-y-4">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-primary border-b pb-1">Client Coordination & Feedback</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase mb-1">Client Representative Met</label>
+                        <input
+                          type="text"
+                          placeholder="Representative name / title..."
+                          value={clientNoteForm.clientRep}
+                          onChange={(e) => setClientNoteForm({ ...clientNoteForm, clientRep: e.target.value })}
+                          className="w-full bg-surface border border-outline-variant rounded px-3 py-2 text-xs text-on-surface"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase mb-1">Client Performance Feedback</label>
+                        <div className="flex gap-4 py-2">
+                          {["Positive", "Neutral", "Complaint"].map(f => (
+                            <label key={f} className="flex items-center gap-1.5 cursor-pointer">
+                              <input
+                                type="radio"
+                                name="feedback"
+                                checked={clientNoteForm.feedback === f}
+                                onChange={() => setClientNoteForm({ ...clientNoteForm, feedback: f })}
+                              />
+                              <span className={`font-bold ${
+                                f === "Positive" ? "text-emerald-600" : f === "Complaint" ? "text-rose-600" : "text-on-surface-variant"
+                              }`}>{f}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="md:col-span-2">
+                        <label className="block text-[10px] font-bold uppercase mb-1">Client Complaints (if any)</label>
+                        <textarea
+                          rows={2}
+                          placeholder="Record client grievances or complaints..."
+                          value={clientNoteForm.complaint}
+                          onChange={(e) => setClientNoteForm({ ...clientNoteForm, complaint: e.target.value })}
+                          className="w-full bg-surface border border-outline-variant rounded px-3 py-2 text-xs text-on-surface"
+                        />
+                      </div>
+
+                      <div className="md:col-span-2">
+                        <label className="block text-[10px] font-bold uppercase mb-1">Special Site Instructions</label>
+                        <textarea
+                          rows={2}
+                          placeholder="Instructions issued by client or supervisor..."
+                          value={clientNoteForm.specialInstruction}
+                          onChange={(e) => setClientNoteForm({ ...clientNoteForm, specialInstruction: e.target.value })}
+                          className="w-full bg-surface border border-outline-variant rounded px-3 py-2 text-xs text-on-surface"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase mb-1">Additional Manpower Requested?</label>
+                        <div className="flex gap-4 py-2">
+                          {["Yes", "No"].map(v => (
+                            <label key={v} className="flex items-center gap-1.5 cursor-pointer">
+                              <input
+                                type="radio"
+                                name="manpowerReq"
+                                checked={clientNoteForm.additionalManpower === v}
+                                onChange={() => setClientNoteForm({ ...clientNoteForm, additionalManpower: v })}
+                              />
+                              <span>{v}</span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold uppercase mb-1">Requested Quantity (Guards)</label>
+                        <input
+                          type="number"
+                          disabled={clientNoteForm.additionalManpower === "No"}
+                          value={clientNoteForm.requestedQty}
+                          onChange={(e) => setClientNoteForm({ ...clientNoteForm, requestedQty: parseInt(e.target.value) || 0 })}
+                          className="w-full bg-surface border border-outline-variant rounded px-3 py-2 text-xs text-on-surface disabled:opacity-50"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {patrolActiveTab === "signatures" && (
+                  <div className="space-y-6">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-primary border-b pb-1">Evidence & Signature Capturing</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-xs">
+                      <div className="p-4 border border-dashed border-outline-variant rounded-xl flex flex-col items-center justify-center h-40 bg-surface-container-low opacity-60">
+                        <span className="material-symbols-outlined text-[36px] text-on-surface-variant">photo_camera</span>
+                        <span className="font-bold mt-2">Patrol Visit Photo</span>
+                        <span className="text-[9px] text-on-surface-variant/80 mt-1">Photo Upload module coming soon</span>
+                      </div>
+                      <div className="p-4 border border-dashed border-outline-variant rounded-xl flex flex-col items-center justify-center h-40 bg-surface-container-low opacity-60">
+                        <span className="material-symbols-outlined text-[36px] text-on-surface-variant">photo_camera</span>
+                        <span className="font-bold mt-2">Incident / Proof Photo</span>
+                        <span className="text-[9px] text-on-surface-variant/80 mt-1">Photo Upload module coming soon</span>
+                      </div>
+
+                      <div className="p-4 border border-outline-variant rounded-xl bg-surface-container-low opacity-60 flex flex-col justify-between h-40">
+                        <span className="text-[10px] font-bold uppercase tracking-wider">Patrolling Supervisor Signature</span>
+                        <div className="border border-outline-variant rounded h-20 bg-surface flex items-center justify-center text-[10px] italic">Signature box disabled</div>
+                      </div>
+
+                      <div className="p-4 border border-outline-variant rounded-xl bg-surface-container-low opacity-60 flex flex-col justify-between h-40">
+                        <span className="text-[10px] font-bold uppercase tracking-wider">Client Representative Signature</span>
+                        <div className="border border-outline-variant rounded h-20 bg-surface flex items-center justify-center text-[10px] italic">Signature box disabled</div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {patrolActiveTab === "report" && (
+                  <div className="space-y-6">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-primary border-b pb-1">Site Patrol Summary Report Preview</h4>
+                    <div className="p-4 border border-outline-variant rounded-xl bg-surface shadow-sm space-y-4">
+                      <div className="grid grid-cols-2 gap-4 text-xs border-b border-outline-variant/60 pb-3 font-bold">
+                        <div>
+                          <span className="text-on-surface-variant">Site Name:</span>
+                          <span className="text-on-surface ml-2">{selectedPatrolSite.name}</span>
+                        </div>
+                        <div>
+                          <span className="text-on-surface-variant">Date:</span>
+                          <span className="text-on-surface ml-2">{new Date().toLocaleDateString()}</span>
+                        </div>
+                        <div>
+                          <span className="text-on-surface-variant">Patrolling Supervisor:</span>
+                          <span className="text-on-surface ml-2">{session?.user?.name || "Patrol Coordinator"}</span>
+                        </div>
+                        <div>
+                          <span className="text-on-surface-variant">Visit Time:</span>
+                          <span className="text-on-surface ml-2">{new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2 text-xs">
+                        <h5 className="font-bold text-on-surface">Inspected Guards:</h5>
+                        <ul className="list-disc pl-5 space-y-1">
+                          {getPlannedGuardsForSite(selectedPatrolSite.id).map((g: any) => {
+                            const rec = verificationRecords[g.id] || { status: "Present" };
+                            return (
+                              <li key={g.id}>
+                                <span className="font-bold">{g.employeeName}</span> ({g.employeeId}) — Status:
+                                <span className={`ml-1 font-bold ${
+                                  rec.status === "Present" ? "text-emerald-600" : "text-rose-600"
+                                }`}>{rec.status}</span>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </div>
+
+                      <div className="space-y-2 text-xs">
+                        <h5 className="font-bold text-on-surface">Inspection Checklist Summary:</h5>
+                        <div className="grid grid-cols-2 gap-2 text-[11px]">
+                          <div>OK Checklist items: <span className="text-emerald-600 font-bold">{Object.values(checklistAnswers).filter(a => a.status === "OK").length}</span></div>
+                          <div>Not OK items: <span className="text-rose-600 font-bold">{Object.values(checklistAnswers).filter(a => a.status === "NOT_OK").length}</span></div>
+                        </div>
+                      </div>
+
+                      {incidentForm.description && (
+                        <div className="space-y-2 text-xs bg-rose-500/5 p-3 rounded-lg border border-rose-500/10">
+                          <h5 className="font-bold text-rose-600 flex items-center gap-1">
+                            <span className="material-symbols-outlined text-[15px]">report</span>
+                            Reported Incident:
+                          </h5>
+                          <div>Type: <span className="font-bold">{incidentForm.type}</span> ({incidentForm.severity})</div>
+                          <div className="italic text-on-surface-variant mt-1">"{incidentForm.description}"</div>
+                        </div>
+                      )}
+
+                      {replacementForm.originalGuard && (
+                        <div className="space-y-2 text-xs bg-amber-500/5 p-3 rounded-lg border border-amber-500/10">
+                          <h5 className="font-bold text-amber-600 flex items-center gap-1">
+                            <span className="material-symbols-outlined text-[15px]">swap_horiz</span>
+                            Replacement Request:
+                          </h5>
+                          <div>Original: <span className="font-bold">{replacementForm.originalGuard}</span> ➔ Replacement: <span className="font-bold">{replacementForm.replacementGuard || "TBD"}</span></div>
+                          <div>Status: <span className="font-bold">{replacementForm.status}</span></div>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="p-3 bg-surface-container-low rounded-xl text-xs text-on-surface-variant flex items-center gap-2 border border-outline-variant">
+                      <span className="material-symbols-outlined text-[18px]">info</span>
+                      <span>Exporting PDF and sending notifications to operations is currently disabled (coming in Phase 2).</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="p-4 border-t border-outline-variant flex justify-between items-center bg-surface-container-low">
+                <button
+                  type="button"
+                  onClick={() => setShowPatrolDrawer(false)}
+                  className="px-4 py-2 border border-outline-variant rounded-lg text-xs font-bold text-on-surface hover:bg-surface-container-high transition-colors"
+                >
+                  Cancel
+                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      alert("Patrol report saved as Draft successfully (local browser session)!");
+                      setShowPatrolDrawer(false);
+                    }}
+                    className="px-4 py-2 border border-outline-variant rounded-lg text-xs font-bold text-on-surface hover:bg-surface-container-high transition-colors"
+                  >
+                    Save Draft
+                  </button>
+                  <button
+                    onClick={() => handleSavePatrolVisit(selectedPatrolSite)}
+                    className="px-4 py-2 bg-primary text-white text-xs font-bold rounded-lg hover:bg-primary-variant transition-colors flex items-center gap-1.5"
+                  >
+                    <span className="material-symbols-outlined text-[14px]">save</span>
+                    Submit Patrol Report
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
-    <div className="flex-1 bg-surface-container-lowest p-6 flex flex-col h-[calc(100vh-4rem)] overflow-y-auto">
+    <div className="flex-1 bg-surface-container-lowest p-6 flex flex-col h-[calc(100vh-4rem)] overflow-y-auto font-sans">
       {/* Header */}
       <div className="flex justify-between items-center mb-6">
         <div className="flex items-center gap-3">
@@ -3106,7 +4169,19 @@ export default function ManpowerMasterPage() {
           </div>
         </div>
 
-        {canManage && (
+        {canManage && (isSecurity && master === "coordinators" && coordinatorSubTab === "board" ? (
+          <button
+            onClick={() => {
+              setSelectedPatrolSite(displaySites[0]);
+              setShowPatrolDrawer(true);
+              setPatrolActiveTab("report");
+            }}
+            className="px-3 py-2 bg-secondary hover:bg-secondary-container text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-2"
+          >
+            <span className="material-symbols-outlined text-[16px]">menu_book</span>
+            Patrol Reports Console
+          </button>
+        ) : (
           <button
             onClick={() => {
               if (isSecurity && master === "manpower") {
@@ -3138,7 +4213,7 @@ export default function ManpowerMasterPage() {
             <span className="material-symbols-outlined text-[16px]">add</span>
             Add {isSecurity && master === "manpower" && activeSubTab === "licenses" ? "Security License" : isSecurity && master === "manpower" && activeSubTab === "gatePasses" ? "Gate Pass" : masterLabel.replace(/s$/, "")}
           </button>
-        )}
+        ))}
       </div>
 
       {/* Sub-tabs for Security Manpower Console */}
@@ -3170,7 +4245,31 @@ export default function ManpowerMasterPage() {
         </div>
       )}
 
-      {/* Filter Toolbar */}
+      {/* Sub-tabs for Security Coordinators Workspace */}
+      {isSecurity && master === "coordinators" && (
+        <div className="flex border-b border-outline-variant mb-6 gap-2 bg-surface p-1 rounded-xl">
+          {[
+            { id: "board", label: "Patrol Operations Board", icon: "dashboard" },
+            { id: "assignments", label: "Manage Assignments & Sync", icon: "assignment" }
+          ].map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => {
+                setCoordinatorSubTab(tab.id as any);
+                setSearchTerm("");
+              }}
+              className={`flex items-center gap-1.5 px-4 py-2 text-xs font-bold border-b-2 transition-all rounded-lg ${
+                coordinatorSubTab === tab.id
+                  ? "border-primary text-primary bg-primary/5"
+                  : "border-transparent text-on-surface-variant hover:text-primary hover:bg-surface-container-low"
+              }`}
+            >
+              <span className="material-symbols-outlined text-[16px]">{tab.icon}</span>
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      )}
       <div className="bg-surface border border-outline-variant p-4 rounded-xl shadow-sm mb-6 flex flex-col gap-3">
         <div className="flex gap-4 items-center">
           <div className="flex-1 relative">
@@ -3268,8 +4367,10 @@ export default function ManpowerMasterPage() {
           </div>
         )}
       </div>
-      {/* Roster Grid / Projects Panel split */}
-      <div className="flex gap-6 flex-1 min-h-0">
+      {isSecurity && master === "coordinators" && coordinatorSubTab === "board" ? (
+        renderPatrolOperationsBoard()
+      ) : (
+        <div className="flex gap-6 flex-1 min-h-0">
         <div className={`bg-surface border border-outline-variant rounded-xl shadow-sm overflow-hidden flex flex-col ${
           (isSecurity && master === "projects" && selectedProjectId) ? "w-1/2" : "w-full"
         }`}>
@@ -3738,17 +4839,20 @@ export default function ManpowerMasterPage() {
                                 <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-status-warning/15 text-status-warning border border-status-warning/20 animate-pulse">
                                   Operation Type Needs Sync
                                 </span>
-                                {canManage && (
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleSyncOperationType(item);
-                                    }}
-                                    className="bg-primary hover:bg-primary-hover text-on-primary text-[10px] font-bold px-2 py-1 rounded transition-colors"
-                                  >
-                                    Sync
-                                  </button>
-                                )}
+                                <button
+                                  disabled={!canManage}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleSyncOperationType(item);
+                                  }}
+                                  className={`text-[10px] font-bold px-2 py-1 rounded transition-colors ${
+                                    canManage
+                                      ? "bg-secondary hover:bg-secondary-container text-white cursor-pointer"
+                                      : "bg-outline-variant/30 text-on-surface-variant/50 cursor-not-allowed"
+                                  }`}
+                                >
+                                  Sync
+                                </button>
                               </div>
                             ) : (
                               <span className="text-[10px] text-status-success font-bold">Synced</span>
@@ -3856,6 +4960,7 @@ export default function ManpowerMasterPage() {
 
         {isSecurity && master === "projects" && selectedProjectId && renderProjectDetailsPanel()}
       </div>
+      )}
 
       {/* Add Modal */}
       {showAddModal && (

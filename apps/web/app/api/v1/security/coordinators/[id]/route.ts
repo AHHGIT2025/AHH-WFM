@@ -4,7 +4,7 @@ import { checkApiAuth } from "@/lib/api-guards";
 
 export async function PUT(request: Request, { params }: { params: { id: string } }) {
   const auth = await checkApiAuth(undefined, {
-    requiredOperation: "SECURITY_GUARDING"
+    requiredOperation: ["SECURITY_GUARDING", "FACILITY_MANAGEMENT"]
   });
   if (auth.error) return auth.error;
 
@@ -23,7 +23,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
 
 export async function DELETE(request: Request, { params }: { params: { id: string } }) {
   const auth = await checkApiAuth(undefined, {
-    requiredOperation: "SECURITY_GUARDING"
+    requiredOperation: ["SECURITY_GUARDING", "FACILITY_MANAGEMENT"]
   });
   if (auth.error) return auth.error;
 

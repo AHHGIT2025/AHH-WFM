@@ -11072,36 +11072,89 @@ export const mockDb = {
   },
 
   // --- Security Project Coordinator Assignments CRUD ---
-  getSecurityProjectCoordinatorAssignments: async (projectId?: string, coordinatorEmployeeId?: string): Promise<any[]> => {
+  getSecurityProjectCoordinatorAssignments: async (projectId?: string, coordinatorEmployeeId?: string, operationType?: string): Promise<any[]> => {
     if (isDbConnected()) {
       const where: any = {};
       if (projectId) where.projectId = projectId;
       if (coordinatorEmployeeId) where.coordinatorEmployeeId = coordinatorEmployeeId;
+      if (operationType) {
+        where.project = {
+          operationType: operationType
+        };
+      }
       const res = await prismaClient.securityProjectCoordinatorAssignment.findMany({
         where,
-        include: { project: true, coordinatorEmployee: true }
+        include: { 
+          project: { include: { contract: true } }, 
+          coordinator: true 
+        }
       });
       return res.map((x: any) => ({
         ...x,
         createdAt: x.createdAt?.toISOString(),
-        updatedAt: x.updatedAt?.toISOString()
+        updatedAt: x.updatedAt?.toISOString(),
+        coordinatorEmployee: x.coordinator
       }));
     }
     const db = readDb();
     let res = db.securityProjectCoordinatorAssignments || [];
     if (projectId) res = res.filter((x: any) => x.projectId === projectId);
     if (coordinatorEmployeeId) res = res.filter((x: any) => x.coordinatorEmployeeId === coordinatorEmployeeId);
-    return res.map((x: any) => ({
-      ...x,
-      project: (db.manpowerProjects || []).find((p: any) => p.id === x.projectId),
-      coordinatorEmployee: (db.employees || []).find((e: any) => e.id === x.coordinatorEmployeeId)
-    }));
+    
+    let mapped = res.map((x: any) => {
+      const project = (db.manpowerProjects || []).find((p: any) => p.id === x.projectId);
+      const contract = project ? (db.manpowerContracts || []).find((c: any) => c.id === project.contractId) : undefined;
+      return {
+        ...x,
+        project: project ? { ...project, contract } : undefined,
+        coordinatorEmployee: (db.employees || []).find((e: any) => e.id === x.coordinatorEmployeeId)
+      };
+    });
+
+    if (operationType) {
+      mapped = mapped.filter((x: any) => x.project?.operationType === operationType);
+    }
+    return mapped;
   },
   createSecurityProjectCoordinatorAssignment: async (data: any): Promise<any> => {
+    let resolvedStartDate: Date | null = null;
+    if (data.startDate) {
+      resolvedStartDate = new Date(data.startDate);
+    } else if (data.projectId) {
+      if (isDbConnected()) {
+        const proj = await prismaClient.manpowerProject.findUnique({
+          where: { id: data.projectId },
+          include: { contract: true }
+        });
+        if (proj?.contract?.startDate) {
+          resolvedStartDate = new Date(proj.contract.startDate);
+        }
+      } else {
+        const db = readDb();
+        const proj = (db.manpowerProjects || []).find((p: any) => p.id === data.projectId);
+        if (proj) {
+          const contract = (db.manpowerContracts || []).find((c: any) => c.id === proj.contractId);
+          if (contract?.startDate) {
+            resolvedStartDate = new Date(contract.startDate);
+          }
+        }
+      }
+    }
+
+    if (!resolvedStartDate || isNaN(resolvedStartDate.getTime())) {
+      resolvedStartDate = new Date();
+    }
+
     const code = data.code || await getNextSequenceCode("SCA");
     const dataWithCode = { ...data, code };
+
     if (isDbConnected()) {
-      const res = await prismaClient.securityProjectCoordinatorAssignment.create({ data: dataWithCode });
+      const res = await prismaClient.securityProjectCoordinatorAssignment.create({ 
+        data: {
+          ...dataWithCode,
+          startDate: resolvedStartDate
+        } 
+      });
       return {
         ...res,
         createdAt: res.createdAt?.toISOString(),
@@ -11113,6 +11166,7 @@ export const mockDb = {
       ...dataWithCode,
       id: dataWithCode.id || `coord-${Date.now()}`,
       isActive: dataWithCode.isActive !== false,
+      startDate: resolvedStartDate.toISOString(),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
@@ -12649,6 +12703,47 @@ export const mockDb = {
 
     writeDb(db);
     return await mockDb.getManpowerContract(id);
+  },
+  getPatrolVisits: async (operationType?: string, coordinatorId?: string, siteId?: string): Promise<any[]> => {
+    const db = readDb() as any;
+    let list = db.patrolVisits || [];
+    if (operationType) list = list.filter((x: any) => x.operationType === operationType);
+    if (coordinatorId) list = list.filter((x: any) => x.coordinatorId === coordinatorId);
+    if (siteId) list = list.filter((x: any) => x.siteId === siteId);
+    return list;
+  },
+  createPatrolVisit: async (data: any): Promise<any> => {
+    const db = readDb() as any;
+    db.patrolVisits = db.patrolVisits || [];
+    const newRecord = {
+      ...data,
+      id: data.id || `patrol-${Date.now()}`,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    db.patrolVisits.push(newRecord);
+    writeDb(db);
+    return newRecord;
+  },
+  getDailyPatrolReports: async (operationType?: string, coordinatorId?: string): Promise<any[]> => {
+    const db = readDb() as any;
+    let list = db.dailyPatrolReports || [];
+    if (operationType) list = list.filter((x: any) => x.operationType === operationType);
+    if (coordinatorId) list = list.filter((x: any) => x.coordinatorId === coordinatorId);
+    return list;
+  },
+  createDailyPatrolReport: async (data: any): Promise<any> => {
+    const db = readDb() as any;
+    db.dailyPatrolReports = db.dailyPatrolReports || [];
+    const newRecord = {
+      ...data,
+      id: data.id || `dreport-${Date.now()}`,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    db.dailyPatrolReports.push(newRecord);
+    writeDb(db);
+    return newRecord;
   }
 };
 
