@@ -3,6 +3,16 @@ import { checkApiAuth } from "@/lib/api-guards";
 import { mockDb, isDbConnected, readDb } from "@ahh-wfm/mock-data";
 import { prisma } from "@ahh-wfm/database";
 
+// Date safety check helper
+function checkExpiring(dateVal: any, limitDate: Date): boolean {
+  if (!dateVal) return false;
+  const d = new Date(dateVal);
+  if (isNaN(d.getTime())) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return d > today && d <= limitDate;
+}
+
 export async function GET(request: Request) {
   const auth = await checkApiAuth();
   if (auth.error) return auth.error;
@@ -13,268 +23,417 @@ export async function GET(request: Request) {
   const todayEnd = new Date();
   todayEnd.setHours(23, 59, 59, 999);
 
-  try {
-    let employees: any[] = [];
-    let attendance: any[] = [];
-    let leaves: any[] = [];
-    let contracts: any[] = [];
-    let addendums: any[] = [];
-    let projects: any[] = [];
-    let projectSites: any[] = [];
-    let deployments: any[] = [];
-    let deploymentAssignments: any[] = [];
-    let relieverAssignments: any[] = [];
-    let securityLicenses: any[] = [];
-    let securityGatePasses: any[] = [];
-    let coordinatorAssignments: any[] = [];
-    let siteInspections: any[] = [];
-    let userActivityLogs: any[] = [];
+  let employees: any[] = [];
+  let attendance: any[] = [];
+  let leaves: any[] = [];
+  let contracts: any[] = [];
+  let addendums: any[] = [];
+  let projects: any[] = [];
+  let projectSites: any[] = [];
+  let deployments: any[] = [];
+  let deploymentAssignments: any[] = [];
+  let relieverAssignments: any[] = [];
+  let securityLicenses: any[] = [];
+  let securityGatePasses: any[] = [];
+  let coordinatorAssignments: any[] = [];
+  let siteInspections: any[] = [];
+  let userActivityLogs: any[] = [];
+  let companies: any[] = [];
+  let locations: any[] = [];
 
-    if (isDbConnected()) {
-      employees = await prisma.employee.findMany();
-      attendance = await prisma.attendanceRecord.findMany();
-      leaves = await prisma.leaveRequest.findMany();
-      contracts = await prisma.manpowerContract.findMany();
-      addendums = await prisma.manpowerContractAddendum.findMany();
-      projects = await prisma.project.findMany();
-      projectSites = await prisma.projectSite.findMany();
-      deployments = await prisma.manpowerDeployment.findMany();
-      deploymentAssignments = await prisma.manpowerDeploymentAssignment.findMany();
-      relieverAssignments = await prisma.manpowerRelieverAssignment.findMany();
-      securityLicenses = await prisma.securityLicense.findMany();
-      securityGatePasses = await prisma.securityGatePass.findMany();
-      coordinatorAssignments = await prisma.securityProjectCoordinatorAssignment.findMany();
-      siteInspections = await prisma.securitySiteInspection.findMany();
-      userActivityLogs = await prisma.userActivityLog.findMany({ take: 50, orderBy: { createdAt: "desc" } });
-    } else {
-      const db = readDb() as any;
-      employees = db.employees || [];
-      attendance = db.attendance || db.attendanceRecords || [];
-      leaves = db.leaves || db.leaveRequests || [];
-      contracts = db.manpowerContracts || [];
-      addendums = db.manpowerContractAddendums || [];
-      projects = db.projects || db.manpowerProjects || [];
-      projectSites = db.projectSites || db.manpowerSites || [];
-      deployments = db.manpowerDeployments || [];
-      deploymentAssignments = db.manpowerDeploymentAssignments || [];
-      relieverAssignments = db.manpowerRelieverAssignments || [];
-      securityLicenses = db.securityLicenses || [];
-      securityGatePasses = db.securityGatePasses || [];
-      coordinatorAssignments = db.securityProjectCoordinatorAssignments || [];
-      siteInspections = db.securitySiteInspections || [];
-      userActivityLogs = db.userActivityLogs || [];
+  // Safe wrapper for Prisma/DB queries to prevent whole dashboard failure
+  const runSafeQuery = async <T>(name: string, prismaFn: () => Promise<T>, fallbackFn: () => T): Promise<T> => {
+    try {
+      if (isDbConnected()) {
+        return await prismaFn();
+      }
+    } catch (err) {
+      console.error(`[Dashboard Summary] DB Query failed for ${name}, falling back to memory:`, err);
     }
+    try {
+      return fallbackFn();
+    } catch (err) {
+      console.error(`[Dashboard Summary] Fallback failed for ${name}:`, err);
+      return [] as unknown as T;
+    }
+  };
 
-    const companies = await mockDb.getCompanies();
-    const locations = await mockDb.getLocations();
+  // Resolve all data sets safely
+  employees = await runSafeQuery("employees", () => prisma.employee.findMany(), () => (readDb() as any).employees || []);
+  attendance = await runSafeQuery("attendance", () => prisma.attendanceRecord.findMany(), () => (readDb() as any).attendance || (readDb() as any).attendanceRecords || []);
+  leaves = await runSafeQuery("leaves", () => prisma.leaveRequest.findMany(), () => (readDb() as any).leaves || (readDb() as any).leaveRequests || []);
+  contracts = await runSafeQuery("contracts", () => prisma.manpowerContract.findMany(), () => (readDb() as any).manpowerContracts || []);
+  addendums = await runSafeQuery("addendums", () => prisma.manpowerContractAddendum.findMany(), () => (readDb() as any).manpowerContractAddendums || []);
+  projects = await runSafeQuery("projects", () => prisma.project.findMany(), () => (readDb() as any).projects || (readDb() as any).manpowerProjects || []);
+  projectSites = await runSafeQuery("projectSites", () => prisma.projectSite.findMany(), () => (readDb() as any).projectSites || (readDb() as any).manpowerSites || []);
+  deployments = await runSafeQuery("deployments", () => prisma.manpowerDeployment.findMany(), () => (readDb() as any).manpowerDeployments || []);
+  deploymentAssignments = await runSafeQuery("deploymentAssignments", () => prisma.manpowerDeploymentAssignment.findMany(), () => (readDb() as any).manpowerDeploymentAssignments || []);
+  relieverAssignments = await runSafeQuery("relieverAssignments", () => prisma.manpowerRelieverAssignment.findMany(), () => (readDb() as any).manpowerRelieverAssignments || []);
+  securityLicenses = await runSafeQuery("securityLicenses", () => prisma.securityLicense.findMany(), () => (readDb() as any).securityLicenses || []);
+  securityGatePasses = await runSafeQuery("securityGatePasses", () => prisma.securityGatePass.findMany(), () => (readDb() as any).securityGatePasses || []);
+  coordinatorAssignments = await runSafeQuery("coordinatorAssignments", () => prisma.securityProjectCoordinatorAssignment.findMany(), () => (readDb() as any).securityProjectCoordinatorAssignments || []);
+  siteInspections = await runSafeQuery("siteInspections", () => prisma.securitySiteInspection.findMany(), () => (readDb() as any).securitySiteInspections || []);
+  userActivityLogs = await runSafeQuery("userActivityLogs", () => prisma.userActivityLog.findMany({ take: 50, orderBy: { createdAt: "desc" } }), () => (readDb() as any).userActivityLogs || []);
 
-    const activeEmployees = employees.filter(e => e.isActive !== false && e.employmentStatus === "ACTIVE");
-    const totalActiveCount = activeEmployees.length;
+  companies = await mockDb.getCompanies().catch(() => []);
+  locations = await mockDb.getLocations().catch(() => []);
 
-    // 1. Attendance Today (dynamic check)
-    // Map checkIn dates
-    const parseDateOnly = (dStr: string) => dStr.split("T")[0];
+  const activeEmployees = (employees || []).filter(e => e && e.isActive !== false && e.employmentStatus === "ACTIVE");
+  const totalActiveCount = activeEmployees.length;
+
+  const parseDateOnly = (dStr: string) => {
+    if (!dStr) return "";
+    return dStr.split("T")[0];
+  };
+
+  const todayAttendance = (attendance || []).filter(a => {
+    if (!a || !a.checkIn) return false;
+    return parseDateOnly(a.checkIn) === todayStr;
+  });
+
+  const presentTodayCount = new Set(todayAttendance.map(a => a.employeeId)).size;
+  const onDutyNowCount = todayAttendance.filter(a => !a.checkOut).length;
+  const lateTodayCount = todayAttendance.filter(a => a.status === "Late").length;
+  const earlyCheckoutCount = todayAttendance.filter(a => a.checkoutStatus?.toLowerCase().includes("early")).length;
+  const missingCheckoutCount = todayAttendance.filter(a => {
+    if (!a || a.checkOut || !a.checkIn) return false;
+    const hoursSinceCheckIn = (Date.now() - new Date(a.checkIn).getTime()) / (1000 * 60 * 60);
+    return hoursSinceCheckIn > 12;
+  }).length;
+
+  const onLeaveToday = (leaves || []).filter(l => {
+    if (!l || l.status !== "Approved") return false;
+    const startStr = l.startDate || l.from;
+    const endStr = l.endDate || l.to;
+    if (!startStr || !endStr) return false;
+    const start = new Date(startStr);
+    const end = new Date(endStr);
+    const today = new Date(todayStr);
+    return today >= start && today <= end;
+  });
+  const onLeaveTodayCount = onLeaveToday.length;
+
+  const pendingLeaves = (leaves || []).filter(l => l && l.status === "Pending Approval");
+  const pendingLeavesCount = pendingLeaves.length;
+
+  const upcomingLeaves = (leaves || []).filter(l => {
+    if (!l || l.status !== "Approved") return false;
+    const startStr = l.startDate || l.from;
+    if (!startStr) return false;
+    const start = new Date(startStr);
+    const diffTime = start.getTime() - todayStart.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays > 0 && diffDays <= 7;
+  }).length;
+
+  const absentTodayCount = Math.max(0, totalActiveCount - presentTodayCount - onLeaveTodayCount);
+
+  // Workforce Clusters helper
+  const clusters = {
+    WHITE_COLLAR: activeEmployees.filter(e => e.operationType === "WHITE_COLLAR"),
+    SECURITY_GUARDING: activeEmployees.filter(e => e.operationType === "SECURITY_GUARDING"),
+    FACILITY_MANAGEMENT: activeEmployees.filter(e => e.operationType === "FACILITY_MANAGEMENT"),
+  };
+
+  const getClusterStats = (clusterEmps: any[]) => {
+    const ids = clusterEmps.map(e => e.id);
+    const clusterPresent = todayAttendance.filter(a => ids.includes(a.employeeId));
+    const presentCount = new Set(clusterPresent.map(a => a.employeeId)).size;
+    const onDutyCount = clusterPresent.filter(a => !a.checkOut).length;
     
-    const todayAttendance = attendance.filter(a => {
-      if (!a.checkIn) return false;
-      return parseDateOnly(a.checkIn) === todayStr;
-    });
+    const clusterLeaves = onLeaveToday.filter(l => ids.includes(l.employeeId));
+    const leaveCount = clusterLeaves.length;
 
-    const presentTodayCount = new Set(todayAttendance.map(a => a.employeeId)).size;
-    const onDutyNowCount = todayAttendance.filter(a => !a.checkOut).length;
-    const lateTodayCount = todayAttendance.filter(a => a.status === "Late").length;
-    const earlyCheckoutCount = todayAttendance.filter(a => a.checkoutStatus?.toLowerCase().includes("early")).length;
-    const missingCheckoutCount = todayAttendance.filter(a => {
-      if (a.checkOut) return false;
-      // If checked in before today or hours ago and still not checked out, mark missing
-      const hoursSinceCheckIn = (Date.now() - new Date(a.checkIn).getTime()) / (1000 * 60 * 60);
-      return hoursSinceCheckIn > 12;
-    }).length;
+    const absentCount = Math.max(0, clusterEmps.length - presentCount - leaveCount);
+    const total = clusterEmps.length;
+    const utilization = total > 0 ? Math.round(((onDutyCount + presentCount) / (total * 2)) * 100) : 0;
 
-    // 2. Leaves Today
-    const onLeaveToday = leaves.filter(l => {
-      if (l.status !== "Approved") return false;
-      const start = new Date(l.startDate || l.from || "");
-      const end = new Date(l.endDate || l.to || "");
-      const today = new Date(todayStr);
-      return today >= start && today <= end;
-    });
-    const onLeaveTodayCount = onLeaveToday.length;
-
-    const pendingLeaves = leaves.filter(l => l.status === "Pending Approval");
-    const pendingLeavesCount = pendingLeaves.length;
-
-    const upcomingLeaves = leaves.filter(l => {
-      if (l.status !== "Approved") return false;
-      const start = new Date(l.startDate || l.from || "");
-      const diffTime = start.getTime() - todayStart.getTime();
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      return diffDays > 0 && diffDays <= 7;
-    }).length;
-
-    const absentTodayCount = Math.max(0, totalActiveCount - presentTodayCount - onLeaveTodayCount);
-
-    // 3. Workforce Clusters
-    const clusters = {
-      WHITE_COLLAR: activeEmployees.filter(e => e.operationType === "WHITE_COLLAR"),
-      SECURITY_GUARDING: activeEmployees.filter(e => e.operationType === "SECURITY_GUARDING"),
-      FACILITY_MANAGEMENT: activeEmployees.filter(e => e.operationType === "FACILITY_MANAGEMENT"),
+    return {
+      total,
+      active: clusterEmps.filter(e => e.isActive !== false).length,
+      onDutyNow: onDutyCount,
+      presentToday: presentCount,
+      absentToday: absentCount,
+      onLeave: leaveCount,
+      pendingDeployment: 0,
+      utilization
     };
+  };
 
-    const getClusterStats = (clusterEmps: any[]) => {
-      const ids = clusterEmps.map(e => e.id);
-      const clusterPresent = todayAttendance.filter(a => ids.includes(a.employeeId));
-      const presentCount = new Set(clusterPresent.map(a => a.employeeId)).size;
-      const onDutyCount = clusterPresent.filter(a => !a.checkOut).length;
-      
-      const clusterLeaves = onLeaveToday.filter(l => ids.includes(l.employeeId));
-      const leaveCount = clusterLeaves.length;
+  const todayDeployments = (deployments || []).filter(d => d && parseDateOnly(d.date) === todayStr);
+  const todayDepIds = todayDeployments.map(d => d.id);
+  const todayAssignments = (deploymentAssignments || []).filter(a => a && todayDepIds.includes(a.deploymentId));
+  const staffDeployedCount = new Set(todayAssignments.map(a => a.employeeId)).size;
+  
+  const relieversDeployedCount = (relieverAssignments || []).filter(r => {
+    if (!r) return false;
+    const orig = todayAssignments.find(a => a.id === r.originalAssignmentId);
+    return orig && todayDepIds.includes(orig.deploymentId);
+  }).length;
 
-      const absentCount = Math.max(0, clusterEmps.length - presentCount - leaveCount);
-      const total = clusterEmps.length;
-      const utilization = total > 0 ? Math.round(((onDutyCount + presentCount) / (total * 2)) * 100) : 0; // expected duty proxy
+  const blueCollarActiveIds = activeEmployees
+    .filter(e => e.employeeCategory === "BLUE_COLLAR")
+    .map(e => e.id);
+  const deployedIds = new Set(todayAssignments.map(a => a.employeeId));
+  const unassignedManpowerCount = blueCollarActiveIds.filter(id => !deployedIds.has(id)).length;
 
-      return {
-        total,
-        active: clusterEmps.filter(e => e.isActive !== false).length,
-        onDutyNow: onDutyCount,
-        presentToday: presentCount,
-        absentToday: absentCount,
-        onLeave: leaveCount,
-        pendingDeployment: 0, // calculated from shift planner
-        utilization
-      };
-    };
+  const activeContracts = (contracts || []).filter(c => c && (c.status === "ACTIVE" || c.statusCode === "ACTIVE"));
+  const activeContractsCount = activeContracts.length;
+  const draftContractsCount = (contracts || []).filter(c => c && (c.status === "DRAFT" || c.statusCode === "DRAFT")).length;
+  const pendingContractsCount = (contracts || []).filter(c => c && (c.status === "PENDING_APPROVAL" || c.statusCode === "PENDING_APPROVAL")).length;
+  
+  const expiringContractsCount = activeContracts.filter(c => {
+    if (!c || !c.endDate) return false;
+    const end = new Date(c.endDate);
+    if (isNaN(end.getTime())) return false;
+    const diff = end.getTime() - todayStart.getTime();
+    const diffDays = Math.ceil(diff / (1000 * 60 * 60 * 24));
+    return diffDays > 0 && diffDays <= 30;
+  }).length;
 
-    const workforceOverview = {
+  const activeSites = (projectSites || []).filter(s => s && (s.status === "ACTIVE" || s.isActive !== false));
+
+  // safeSection wrapper to isolate section errors
+  const errors: string[] = [];
+  const safeSection = <T>(name: string, fallback: T, fn: () => T): T => {
+    try {
+      return fn();
+    } catch (err: any) {
+      console.error(`[Dashboard Summary] section failed: ${name}`, err);
+      errors.push(`${name} failed: ${err.message || err}`);
+      return fallback;
+    }
+  };
+
+  const workforceOverview = safeSection("workforceOverview", {
+    whiteCollar: { total: 0, active: 0, onDutyNow: 0, presentToday: 0, absentToday: 0, onLeave: 0, pendingDeployment: 0, utilization: 0 },
+    securityGuarding: { total: 0, active: 0, onDutyNow: 0, presentToday: 0, absentToday: 0, onLeave: 0, pendingDeployment: 0, utilization: 0 },
+    facilityManagement: { total: 0, active: 0, onDutyNow: 0, presentToday: 0, absentToday: 0, onLeave: 0, pendingDeployment: 0, utilization: 0 }
+  }, () => {
+    const overview = {
       whiteCollar: getClusterStats(clusters.WHITE_COLLAR),
       securityGuarding: getClusterStats(clusters.SECURITY_GUARDING),
       facilityManagement: getClusterStats(clusters.FACILITY_MANAGEMENT),
     };
-
-    // 4. Shift & Deployments Today
-    const todayDeployments = deployments.filter(d => parseDateOnly(d.date) === todayStr);
-    const todayDepIds = todayDeployments.map(d => d.id);
-    const todayAssignments = deploymentAssignments.filter(a => todayDepIds.includes(a.deploymentId));
-    
-    const staffDeployedCount = new Set(todayAssignments.map(a => a.employeeId)).size;
-    const relieversDeployedCount = relieverAssignments.filter(r => {
-      const orig = deploymentAssignments.find(a => a.id === r.originalAssignmentId);
-      return orig && todayDepIds.includes(orig.deploymentId);
-    }).length;
-
-    // Calculate unassigned blue-collar count
-    const blueCollarActiveIds = activeEmployees
-      .filter(e => e.employeeCategory === "BLUE_COLLAR")
-      .map(e => e.id);
-    const deployedIds = new Set(todayAssignments.map(a => a.employeeId));
-    const unassignedManpowerCount = blueCollarActiveIds.filter(id => !deployedIds.has(id)).length;
-
-    // Update clusters pending deployment count
-    workforceOverview.securityGuarding.pendingDeployment = activeEmployees
+    overview.securityGuarding.pendingDeployment = activeEmployees
       .filter(e => e.operationType === "SECURITY_GUARDING" && e.employeeCategory === "BLUE_COLLAR" && !deployedIds.has(e.id)).length;
-    workforceOverview.facilityManagement.pendingDeployment = activeEmployees
+    overview.facilityManagement.pendingDeployment = activeEmployees
       .filter(e => e.operationType === "FACILITY_MANAGEMENT" && e.employeeCategory === "BLUE_COLLAR" && !deployedIds.has(e.id)).length;
+    return overview;
+  });
 
-    // 5. Contracts & Projects
-    const activeContracts = contracts.filter(c => c.status === "ACTIVE" || c.statusCode === "ACTIVE");
-    const activeContractsCount = activeContracts.length;
-    const draftContractsCount = contracts.filter(c => c.status === "DRAFT" || c.statusCode === "DRAFT").length;
-    const pendingContractsCount = contracts.filter(c => c.status === "PENDING_APPROVAL" || c.statusCode === "PENDING_APPROVAL").length;
-    
-    // Contracts expiring in 30 days
-    const expiringContractsCount = activeContracts.filter(c => {
-      if (!c.endDate) return false;
-      const end = new Date(c.endDate);
-      const diff = end.getTime() - todayStart.getTime();
-      const diffDays = Math.ceil(diff / (1000 * 60 * 60 * 24));
-      return diffDays > 0 && diffDays <= 30;
-    }).length;
+  const workforceSummary = safeSection("workforceSummary", {
+    totalActive: 0,
+    presentToday: 0,
+    absentToday: 0,
+    onDutyNow: 0,
+    lateToday: 0,
+    onLeaveToday: 0,
+    openIncidents: 0,
+    pendingApprovals: 0,
+    activeContracts: 0,
+    activeDeployments: 0
+  }, () => ({
+    totalActive: totalActiveCount,
+    presentToday: presentTodayCount,
+    absentToday: absentTodayCount,
+    onDutyNow: onDutyNowCount,
+    lateToday: lateTodayCount,
+    onLeaveToday: onLeaveTodayCount,
+    openIncidents: 0,
+    pendingApprovals: pendingLeavesCount + pendingContractsCount,
+    activeContracts: activeContractsCount,
+    activeDeployments: todayDeployments.length
+  }));
 
-    // 6. Security Guarding Ops
-    const activeSites = projectSites.filter(s => s.status === "ACTIVE" || s.isActive !== false);
-    const openIncidentsCount = 0; // fallback (no data)
-    
-    const securitySummary = {
-      activeContracts: contracts.filter(c => (c.status === "ACTIVE" || c.statusCode === "ACTIVE") && c.contractType === "SECURITY_GUARDING").length,
-      activeSites: activeSites.length,
-      guardsDeployed: workforceOverview.securityGuarding.presentToday,
-      vacantPosts: 0, // fallback
-      patrolsToday: siteInspections.filter(i => parseDateOnly(i.inspectionDate || i.createdAt) === todayStr).length,
-      openIncidents: openIncidentsCount,
-      feedbackPending: 0
-    };
+  const securitySummary = safeSection("securitySummary", {
+    activeContracts: 0,
+    activeSites: 0,
+    guardsDeployed: 0,
+    vacantPosts: 0,
+    patrolsToday: 0,
+    openIncidents: 0,
+    feedbackPending: 0
+  }, () => ({
+    activeContracts: (contracts || []).filter(c => c && (c.status === "ACTIVE" || c.statusCode === "ACTIVE") && c.contractType === "SECURITY_GUARDING").length,
+    activeSites: activeSites.length,
+    guardsDeployed: workforceOverview.securityGuarding.presentToday,
+    vacantPosts: 0,
+    patrolsToday: (siteInspections || []).filter(i => i && parseDateOnly(i.inspectionDate || i.createdAt) === todayStr).length,
+    openIncidents: 0,
+    feedbackPending: 0
+  }));
 
-    // 7. Facility Management Ops
-    const facilitySummary = {
-      activeProjects: projects.filter(p => (p.status === "ACTIVE" || p.status === "Active") && p.projectType === "FACILITY_MANAGEMENT").length,
-      staffDeployed: workforceOverview.facilityManagement.presentToday,
-      openWorkReports: 0,
-      feedbackPending: 0,
-      openIncidents: 0,
-      relieverRequests: relieverAssignments.length
-    };
+  const facilitySummary = safeSection("facilitySummary", {
+    activeProjects: 0,
+    staffDeployed: 0,
+    openWorkReports: 0,
+    feedbackPending: 0,
+    openIncidents: 0,
+    relieverRequests: 0
+  }, () => ({
+    activeProjects: (projects || []).filter(p => p && (p.status === "ACTIVE" || p.status === "Active") && p.projectType === "FACILITY_MANAGEMENT").length,
+    staffDeployed: workforceOverview.facilityManagement.presentToday,
+    openWorkReports: 0,
+    feedbackPending: 0,
+    openIncidents: 0,
+    relieverRequests: relieverAssignments.length
+  }));
 
-    // 8. Corporate / White Collar Ops
-    const corporateSummary = {
-      activeStaff: workforceOverview.whiteCollar.total,
-      presentToday: workforceOverview.whiteCollar.presentToday,
-      onLeave: workforceOverview.whiteCollar.onLeave,
-      lateToday: todayAttendance.filter(a => {
-        const emp = activeEmployees.find(e => e.id === a.employeeId);
-        return emp && emp.operationType === "WHITE_COLLAR" && a.status === "Late";
-      }).length,
-      pendingLeaveApprovals: pendingLeavesCount,
-      pendingClearances: 0 // fallback
-    };
+  const corporateSummary = safeSection("corporateSummary", {
+    activeStaff: 0,
+    presentToday: 0,
+    onLeave: 0,
+    lateToday: 0,
+    pendingLeaveApprovals: 0,
+    pendingClearances: 0
+  }, () => ({
+    activeStaff: workforceOverview.whiteCollar.total,
+    presentToday: workforceOverview.whiteCollar.presentToday,
+    onLeave: workforceOverview.whiteCollar.onLeave,
+    lateToday: todayAttendance.filter(a => {
+      const emp = activeEmployees.find(e => e.id === a.employeeId);
+      return emp && emp.operationType === "WHITE_COLLAR" && a.status === "Late";
+    }).length,
+    pendingLeaveApprovals: pendingLeavesCount,
+    pendingClearances: 0
+  }));
 
-    // 9. Risk & Exceptions
-    const thirtyDaysFromNow = new Date();
-    thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
-    const sixtyDaysFromNow = new Date();
-    sixtyDaysFromNow.setDate(sixtyDaysFromNow.getDate() + 60);
+  const attendanceSummary = safeSection("attendanceSummary", {
+    present: 0,
+    absent: 0,
+    late: 0,
+    earlyCheckout: 0,
+    missingCheckout: 0,
+    overtimePending: 0
+  }, () => ({
+    present: presentTodayCount,
+    absent: absentTodayCount,
+    late: lateTodayCount,
+    earlyCheckout: earlyCheckoutCount,
+    missingCheckout: missingCheckoutCount,
+    overtimePending: 0
+  }));
 
-    const checkExpiring = (dateStr: string | null | undefined, limitDate: Date) => {
-      if (!dateStr) return false;
-      const d = new Date(dateStr);
-      return d > todayStart && d <= limitDate;
-    };
+  const leaveSummary = safeSection("leaveSummary", {
+    pendingApproval: 0,
+    approvedToday: 0,
+    onLeaveToday: 0,
+    upcomingNext7Days: 0
+  }, () => ({
+    pendingApproval: pendingLeavesCount,
+    approvedToday: onLeaveTodayCount,
+    onLeaveToday: onLeaveTodayCount,
+    upcomingNext7Days: upcomingLeaves
+  }));
 
-    const exceptions = {
-      noDefaultLocation: activeEmployees.filter(e => !e.defaultLocationId).length,
-      noActiveDeployment: unassignedManpowerCount,
-      expiringQid30: activeEmployees.filter(e => checkExpiring(e.qidExpiryDate, thirtyDaysFromNow)).length,
-      expiringQid60: activeEmployees.filter(e => checkExpiring(e.qidExpiryDate, sixtyDaysFromNow)).length,
-      expiringPassport30: activeEmployees.filter(e => checkExpiring(e.passportExpiryDate, thirtyDaysFromNow)).length,
-      expiringPassport60: activeEmployees.filter(e => checkExpiring(e.passportExpiryDate, sixtyDaysFromNow)).length,
-      expiringVisa30: activeEmployees.filter(e => checkExpiring(e.visaExpiryDate, thirtyDaysFromNow)).length,
-      expiringMoiLicense30: securityLicenses.filter(l => checkExpiring(l.expiryDate, thirtyDaysFromNow)).length,
-      expiringGatePass30: securityGatePasses.filter(g => checkExpiring(g.expiryDate, thirtyDaysFromNow)).length,
-      expiringHealthCard30: activeEmployees.filter(e => checkExpiring(e.healthCardExpiryDate, thirtyDaysFromNow)).length,
-      missingCheckout: missingCheckoutCount,
-      activeWithDisabledLogin: activeEmployees.filter(e => e.isLoginEnabled === false).length,
-    };
+  const shiftDeploymentSummary = safeSection("shiftDeploymentSummary", {
+    activeShiftsToday: 0,
+    deployedToday: 0,
+    openGaps: 0,
+    relieverAssignments: 0,
+    unassignedManpower: 0
+  }, () => ({
+    activeShiftsToday: todayDeployments.length,
+    deployedToday: staffDeployedCount,
+    openGaps: 0,
+    relieverAssignments: relieversDeployedCount,
+    unassignedManpower: unassignedManpowerCount
+  }));
 
-    // 10. Approvals Summary
-    const approvalsSummary = {
-      leaveApprovals: pendingLeavesCount,
-      attendanceCorrections: 0,
-      overtime: 0,
-      deployments: deployments.filter(d => d.approvalStatus === "DRAFT" || d.approvalStatus === "SUBMITTED").length,
-      contracts: pendingContractsCount,
-      addendums: addendums.filter(a => a.status === "PENDING" || a.status === "PENDING_APPROVAL").length,
-      clearances: 0
-    };
+  const contractSummary = safeSection("contractSummary", {
+    active: 0,
+    draft: 0,
+    pendingApproval: 0,
+    expiring30Days: 0,
+    activeProjects: 0,
+    pendingAddendums: 0
+  }, () => ({
+    active: activeContractsCount,
+    draft: draftContractsCount,
+    pendingApproval: pendingContractsCount,
+    expiring30Days: expiringContractsCount,
+    activeProjects: (projects || []).length,
+    pendingAddendums: (addendums || []).filter(a => a && a.status === "PENDING").length
+  }));
 
-    // 11. Regional Activity
-    // Count active operatives by default location
+  const approvalSummary = safeSection("approvalSummary", {
+    leaveApprovals: 0,
+    attendanceCorrections: 0,
+    overtime: 0,
+    deployments: 0,
+    contracts: 0,
+    addendums: 0,
+    clearances: 0
+  }, () => ({
+    leaveApprovals: pendingLeavesCount,
+    attendanceCorrections: 0,
+    overtime: 0,
+    deployments: (deployments || []).filter(d => d && (d.approvalStatus === "DRAFT" || d.approvalStatus === "SUBMITTED")).length,
+    contracts: pendingContractsCount,
+    addendums: (addendums || []).filter(a => a && (a.status === "PENDING" || a.status === "PENDING_APPROVAL")).length,
+    clearances: 0
+  }));
+
+  const thirtyDaysFromNow = new Date();
+  thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
+  const sixtyDaysFromNow = new Date();
+  sixtyDaysFromNow.setDate(sixtyDaysFromNow.getDate() + 60);
+
+  const exceptionSummary = safeSection("exceptionSummary", {
+    noDefaultLocation: 0,
+    noActiveDeployment: 0,
+    expiringQid30: 0,
+    expiringQid60: 0,
+    expiringPassport30: 0,
+    expiringPassport60: 0,
+    expiringVisa30: 0,
+    expiringMoiLicense30: 0,
+    expiringGatePass30: 0,
+    expiringHealthCard30: 0,
+    missingCheckout: 0,
+    activeWithDisabledLogin: 0
+  }, () => ({
+    noDefaultLocation: activeEmployees.filter(e => !e.defaultLocationId).length,
+    noActiveDeployment: unassignedManpowerCount,
+    expiringQid30: activeEmployees.filter(e => checkExpiring(e.qidExpiryDate, thirtyDaysFromNow)).length,
+    expiringQid60: activeEmployees.filter(e => checkExpiring(e.qidExpiryDate, sixtyDaysFromNow)).length,
+    expiringPassport30: activeEmployees.filter(e => checkExpiring(e.passportExpiryDate, thirtyDaysFromNow)).length,
+    expiringPassport60: activeEmployees.filter(e => checkExpiring(e.passportExpiryDate, sixtyDaysFromNow)).length,
+    expiringVisa30: activeEmployees.filter(e => checkExpiring((e as any).visaExpiryDate, thirtyDaysFromNow)).length,
+    expiringMoiLicense30: (securityLicenses || []).filter(l => l && checkExpiring(l.expiryDate, thirtyDaysFromNow)).length,
+    expiringGatePass30: (securityGatePasses || []).filter(g => g && checkExpiring(g.expiryDate, thirtyDaysFromNow)).length,
+    expiringHealthCard30: activeEmployees.filter(e => checkExpiring((e as any).healthCardExpiryDate, thirtyDaysFromNow)).length,
+    missingCheckout: missingCheckoutCount,
+    activeWithDisabledLogin: activeEmployees.filter(e => e.isLoginEnabled === false).length,
+  }));
+
+  const reportSnapshot = safeSection("reportSnapshot", {
+    attendanceReport: "Not configured",
+    leaveReport: "Not configured",
+    deploymentReport: "Not configured",
+    securityReport: "Not configured",
+    facilityReport: "Not configured",
+    auditActivityToday: 0,
+    backupReady: "Not configured"
+  }, () => ({
+    attendanceReport: "GENERATED",
+    leaveReport: "UP-TO-DATE",
+    deploymentReport: "SYNCED",
+    securityReport: "HEALTHY",
+    facilityReport: "HEALTHY",
+    auditActivityToday: (userActivityLogs || []).filter(log => log && parseDateOnly(log.timestamp || log.createdAt) === todayStr).length,
+    backupReady: "SUCCESS"
+  }));
+
+  const regionalActivity = safeSection("regionalActivity", [] as Array<{ name: string; count: number }>, () => {
     const locationCounts: Record<string, { name: string; count: number }> = {};
     activeEmployees.forEach(e => {
-      // Find default location name
-      const loc = locations.find((l: any) => l.id === e.defaultLocationId || l.locationCode === e.defaultLocationId);
+      if (!e) return;
+      const loc = (locations || []).find((l: any) => l && (l.id === e.defaultLocationId || l.locationCode === e.defaultLocationId));
       const locName = loc ? (loc.locationName || (loc as any).name) : "Office HQ";
       
-      const att = todayAttendance.find(a => a.employeeId === e.id && !a.checkOut);
+      const att = todayAttendance.find(a => a && a.employeeId === e.id && !a.checkOut);
       if (att) {
         if (!locationCounts[locName]) {
           locationCounts[locName] = { name: locName, count: 0 };
@@ -282,73 +441,30 @@ export async function GET(request: Request) {
         locationCounts[locName].count++;
       }
     });
+    return Object.values(locationCounts);
+  });
 
-    const regionalActivity = Object.values(locationCounts);
+  const payload = {
+    workforceSummary,
+    workforceOverview,
+    securitySummary,
+    facilitySummary,
+    corporateSummary,
+    attendanceSummary,
+    leaveSummary,
+    shiftDeploymentSummary,
+    contractSummary,
+    approvalSummary,
+    exceptionSummary,
+    reportSnapshot,
+    regionalActivity,
+    lastUpdated: new Date().toISOString()
+  };
 
-    const dashboardSummary = {
-      workforceSummary: {
-        totalActive: totalActiveCount,
-        presentToday: presentTodayCount,
-        absentToday: absentTodayCount,
-        onDutyNow: onDutyNowCount,
-        lateToday: lateTodayCount,
-        onLeaveToday: onLeaveTodayCount,
-        openIncidents: openIncidentsCount,
-        pendingApprovals: pendingLeavesCount + pendingContractsCount,
-        activeContracts: activeContractsCount,
-        activeDeployments: todayDeployments.length
-      },
-      workforceOverview,
-      securitySummary,
-      facilitySummary,
-      corporateSummary,
-      attendanceSummary: {
-        present: presentTodayCount,
-        absent: absentTodayCount,
-        late: lateTodayCount,
-        earlyCheckout: earlyCheckoutCount,
-        missingCheckout: missingCheckoutCount,
-        overtimePending: 0
-      },
-      leaveSummary: {
-        pendingApproval: pendingLeavesCount,
-        approvedToday: onLeaveTodayCount,
-        onLeaveToday: onLeaveTodayCount,
-        upcomingNext7Days: upcomingLeaves
-      },
-      shiftDeploymentSummary: {
-        activeShiftsToday: todayDeployments.length,
-        deployedToday: staffDeployedCount,
-        openGaps: 0,
-        relieverAssignments: relieversDeployedCount,
-        unassignedManpower: unassignedManpowerCount
-      },
-      contractSummary: {
-        active: activeContractsCount,
-        draft: draftContractsCount,
-        pendingApproval: pendingContractsCount,
-        expiring30Days: expiringContractsCount,
-        activeProjects: projects.length,
-        pendingAddendums: addendums.filter(a => a.status === "PENDING").length
-      },
-      approvalSummary: approvalsSummary,
-      exceptionSummary: exceptions,
-      reportSnapshot: {
-        attendanceReport: "GENERATED",
-        leaveReport: "UP-TO-DATE",
-        deploymentReport: "SYNCED",
-        securityReport: "HEALTHY",
-        facilityReport: "HEALTHY",
-        auditActivityToday: userActivityLogs.filter(log => parseDateOnly(log.timestamp || log.createdAt) === todayStr).length,
-        backupReady: "SUCCESS"
-      },
-      regionalActivity,
-      lastUpdated: new Date().toISOString()
-    };
-
-    return NextResponse.json(dashboardSummary);
-  } catch (error: any) {
-    console.error("Dashboard summary API error:", error);
-    return NextResponse.json({ error: "Failed to generate dashboard summary: " + error.message }, { status: 500 });
-  }
+  return NextResponse.json({
+    success: true,
+    degraded: errors.length > 0,
+    errors,
+    data: payload
+  });
 }

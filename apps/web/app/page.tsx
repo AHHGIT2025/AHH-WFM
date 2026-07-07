@@ -137,6 +137,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [data, setData] = useState<DashboardData | null>(null);
+  const [degraded, setDegraded] = useState(false);
 
   // High level filters
   const [companyFilter, setCompanyFilter] = useState("all");
@@ -149,7 +150,12 @@ export default function DashboardPage() {
       const res = await fetch("/api/v1/dashboard/summary");
       if (res.ok) {
         const json = await res.json();
-        setData(json);
+        if (json && json.success) {
+          setData(json.data);
+          setDegraded(!!json.degraded);
+        } else {
+          console.error("Dashboard Summary returned unsuccessful:", json);
+        }
       }
     } catch (e) {
       console.error("Failed to load dashboard summary payload", e);
@@ -230,9 +236,14 @@ export default function DashboardPage() {
       {/* Executive Command Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-surface-container-low p-4 rounded-xl border border-border-subtle">
         <div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-full bg-status-success animate-pulse"></span>
             <h1 className="text-lg font-bold text-primary tracking-tight">Executive Operations Dashboard</h1>
+            {degraded && (
+              <Badge variant="warning" className="ml-2 animate-pulse">
+                Some dashboard sections are using fallback data
+              </Badge>
+            )}
           </div>
           <p className="text-[11px] text-on-surface-variant mt-0.5">AHH WFM Global Command Console · Last Updated: {new Date(data.lastUpdated).toLocaleTimeString()}</p>
         </div>
