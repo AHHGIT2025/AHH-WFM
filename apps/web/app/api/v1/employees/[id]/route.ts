@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
-import { mockDb } from "@ahh-wfm/mock-data";
+import { mockDb, isDbConnected, readDb, writeDb } from "@ahh-wfm/mock-data";
 import { checkApiAuth } from "@/lib/api-guards";
-import { hasPermission } from "@/lib/permissions";
+import { hasPermission, isAdminUser } from "@/lib/permissions";
+import { prisma } from "@ahh-wfm/database";
 
 function normalizeEmployee(emp: any) {
   if (!emp) return emp;
@@ -352,8 +353,15 @@ export async function PATCH(request: Request, { params }: RouteParams) {
 }
 
 export async function DELETE(request: Request, { params }: RouteParams) {
-  const auth = await checkApiAuth(["ADMIN"]);
+  const auth = await checkApiAuth();
   if (auth.error) return auth.error;
+
+  // Strict check: Only Admin & Super Admin are allowed to delete employees
+  if (!isAdminUser(auth.session?.user)) {
+    return NextResponse.json({ error: "Only Admin and Super Admin can delete employees." }, { status: 403 });
+  }
+
+  const deletedBy = (auth.session?.user as any)?.id || "admin-system";
 
   try {
     const employees = await mockDb.getEmployees();
@@ -363,15 +371,160 @@ export async function DELETE(request: Request, { params }: RouteParams) {
     }
     const { targetId } = resolution;
 
-    const result = await mockDb.deactivateEmployee(targetId);
-    if (!result) {
-      return NextResponse.json({ error: "Employee not found" }, { status: 404 });
+    const deactivatedAt = new Date();
+    const deactivatedAtStr = deactivatedAt.toISOString();
+
+    let resultEmployee: any = null;
+
+    if (isDbConnected()) {
+      // 1. Deactivate employee record & disable access
+      resultEmployee = await prisma.employee.update({
+        where: { id: targetId },
+        data: {
+          isActive: false,
+          employmentStatus: "INACTIVE",
+          status: "Offline",
+          dutyStatus: "OFF_DUTY",
+          deactivatedAt,
+          isLoginEnabled: false,
+          webAccessEnabled: false,
+          mobileAccessEnabled: false
+        }
+      });
+
+      // 2. Deactivate coordinator assignments
+      await prisma.securityProjectCoordinatorAssignment.updateMany({
+        where: { coordinatorEmployeeId: targetId, isActive: true },
+        data: { isActive: false, endDate: deactivatedAt }
+      });
+
+      // 3. Remove future shift assignments (date >= today)
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      await prisma.shiftAssignment.deleteMany({
+        where: { employeeId: targetId, date: { gte: today } }
+      });
+
+      // 4. Remove future deployment and reliever assignments
+      const futureDeployments = await prisma.manpowerDeployment.findMany({
+        where: { date: { gte: today } },
+        select: { id: true }
+      });
+      const futureDepIds = futureDeployments.map(d => d.id);
+      if (futureDepIds.length > 0) {
+        await prisma.manpowerDeploymentAssignment.deleteMany({
+          where: { employeeId: targetId, deploymentId: { in: futureDepIds } }
+        });
+        await prisma.manpowerRelieverAssignment.deleteMany({
+          where: {
+            relieverEmployeeId: targetId,
+            originalAssignment: {
+              deploymentId: { in: futureDepIds }
+            }
+          }
+        });
+      }
+
+      // 5. Create user activity log
+      await prisma.userActivityLog.create({
+        data: {
+          id: `LOG-${Date.now()}`,
+          userId: deletedBy,
+          action: "EMPLOYEE_DELETE",
+          entityType: "EMPLOYEE",
+          entityId: targetId,
+          afterJson: JSON.stringify({
+            employeeId: targetId,
+            deletedBy,
+            deletedAt: deactivatedAtStr,
+            status: "INACTIVE",
+            affectedModules: "Employee deactivation, Login disabled, Coordinator assignments deactivated, Future shift/deployment assignments cancelled"
+          }),
+          ipAddress: "127.0.0.1",
+          userAgent: "API Call"
+        }
+      });
+    } else {
+      const db = readDb();
+      const empIdx = db.employees.findIndex((e: any) => e.id === targetId);
+      if (empIdx === -1) {
+        return NextResponse.json({ error: "Employee not found" }, { status: 404 });
+      }
+
+      const emp = db.employees[empIdx];
+      emp.isActive = false;
+      emp.employmentStatus = "INACTIVE";
+      emp.status = "Offline";
+      emp.dutyStatus = "OFF_DUTY";
+      emp.deactivatedAt = deactivatedAtStr;
+      emp.isLoginEnabled = false;
+      emp.webAccessEnabled = false;
+      emp.mobileAccessEnabled = false;
+      resultEmployee = emp;
+
+      // 2. Deactivate coordinator assignments
+      db.securityProjectCoordinatorAssignments = (db.securityProjectCoordinatorAssignments || []).map((x: any) => {
+        if (x.coordinatorEmployeeId === targetId && x.isActive !== false) {
+          return { ...x, isActive: false, endDate: deactivatedAtStr };
+        }
+        return x;
+      });
+
+      const todayStr = deactivatedAtStr.split("T")[0];
+
+      // 3. Remove future shift assignments
+      db.shiftAssignments = (db.shiftAssignments || []).filter((s: any) => 
+        !(s.employeeId === targetId && s.date >= todayStr)
+      );
+
+      // 4. Remove future deployment and reliever assignments
+      const futureDeployments = (db.manpowerDeployments || []).filter((d: any) => d.date >= todayStr);
+      const futureDepIds = futureDeployments.map((d: any) => d.id);
+      if (futureDepIds.length > 0) {
+        db.manpowerDeploymentAssignments = (db.manpowerDeploymentAssignments || []).filter((a: any) => 
+          !(a.employeeId === targetId && futureDepIds.includes(a.deploymentId))
+        );
+        
+        // Remove reliever assignments
+        const futureRelieverAssignments = (db.manpowerRelieverAssignments || []).filter((r: any) => {
+          if (r.relieverEmployeeId !== targetId) return false;
+          const orig = (db.manpowerDeploymentAssignments || []).find((a: any) => a.id === r.originalAssignmentId);
+          if (!orig) return false;
+          return futureDepIds.includes(orig.deploymentId);
+        });
+        const futureRelieverIds = futureRelieverAssignments.map((r: any) => r.id);
+        db.manpowerRelieverAssignments = (db.manpowerRelieverAssignments || []).filter((r: any) => !futureRelieverIds.includes(r.id));
+      }
+
+      // 5. Create user activity log
+      const newLog = {
+        id: `LOG-${Date.now()}`,
+        userId: deletedBy,
+        action: "EMPLOYEE_DELETE",
+        entityType: "EMPLOYEE",
+        entityId: targetId,
+        afterJson: JSON.stringify({
+          employeeId: targetId,
+          deletedBy,
+          deletedAt: deactivatedAtStr,
+          status: "INACTIVE",
+          affectedModules: "Employee deactivation, Login disabled, Coordinator assignments deactivated, Future shift/deployment assignments cancelled"
+        }),
+        createdAt: deactivatedAtStr,
+        ipAddress: "127.0.0.1",
+        userAgent: "API Call"
+      };
+      db.userActivityLogs = db.userActivityLogs || [];
+      db.userActivityLogs.push(newLog);
+
+      writeDb(db);
     }
-    
-    const copy = { ...result };
+
+    const copy = { ...resultEmployee };
     delete (copy as any).passwordHash;
-    return NextResponse.json({ message: "Employee deactivated successfully", employee: copy });
-  } catch (e) {
-    return NextResponse.json({ error: "Failed to deactivate employee" }, { status: 500 });
+    return NextResponse.json({ message: "Employee deleted successfully", employee: copy });
+  } catch (e: any) {
+    console.error("Employee delete failed:", e);
+    return NextResponse.json({ error: "Failed to delete employee: " + e.message }, { status: 500 });
   }
 }

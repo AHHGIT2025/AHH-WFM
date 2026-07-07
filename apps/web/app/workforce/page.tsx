@@ -294,6 +294,13 @@ export default function WorkforcePage() {
   const isSessionAdminOrHR = sessionRole === "ADMIN" || sessionRole === "HR" || sessionRole === "HR_MANAGER";
 
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [employeeToDelete, setEmployeeToDelete] = useState<string | null>(null);
+
+  const user = session?.user as any;
+  const loggedInRole = user?.role?.toUpperCase().replace(/\s+/g, "_") || "";
+  const isStrictAdmin = loggedInRole === "ADMIN" || loggedInRole === "SUPER_ADMIN";
   const [profileLoadFailed, setProfileLoadFailed] = useState(false);
   const [isEditLoading, setIsEditLoading] = useState(false);
 
@@ -928,6 +935,28 @@ export default function WorkforcePage() {
       }
     } catch (e) {
       alert("Failed to deactivate employee due to network connection issues");
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (deleteConfirmText !== "DELETE" || !employeeToDelete) return;
+    try {
+      const res = await fetch(`/api/v1/employees/${employeeToDelete}`, {
+        method: "DELETE"
+      });
+      if (res.ok) {
+        setIsDeleteModalOpen(false);
+        setEmployeeToDelete(null);
+        setDeleteConfirmText("");
+        setIsEditEmpOpen(false);
+        setSelectedEmp(null);
+        fetchDb();
+      } else {
+        const err = await res.json();
+        alert(err.error || "Failed to delete employee");
+      }
+    } catch (e) {
+      alert("Failed to delete employee");
     }
   };
 
@@ -1576,28 +1605,85 @@ export default function WorkforcePage() {
                   Edit Profile
                 </Button>
                 {!isEmpActive ? (
-                  <Button
-                    variant="success"
-                    className="font-bold text-xs py-1.5 px-3"
-                    onClick={() => handleActivate(emp.id)}
-                  >
-                    Activate
-                  </Button>
+                  (isStrictAdmin || isSessionAdminOrHR) && (
+                    <Button
+                      variant="success"
+                      className="font-bold text-xs py-1.5 px-3"
+                      onClick={() => handleActivate(emp.id)}
+                    >
+                      Activate
+                    </Button>
+                  )
                 ) : (
-                  <Button
-                    variant="ghost"
-                    className="text-status-error hover:bg-red-50 font-bold text-xs py-1.5 px-3 border border-outline-variant"
-                    onClick={() => handleDeactivate(emp.id)}
-                  >
-                    Deactivate
-                  </Button>
+                  isStrictAdmin && (
+                    <Button
+                      variant="ghost"
+                      className="text-status-error hover:bg-red-50 font-bold text-xs py-1.5 px-3 border border-outline-variant"
+                      onClick={() => {
+                        setEmployeeToDelete(emp.id);
+                        setDeleteConfirmText("");
+                        setIsDeleteModalOpen(true);
+                      }}
+                    >
+                      Delete Employee
+                    </Button>
+                  )
                 )}
               </div>
             </Card>
           );
         })}
       </div>
-      )} {/* end employee grid ternary */}
+      )}
+
+      {/* Delete Confirmation Modal */}
+      <Modal isOpen={isDeleteModalOpen} onClose={() => setIsDeleteModalOpen(false)} title="Confirm Employee Deletion">
+        <div className="space-y-4 text-xs font-semibold p-1">
+          <div className="p-3.5 bg-status-error/10 border border-status-error/20 text-status-error rounded-xl space-y-1.5">
+            <div className="flex items-center gap-1.5 font-bold">
+              <span className="material-symbols-outlined text-lg">warning</span>
+              <span>CRITICAL SECURITY NOTICE</span>
+            </div>
+            <p className="leading-relaxed text-[11px]">
+              Deleting this employee will remove/disable the employee from active workforce usage, login access, manpower directories, future deployments, and active assignments. Historical records may be retained for audit and reporting.
+            </p>
+          </div>
+
+          <div className="space-y-1.5 text-[11px]">
+            <p className="text-[10px] uppercase font-bold text-outline-variant">Please confirm the following:</p>
+            <ul className="list-disc list-inside space-y-1 text-on-surface-variant font-medium">
+              <li>Linked user login account will be disabled.</li>
+              <li>Active coordinator assignments will be deactivated.</li>
+              <li>Future shift assignments and deployments will be removed.</li>
+              <li>Historical transaction history will be preserved.</li>
+            </ul>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="block text-[10px] font-bold uppercase tracking-wider text-outline-variant">
+              To proceed, please type <span className="text-status-error font-extrabold select-all">DELETE</span> below:
+            </label>
+            <Input
+              placeholder="Type DELETE to confirm"
+              value={deleteConfirmText}
+              onChange={(e: any) => setDeleteConfirmText(e.target.value)}
+              className="text-xs font-mono font-bold uppercase"
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 border-t border-border-subtle pt-4 mt-6">
+            <Button variant="secondary" type="button" onClick={() => setIsDeleteModalOpen(false)}>Cancel</Button>
+            <Button
+              variant="error"
+              type="button"
+              disabled={deleteConfirmText !== "DELETE"}
+              onClick={handleConfirmDelete}
+            >
+              Confirm Delete
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Bulk Upload Modal */}
       <Modal isOpen={isBulkUploadOpen} onClose={() => setIsBulkUploadOpen(false)} title="Bulk Upload Employees Gateway">
@@ -3261,9 +3347,24 @@ export default function WorkforcePage() {
 
             <div className="flex justify-between items-center border-t border-border-subtle pt-4 mt-6">
               {selectedEmp.isActive !== false ? (
-                <Button variant="error" type="button" onClick={() => handleDeactivate(selectedEmp.id)}>Deactivate</Button>
+                isStrictAdmin ? (
+                  <Button
+                    variant="error"
+                    type="button"
+                    onClick={() => {
+                      setIsEditEmpOpen(false);
+                      setEmployeeToDelete(selectedEmp.id);
+                      setDeleteConfirmText("");
+                      setIsDeleteModalOpen(true);
+                    }}
+                  >
+                    Delete Employee
+                  </Button>
+                ) : null
               ) : (
-                <Button variant="success" type="button" onClick={() => handleActivate(selectedEmp.id)}>Activate</Button>
+                (isStrictAdmin || isSessionAdminOrHR) ? (
+                  <Button variant="success" type="button" onClick={() => handleActivate(selectedEmp.id)}>Activate</Button>
+                ) : null
               )}
               <div className="flex gap-2">
                 <Button variant="secondary" type="button" onClick={() => setIsEditEmpOpen(false)}>Cancel</Button>

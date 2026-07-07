@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { checkApiAuth } from "@/lib/api-guards";
-import { mockDb } from "@ahh-wfm/mock-data";
+import { mockDb, isDbConnected, readDb, writeDb } from "@ahh-wfm/mock-data";
+import { prisma } from "@ahh-wfm/database";
 
 function parseDateStr(fieldLabel: string, val: any, errors: string[]): Date | undefined {
   if (val === undefined || val === null || String(val).trim() === "") return undefined;
@@ -13,7 +14,7 @@ function parseDateStr(fieldLabel: string, val: any, errors: string[]): Date | un
 }
 
 export async function POST(request: Request) {
-  const auth = await checkApiAuth(["ADMIN", "SUPERVISOR"]);
+  const auth = await checkApiAuth();
   if (auth.error) return auth.error;
 
   const session = auth.session;
@@ -28,12 +29,12 @@ export async function POST(request: Request) {
 
     const companies = await mockDb.getCompanies();
     const depts = await mockDb.getDepartments();
+    const designations = await mockDb.getDesignations();
+    const locations = await mockDb.getLocations();
     const existingEmployees = await mockDb.getEmployees();
-    const projects = await mockDb.getProjects();
-    const sites = await mockDb.getProjectSites();
-    const categories = await mockDb.getBlueCollarPositionCategories();
 
     let importedCount = 0;
+    let updatedCount = 0;
     let failedCount = 0;
     const failures: { row: number; errors: string[] }[] = [];
 
@@ -54,7 +55,8 @@ export async function POST(request: Request) {
       const rowNum = i + 2;
       const errors: string[] = [];
 
-      if (!row.employeeId || !row.fullName || !row.email || !row.department || !row.role) {
+      const empCode = row.employeeCode || row.employeeId;
+      if (!empCode || !row.fullName || !row.companyCode || !row.department || !row.designation || !row.employeeCategory || !row.operationType || !row.defaultLocation || !row.dateOfJoining) {
         errors.push("Missing core required parameters");
       }
 
@@ -65,66 +67,48 @@ export async function POST(request: Request) {
       }
 
       try {
-        // 1. Resolve Company
-        let companyId: string | undefined = undefined;
-        const matchedEmp = existingEmployees.find(e => e.id === row.employeeId);
-        const isNewEmployee = !matchedEmp;
-        const empStatus = row.employmentStatus || (matchedEmp ? matchedEmp.employmentStatus : "ACTIVE");
+        // Resolve Company
+        let companyId = "";
+        const matchComp = companies.find(c => c.companyCode.toLowerCase() === row.companyCode.trim().toLowerCase());
+        if (matchComp) companyId = matchComp.id;
 
-        if (row.companyCode) {
-          const matchComp = companies.find(c => c.companyCode.toLowerCase() === row.companyCode.toLowerCase());
-          if (matchComp) {
-            companyId = matchComp.id;
-          } else {
-            errors.push(`Company Code '${row.companyCode}' not found in Master Data`);
-          }
+        // Resolve Designation
+        let designationId = "";
+        const matchDes = designations.find(d => d.code.toLowerCase() === row.designation.trim().toLowerCase() || d.name.toLowerCase() === row.designation.trim().toLowerCase());
+        if (matchDes) designationId = matchDes.id;
+
+        // Resolve Default Location
+        let defaultLocationId = "";
+        const matchLoc = locations.find(l => l.locationCode.toLowerCase() === row.defaultLocation.trim().toLowerCase() || l.locationName.toLowerCase() === row.defaultLocation.trim().toLowerCase());
+        if (matchLoc) defaultLocationId = matchLoc.id;
+
+        // Resolve Department ID (create if missing)
+        let departmentId = "";
+        const matchedDept = depts.find(d => d.name.toLowerCase() === row.department.trim().toLowerCase());
+        if (matchedDept) {
+          departmentId = matchedDept.id;
         } else {
-          // Company required for new active employees
-          if (isNewEmployee && empStatus === "ACTIVE") {
-            errors.push("Company Code is required for active employees");
-          } else if (matchedEmp && matchedEmp.companyId) {
-            companyId = matchedEmp.companyId; // keep existing if not provided
-          }
+          const newDept = await mockDb.createDepartment(row.department.trim(), companyId || undefined);
+          depts.push(newDept);
+          departmentId = newDept.id;
         }
 
         // Date Parsing & Validation
-        const dateOfJoining = parseDateStr("joiningDate/dateOfJoining", row.dateOfJoining || row.joiningDate, errors);
+        const dateOfJoining = parseDateStr("dateOfJoining", row.dateOfJoining, errors);
+        const dateOfBirth = parseDateStr("dateOfBirth", row.dateOfBirth, errors);
+        const qidIssueDate = parseDateStr("qidIssueDate", row.qidIssueDate, errors);
         const qidExpiryDate = parseDateStr("qidExpiryDate", row.qidExpiryDate, errors);
         const passportIssueDate = parseDateStr("passportIssueDate", row.passportIssueDate, errors);
         const passportExpiryDate = parseDateStr("passportExpiryDate", row.passportExpiryDate, errors);
-
-        // Business logic date rules
-        const finalJoiningDate = dateOfJoining || (matchedEmp ? (matchedEmp.dateOfJoining ? new Date(matchedEmp.dateOfJoining) : undefined) : undefined);
-        const finalQidExpiry = qidExpiryDate || (matchedEmp ? (matchedEmp.qidExpiryDate ? new Date(matchedEmp.qidExpiryDate) : undefined) : undefined);
-        if (finalJoiningDate && finalQidExpiry && finalQidExpiry < finalJoiningDate) {
-          errors.push("Qatar ID expiry date cannot be before date of joining");
-        }
-
-        const finalPassIssue = passportIssueDate || (matchedEmp ? (matchedEmp.passportIssueDate ? new Date(matchedEmp.passportIssueDate) : undefined) : undefined);
-        const finalPassExpiry = passportExpiryDate || (matchedEmp ? (matchedEmp.passportExpiryDate ? new Date(matchedEmp.passportExpiryDate) : undefined) : undefined);
-        if (finalPassIssue && finalPassExpiry && finalPassExpiry < finalPassIssue) {
-          errors.push("Passport expiry date cannot be before issue date");
-        }
-
-        // Document values (cleaned)
-        const qidNumber = row.qidNumber ? String(row.qidNumber).trim() : undefined;
-        const passportNumber = row.passportNumber ? String(row.passportNumber).trim().toUpperCase() : undefined;
-
-        // Duplicate QID check
-        if (qidNumber) {
-          const dupQid = existingEmployees.find(e => e.id !== row.employeeId && e.qidNumber && e.qidNumber.trim() === qidNumber);
-          if (dupQid) {
-            errors.push(`Qatar ID '${qidNumber}' is already assigned to employee ${dupQid.name} (${dupQid.id})`);
-          }
-        }
-
-        // Duplicate Passport check
-        if (passportNumber) {
-          const dupPass = existingEmployees.find(e => e.id !== row.employeeId && e.passportNumber && e.passportNumber.trim().toUpperCase() === passportNumber);
-          if (dupPass) {
-            errors.push(`Passport '${passportNumber}' is already assigned to employee ${dupPass.name} (${dupPass.id})`);
-          }
-        }
+        const visaIssueDate = parseDateStr("visaIssueDate", row.visaIssueDate, errors);
+        const visaExpiryDate = parseDateStr("visaExpiryDate", row.visaExpiryDate, errors);
+        const workPermitExpiryDate = parseDateStr("workPermitExpiryDate", row.workPermitExpiryDate, errors);
+        const moiLicenseIssueDate = parseDateStr("moiLicenseIssueDate", row.moiLicenseIssueDate, errors);
+        const moiLicenseExpiryDate = parseDateStr("moiLicenseExpiryDate", row.moiLicenseExpiryDate, errors);
+        const securityTrainingExpiryDate = parseDateStr("securityTrainingExpiryDate", row.securityTrainingExpiryDate, errors);
+        const siteGatePassExpiryDate = parseDateStr("siteGatePassExpiryDate", row.siteGatePassExpiryDate, errors);
+        const skillCertificateExpiryDate = parseDateStr("skillCertificateExpiryDate", row.skillCertificateExpiryDate, errors);
+        const healthCardExpiryDate = parseDateStr("healthCardExpiryDate", row.healthCardExpiryDate, errors);
 
         if (errors.length > 0) {
           failedCount++;
@@ -132,104 +116,187 @@ export async function POST(request: Request) {
           continue;
         }
 
-        // Resolve/Create department if needed
-        let deptId = "";
-        const matchedDept = depts.find(d => d.name.toLowerCase() === row.department.toLowerCase());
-        if (matchedDept) {
-          deptId = matchedDept.id;
-        } else {
-          // Create new department
-          const newDept = await mockDb.createDepartment(row.department, companyId);
-          depts.push(newDept);
-          deptId = newDept.id;
-        }
+        const matchedEmp = existingEmployees.find(e => e.id === empCode || (e as any).employeeCode === empCode);
+        
+        // Define unified profile payload
+        const payload: any = {
+          id: empCode,
+          employeeCode: empCode,
+          name: row.fullName,
+          email: row.email || `${empCode.toLowerCase()}@alhattab.qa`,
+          phone: row.phone || null,
+          companyId: companyId || null,
+          department: row.department,
+          departmentId: departmentId || null,
+          designationId: designationId || null,
+          role: row.role ? row.role.toUpperCase() : "EMPLOYEE",
+          employeeCategory: row.employeeCategory ? row.employeeCategory.toUpperCase() : "WHITE_COLLAR",
+          operationType: row.operationType ? row.operationType.toUpperCase() : "WHITE_COLLAR",
+          defaultLocationId: defaultLocationId || null,
+          dateOfJoining: dateOfJoining || null,
+          nationality: row.nationality || null,
+          gender: row.gender || null,
+          dateOfBirth: dateOfBirth || null,
+          qidNumber: row.qidNumber || null,
+          qidIssueDate: qidIssueDate || null,
+          qidExpiryDate: qidExpiryDate || null,
+          passportNumber: row.passportNumber || null,
+          passportIssueDate: passportIssueDate || null,
+          passportExpiryDate: passportExpiryDate || null,
+          passportIssuingCountry: row.passportIssuingCountry || null,
+          visaNumber: row.visaNumber || null,
+          visaIssueDate: visaIssueDate || null,
+          visaExpiryDate: visaExpiryDate || null,
+          workPermitNumber: row.workPermitNumber || null,
+          workPermitExpiryDate: workPermitExpiryDate || null,
+          
+          // Security Guarding fields
+          moiLicenseNumber: row.moiLicenseNumber || null,
+          moiLicenseIssueDate: moiLicenseIssueDate || null,
+          moiLicenseExpiryDate: moiLicenseExpiryDate || null,
+          securityTrainingCertificateNumber: row.securityTrainingCertificateNumber || null,
+          securityTrainingExpiryDate: securityTrainingExpiryDate || null,
+          siteGatePassNumber: row.siteGatePassNumber || null,
+          siteGatePassExpiryDate: siteGatePassExpiryDate || null,
 
-        // Resolve default project
-        let defaultProjectId = undefined;
-        if (row.defaultProjectCode) {
-          const matchProj = projects.find(p => p.projectCode.toLowerCase() === row.defaultProjectCode.toLowerCase() || p.id.toLowerCase() === row.defaultProjectCode.toLowerCase());
-          if (matchProj) defaultProjectId = matchProj.id;
-        }
+          // Facility Management fields
+          tradeSkill: row.tradeSkill || null,
+          skillCertificateNumber: row.skillCertificateNumber || null,
+          skillCertificateExpiryDate: skillCertificateExpiryDate || null,
+          healthCardNumber: row.healthCardNumber || null,
+          healthCardExpiryDate: healthCardExpiryDate || null,
 
-        // Resolve default site
-        let defaultSiteId = undefined;
-        if (row.defaultSiteCode) {
-          const matchSite = sites.find(s => s.siteCode.toLowerCase() === row.defaultSiteCode.toLowerCase() || s.id.toLowerCase() === row.defaultSiteCode.toLowerCase());
-          if (matchSite) defaultSiteId = matchSite.id;
-        }
+          // Document placeholders
+          qidDocumentFile: row.qidDocumentFile || null,
+          passportDocumentFile: row.passportDocumentFile || null,
+          visaDocumentFile: row.visaDocumentFile || null,
+          workPermitDocumentFile: row.workPermitDocumentFile || null,
+          moiLicenseDocumentFile: row.moiLicenseDocumentFile || null,
+          trainingCertificateFile: row.trainingCertificateFile || null,
+          gatePassFile: row.gatePassFile || null,
+          healthCardFile: row.healthCardFile || null,
 
-        // Resolve position category
-        let positionCategoryId = undefined;
-        if (row.positionCategory) {
-          const matchCat = categories.find(c => c.code.toLowerCase() === row.positionCategory.toLowerCase() || c.name.toLowerCase() === row.positionCategory.toLowerCase());
-          if (matchCat) positionCategoryId = matchCat.id;
-        }
+          isActive: true,
+          employmentStatus: "ACTIVE",
+          status: "Offline",
+          dutyStatus: "OFF_DUTY"
+        };
 
-        if (matchedEmp) {
-          if (updateExisting) {
-            // Update employee
-            await mockDb.updateEmployee(matchedEmp.id, {
-              name: row.fullName,
-              email: row.email,
-              phone: row.phone || matchedEmp.phone,
-              department: row.department,
-              departmentId: deptId,
-              role: row.role.toUpperCase(),
-              employmentStatus: row.employmentStatus || matchedEmp.employmentStatus,
-              dutyStatus: row.dutyStatus || matchedEmp.dutyStatus,
-              employeeCategory: row.workerCategory || row.employeeCategory || matchedEmp.employeeCategory,
-              isActive: row.employmentStatus ? (row.employmentStatus === "ACTIVE") : matchedEmp.isActive,
-              positionCategoryId: positionCategoryId || matchedEmp.positionCategoryId,
-              defaultProjectId: defaultProjectId || matchedEmp.defaultProjectId,
-              defaultSiteId: defaultSiteId || matchedEmp.defaultSiteId,
-              
-              // New fields
-              companyId: companyId || matchedEmp.companyId,
-              qidNumber: qidNumber || matchedEmp.qidNumber,
-              qidExpiryDate: qidExpiryDate || matchedEmp.qidExpiryDate,
-              passportNumber: passportNumber || matchedEmp.passportNumber,
-              passportIssueDate: passportIssueDate || matchedEmp.passportIssueDate,
-              passportExpiryDate: passportExpiryDate || matchedEmp.passportExpiryDate,
-              passportIssuingCountry: row.passportIssuingCountry || matchedEmp.passportIssuingCountry,
-              dateOfJoining: dateOfJoining || matchedEmp.dateOfJoining,
-              sponsor: row.sponsor || matchedEmp.sponsor
+        if (isDbConnected()) {
+          // 1. Persist/update to Prisma
+          const { id, companyId, departmentId, designationId, defaultLocationId, ...employeeData } = payload;
+          
+          const dbEmployeeData = {
+            name: employeeData.name,
+            email: employeeData.email,
+            phone: employeeData.phone,
+            companyId: companyId || undefined,
+            departmentId: departmentId || undefined,
+            designationId: designationId || undefined,
+            defaultLocationId: defaultLocationId || undefined,
+            role: employeeData.role,
+            employeeCategory: employeeData.employeeCategory,
+            operationType: employeeData.operationType,
+            dateOfJoining: employeeData.dateOfJoining,
+            dateOfBirth: employeeData.dateOfBirth,
+            qidNumber: employeeData.qidNumber,
+            qidExpiryDate: employeeData.qidExpiryDate,
+            passportNumber: employeeData.passportNumber,
+            passportExpiryDate: employeeData.passportExpiryDate,
+            passportIssueDate: employeeData.passportIssueDate,
+            passportIssuingCountry: employeeData.passportIssuingCountry,
+            sponsor: row.sponsor || "Al Hattab Holding",
+            isActive: true,
+            employmentStatus: "ACTIVE",
+            status: employeeData.status || "Offline",
+            dutyStatus: "OFF_DUTY",
+            department: employeeData.department
+          };
+
+          if (matchedEmp) {
+            if (updateExisting) {
+              await prisma.employee.update({
+                where: { id: matchedEmp.id },
+                data: dbEmployeeData
+              });
+              updatedCount++;
+            } else {
+              failedCount++;
+              failures.push({ row: rowNum, errors: [`Employee Code ${empCode} already exists.`] });
+              continue;
+            }
+          } else {
+            await prisma.employee.create({
+              data: {
+                id,
+                ...dbEmployeeData
+              }
             });
             importedCount++;
-          } else {
-            failedCount++;
-            failures.push({ row: rowNum, errors: [`Employee ID ${row.employeeId} already exists.`] });
+          }
+
+          // Upsert SecurityLicense in database
+          if (payload.operationType === "SECURITY_GUARDING" && payload.moiLicenseNumber) {
+            const licenseData = {
+              licenseNumber: payload.moiLicenseNumber,
+              issueDate: payload.moiLicenseIssueDate || new Date(),
+              expiryDate: payload.moiLicenseExpiryDate || new Date(),
+              status: "VALID",
+              documentUrl: payload.moiLicenseDocumentFile || null
+            };
+            const existingLic = await prisma.securityLicense.findFirst({ where: { employeeId: payload.id } });
+            if (existingLic) {
+              await prisma.securityLicense.update({
+                where: { id: existingLic.id },
+                data: licenseData
+              });
+            } else {
+              await prisma.securityLicense.create({
+                data: {
+                  employeeId: payload.id,
+                  ...licenseData
+                }
+              });
+            }
           }
         } else {
-          // Create employee
-          await mockDb.createEmployee({
-            id: row.employeeId,
-            name: row.fullName,
-            email: row.email,
-            phone: row.phone || undefined,
-            department: row.department,
-            departmentId: deptId,
-            role: row.role.toUpperCase(),
-            status: row.dutyStatus || "Offline",
-            isActive: row.employmentStatus ? (row.employmentStatus === "ACTIVE") : true,
-            employmentStatus: row.employmentStatus || "ACTIVE",
-            dutyStatus: row.dutyStatus || "OFF_DUTY",
-            employeeCategory: row.workerCategory || row.employeeCategory || "WHITE_COLLAR",
-            positionCategoryId: positionCategoryId || undefined,
-            defaultProjectId: defaultProjectId || undefined,
-            defaultSiteId: defaultSiteId || undefined,
+          // 2. Persist to mock memory DB
+          if (matchedEmp) {
+            if (updateExisting) {
+              await mockDb.updateEmployee(matchedEmp.id, payload);
+              updatedCount++;
+            } else {
+              failedCount++;
+              failures.push({ row: rowNum, errors: [`Employee Code ${empCode} already exists.`] });
+              continue;
+            }
+          } else {
+            await mockDb.createEmployee(payload);
+            importedCount++;
+          }
 
-            // New fields
-            companyId: companyId || undefined,
-            qidNumber: qidNumber || undefined,
-            qidExpiryDate: qidExpiryDate || undefined,
-            passportNumber: passportNumber || undefined,
-            passportIssueDate: passportIssueDate || undefined,
-            passportExpiryDate: passportExpiryDate || undefined,
-            passportIssuingCountry: row.passportIssuingCountry || undefined,
-            dateOfJoining: dateOfJoining || undefined,
-            sponsor: row.sponsor || undefined
-          });
-          importedCount++;
+          // Sync SecurityLicense in mock database
+          if (payload.operationType === "SECURITY_GUARDING" && payload.moiLicenseNumber) {
+            const db = readDb();
+            db.securityLicenses = db.securityLicenses || [];
+            const licIdx = db.securityLicenses.findIndex((l: any) => l.employeeId === payload.id);
+            const licData = {
+              employeeId: payload.id,
+              licenseType: "MOI",
+              licenseNumber: payload.moiLicenseNumber,
+              issueDate: payload.moiLicenseIssueDate ? payload.moiLicenseIssueDate.toISOString() : new Date().toISOString(),
+              expiryDate: payload.moiLicenseExpiryDate ? payload.moiLicenseExpiryDate.toISOString() : new Date().toISOString(),
+              status: "VALID",
+              documentUrl: payload.moiLicenseDocumentFile || null,
+              updatedAt: new Date().toISOString()
+            };
+            if (licIdx !== -1) {
+              db.securityLicenses[licIdx] = { ...db.securityLicenses[licIdx], ...licData };
+            } else {
+              db.securityLicenses.push({ id: `lic-${Date.now()}`, createdAt: new Date().toISOString(), ...licData });
+            }
+            writeDb(db);
+          }
         }
       } catch (err: any) {
         failedCount++;
@@ -258,6 +325,7 @@ export async function POST(request: Request) {
         fileName: fileName,
         totalRows: rows.length,
         importedCount,
+        updatedCount,
         failedCount
       }),
       ipAddress: "127.0.0.1",
@@ -268,6 +336,7 @@ export async function POST(request: Request) {
       success: true,
       jobId: job.id,
       importedRows: importedCount,
+      updatedRows: updatedCount,
       failedRows: failedCount,
       failures
     });

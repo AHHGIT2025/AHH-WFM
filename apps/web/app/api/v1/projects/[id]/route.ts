@@ -29,9 +29,15 @@ export async function PATCH(request: Request, { params }: { params: { id: string
   }
 }
 
+import { isAdminUser } from "@/lib/permissions";
+
 export async function DELETE(request: Request, { params }: { params: { id: string } }) {
-  const auth = await checkApiAuth(["ADMIN", "SUPERVISOR"]);
+  const auth = await checkApiAuth();
   if (auth.error) return auth.error;
+
+  if (!isAdminUser(auth.session?.user)) {
+    return NextResponse.json({ error: "Only Admin and Super Admin can delete master data." }, { status: 403 });
+  }
 
   try {
     await mockDb.deleteProject(params.id);

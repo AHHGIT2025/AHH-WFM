@@ -37,8 +37,14 @@ function parseCSV(text: string) {
   return { headers, rows };
 }
 
+function isValidDate(val?: string) {
+  if (!val || val.trim() === "") return true;
+  const d = new Date(val);
+  return d instanceof Date && !isNaN(d.getTime());
+}
+
 export async function POST(request: Request) {
-  const auth = await checkApiAuth(["ADMIN", "SUPERVISOR"]);
+  const auth = await checkApiAuth();
   if (auth.error) return auth.error;
 
   try {
@@ -51,16 +57,14 @@ export async function POST(request: Request) {
     const { rows } = parseCSV(csvText);
     const existingEmployees = await mockDb.getEmployees();
     const depts = await mockDb.getDepartments();
-    const projects = await mockDb.getProjects();
-    const sites = await mockDb.getProjectSites();
-    const categories = await mockDb.getBlueCollarPositionCategories();
-    const roles = ["ADMIN", "SUPERVISOR", "EMPLOYEE", "SUPER_ADMIN", "HR_MANAGER", "FINANCE_MANAGER", "SAP_ADMIN", "REPORT_VIEWER"];
+    const companies = await mockDb.getCompanies();
+    const locations = await mockDb.getLocations();
 
     const previewRows = [];
     let validCount = 0;
     let invalidCount = 0;
 
-    const seenIds = new Set<string>();
+    const seenCodes = new Set<string>();
     const seenEmails = new Set<string>();
 
     for (let idx = 0; idx < rows.length; idx++) {
@@ -69,74 +73,146 @@ export async function POST(request: Request) {
       const rowNum = idx + 2; // header is row 1
 
       // 1. Required fields
-      if (!row.employeeId) errors.push("employeeId is required");
+      // Use employeeCode as primary identifier
+      const empCode = row.employeeCode || row.employeeId;
+      if (!empCode) errors.push("employeeCode is required");
       if (!row.fullName) errors.push("fullName is required");
-      if (!row.email) errors.push("email is required");
+      if (!row.companyCode) errors.push("companyCode is required");
       if (!row.department) errors.push("department is required");
-      if (!row.role) errors.push("role is required");
+      if (!row.designation) errors.push("designation is required");
+      if (!row.employeeCategory) errors.push("employeeCategory is required");
+      if (!row.operationType) errors.push("operationType is required");
+      if (!row.defaultLocation) errors.push("defaultLocation is required");
+      if (!row.dateOfJoining) errors.push("dateOfJoining is required");
 
       // 2. Validate duplicates in payload
-      if (row.employeeId) {
-        if (seenIds.has(row.employeeId)) {
-          errors.push(`Duplicate employeeId '${row.employeeId}' in upload file`);
+      if (empCode) {
+        const normalizedCode = empCode.trim().toLowerCase();
+        if (seenCodes.has(normalizedCode)) {
+          errors.push(`Duplicate employeeCode/Id '${empCode}' in upload file`);
         } else {
-          seenIds.add(row.employeeId);
+          seenCodes.add(normalizedCode);
         }
       }
 
-      if (row.email) {
-        if (seenEmails.has(row.email.toLowerCase())) {
+      if (row.email && row.email.trim() !== "") {
+        const normalizedEmail = row.email.trim().toLowerCase();
+        if (seenEmails.has(normalizedEmail)) {
           errors.push(`Duplicate email '${row.email}' in upload file`);
         } else {
-          seenEmails.add(row.email.toLowerCase());
+          seenEmails.add(normalizedEmail);
         }
       }
 
       // 3. Validate duplicates against DB (unless updateExisting is true)
-      if (row.employeeId && !updateExisting) {
-        const match = existingEmployees.find(e => e.id === row.employeeId);
+      if (empCode && !updateExisting) {
+        const match = existingEmployees.find(e => e.id === empCode || (e as any).employeeCode === empCode);
         if (match) {
-          errors.push(`Employee ID '${row.employeeId}' already exists in database`);
+          errors.push(`Employee Code '${empCode}' already exists in database`);
         }
       }
 
-      if (row.email && !updateExisting) {
-        const match = existingEmployees.find(e => e.email.toLowerCase() === row.email.toLowerCase());
+      if (row.email && row.email.trim() !== "" && !updateExisting) {
+        const match = existingEmployees.find(e => e.email?.toLowerCase() === row.email.trim().toLowerCase());
         if (match) {
           errors.push(`Email '${row.email}' already exists in database`);
         }
       }
 
       // 4. Validate employeeCategory
-      const resolvedCategory = row.employeeCategory || row.workerCategory;
-      if (resolvedCategory && !["WHITE_COLLAR", "BLUE_COLLAR"].includes(resolvedCategory)) {
+      if (row.employeeCategory && !["WHITE_COLLAR", "BLUE_COLLAR"].includes(row.employeeCategory.toUpperCase())) {
         errors.push("employeeCategory must be WHITE_COLLAR or BLUE_COLLAR");
       }
 
-      // 5. Validate Role
-      if (row.role && !roles.includes(row.role.toUpperCase())) {
-        errors.push(`Invalid role '${row.role}'. Supported roles: ${roles.join(", ")}`);
+      // 5. Validate operationType
+      if (row.operationType && !["WHITE_COLLAR", "SECURITY_GUARDING", "FACILITY_MANAGEMENT"].includes(row.operationType.toUpperCase())) {
+        errors.push("operationType must be WHITE_COLLAR, SECURITY_GUARDING, or FACILITY_MANAGEMENT");
       }
 
-      // 6. Validate positionCategory, defaultProjectCode, defaultSiteCode
-      if (resolvedCategory === "BLUE_COLLAR" || row.positionCategory || row.defaultProjectCode || row.defaultSiteCode) {
-        if (row.positionCategory) {
-          const matchCat = categories.find(c => c.code.toLowerCase() === row.positionCategory.toLowerCase() || c.name.toLowerCase() === row.positionCategory.toLowerCase());
-          if (!matchCat) {
-            errors.push(`Position Category '${row.positionCategory}' not found. Configure it in Settings first.`);
-          }
+      // 6. Validate master references
+      if (row.companyCode) {
+        const comp = companies.find(c => c.companyCode.toLowerCase() === row.companyCode.trim().toLowerCase());
+        if (!comp) errors.push(`Referenced Company Code '${row.companyCode}' not found`);
+      }
+      if (row.department) {
+        const dept = depts.find(d => d.name.toLowerCase() === row.department.trim().toLowerCase() || d.id === row.department);
+        if (!dept) errors.push(`Referenced Department '${row.department}' not found`);
+      }
+      if (row.defaultLocation) {
+        const loc = locations.find(l => l.locationCode.toLowerCase() === row.defaultLocation.trim().toLowerCase() || l.locationName.toLowerCase() === row.defaultLocation.trim().toLowerCase());
+        if (!loc) errors.push(`Referenced Location '${row.defaultLocation}' not found`);
+      }
+
+      // 7. Validate Qatar ID format: /^[23]\d{10}$/
+      if (row.qidNumber && row.qidNumber.trim() !== "") {
+        if (!/^[23]\d{10}$/.test(row.qidNumber.trim())) {
+          errors.push(`Qatar ID '${row.qidNumber}' must be exactly 11 digits starting with 2 or 3`);
         }
-        if (row.defaultProjectCode) {
-          const matchProj = projects.find(p => p.projectCode.toLowerCase() === row.defaultProjectCode.toLowerCase() || p.id.toLowerCase() === row.defaultProjectCode.toLowerCase());
-          if (!matchProj) {
-            errors.push(`Project Code/ID '${row.defaultProjectCode}' not found.`);
-          }
+      }
+
+      // 8. Validate date formats
+      const dateFields = [
+        { name: "dateOfJoining", val: row.dateOfJoining },
+        { name: "dateOfBirth", val: row.dateOfBirth },
+        { name: "qidIssueDate", val: row.qidIssueDate },
+        { name: "qidExpiryDate", val: row.qidExpiryDate },
+        { name: "passportIssueDate", val: row.passportIssueDate },
+        { name: "passportExpiryDate", val: row.passportExpiryDate },
+        { name: "visaIssueDate", val: row.visaIssueDate },
+        { name: "visaExpiryDate", val: row.visaExpiryDate },
+        { name: "workPermitExpiryDate", val: row.workPermitExpiryDate },
+        { name: "moiLicenseIssueDate", val: row.moiLicenseIssueDate },
+        { name: "moiLicenseExpiryDate", val: row.moiLicenseExpiryDate },
+        { name: "securityTrainingExpiryDate", val: row.securityTrainingExpiryDate },
+        { name: "siteGatePassExpiryDate", val: row.siteGatePassExpiryDate },
+        { name: "skillCertificateExpiryDate", val: row.skillCertificateExpiryDate },
+        { name: "healthCardExpiryDate", val: row.healthCardExpiryDate }
+      ];
+
+      dateFields.forEach(f => {
+        if (f.val && f.val.trim() !== "" && !isValidDate(f.val)) {
+          errors.push(`Invalid date format for '${f.name}': '${f.val}' (Expected YYYY-MM-DD)`);
         }
-        if (row.defaultSiteCode) {
-          const matchSite = sites.find(s => s.siteCode.toLowerCase() === row.defaultSiteCode.toLowerCase() || s.id.toLowerCase() === row.defaultSiteCode.toLowerCase());
-          if (!matchSite) {
-            errors.push(`Project Site Code/ID '${row.defaultSiteCode}' not found.`);
-          }
+      });
+
+      // 9. Validate expiry dates are after issue/joining dates
+      const compareDates = (start?: string, end?: string, startLabel = "Issue Date", endLabel = "Expiry Date") => {
+        if (!start || !end || start.trim() === "" || end.trim() === "") return;
+        if (!isValidDate(start) || !isValidDate(end)) return;
+        if (new Date(end) <= new Date(start)) {
+          errors.push(`${endLabel} must be strictly after ${startLabel}`);
+        }
+      };
+
+      compareDates(row.qidIssueDate, row.qidExpiryDate, "QID Issue Date", "QID Expiry Date");
+      compareDates(row.passportIssueDate, row.passportExpiryDate, "Passport Issue Date", "Passport Expiry Date");
+      compareDates(row.visaIssueDate, row.visaExpiryDate, "Visa Issue Date", "Visa Expiry Date");
+      compareDates(row.moiLicenseIssueDate, row.moiLicenseExpiryDate, "MOI License Issue Date", "MOI License Expiry Date");
+      compareDates(row.dateOfJoining, row.workPermitExpiryDate, "Date of Joining", "Work Permit Expiry Date");
+      compareDates(row.dateOfJoining, row.securityTrainingExpiryDate, "Date of Joining", "Security Training Expiry Date");
+      compareDates(row.dateOfJoining, row.siteGatePassExpiryDate, "Date of Joining", "Site Gate Pass Expiry Date");
+      compareDates(row.dateOfJoining, row.skillCertificateExpiryDate, "Date of Joining", "Skill Certificate Expiry Date");
+      compareDates(row.dateOfJoining, row.healthCardExpiryDate, "Date of Joining", "Health Card Expiry Date");
+
+      // 10. Operation-specific field validation
+      const opType = (row.operationType || "").toUpperCase();
+      const hasSGFields = !!(row.moiLicenseNumber || row.moiLicenseIssueDate || row.moiLicenseExpiryDate || row.securityTrainingCertificateNumber || row.securityTrainingExpiryDate || row.siteGatePassNumber || row.siteGatePassExpiryDate);
+      const hasFMFields = !!(row.tradeSkill || row.skillCertificateNumber || row.skillCertificateExpiryDate || row.healthCardNumber || row.healthCardExpiryDate);
+
+      if (opType === "SECURITY_GUARDING") {
+        if (hasFMFields) {
+          errors.push("Facility Management-specific fields (trade skill, skill certificate, health card) are not allowed for SECURITY_GUARDING operation type");
+        }
+      } else if (opType === "FACILITY_MANAGEMENT") {
+        if (hasSGFields) {
+          errors.push("Security Guarding-specific fields (MOI license, training certificate, gate pass) are not allowed for FACILITY_MANAGEMENT operation type");
+        }
+      } else if (opType === "WHITE_COLLAR") {
+        if (hasSGFields) {
+          errors.push("Security Guarding-specific fields are not allowed for WHITE_COLLAR operation type");
+        }
+        if (hasFMFields) {
+          errors.push("Facility Management-specific fields are not allowed for WHITE_COLLAR operation type");
         }
       }
 

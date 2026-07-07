@@ -1,8 +1,10 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Plus, Search, Edit2, PowerOff, CheckCircle2, X } from "lucide-react";
+import { Plus, Search, Edit2, PowerOff, CheckCircle2, X, Trash2, Upload, AlertTriangle } from "lucide-react";
 import { Card, Button, Input, Modal, Badge } from "@ahh-wfm/ui/src";
+import { useSession } from "next-auth/react";
+import { isAdminUser } from "@/lib/permissions";
 
 interface ColumnDef {
   key: string;
@@ -23,6 +25,9 @@ interface TabConfig {
 }
 
 export function MasterDataEntityTab({ config }: { config: TabConfig }) {
+  const { data: session } = useSession();
+  const isAdmin = isAdminUser(session?.user as any);
+
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -32,6 +37,13 @@ export function MasterDataEntityTab({ config }: { config: TabConfig }) {
   
   // To hold dynamic options (like Companies list for a Select field)
   const [dynamicOptions, setDynamicOptions] = useState<Record<string, any[]>>({});
+
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [updateExisting, setUpdateExisting] = useState(false);
+  const [importPreview, setImportPreview] = useState<any | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [importStatus, setImportStatus] = useState<string | null>(null);
 
   const fetchData = async () => {
     setLoading(true);
@@ -164,6 +176,109 @@ export function MasterDataEntityTab({ config }: { config: TabConfig }) {
     }
   };
 
+  const handleDelete = async (item: any) => {
+    const confirmName = item.name || item.companyName || item.projectName || item.locationName || item.costCenterName || item.siteName || item.code || item.id || "";
+    if (!confirm(`Are you sure you want to permanently delete "${confirmName}"?`)) return;
+
+    try {
+      const res = await fetch(`${config.apiPath}/${item.id}`, {
+        method: "DELETE"
+      });
+      const resData = await res.json().catch(() => ({}));
+      if (res.ok) {
+        if (resData.deactivated) {
+          alert(resData.message || "This master is already used in records. It has been deactivated instead of permanently deleted.");
+        }
+        fetchData();
+      } else {
+        alert(resData.error || "Failed to delete record.");
+      }
+    } catch (e: any) {
+      console.error(`[MasterDataEntityTab] Delete network error: DELETE ${config.apiPath}/${item.id}`, e);
+      alert(`Action failed: Network error - ${e.message}`);
+    }
+  };
+
+  const handleImportFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImportFile(file);
+    setImportPreview(null);
+    setImportStatus(null);
+    setIsUploading(true);
+
+    try {
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        const csvText = event.target?.result as string;
+        try {
+          const res = await fetch(`${config.apiPath}/bulk-preview`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              csvText,
+              fileName: file.name,
+              updateExisting
+            })
+          });
+          if (res.ok) {
+            setImportPreview(await res.json());
+          } else {
+            const err = await res.json().catch(() => ({}));
+            alert(err.error || "Failed to parse file preview.");
+          }
+        } catch (err: any) {
+          alert("Error generating preview: " + err.message);
+        } finally {
+          setIsUploading(false);
+        }
+      };
+      reader.readAsText(file);
+    } catch (err: any) {
+      alert("Failed to read file: " + err.message);
+      setIsUploading(false);
+    }
+  };
+
+  const handleCommitImport = async () => {
+    if (!importPreview || !importPreview.previewRows) return;
+    const validRows = importPreview.previewRows.filter((r: any) => r.isValid).map((r: any) => r.data);
+    if (validRows.length === 0) {
+      alert("No valid rows to import.");
+      return;
+    }
+
+    setImportStatus("Importing records, please wait...");
+    setIsUploading(true);
+
+    try {
+      const res = await fetch(`${config.apiPath}/bulk-import`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          rows: validRows,
+          fileName: importFile?.name || "import.csv",
+          updateExisting
+        })
+      });
+      if (res.ok) {
+        const result = await res.json();
+        setImportStatus(`Import successful! ${result.importedRows} records imported, ${result.updatedRows} records updated.`);
+        fetchData();
+        // Clear file and preview
+        setImportFile(null);
+        setImportPreview(null);
+      } else {
+        const err = await res.json().catch(() => ({}));
+        setImportStatus(`Import failed: ${err.error || "Server error"}`);
+      }
+    } catch (err: any) {
+      setImportStatus(`Import failed due to network error: ${err.message}`);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
   const filteredData = data.filter(item => {
     if (!searchQuery) return true;
     const q = searchQuery.toLowerCase();
@@ -195,6 +310,14 @@ export function MasterDataEntityTab({ config }: { config: TabConfig }) {
               className="pl-9 pr-4 py-2 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none w-64 transition-all"
             />
           </div>
+          <Button onClick={() => {
+            setImportFile(null);
+            setImportPreview(null);
+            setImportStatus(null);
+            setIsImportModalOpen(true);
+          }} variant="secondary" className="flex items-center gap-2">
+            <Upload className="h-4 w-4" /> Bulk Import
+          </Button>
           <Button onClick={() => handleOpenModal()} className="flex items-center gap-2">
             <Plus className="h-4 w-4" /> Add New
           </Button>
@@ -261,12 +384,17 @@ export function MasterDataEntityTab({ config }: { config: TabConfig }) {
                     </td>
                     <td className="px-6 py-4 text-right">
                       <div className="flex justify-end gap-2">
-                        <button onClick={() => handleOpenModal(item)} className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors">
+                        <button onClick={() => handleOpenModal(item)} className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-md transition-colors" title="Edit Record">
                           <Edit2 className="h-4 w-4" />
                         </button>
-                        <button onClick={() => handleToggleStatus(item)} className={`p-1.5 rounded-md transition-colors ${item.isActive ? "text-red-600 hover:bg-red-50" : "text-green-600 hover:bg-green-50"}`}>
+                        <button onClick={() => handleToggleStatus(item)} className={`p-1.5 rounded-md transition-colors ${item.isActive ? "text-red-600 hover:bg-red-50" : "text-green-600 hover:bg-green-50"}`} title="Toggle Active Status">
                           <PowerOff className="h-4 w-4" />
                         </button>
+                        {isAdmin && (
+                          <button onClick={() => handleDelete(item)} className="p-1.5 text-red-600 hover:bg-red-50 rounded-md transition-colors" title="Delete Record">
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -334,6 +462,148 @@ export function MasterDataEntityTab({ config }: { config: TabConfig }) {
             <Button type="submit">Save Record</Button>
           </div>
         </form>
+      </Modal>
+
+      {/* Master Bulk Import Modal */}
+      <Modal isOpen={isImportModalOpen} onClose={() => setIsImportModalOpen(false)} title={`Bulk Import ${config.label} Gateway`}>
+        <div className="space-y-4 text-xs font-semibold p-1">
+          {/* Download Template Block */}
+          <div className="p-4 bg-surface-container-low border border-border-subtle rounded-xl flex justify-between items-center">
+            <div>
+              <p className="font-bold text-primary text-[13px]">Download CSV Template</p>
+              <p className="text-[10px] text-outline-variant font-medium">Standard schema fields layout rules template file.</p>
+            </div>
+            <a
+              href={`${config.apiPath}/bulk-template`}
+              download
+              className="bg-primary text-white hover:bg-primary/95 text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1 transition-all shadow-sm"
+            >
+              <span className="material-symbols-outlined text-[16px]">download</span> Download CSV
+            </a>
+          </div>
+
+          {/* Upload and settings block */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-4">
+              <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-primary">
+                <input
+                  type="checkbox"
+                  checked={updateExisting}
+                  onChange={(e) => setUpdateExisting(e.target.checked)}
+                  className="rounded border-gray-300 text-primary focus:ring-primary"
+                />
+                Update existing records if code/name matches
+              </label>
+            </div>
+
+            <div className="space-y-2">
+              <label className="block text-[10px] font-bold uppercase tracking-wider text-outline-variant">Upload CSV Data File</label>
+              <input
+                type="file"
+                accept=".csv"
+                onChange={handleImportFileChange}
+                className="w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 cursor-pointer"
+              />
+            </div>
+          </div>
+
+          {/* Upload loading/status messages */}
+          {isUploading && (
+            <div className="p-3 bg-indigo-50 text-indigo-700 rounded-lg text-center animate-pulse">
+              Processing data, please wait...
+            </div>
+          )}
+
+          {importStatus && (
+            <div className={`p-3 rounded-lg border text-center ${importStatus.includes("successful") ? "bg-green-50 border-green-200 text-green-700" : "bg-red-50 border-red-200 text-red-700"}`}>
+              {importStatus}
+            </div>
+          )}
+
+          {/* Validation Statistics and Preview */}
+          {importPreview && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-4 gap-2 text-center text-[11px]">
+                <div className="bg-gray-50 p-2 rounded-lg border border-gray-200">
+                  <p className="text-gray-500 font-bold">Total Rows</p>
+                  <p className="text-[14px] font-black text-gray-800">{importPreview.totalRows}</p>
+                </div>
+                <div className="bg-green-50 p-2 rounded-lg border border-green-200">
+                  <p className="text-green-600 font-bold">Valid Rows</p>
+                  <p className="text-[14px] font-black text-green-700">{importPreview.validRows}</p>
+                </div>
+                <div className="bg-red-50 p-2 rounded-lg border border-red-200">
+                  <p className="text-red-600 font-bold">Error Rows</p>
+                  <p className="text-[14px] font-black text-red-700">{importPreview.invalidRows}</p>
+                </div>
+                <div className="bg-orange-50 p-2 rounded-lg border border-orange-200">
+                  <p className="text-orange-600 font-bold">Importable</p>
+                  <p className="text-[14px] font-black text-orange-700">{importPreview.validRows}</p>
+                </div>
+              </div>
+
+              {/* Preview table/list */}
+              <div className="border border-border-subtle rounded-lg overflow-hidden max-h-48 overflow-y-auto">
+                <table className="w-full text-left border-collapse text-[10px]">
+                  <thead>
+                    <tr className="bg-gray-100 border-b border-border-subtle sticky top-0">
+                      <th className="p-2 w-12 text-center">Row</th>
+                      <th className="p-2">Details</th>
+                      <th className="p-2 w-16 text-center">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {importPreview.previewRows.map((row: any, rIdx: number) => (
+                      <tr key={rIdx} className={`border-b border-border-subtle ${row.isValid ? "bg-white" : "bg-red-50/30"}`}>
+                        <td className="p-2 text-center text-outline-variant font-bold">{row.rowNum}</td>
+                        <td className="p-2 space-y-1">
+                          <div className="flex flex-wrap gap-2 text-on-surface-variant">
+                            {Object.entries(row.data).slice(0, 3).map(([k, v]) => (
+                              <span key={k} className="bg-gray-50 px-1 py-0.5 rounded border border-gray-100">
+                                <strong>{k}:</strong> {String(v)}
+                              </span>
+                            ))}
+                          </div>
+                          {row.errors && row.errors.length > 0 && (
+                            <div className="text-status-error font-medium flex items-center gap-1">
+                              <AlertTriangle className="h-3 w-3 shrink-0" />
+                              <span>{row.errors.join(", ")}</span>
+                            </div>
+                          )}
+                        </td>
+                        <td className="p-2 text-center">
+                          {row.isValid ? (
+                            <span className="text-green-600 font-extrabold">PASS</span>
+                          ) : (
+                            <span className="text-red-600 font-extrabold">FAIL</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Commit Button */}
+              {importPreview.validRows > 0 && (
+                <div className="flex justify-end pt-2 border-t border-border-subtle">
+                  <Button
+                    onClick={handleCommitImport}
+                    disabled={isUploading}
+                    className="w-full sm:w-auto font-bold text-xs"
+                    type="button"
+                  >
+                    Commit Import ({importPreview.validRows} rows)
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="flex justify-end gap-2 border-t border-border-subtle pt-4 mt-6">
+            <Button variant="secondary" type="button" onClick={() => setIsImportModalOpen(false)}>Close</Button>
+          </div>
+        </div>
       </Modal>
     </div>
   );

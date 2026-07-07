@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@ahh-wfm/database";
 import { isDbConnected, readDb, writeDb, mockDb } from "@ahh-wfm/mock-data";
+import { checkApiAuth } from "@/lib/api-guards";
+import { isAdminUser } from "@/lib/permissions";
 
 const entityMap: Record<string, keyof typeof prisma> = {
   companies: "company",
@@ -458,18 +460,129 @@ export async function PUT(request: Request, { params }: { params: { entity: stri
   }
 }
 
-export async function DELETE(request: Request, { params }: { params: { entity: string; id: string } }) {
-  try {
-    const { entity, id } = params;
-
-    if (entity === "leave-types") {
-      try {
-        const result = await mockDb.deleteLeaveType(id);
-        return NextResponse.json({ success: true, softDeleted: result.softDeleted });
-      } catch (err: any) {
-        return NextResponse.json({ error: err.message || "Failed to delete leave type" }, { status: 400 });
+async function isMasterRecordUsed(entity: string, id: string): Promise<boolean> {
+  if (isDbConnected()) {
+    try {
+      if (entity === "companies") {
+        const c1 = await prisma.employee.count({ where: { companyId: id } });
+        const c2 = await prisma.department.count({ where: { companyId: id } });
+        const c3 = await prisma.project.count({ where: { companyId: id } });
+        const c4 = await prisma.locationMaster.count({ where: { companyId: id } });
+        const c5 = await prisma.costCenter.count({ where: { companyId: id } });
+        return c1 > 0 || c2 > 0 || c3 > 0 || c4 > 0 || c5 > 0;
       }
+      if (entity === "departments") {
+        const c1 = await prisma.employee.count({ where: { departmentId: id } });
+        return c1 > 0;
+      }
+      if (entity === "designations") {
+        const c1 = await prisma.employee.count({ where: { designationId: id } });
+        const c2 = await prisma.relieverStandbyRule.count({ where: { designationId: id } });
+        return c1 > 0 || c2 > 0;
+      }
+      if (entity === "trade-classifications") {
+        const c1 = await prisma.employee.count({ where: { tradeClassificationId: id } });
+        const c2 = await prisma.relieverStandbyRule.count({ where: { tradeClassificationId: id } });
+        return c1 > 0 || c2 > 0;
+      }
+      if (entity === "locations") {
+        const c1 = await prisma.employee.count({
+          where: { OR: [{ defaultLocationId: id }, { officeLocationId: id }] }
+        });
+        const c2 = await prisma.project.count({ where: { locationId: id } });
+        return c1 > 0 || c2 > 0;
+      }
+      if (entity === "cost-centers") {
+        const c1 = await prisma.employee.count({ where: { costCenterId: id } });
+        return c1 > 0;
+      }
+      if (entity === "projects") {
+        const c1 = await prisma.employee.count({ where: { defaultProjectId: id } });
+        const c2 = await prisma.projectSite.count({ where: { projectId: id } });
+        return c1 > 0 || c2 > 0;
+      }
+      if (entity === "project-sites") {
+        const c1 = await prisma.employee.count({ where: { defaultSiteId: id } });
+        const c2 = await prisma.employeeDeployment.count({ where: { siteId: id } });
+        const c3 = await prisma.shiftAssignment.count({ where: { siteId: id } });
+        return c1 > 0 || c2 > 0 || c3 > 0;
+      }
+      if (entity === "allowed-punch-locations") {
+        const c1 = await prisma.employee.count({ where: { defaultPunchLocationId: id } });
+        const c2 = await prisma.employeeAllowedPunchLocation.count({ where: { allowedPunchLocationId: id } });
+        return c1 > 0 || c2 > 0;
+      }
+      if (entity === "leave-types") {
+        const c1 = await prisma.leaveRequest.count({ where: { leaveTypeId: id } });
+        const c2 = await prisma.leaveBalance.count({ where: { leaveTypeId: id } });
+        return c1 > 0 || c2 > 0;
+      }
+    } catch (err) {
+      console.error("isMasterRecordUsed prisma error:", err);
+      return true; // fail-safe to prevent delete
     }
+  } else {
+    const db = readDb();
+    if (entity === "companies") {
+      return (db.employees || []).some((e: any) => e.companyId === id) ||
+             (db.departments || []).some((d: any) => d.companyId === id) ||
+             (db.projects || []).some((p: any) => p.companyId === id) ||
+             (db.locations || []).some((l: any) => l.companyId === id) ||
+             (db.costCenters || []).some((c: any) => c.companyId === id);
+    }
+    if (entity === "departments") {
+      return (db.employees || []).some((e: any) => e.departmentId === id || e.department === id);
+    }
+    if (entity === "designations") {
+      return (db.employees || []).some((e: any) => e.designationId === id) ||
+             (db.relieverStandbyRules || []).some((r: any) => r.designationId === id);
+    }
+    if (entity === "trade-classifications") {
+      return (db.employees || []).some((e: any) => e.tradeClassificationId === id) ||
+             (db.relieverStandbyRules || []).some((r: any) => r.tradeClassificationId === id);
+    }
+    if (entity === "locations") {
+      return (db.employees || []).some((e: any) => e.defaultLocationId === id || e.officeLocationId === id) ||
+             (db.projects || []).some((p: any) => p.locationId === id);
+    }
+    if (entity === "cost-centers") {
+      return (db.employees || []).some((e: any) => e.costCenterId === id);
+    }
+    if (entity === "projects") {
+      return (db.employees || []).some((e: any) => e.defaultProjectId === id) ||
+             (db.projectSites || []).some((s: any) => s.projectId === id);
+    }
+    if (entity === "project-sites") {
+      return (db.employees || []).some((e: any) => e.defaultSiteId === id) ||
+             (db.deployments || []).some((d: any) => d.siteId === id) ||
+             (db.shiftAssignments || []).some((s: any) => s.siteId === id);
+    }
+    if (entity === "allowed-punch-locations") {
+      return (db.employees || []).some((e: any) => e.defaultPunchLocationId === id) ||
+             (db.employeeAllowedPunchLocations || []).some((e: any) => e.allowedPunchLocationId === id);
+    }
+    if (entity === "leave-types") {
+      return (db.leaves || []).some((l: any) => l.leaveTypeId === id) ||
+             (db.leaveBalances || []).some((b: any) => b.leaveTypeId === id);
+    }
+  }
+  return false;
+}
+
+export async function DELETE(request: Request, { params }: { params: { entity: string; id: string } }) {
+  const auth = await checkApiAuth();
+  if (auth.error) return auth.error;
+
+  // Strict check: Only Admin & Super Admin are allowed to delete master records
+  if (!isAdminUser(auth.session?.user)) {
+    return NextResponse.json({ error: "Only Admin and Super Admin can delete master data." }, { status: 403 });
+  }
+
+  const deletedBy = (auth.session?.user as any)?.id || "admin-system";
+  const { entity, id } = params;
+
+  try {
+    const inUse = await isMasterRecordUsed(entity, id);
 
     if (!isDbConnected()) {
       const memoryKey = memoryKeyMap[entity];
@@ -485,9 +598,54 @@ export async function DELETE(request: Request, { params }: { params: { entity: s
         return NextResponse.json({ error: "Record not found" }, { status: 404 });
       }
 
-      records.splice(index, 1);
-      writeDb(db);
+      if (inUse) {
+        const record = records[index];
+        if ("isActive" in record) {
+          record.isActive = false;
+        } else if ("status" in record) {
+          record.status = "INACTIVE";
+        }
 
+        const newLog = {
+          id: `LOG-${Date.now()}`,
+          userId: deletedBy,
+          action: "MASTER_DEACTIVATE",
+          entityType: entity.toUpperCase(),
+          entityId: id,
+          afterJson: JSON.stringify({ entity, id, deletedBy, action: "DEACTIVATE", reason: "referenced in records" }),
+          createdAt: new Date().toISOString(),
+          ipAddress: "127.0.0.1",
+          userAgent: "API Call"
+        };
+        db.userActivityLogs = db.userActivityLogs || [];
+        db.userActivityLogs.push(newLog);
+
+        writeDb(db);
+
+        return NextResponse.json({
+          success: true,
+          deactivated: true,
+          message: "This master is already used in records. It has been deactivated instead of permanently deleted."
+        });
+      }
+
+      records.splice(index, 1);
+
+      const newLog = {
+        id: `LOG-${Date.now()}`,
+        userId: deletedBy,
+        action: "MASTER_DELETE",
+        entityType: entity.toUpperCase(),
+        entityId: id,
+        afterJson: JSON.stringify({ entity, id, deletedBy, action: "DELETE" }),
+        createdAt: new Date().toISOString(),
+        ipAddress: "127.0.0.1",
+        userAgent: "API Call"
+      };
+      db.userActivityLogs = db.userActivityLogs || [];
+      db.userActivityLogs.push(newLog);
+
+      writeDb(db);
       return NextResponse.json({ success: true });
     }
 
@@ -496,9 +654,56 @@ export async function DELETE(request: Request, { params }: { params: { entity: s
       return NextResponse.json({ error: "Invalid master entity" }, { status: 400 });
     }
 
-    const dbModel: any = prisma[modelName];
+    const dbModel: any = (prisma as any)[modelName];
+
+    if (inUse) {
+      if (["company", "designation", "tradeClassification", "locationMaster", "costCenter", "allowedPunchLocation", "relieverStandbyRule", "leaveType"].includes(modelName as string)) {
+        await dbModel.update({
+          where: { id },
+          data: { isActive: false }
+        });
+      } else if (["project", "projectSite"].includes(modelName as string)) {
+        await dbModel.update({
+          where: { id },
+          data: { status: "INACTIVE" }
+        });
+      }
+
+      await prisma.userActivityLog.create({
+        data: {
+          id: `LOG-${Date.now()}`,
+          userId: deletedBy,
+          action: "MASTER_DEACTIVATE",
+          entityType: entity.toUpperCase(),
+          entityId: id,
+          afterJson: JSON.stringify({ entity, id, deletedBy, action: "DEACTIVATE", reason: "referenced in records" }),
+          ipAddress: "127.0.0.1",
+          userAgent: "API Call"
+        }
+      });
+
+      return NextResponse.json({
+        success: true,
+        deactivated: true,
+        message: "This master is already used in records. It has been deactivated instead of permanently deleted."
+      });
+    }
+
     await dbModel.delete({
       where: { id },
+    });
+
+    await prisma.userActivityLog.create({
+      data: {
+        id: `LOG-${Date.now()}`,
+        userId: deletedBy,
+        action: "MASTER_DELETE",
+        entityType: entity.toUpperCase(),
+        entityId: id,
+        afterJson: JSON.stringify({ entity, id, deletedBy, action: "DELETE" }),
+        ipAddress: "127.0.0.1",
+        userAgent: "API Call"
+      }
     });
 
     return NextResponse.json({ success: true });
@@ -507,7 +712,6 @@ export async function DELETE(request: Request, { params }: { params: { entity: s
     if (error.code === "P2025") {
       return NextResponse.json({ error: "Record not found" }, { status: 404 });
     }
-    // Handle foreign key constraint failures
     if (error.code === "P2003") {
       return NextResponse.json({ error: "Cannot delete record because it is referenced by other records." }, { status: 400 });
     }
