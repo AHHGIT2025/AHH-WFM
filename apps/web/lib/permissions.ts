@@ -1,10 +1,13 @@
 export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
   SUPER_ADMIN: [
-    "dashboard.view", "employees.view", "employees.create", "employees.edit", "employees.delete", "employees.bulkUpload",
-    "attendance.view", "attendance.edit", "attendance.approveCorrection",
-    "leaves.view", "leaves.approve", "shifts.view", "shifts.edit",
+    "dashboard.view", "employees.view", "employees.create", "employees.edit", "employees.delete", "employees.bulkUpload", "employees.manage",
+    "attendance.view", "attendance.edit", "attendance.approveCorrection", "attendance.manage", "attendance.export",
+    "leaves.view", "leaves.create", "leaves.edit", "leaves.approve", "leaves.manage",
+    "clearance.view", "clearance.create", "clearance.edit", "clearance.approve", "clearance.manage",
+    "shifts.view", "shifts.create", "shifts.edit", "shifts.delete", "shifts.manage",
     "overtime.view", "overtime.approve", "reports.view", "reports.export", "reports.manage",
     "reports.executive.view", "reports.attendance.view", "reports.leave.view", "reports.overtime.view", "reports.shiftRoster.view", "reports.sapSync.view", "reports.audit.view", "reports.backup.view", "reports.productionReadiness.view",
+    "reports.security.view", "reports.facility.view", "reports.patrol.view", "reports.deployment.view",
     "sap.view", "sap.sync", "sap.mapping",
     "backup.view", "backup.create", "backup.download", "backup.delete",
     "settings.view", "settings.roles.manage", "masters.view", "masters.manage",
@@ -19,11 +22,14 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "settings.audit.view", "settings.backup.view", "settings.backup.manage", "settings.productionReadiness.view", "settings.integration.view", "settings.integration.manage"
   ],
   ADMIN: [
-    "dashboard.view", "employees.view", "employees.create", "employees.edit", "employees.bulkUpload",
-    "attendance.view", "attendance.edit", "attendance.approveCorrection",
-    "leaves.view", "leaves.approve", "shifts.view", "shifts.edit",
+    "dashboard.view", "employees.view", "employees.create", "employees.edit", "employees.bulkUpload", "employees.manage",
+    "attendance.view", "attendance.edit", "attendance.approveCorrection", "attendance.manage", "attendance.export",
+    "leaves.view", "leaves.create", "leaves.edit", "leaves.approve", "leaves.manage",
+    "clearance.view", "clearance.create", "clearance.edit", "clearance.approve", "clearance.manage",
+    "shifts.view", "shifts.create", "shifts.edit", "shifts.delete", "shifts.manage",
     "overtime.view", "overtime.approve", "reports.view", "reports.export", "reports.manage",
     "reports.executive.view", "reports.attendance.view", "reports.leave.view", "reports.overtime.view", "reports.shiftRoster.view", "reports.sapSync.view", "reports.audit.view", "reports.backup.view", "reports.productionReadiness.view",
+    "reports.security.view", "reports.facility.view", "reports.patrol.view", "reports.deployment.view",
     "sap.view", "sap.sync", "sap.mapping",
     "backup.view", "backup.create", "backup.download",
     "settings.view", "masters.view", "masters.manage",
@@ -274,7 +280,11 @@ export function getUserPermissions(user: { role?: string; permissions?: string[]
   return DEFAULT_ROLE_PERMISSIONS[role] || [];
 }
 
-export function filterNavigationByPermissions(user: { role?: string } | null | undefined, navItems: any[]): any[] {
+export function getEffectiveUserPermissions(user: { id?: string; role?: string; permissions?: string[] } | null | undefined): string[] {
+  return getUserPermissions(user);
+}
+
+export function filterNavigationByPermissions(user: { role?: string; permissions?: string[] } | null | undefined, navItems: any[]): any[] {
   if (!user) return [];
   return navItems.filter(item => {
     // Map paths to permissions
@@ -295,6 +305,27 @@ export function filterNavigationByPermissions(user: { role?: string } | null | u
              hasPermission(user, "manpower.security.view") || 
              hasPermission(user, "manpower.fm.view");
     }
+    
+    // Security Guarding sub-menu items
+    if (item.path === "/manpower/security-guarding/clients") return hasPermission(user, "manpower.security.clients.view") || hasPermission(user, "manpower.admin.full_access");
+    if (item.path === "/manpower/security-guarding/contracts") return hasPermission(user, "manpower.security.contracts.view") || hasPermission(user, "manpower.admin.full_access");
+    if (item.path === "/manpower/security-guarding/projects") return hasPermission(user, "security.projects.view") || hasPermission(user, "manpower.security.projects.view") || hasPermission(user, "manpower.admin.full_access");
+    if (item.path === "/manpower/security-guarding/sites") return hasPermission(user, "manpower.security.sites.view") || hasPermission(user, "manpower.admin.full_access");
+    if (item.path === "/manpower/security-guarding/zones") return hasPermission(user, "manpower.security.zones.view") || hasPermission(user, "manpower.admin.full_access");
+    if (item.path === "/manpower/security-guarding/manpower") return hasPermission(user, "security.manpower.view") || hasPermission(user, "manpower.security.manpower.view") || hasPermission(user, "manpower.admin.full_access");
+    if (item.path === "/manpower/security-guarding/deployment-calendar") return hasPermission(user, "security.deployment.view") || hasPermission(user, "manpower.security.deployments.view") || hasPermission(user, "manpower.admin.full_access");
+    if (item.path === "/manpower/security-guarding/reliever-pools") return hasPermission(user, "manpower.security.relievers.view") || hasPermission(user, "manpower.admin.full_access");
+    if (item.path === "/manpower/security-guarding/coordinators") return hasPermission(user, "security.coordinators.view") || hasPermission(user, "manpower.admin.full_access");
+
+    // Facility Management sub-menu items
+    if (item.path === "/manpower/facility-management/clients") return hasPermission(user, "manpower.fm.clients.view") || hasPermission(user, "manpower.admin.full_access");
+    if (item.path === "/manpower/facility-management/contracts") return hasPermission(user, "manpower.fm.contracts.view") || hasPermission(user, "manpower.admin.full_access");
+    if (item.path === "/manpower/facility-management/projects") return hasPermission(user, "facility.projects.view") || hasPermission(user, "manpower.fm.projects.view") || hasPermission(user, "manpower.admin.full_access");
+    if (item.path === "/manpower/facility-management/sites") return hasPermission(user, "manpower.fm.sites.view") || hasPermission(user, "manpower.admin.full_access");
+    if (item.path === "/manpower/facility-management/areas") return hasPermission(user, "manpower.fm.areas.view") || hasPermission(user, "manpower.admin.full_access");
+    if (item.path === "/manpower/facility-management/manpower") return hasPermission(user, "facility.manpower.view") || hasPermission(user, "manpower.fm.manpower.view") || hasPermission(user, "manpower.admin.full_access");
+    if (item.path === "/manpower/facility-management/deployment-calendar") return hasPermission(user, "facility.deployment.view") || hasPermission(user, "manpower.fm.deployments.view") || hasPermission(user, "manpower.admin.full_access");
+
     if (item.path.startsWith("/manpower/security-guarding")) {
       return hasPermission(user, "manpower.admin.full_access") || hasPermission(user, "manpower.security.view");
     }

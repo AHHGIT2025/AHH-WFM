@@ -19,14 +19,29 @@ const DEFAULT_PERMISSIONS = [
   { key: "attendance.view", label: "View Attendance Monitor", module: "Attendance" },
   { key: "attendance.edit", label: "Edit Attendance Records", module: "Attendance" },
   { key: "attendance.approveCorrection", label: "Approve Attendance Corrections", module: "Attendance" },
+  { key: "attendance.manage", label: "Manage Attendance Configurations", module: "Attendance" },
+  { key: "attendance.export", label: "Export Attendance Records", module: "Attendance" },
 
   // Leaves
   { key: "leaves.view", label: "View Leave Manager", module: "Leaves" },
+  { key: "leaves.create", label: "Create Leave Requests", module: "Leaves" },
+  { key: "leaves.edit", label: "Edit Leave Requests", module: "Leaves" },
   { key: "leaves.approve", label: "Approve Leave Requests", module: "Leaves" },
+  { key: "leaves.manage", label: "Manage Leaves Configurations", module: "Leaves" },
+
+  // Clearance
+  { key: "clearance.view", label: "View Clearance Matrix", module: "Clearance" },
+  { key: "clearance.create", label: "Initiate Clearance Tasks", module: "Clearance" },
+  { key: "clearance.edit", label: "Edit Clearance Tasks", module: "Clearance" },
+  { key: "clearance.approve", label: "Approve Clearance Steps", module: "Clearance" },
+  { key: "clearance.manage", label: "Manage Clearance Settings", module: "Clearance" },
 
   // Shift Scheduling
   { key: "shifts.view", label: "View Shift Rosters", module: "Scheduling" },
+  { key: "shifts.create", label: "Create Shift Schedules", module: "Scheduling" },
   { key: "shifts.edit", label: "Edit Shift Calendars", module: "Scheduling" },
+  { key: "shifts.delete", label: "Delete Shift Rosters", module: "Scheduling" },
+  { key: "shifts.manage", label: "Manage Shift Rules", module: "Scheduling" },
 
   // Overtime
   { key: "overtime.view", label: "View Overtime Claims", module: "Overtime" },
@@ -45,6 +60,10 @@ const DEFAULT_PERMISSIONS = [
   { key: "reports.audit.view", label: "View Audit Report", module: "Reports" },
   { key: "reports.backup.view", label: "View Backup/Restore Report", module: "Reports" },
   { key: "reports.productionReadiness.view", label: "View Production Readiness Report", module: "Reports" },
+  { key: "reports.security.view", label: "View Security Guarding Reports", module: "Reports" },
+  { key: "reports.facility.view", label: "View Facility Management Reports", module: "Reports" },
+  { key: "reports.patrol.view", label: "View Patrol Inspections Reports", module: "Reports" },
+  { key: "reports.deployment.view", label: "View Daily Planner Reports", module: "Reports" },
 
   // SAP Integration
   { key: "sap.view", label: "View SuccessFactors Sync Dashboard", module: "SAP Integration" },
@@ -289,7 +308,7 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const { name, description, scope, isActive, cloneFromRoleId } = body;
+    const { name, description, scope, roleType, isActive, cloneFromRoleId } = body;
     if (!name) {
       return NextResponse.json({ error: "Missing name parameter" }, { status: 400 });
     }
@@ -307,7 +326,8 @@ export async function POST(request: Request) {
       isSystemDefault: false,
       isActive: isActive !== undefined ? isActive : true,
       isEditable: true,
-      scope: scope || "Global"
+      scope: scope || "Global",
+      roleType: roleType || "White Collar Operations"
     });
 
     const allPerms = await mockDb.getSystemPermissions();
@@ -382,11 +402,22 @@ export async function PUT(request: Request) {
           return NextResponse.json({ error: "Default system roles cannot be deactivated" }, { status: 400 });
         }
       } else {
-        await mockDb.updateSystemRole(roleId, {
+        const updateFields: any = {
           description: systemRoleData.description,
           isActive: systemRoleData.isActive !== undefined ? systemRoleData.isActive : role.isActive,
-          scope: systemRoleData.scope || role.scope
-        });
+          scope: systemRoleData.scope || role.scope,
+          roleType: systemRoleData.roleType || role.roleType
+        };
+
+        if (systemRoleData.name && systemRoleData.name.trim().toUpperCase().replace(/\s+/g, "_") !== role.name) {
+          const newNormalizedName = systemRoleData.name.trim().toUpperCase().replace(/\s+/g, "_");
+          if (existing.some(r => r.id !== roleId && r.name === newNormalizedName)) {
+            return NextResponse.json({ error: "Role name already exists" }, { status: 400 });
+          }
+          updateFields.name = newNormalizedName;
+        }
+
+        await mockDb.updateSystemRole(roleId, updateFields);
       }
     }
 

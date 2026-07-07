@@ -37,13 +37,23 @@ async function fetchUserRBAC(userId: string, defaultRole: string) {
       const allPermissions = await mockDb.getSystemPermissions();
 
       const grantedPermIds = new Set<string>();
+
+      // 1. Union direct default/base role permissions
+      const baseRolePermKeys = DEFAULT_ROLE_PERMISSIONS[defaultRole.toUpperCase().replace(/\s+/g, "_")] || [];
+      for (const pKey of baseRolePermKeys) {
+        const pObj = allPermissions.find(x => x.key === pKey);
+        if (pObj) {
+          grantedPermIds.add(pObj.id);
+        }
+      }
+
+      // 2. Union permissions from all assigned roles
       for (const asg of userAssignments) {
         const role = roles.find(r => r.id === asg.roleId);
         if (!role || !role.isActive) continue; // Inactive roles do not contribute permissions
 
         const rolePerms = allRolePermissions.filter(rp => rp.roleId === asg.roleId);
         for (const rp of rolePerms) {
-          // If any capability is checked
           if (rp.canView || rp.canCreate || rp.canEdit || rp.canDelete || rp.canApprove || rp.canExport) {
             grantedPermIds.add(rp.permissionId);
           }

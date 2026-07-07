@@ -13,7 +13,7 @@ export default function ReportsHubPage() {
   const userId = user?.id || "";
 
   // Dynamic Tabs based on Permissions
-  const availableTabs = [];
+  const availableTabs: { id: string; label: string; icon: string; }[] = [];
   if (session) {
     if (isAdminUser(user) || hasPermission(user, "reports.executive.view")) {
       availableTabs.push({ id: "executive", label: "Executive Dashboard", icon: "dashboard" });
@@ -27,6 +27,18 @@ export default function ReportsHubPage() {
     }
     if (isAdminUser(user) || hasPermission(user, "reports.shiftRoster.view")) {
       availableTabs.push({ id: "shifts", label: "Shift Roster Report", icon: "schedule" });
+    }
+    if (isAdminUser(user) || hasPermission(user, "reports.security.view")) {
+      availableTabs.push({ id: "security", label: "Security Guarding", icon: "shield" });
+    }
+    if (isAdminUser(user) || hasPermission(user, "reports.facility.view")) {
+      availableTabs.push({ id: "facility", label: "Facility Management", icon: "store" });
+    }
+    if (isAdminUser(user) || hasPermission(user, "reports.patrol.view")) {
+      availableTabs.push({ id: "patrol", label: "Patrol Inspections", icon: "explore" });
+    }
+    if (isAdminUser(user) || hasPermission(user, "reports.deployment.view")) {
+      availableTabs.push({ id: "deployment", label: "Daily Deployment Planner", icon: "calendar_month" });
     }
     if (isAdminUser(user) || hasPermission(user, "reports.sapSync.view")) {
       availableTabs.push({ id: "sap", label: "SAP Sync Report", icon: "sync_alt" });
@@ -798,6 +810,271 @@ export default function ReportsHubPage() {
                       ))
                     )}
                   </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB: SECURITY GUARDING REPORTS */}
+          {activeTab === "security" && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 font-semibold">
+                <div className="bg-surface-container-lowest border border-border-subtle rounded-xl p-5 shadow-sm">
+                  <p className="text-[10px] uppercase font-bold text-outline-variant tracking-wider">Active Guards Deployed</p>
+                  <p className="text-3xl font-extrabold text-primary mt-2">142 Guards</p>
+                  <p className="text-[10px] text-status-success font-bold mt-1">100% Shift Coverage</p>
+                </div>
+                <div className="bg-surface-container-lowest border border-border-subtle rounded-xl p-5 shadow-sm">
+                  <p className="text-[10px] uppercase font-bold text-outline-variant tracking-wider">Incident Response Compliance</p>
+                  <p className="text-3xl font-extrabold text-status-success mt-2">98.4%</p>
+                  <p className="text-[10px] text-outline-variant font-medium mt-1">Target response standard: &lt;5 mins</p>
+                </div>
+                <div className="bg-surface-container-lowest border border-border-subtle rounded-xl p-5 shadow-sm">
+                  <p className="text-[10px] uppercase font-bold text-outline-variant tracking-wider">Reliever Pool Standby</p>
+                  <p className="text-3xl font-extrabold text-secondary mt-2">18 Standby</p>
+                  <p className="text-[10px] text-outline-variant font-medium mt-1">Across 3 regional zones</p>
+                </div>
+                <div className="bg-surface-container-lowest border border-border-subtle rounded-xl p-5 shadow-sm">
+                  <p className="text-[10px] uppercase font-bold text-outline-variant tracking-wider">Client Site Accounts</p>
+                  <p className="text-3xl font-extrabold text-primary mt-2">24 Projects</p>
+                  <p className="text-[10px] text-outline-variant font-medium mt-1">Including 12 critical infrastructure zones</p>
+                </div>
+              </div>
+
+              <div className="bg-surface-container-lowest border border-border-subtle rounded-xl p-5 shadow-sm">
+                <p className="text-xs font-bold text-primary mb-4">Security Guarding Site Attendance Summary</p>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="border-b border-border-subtle text-primary font-bold">
+                        <th className="pb-2">Client Site Name</th>
+                        <th className="pb-2">Zone / Area</th>
+                        <th className="pb-2 text-center">Required Guards</th>
+                        <th className="pb-2 text-center">Actual Present</th>
+                        <th className="pb-2 text-right">Relief Coverage</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border-subtle/30 font-medium">
+                      <tr>
+                        <td className="py-2 text-primary font-bold">Hamad International Cargo Terminal</td>
+                        <td className="py-2">Zone A (Airside)</td>
+                        <td className="py-2 text-center">15</td>
+                        <td className="py-2 text-center text-status-success">15</td>
+                        <td className="py-2 text-right text-status-success">100% Fully Staffed</td>
+                      </tr>
+                      <tr>
+                        <td className="py-2 text-primary font-bold">Msheireb Downtown Retail Block</td>
+                        <td className="py-2">Zone C (Retail)</td>
+                        <td className="py-2 text-center">8</td>
+                        <td className="py-2 text-center text-status-success">8</td>
+                        <td className="py-2 text-right text-status-success">100% Fully Staffed</td>
+                      </tr>
+                      <tr>
+                        <td className="py-2 text-primary font-bold">Lusail Stadium Outer Ring</td>
+                        <td className="py-2">Lusail Zone 1</td>
+                        <td className="py-2 text-center">32</td>
+                        <td className="py-2 text-center text-status-warning">30</td>
+                        <td className="py-2 text-right text-status-warning">93.8% (2 Standby Deployed)</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB: FACILITY MANAGEMENT REPORTS */}
+          {activeTab === "facility" && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 font-semibold">
+                <div className="bg-surface-container-lowest border border-border-subtle rounded-xl p-5 shadow-sm">
+                  <p className="text-[10px] uppercase font-bold text-outline-variant tracking-wider">Active FM Staff Deployed</p>
+                  <p className="text-3xl font-extrabold text-primary mt-2">89 Cleaners</p>
+                  <p className="text-[10px] text-status-success font-bold mt-1">96.5% Task Compliance</p>
+                </div>
+                <div className="bg-surface-container-lowest border border-border-subtle rounded-xl p-5 shadow-sm">
+                  <p className="text-[10px] uppercase font-bold text-outline-variant tracking-wider">Service Level Compliance (SLA)</p>
+                  <p className="text-3xl font-extrabold text-status-success mt-2">99.1%</p>
+                  <p className="text-[10px] text-outline-variant font-medium mt-1">Target SLA: &gt;95%</p>
+                </div>
+                <div className="bg-surface-container-lowest border border-border-subtle rounded-xl p-5 shadow-sm">
+                  <p className="text-[10px] uppercase font-bold text-outline-variant tracking-wider">Inspections Completed Today</p>
+                  <p className="text-3xl font-extrabold text-secondary mt-2">48 Checks</p>
+                  <p className="text-[10px] text-outline-variant font-medium mt-1">By 6 supervisors</p>
+                </div>
+                <div className="bg-surface-container-lowest border border-border-subtle rounded-xl p-5 shadow-sm">
+                  <p className="text-[10px] uppercase font-bold text-outline-variant tracking-wider">FM Client Accounts</p>
+                  <p className="text-3xl font-extrabold text-primary mt-2">16 Projects</p>
+                  <p className="text-[10px] text-outline-variant font-medium mt-1">Across corporate & commercial properties</p>
+                </div>
+              </div>
+
+              <div className="bg-surface-container-lowest border border-border-subtle rounded-xl p-5 shadow-sm">
+                <p className="text-xs font-bold text-primary mb-4">Facility Management Task & Cleaning Summary</p>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="border-b border-border-subtle text-primary font-bold">
+                        <th className="pb-2">Client Property / Building</th>
+                        <th className="pb-2">Area / Floor</th>
+                        <th className="pb-2 text-center">Scheduled Tasks</th>
+                        <th className="pb-2 text-center">Completed Tasks</th>
+                        <th className="pb-2 text-right">Task Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border-subtle/30 font-medium">
+                      <tr>
+                        <td className="py-2 text-primary font-bold">Qatar Airways Corporate HQ</td>
+                        <td className="py-2">Floor 1 to 4 (Offices)</td>
+                        <td className="py-2 text-center">20</td>
+                        <td className="py-2 text-center text-status-success">20</td>
+                        <td className="py-2 text-right text-status-success">100% Completed</td>
+                      </tr>
+                      <tr>
+                        <td className="py-2 text-primary font-bold">Hamad Medical City Residence</td>
+                        <td className="py-2">Block B (Residence Areas)</td>
+                        <td className="py-2 text-center">15</td>
+                        <td className="py-2 text-center text-status-success">14</td>
+                        <td className="py-2 text-right text-status-warning">93.3% In Progress</td>
+                      </tr>
+                      <tr>
+                        <td className="py-2 text-primary font-bold">West Bay Corporate Tower</td>
+                        <td className="py-2">Main Lobby & Parking</td>
+                        <td className="py-2 text-center">10</td>
+                        <td className="py-2 text-center text-status-success">10</td>
+                        <td className="py-2 text-right text-status-success">100% Completed</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB: PATROL INSPECTIONS REPORTS */}
+          {activeTab === "patrol" && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 font-semibold">
+                <div className="bg-surface-container-lowest border border-border-subtle rounded-xl p-5 shadow-sm">
+                  <p className="text-[10px] uppercase font-bold text-outline-variant tracking-wider">Scheduled Patrol Rounds</p>
+                  <p className="text-3xl font-extrabold text-primary mt-2">64 Patrols</p>
+                  <p className="text-[10px] text-status-success font-bold mt-1">100% Completed</p>
+                </div>
+                <div className="bg-surface-container-lowest border border-border-subtle rounded-xl p-5 shadow-sm">
+                  <p className="text-[10px] uppercase font-bold text-outline-variant tracking-wider">QR Code Checkpoint Hits</p>
+                  <p className="text-3xl font-extrabold text-status-success mt-2">320 Hits</p>
+                  <p className="text-[10px] text-outline-variant font-medium mt-1">Accuracy rating: 99.8%</p>
+                </div>
+                <div className="bg-surface-container-lowest border border-border-subtle rounded-xl p-5 shadow-sm">
+                  <p className="text-[10px] uppercase font-bold text-outline-variant tracking-wider">Defects & Incidents Logged</p>
+                  <p className="text-3xl font-extrabold text-status-warning mt-2">4 Issues</p>
+                  <p className="text-[10px] text-outline-variant font-medium mt-1">1 Critical (Security Breach Resolved)</p>
+                </div>
+                <div className="bg-surface-container-lowest border border-border-subtle rounded-xl p-5 shadow-sm">
+                  <p className="text-[10px] uppercase font-bold text-outline-variant tracking-wider">Active Patrollers</p>
+                  <p className="text-3xl font-extrabold text-primary mt-2">12 Guards</p>
+                  <p className="text-[10px] text-outline-variant font-medium mt-1">Equipped with mobile patrol app</p>
+                </div>
+              </div>
+
+              <div className="bg-surface-container-lowest border border-border-subtle rounded-xl p-5 shadow-sm">
+                <p className="text-xs font-bold text-primary mb-4">Daily Patrolling Inspections Log</p>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="border-b border-border-subtle text-primary font-bold">
+                        <th className="pb-2">Guard Name</th>
+                        <th className="pb-2">Site / Location</th>
+                        <th className="pb-2">Round Interval</th>
+                        <th className="pb-2 text-center">Checkpoints Scanned</th>
+                        <th className="pb-2 text-right">Patrol Result</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border-subtle/30 font-medium">
+                      <tr>
+                        <td className="py-2 text-primary font-bold">Prasanth M (Employee ID)</td>
+                        <td className="py-2">Hamad Airport Cargo</td>
+                        <td className="py-2">08:00 - 10:00</td>
+                        <td className="py-2 text-center">8 / 8</td>
+                        <td className="py-2 text-right text-status-success">✓ OK - Clean patrol</td>
+                      </tr>
+                      <tr>
+                        <td className="py-2 text-primary font-bold">Prasanth M (Employee ID)</td>
+                        <td className="py-2">Hamad Airport Cargo</td>
+                        <td className="py-2">12:00 - 14:00</td>
+                        <td className="py-2 text-center">8 / 8</td>
+                        <td className="py-2 text-right text-status-warning">⚠️ 1 Fire Door unlocked (resolved)</td>
+                      </tr>
+                      <tr>
+                        <td className="py-2 text-primary font-bold">Nasser Al-Khelaifi</td>
+                        <td className="py-2">Lusail Stadium Outer Ring</td>
+                        <td className="py-2">09:00 - 11:00</td>
+                        <td className="py-2 text-center">12 / 12</td>
+                        <td className="py-2 text-right text-status-success">✓ OK - Clean patrol</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB: DAILY DEPLOYMENT PLANNER REPORTS */}
+          {activeTab === "deployment" && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 font-semibold">
+                <div className="bg-surface-container-lowest border border-border-subtle rounded-xl p-5 shadow-sm">
+                  <p className="text-[10px] uppercase font-bold text-outline-variant tracking-wider">Required Shift Deployments</p>
+                  <p className="text-3xl font-extrabold text-primary mt-2">231 Positions</p>
+                  <p className="text-[10px] text-outline-variant font-medium mt-1">Across Security & FM divisions</p>
+                </div>
+                <div className="bg-surface-container-lowest border border-border-subtle rounded-xl p-5 shadow-sm">
+                  <p className="text-[10px] uppercase font-bold text-outline-variant tracking-wider">Positions Deployed</p>
+                  <p className="text-3xl font-extrabold text-status-success mt-2">229 Present</p>
+                  <p className="text-[10px] text-status-success font-bold mt-1">99.1% Deployment Rate</p>
+                </div>
+                <div className="bg-surface-container-lowest border border-border-subtle rounded-xl p-5 shadow-sm">
+                  <p className="text-[10px] uppercase font-bold text-outline-variant tracking-wider">Unscheduled Relief Deployed</p>
+                  <p className="text-3xl font-extrabold text-status-warning mt-2">2 Guards</p>
+                  <p className="text-[10px] text-outline-variant font-medium mt-1">To cover sudden sick leaves</p>
+                </div>
+                <div className="bg-surface-container-lowest border border-border-subtle rounded-xl p-5 shadow-sm">
+                  <p className="text-[10px] uppercase font-bold text-outline-variant tracking-wider">Deployment Deviations</p>
+                  <p className="text-3xl font-extrabold text-status-error mt-2">0 Gaps</p>
+                  <p className="text-[10px] text-outline-variant font-medium mt-1">All site positions accounted for</p>
+                </div>
+              </div>
+
+              <div className="bg-surface-container-lowest border border-border-subtle rounded-xl p-5 shadow-sm">
+                <p className="text-xs font-bold text-primary mb-4">Daily Deployment Planner Status Summary</p>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="border-b border-border-subtle text-primary font-bold">
+                        <th className="pb-2">Division</th>
+                        <th className="pb-2">Total Roles Required</th>
+                        <th className="pb-2 text-center">Staff Present</th>
+                        <th className="pb-2 text-center">Standby Deployed</th>
+                        <th className="pb-2 text-right">Fulfillment Rate</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border-subtle/30 font-medium">
+                      <tr>
+                        <td className="py-2 text-primary font-bold">Security Guarding Operations</td>
+                        <td className="py-2">142</td>
+                        <td className="py-2 text-center text-status-success">140</td>
+                        <td className="py-2 text-center">2</td>
+                        <td className="py-2 text-right text-status-success">100.0% Fulfilled</td>
+                      </tr>
+                      <tr>
+                        <td className="py-2 text-primary font-bold">Facility Management Operations</td>
+                        <td className="py-2">89</td>
+                        <td className="py-2 text-center text-status-success">89</td>
+                        <td className="py-2 text-center">0</td>
+                        <td className="py-2 text-right text-status-success">100.0% Fulfilled</td>
+                      </tr>
+                    </tbody>
+                  </table>
                 </div>
               </div>
             </div>
