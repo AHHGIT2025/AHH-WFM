@@ -159,16 +159,55 @@ export async function GET(request: Request) {
     backupReady: "Not configured"
   };
 
+  // Parse filters from request query params
+  const { searchParams } = new URL(request.url);
+  const companyId = searchParams.get("companyId") || undefined;
+  const operationType = searchParams.get("operationType") || undefined;
+  const period = searchParams.get("period") || "today"; // today | week | month
+  const locationId = searchParams.get("locationId") || undefined;
+  const projectId = searchParams.get("projectId") || undefined;
+  const debug = searchParams.get("debug") === "true";
+
+  // Map operationType aliases from UI filters safely
+  let opType = operationType;
+  if (opType === "white") opType = "WHITE_COLLAR";
+  if (opType === "security") opType = "SECURITY_GUARDING";
+  if (opType === "fm") opType = "FACILITY_MANAGEMENT";
+  if (opType === "all" || opType === "ALL") opType = undefined;
+
   try {
     const auth = await checkApiAuth();
     if (auth.error) return auth.error;
 
-    const todayDate = new Date();
-    todayDate.setHours(0, 0, 0, 0);
-    const todayTime = todayDate.getTime();
+    // Resolve date bounds for the selected period
+    const now = new Date();
+    let startDate = new Date(now);
+    startDate.setHours(0, 0, 0, 0);
+    let endDate = new Date(startDate);
+    endDate.setDate(endDate.getDate() + 1);
+
+    if (period === "week") {
+      const day = now.getDay();
+      const diff = now.getDate() - day; // Sunday start
+      startDate = new Date(now.setDate(diff));
+      startDate.setHours(0, 0, 0, 0);
+      endDate = new Date(startDate);
+      endDate.setDate(endDate.getDate() + 7);
+    } else if (period === "month") {
+      startDate = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+      endDate = new Date(now.getFullYear(), now.getMonth() + 1, 1, 0, 0, 0, 0);
+    }
+
+    const startTime = startDate.getTime();
+    const endTime = endDate.getTime();
 
     const todayStart = new Date();
     todayStart.setHours(0, 0, 0, 0);
+
+    const thirtyDaysFromNow = new Date();
+    thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
+    const sixtyDaysFromNow = new Date();
+    sixtyDaysFromNow.setDate(sixtyDaysFromNow.getDate() + 60);
 
     let employees: any[] = [];
     let attendance: any[] = [];
@@ -225,58 +264,76 @@ export async function GET(request: Request) {
     companies = await mockDb.getCompanies().catch(() => []);
     locations = await mockDb.getLocations().catch(() => []);
 
-    const activeEmployees = (employees || []).filter(e => e && e.isActive !== false && e.employmentStatus === "ACTIVE");
+    // Filter Active Workforce according to selected filters
+    const activeEmployees = (employees || []).filter(e => {
+      if (!e) return false;
+      if (e.isActive === false || e.employmentStatus !== "ACTIVE") return false;
+      if (opType && e.operationType !== opType) return false;
+      if (companyId && companyId !== "all" && e.companyId !== companyId) return false;
+      if (locationId && locationId !== "all" && e.defaultLocationId !== locationId) return false;
+      if (projectId && projectId !== "all" && e.defaultProjectId !== projectId) return false;
+      return true;
+    });
     const totalActiveCount = activeEmployees.length;
 
-    const todayAttendance = (attendance || []).filter(a => {
+    // Filter Attendance according to period bounds and active employees
+    const filteredAttendance = (attendance || []).filter(a => {
       if (!a || !a.checkIn) return false;
       const aDate = parseDateOnly(a.checkIn);
-      return aDate ? aDate.getTime() === todayTime : false;
+      if (!aDate) return false;
+      const t = aDate.getTime();
+      if (t < startTime || t >= endTime) return false;
+      // Must match filtered workforce
+      const emp = activeEmployees.find(e => e.id === a.employeeId);
+      return !!emp;
     });
 
-    const presentTodayCount = new Set(todayAttendance.map(a => a.employeeId)).size;
-    const onDutyNowCount = todayAttendance.filter(a => !a.checkOut).length;
-    const lateTodayCount = todayAttendance.filter(a => a.status === "Late").length;
-    const earlyCheckoutCount = todayAttendance.filter(a => a.checkoutStatus?.toLowerCase().includes("early")).length;
-    const missingCheckoutCount = todayAttendance.filter(a => {
+    const presentTodayCount = new Set(filteredAttendance.map(a => a.employeeId)).size;
+    const onDutyNowCount = filteredAttendance.filter(a => !a.checkOut).length;
+    const lateTodayCount = filteredAttendance.filter(a => a.status === "Late").length;
+    const earlyCheckoutCount = filteredAttendance.filter(a => a.checkoutStatus?.toLowerCase().includes("early")).length;
+    const missingCheckoutCount = filteredAttendance.filter(a => {
       if (!a || a.checkOut || !a.checkIn) return false;
       const hoursSinceCheckIn = (Date.now() - new Date(a.checkIn).getTime()) / (1000 * 60 * 60);
       return hoursSinceCheckIn > 12;
     }).length;
 
+    // Filter Leaves according to overlap with selected period bounds and active employees
     const onLeaveToday = (leaves || []).filter(l => {
       if (!l || l.status !== "Approved") return false;
+      const emp = activeEmployees.find(e => e.id === l.employeeId);
+      if (!emp) return false;
       const start = parseDateOnly(l.startDate || l.from);
       const end = parseDateOnly(l.endDate || l.to);
       if (!start || !end) return false;
-      return todayDate >= start && todayDate <= end;
+      return start < endDate && end >= startDate;
     });
     const onLeaveTodayCount = onLeaveToday.length;
 
-    const pendingLeaves = (leaves || []).filter(l => l && l.status === "Pending Approval");
+    const pendingLeaves = (leaves || []).filter(l => {
+      if (!l || l.status !== "Pending Approval") return false;
+      const emp = activeEmployees.find(e => e.id === l.employeeId);
+      return !!emp;
+    });
     const pendingLeavesCount = pendingLeaves.length;
 
     const upcomingLeaves = (leaves || []).filter(l => {
       if (!l || l.status !== "Approved") return false;
+      const emp = activeEmployees.find(e => e.id === l.employeeId);
+      if (!emp) return false;
       const start = parseDateOnly(l.startDate || l.from);
       if (!start) return false;
-      const diffTime = start.getTime() - todayStart.getTime();
+      const diffTime = start.getTime() - startDate.getTime();
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
       return diffDays > 0 && diffDays <= 7;
     }).length;
 
     const absentTodayCount = Math.max(0, totalActiveCount - presentTodayCount - onLeaveTodayCount);
 
-    // Workforce Clusters helper
-    const clusters = {
-      WHITE_COLLAR: activeEmployees.filter(e => e.operationType === "WHITE_COLLAR"),
-      SECURITY_GUARDING: activeEmployees.filter(e => e.operationType === "SECURITY_GUARDING"),
-      FACILITY_MANAGEMENT: activeEmployees.filter(e => e.operationType === "FACILITY_MANAGEMENT"),
-    };
-
+    // Workforce Clusters helper - completely dynamic
     const getClusterStats = (clusterEmps: any[]) => {
       const ids = clusterEmps.map(e => e.id);
-      const clusterPresent = todayAttendance.filter(a => ids.includes(a.employeeId));
+      const clusterPresent = filteredAttendance.filter(a => ids.includes(a.employeeId));
       const presentCount = new Set(clusterPresent.map(a => a.employeeId)).size;
       const onDutyCount = clusterPresent.filter(a => !a.checkOut).length;
       
@@ -299,31 +356,64 @@ export async function GET(request: Request) {
       };
     };
 
-    const todayDeployments = (deployments || []).filter(d => {
+    // Filter Deployments by date period and active employees
+    const periodDeployments = (deployments || []).filter(d => {
       if (!d || !d.date) return false;
       const dDate = parseDateOnly(d.date);
-      return dDate ? dDate.getTime() === todayTime : false;
+      if (!dDate) return false;
+      const t = dDate.getTime();
+      return t >= startTime && t < endTime;
     });
-    const todayDepIds = todayDeployments.map(d => d.id);
-    const todayAssignments = (deploymentAssignments || []).filter(a => a && todayDepIds.includes(a.deploymentId));
-    const staffDeployedCount = new Set(todayAssignments.map(a => a.employeeId)).size;
+    const periodDepIds = periodDeployments.map(d => d.id);
+    
+    const periodAssignments = (deploymentAssignments || []).filter(a => {
+      if (!a || !periodDepIds.includes(a.deploymentId)) return false;
+      const emp = activeEmployees.find(e => e.id === a.employeeId);
+      return !!emp;
+    });
+    const staffDeployedCount = new Set(periodAssignments.map(a => a.employeeId)).size;
     
     const relieversDeployedCount = (relieverAssignments || []).filter(r => {
       if (!r) return false;
-      const orig = todayAssignments.find(a => a.id === r.originalAssignmentId);
-      return orig && todayDepIds.includes(orig.deploymentId);
+      const orig = periodAssignments.find(a => a.id === r.originalAssignmentId);
+      return orig && periodDepIds.includes(orig.deploymentId);
     }).length;
 
     const blueCollarActiveIds = activeEmployees
       .filter(e => e.employeeCategory === "BLUE_COLLAR")
       .map(e => e.id);
-    const deployedIds = new Set(todayAssignments.map(a => a.employeeId));
+    const deployedIds = new Set(periodAssignments.map(a => a.employeeId));
     const unassignedManpowerCount = blueCollarActiveIds.filter(id => !deployedIds.has(id)).length;
 
-    const activeContracts = (contracts || []).filter(c => c && (c.status === "ACTIVE" || c.statusCode === "ACTIVE"));
+    // Filter Contracts & Projects
+    const filteredContracts = (contracts || []).filter(c => {
+      if (!c) return false;
+      if (companyId && companyId !== "all" && c.companyId !== companyId) return false;
+      if (opType) {
+        if (opType === "SECURITY_GUARDING" && c.contractType !== "SECURITY_GUARDING") return false;
+        if (opType === "FACILITY_MANAGEMENT" && c.contractType !== "FACILITY_MANAGEMENT") return false;
+        if (opType === "WHITE_COLLAR") return false;
+      }
+      if (projectId && projectId !== "all" && c.projectId !== projectId) return false;
+      return true;
+    });
+
+    const filteredProjects = (projects || []).filter(p => {
+      if (!p) return false;
+      if (companyId && companyId !== "all" && p.companyId !== companyId) return false;
+      if (opType) {
+        if (opType === "SECURITY_GUARDING" && p.projectType !== "SECURITY_GUARDING") return false;
+        if (opType === "FACILITY_MANAGEMENT" && p.projectType !== "FACILITY_MANAGEMENT") return false;
+        if (opType === "WHITE_COLLAR") return false;
+      }
+      if (projectId && projectId !== "all" && p.id !== projectId) return false;
+      return true;
+    });
+
+    const activeContracts = filteredContracts.filter(c => c && (c.status === "ACTIVE" || c.statusCode === "ACTIVE"));
     const activeContractsCount = activeContracts.length;
-    const draftContractsCount = (contracts || []).filter(c => c && (c.status === "DRAFT" || c.statusCode === "DRAFT")).length;
-    const pendingContractsCount = (contracts || []).filter(c => c && (c.status === "PENDING_APPROVAL" || c.statusCode === "PENDING_APPROVAL")).length;
+    const draftContractsCount = filteredContracts.filter(c => c && (c.status === "DRAFT" || c.statusCode === "DRAFT")).length;
+    const pendingContractsCount = filteredContracts.filter(c => c && (c.status === "PENDING_APPROVAL" || c.statusCode === "PENDING_APPROVAL")).length;
     
     const expiringContractsCount = activeContracts.filter(c => {
       if (!c || !c.endDate) return false;
@@ -334,7 +424,12 @@ export async function GET(request: Request) {
       return diffDays > 0 && diffDays <= 30;
     }).length;
 
-    const activeSites = (projectSites || []).filter(s => s && (s.status === "ACTIVE" || s.isActive !== false));
+    const activeSites = (projectSites || []).filter(s => {
+      if (!s) return false;
+      if (s.status === "INACTIVE" || s.isActive === false) return false;
+      const proj = filteredProjects.find(p => p.id === s.projectId);
+      return !!proj;
+    });
 
     // safeSection wrapper to isolate section errors
     const errors: string[] = [];
@@ -350,9 +445,9 @@ export async function GET(request: Request) {
 
     const workforceOverview = safeSection("workforceOverview", defaultWorkforceOverview, () => {
       const overview = {
-        whiteCollar: getClusterStats(clusters.WHITE_COLLAR),
-        securityGuarding: getClusterStats(clusters.SECURITY_GUARDING),
-        facilityManagement: getClusterStats(clusters.FACILITY_MANAGEMENT),
+        whiteCollar: getClusterStats(activeEmployees.filter(e => e.operationType === "WHITE_COLLAR")),
+        securityGuarding: getClusterStats(activeEmployees.filter(e => e.operationType === "SECURITY_GUARDING")),
+        facilityManagement: getClusterStats(activeEmployees.filter(e => e.operationType === "FACILITY_MANAGEMENT")),
       };
       overview.securityGuarding.pendingDeployment = activeEmployees
         .filter(e => e.operationType === "SECURITY_GUARDING" && e.employeeCategory === "BLUE_COLLAR" && !deployedIds.has(e.id)).length;
@@ -371,25 +466,27 @@ export async function GET(request: Request) {
       openIncidents: 0,
       pendingApprovals: pendingLeavesCount + pendingContractsCount,
       activeContracts: activeContractsCount,
-      activeDeployments: todayDeployments.length
+      activeDeployments: periodDeployments.length
     }));
 
     const securitySummary = safeSection("securitySummary", defaultSecuritySummary, () => ({
-      activeContracts: (contracts || []).filter(c => c && (c.status === "ACTIVE" || c.statusCode === "ACTIVE") && c.contractType === "SECURITY_GUARDING").length,
+      activeContracts: filteredContracts.filter(c => c && (c.status === "ACTIVE" || c.statusCode === "ACTIVE") && c.contractType === "SECURITY_GUARDING").length,
       activeSites: activeSites.length,
       guardsDeployed: workforceOverview.securityGuarding.presentToday,
       vacantPosts: 0,
       patrolsToday: (siteInspections || []).filter(i => {
         if (!i) return false;
         const iDate = parseDateOnly(i.inspectionDate || i.createdAt);
-        return iDate ? iDate.getTime() === todayTime : false;
+        if (!iDate) return false;
+        const t = iDate.getTime();
+        return t >= startTime && t < endTime;
       }).length,
       openIncidents: 0,
       feedbackPending: 0
     }));
 
     const facilitySummary = safeSection("facilitySummary", defaultFacilitySummary, () => ({
-      activeProjects: (projects || []).filter(p => p && (p.status === "ACTIVE" || p.status === "Active") && p.projectType === "FACILITY_MANAGEMENT").length,
+      activeProjects: filteredProjects.filter(p => p && (p.status === "ACTIVE" || p.status === "Active") && p.projectType === "FACILITY_MANAGEMENT").length,
       staffDeployed: workforceOverview.facilityManagement.presentToday,
       openWorkReports: 0,
       feedbackPending: 0,
@@ -401,7 +498,7 @@ export async function GET(request: Request) {
       activeStaff: workforceOverview.whiteCollar.total,
       presentToday: workforceOverview.whiteCollar.presentToday,
       onLeave: workforceOverview.whiteCollar.onLeave,
-      lateToday: todayAttendance.filter(a => {
+      lateToday: filteredAttendance.filter(a => {
         const emp = activeEmployees.find(e => e.id === a.employeeId);
         return emp && emp.operationType === "WHITE_COLLAR" && a.status === "Late";
       }).length,
@@ -426,7 +523,7 @@ export async function GET(request: Request) {
     }));
 
     const shiftDeploymentSummary = safeSection("shiftDeploymentSummary", defaultShiftDeploymentSummary, () => ({
-      activeShiftsToday: todayDeployments.length,
+      activeShiftsToday: periodDeployments.length,
       deployedToday: staffDeployedCount,
       openGaps: 0,
       relieverAssignments: relieversDeployedCount,
@@ -438,7 +535,7 @@ export async function GET(request: Request) {
       draft: draftContractsCount,
       pendingApproval: pendingContractsCount,
       expiring30Days: expiringContractsCount,
-      activeProjects: (projects || []).length,
+      activeProjects: filteredProjects.length,
       pendingAddendums: (addendums || []).filter(a => a && a.status === "PENDING").length
     }));
 
@@ -446,16 +543,11 @@ export async function GET(request: Request) {
       leaveApprovals: pendingLeavesCount,
       attendanceCorrections: 0,
       overtime: 0,
-      deployments: (deployments || []).filter(d => d && (d.approvalStatus === "DRAFT" || d.approvalStatus === "SUBMITTED")).length,
+      deployments: periodDeployments.filter(d => d && (d.approvalStatus === "DRAFT" || d.approvalStatus === "SUBMITTED")).length,
       contracts: pendingContractsCount,
       addendums: (addendums || []).filter(a => a && (a.status === "PENDING" || a.status === "PENDING_APPROVAL")).length,
       clearances: 0
     }));
-
-    const thirtyDaysFromNow = new Date();
-    thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
-    const sixtyDaysFromNow = new Date();
-    sixtyDaysFromNow.setDate(sixtyDaysFromNow.getDate() + 60);
 
     const exceptionSummary = safeSection("exceptionSummary", defaultExceptionSummary, () => ({
       noDefaultLocation: activeEmployees.filter(e => !e.defaultLocationId).length,
@@ -481,7 +573,9 @@ export async function GET(request: Request) {
       auditActivityToday: (userActivityLogs || []).filter(log => {
         if (!log) return false;
         const logDate = parseDateOnly(log.timestamp || log.createdAt);
-        return logDate ? logDate.getTime() === todayTime : false;
+        if (!logDate) return false;
+        const t = logDate.getTime();
+        return t >= startTime && t < endTime;
       }).length,
       backupReady: "SUCCESS"
     }));
@@ -493,7 +587,7 @@ export async function GET(request: Request) {
         const loc = (locations || []).find((l: any) => l && (l.id === e.defaultLocationId || l.locationCode === e.defaultLocationId));
         const locName = loc ? (loc.locationName || (loc as any).name) : "Office HQ";
         
-        const att = todayAttendance.find(a => a && a.employeeId === e.id && !a.checkOut);
+        const att = filteredAttendance.find((a: any) => a && a.employeeId === e.id && !a.checkOut);
         if (att) {
           if (!locationCounts[locName]) {
             locationCounts[locName] = { name: locName, count: 0 };
@@ -521,10 +615,21 @@ export async function GET(request: Request) {
       lastUpdated: new Date().toISOString()
     };
 
+    const appliedFilters = {
+      companyId,
+      operationType,
+      period,
+      locationId,
+      projectId,
+      startDate: startDate.toISOString(),
+      endDate: endDate.toISOString()
+    };
+
     return NextResponse.json({
       success: true,
       degraded: errors.length > 0,
       errors,
+      appliedFilters,
       data: payload
     });
   } catch (error: any) {
