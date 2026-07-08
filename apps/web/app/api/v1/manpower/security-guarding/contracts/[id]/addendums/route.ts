@@ -43,6 +43,15 @@ export async function POST(request: Request, { params }: { params: { id: string 
     if (!payload.title || !payload.addendumType) {
       return NextResponse.json({ error: "Addendum Title and Type are required" }, { status: 400 });
     }
+
+    if (payload.lineItems && Array.isArray(payload.lineItems)) {
+      payload.lineItems = payload.lineItems.map((li: any) => ({
+        ...li,
+        changeType: li.changeType || li.action || "ADD",
+        itemName: li.itemName || li.label || ""
+      }));
+    }
+
     const addendum = await mockDb.createManpowerContractAddendum({
       ...payload,
       contractId: params.id

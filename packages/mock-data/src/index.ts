@@ -159,7 +159,20 @@ export function mapContractRecord(c: any) {
   const rr = c.relieverRequirements || [];
   const sr = c.shiftRequirements || [];
   const materials = c.materials || [];
-  const addendums = c.addendums || [];
+  const rawAddendums = c.addendums || [];
+  const addendums = rawAddendums.map((a: any) => ({
+    ...a,
+    addendumDate: a.addendumDate?.toISOString ? a.addendumDate.toISOString() : a.addendumDate,
+    effectiveFrom: a.effectiveFrom?.toISOString ? a.effectiveFrom.toISOString() : a.effectiveFrom,
+    effectiveTo: a.effectiveTo?.toISOString ? a.effectiveTo.toISOString() : a.effectiveTo,
+    createdAt: a.createdAt?.toISOString ? a.createdAt.toISOString() : a.createdAt,
+    updatedAt: a.updatedAt?.toISOString ? a.updatedAt.toISOString() : a.updatedAt,
+    lineItems: (a.lineItems || []).map((li: any) => ({
+      ...li,
+      createdAt: li.createdAt?.toISOString ? li.createdAt.toISOString() : li.createdAt,
+      updatedAt: li.updatedAt?.toISOString ? li.updatedAt.toISOString() : li.updatedAt
+    }))
+  }));
   const workflows = c.workflows || [];
   const documents = (c.documents || []).map((d: any) => {
     const days = calculateDaysToExpiry(d.expiryDate);
@@ -184,6 +197,7 @@ export function mapContractRecord(c: any) {
 
   return {
     ...c,
+    addendums,
     createdAt: c.createdAt?.toISOString ? c.createdAt.toISOString() : c.createdAt,
     updatedAt: c.updatedAt?.toISOString ? c.updatedAt.toISOString() : c.updatedAt,
     startDate: c.startDate?.toISOString ? c.startDate.toISOString() : c.startDate,
@@ -10204,6 +10218,42 @@ export const mockDb = {
     db.manpowerProjects.push(newRecord);
     writeDb(db);
     return newRecord;
+  },
+  updateManpowerProject: async (id: string, data: any): Promise<any> => {
+    if (isDbConnected()) {
+      const res = await prismaClient.manpowerProject.update({
+        where: { id },
+        data: {
+          name: data.name,
+          contractId: data.contractId,
+          isActive: data.isActive !== undefined ? data.isActive : undefined
+        }
+      });
+      return { ...res, createdAt: res.createdAt?.toISOString(), updatedAt: res.updatedAt?.toISOString() };
+    }
+    const db = readDb();
+    const index = (db.manpowerProjects || []).findIndex((p: any) => p.id === id);
+    if (index === -1) throw new Error("Project not found");
+    const updated = {
+      ...db.manpowerProjects[index],
+      ...data,
+      updatedAt: new Date().toISOString()
+    };
+    db.manpowerProjects[index] = updated;
+    writeDb(db);
+    return updated;
+  },
+  deleteManpowerProject: async (id: string): Promise<boolean> => {
+    if (isDbConnected()) {
+      await prismaClient.manpowerProject.delete({ where: { id } });
+      return true;
+    }
+    const db = readDb();
+    const index = (db.manpowerProjects || []).findIndex((p: any) => p.id === id);
+    if (index === -1) return false;
+    db.manpowerProjects.splice(index, 1);
+    writeDb(db);
+    return true;
   },
 
   // --- Manpower Sites CRUD ---

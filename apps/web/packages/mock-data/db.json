@@ -2324,5 +2324,20 @@
   "workflowTemplates": [],
   "workflowTemplateLevels": [],
   "workflowTemplateApprovers": [],
-  "workflowDelegations": []
+  "workflowDelegations": [],
+  "siteAllowances": [
+    {
+      "id": "sa-1783516107869",
+      "siteId": "892b0b42-ccd7-4396-824e-e2edc3f4a0c9",
+      "siteAllowanceEnabled": true,
+      "siteAllowanceAmount": 450,
+      "siteAllowanceFrequency": "DAILY",
+      "allowanceDescription": "Automated test site allowance of 450 QAR daily.",
+      "effectiveFrom": null,
+      "effectiveTo": null,
+      "isActive": true,
+      "createdAt": "2026-07-08T13:08:27.869Z",
+      "updatedAt": "2026-07-08T13:08:27.869Z"
+    }
+  ]
 }

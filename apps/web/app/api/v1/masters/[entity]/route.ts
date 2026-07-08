@@ -241,7 +241,11 @@ export async function GET(request: Request, { params }: { params: { entity: stri
 
     let whereClause = {};
     if (isActive !== null) {
-      whereClause = { isActive: isActive === "true" };
+      if (entity === "projects" || entity === "project-sites") {
+        whereClause = { status: isActive === "true" ? "ACTIVE" : "INACTIVE" };
+      } else {
+        whereClause = { isActive: isActive === "true" };
+      }
     }
 
     // Include relations based on entity

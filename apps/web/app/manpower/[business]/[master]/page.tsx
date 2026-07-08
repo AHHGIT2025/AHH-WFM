@@ -191,6 +191,7 @@ export default function ManpowerMasterPage() {
   const [selectedClientDetail, setSelectedClientDetail] = useState<any | null>(null);
   const [selectedContractDetail, setSelectedContractDetail] = useState<any | null>(null);
   const [addendumContract, setAddendumContract] = useState<any | null>(null);
+  const [addendumActiveTab, setAddendumActiveTab] = useState<string>("summary");
   const [addFormLineItems, setAddFormLineItems] = useState<any[]>([]);
   const [addendumForm, setAddendumForm] = useState<any>({
     title: "",
@@ -203,12 +204,47 @@ export default function ManpowerMasterPage() {
     lineItems: []
   });
 
+  const [projectAllocations, setProjectAllocations] = useState<any[]>([]);
+  const [projectRelieverAllocations, setProjectRelieverAllocations] = useState<any[]>([]);
+  const [siteAllocations, setSiteAllocations] = useState<any[]>([]);
+  const [siteRelieverAllocations, setSiteRelieverAllocations] = useState<any[]>([]);
+
+  const fetchProjectAllocationSummary = async (projId: string, contractId: string) => {
+    try {
+      const res = await fetch(`/api/v1/security/projects/${projId}/allocation-summary?contractId=${contractId}`);
+      if (res.ok) {
+        const json = await res.json();
+        setProjectAllocations(json.manpowerSummary || []);
+        setProjectRelieverAllocations(json.relieverSummary || []);
+      }
+    } catch (e) {
+      console.error("Failed to load project allocation summary", e);
+    }
+  };
+
+  const fetchSiteAllocationSummary = async (siteId: string, projId: string) => {
+    try {
+      const res = await fetch(`/api/v1/security/sites/${siteId}/allocation-summary?projectId=${projId}`);
+      if (res.ok) {
+        const json = await res.json();
+        setSiteAllocations(json.manpowerSummary || []);
+        setSiteRelieverAllocations(json.relieverSummary || []);
+      }
+    } catch (e) {
+      console.error("Failed to load site allocation summary", e);
+    }
+  };
+
   const startEdit = (item: any) => {
     setEditItem(item);
     setFormData({ ...item });
     setFormError("");
     if (master === "contracts") {
       setWorkflowLevels(item.workflowLevels || []);
+    } else if (master === "projects") {
+      fetchProjectAllocationSummary(item.id, item.contractId);
+    } else if (master === "sites") {
+      fetchSiteAllocationSummary(item.id, item.projectId);
     }
   };
 
@@ -458,14 +494,47 @@ export default function ManpowerMasterPage() {
     setFormError("");
 
     try {
+      let submitBody = { ...formData };
+      if (master === "projects") {
+        submitBody.allocations = projectAllocations.map(a => ({
+          requirementId: a.requirementId,
+          position: a.position,
+          allocatedQty: a.allocatedToThis
+        }));
+        submitBody.relieverAllocations = projectRelieverAllocations.map(a => ({
+          requirementId: a.requirementId,
+          position: a.position,
+          allocatedQty: a.allocatedToThis
+        }));
+      } else if (master === "sites") {
+        submitBody.allocations = [
+          ...siteAllocations.map(a => ({
+            position: a.position,
+            allocatedQty: a.allocatedToThis,
+            deploymentType: "PERMANENT",
+            relieverPoolType: "DEDICATED"
+          })),
+          ...siteRelieverAllocations.map(a => ({
+            position: a.position,
+            allocatedQty: a.allocatedToThis,
+            deploymentType: "RELIEVER",
+            relieverPoolType: a.relieverPoolType || "DEDICATED"
+          }))
+        ];
+      }
+
       const res = await fetch(apiBase, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData)
+        body: JSON.stringify(submitBody)
       });
       if (res.ok) {
         setShowAddModal(false);
         setFormData({});
+        setProjectAllocations([]);
+        setProjectRelieverAllocations([]);
+        setSiteAllocations([]);
+        setSiteRelieverAllocations([]);
         loadData();
       } else {
         const errJson = await res.json();
@@ -481,16 +550,49 @@ export default function ManpowerMasterPage() {
     setFormError("");
 
     try {
-            const url = master === "materials" ? `${apiBase}/${editItem.id}` : apiBase;
+      let submitBody = { id: editItem.id, ...formData };
+      if (master === "projects") {
+        submitBody.allocations = projectAllocations.map(a => ({
+          requirementId: a.requirementId,
+          position: a.position,
+          allocatedQty: a.allocatedToThis
+        }));
+        submitBody.relieverAllocations = projectRelieverAllocations.map(a => ({
+          requirementId: a.requirementId,
+          position: a.position,
+          allocatedQty: a.allocatedToThis
+        }));
+      } else if (master === "sites") {
+        submitBody.allocations = [
+          ...siteAllocations.map(a => ({
+            position: a.position,
+            allocatedQty: a.allocatedToThis,
+            deploymentType: "PERMANENT",
+            relieverPoolType: "DEDICATED"
+          })),
+          ...siteRelieverAllocations.map(a => ({
+            position: a.position,
+            allocatedQty: a.allocatedToThis,
+            deploymentType: "RELIEVER",
+            relieverPoolType: a.relieverPoolType || "DEDICATED"
+          }))
+        ];
+      }
+
+      const url = master === "materials" ? `${apiBase}/${editItem.id}` : apiBase;
       const method = master === "materials" ? "PUT" : "PATCH";
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: editItem.id, ...formData })
+        body: JSON.stringify(submitBody)
       });
       if (res.ok) {
         setEditItem(null);
         setFormData({});
+        setProjectAllocations([]);
+        setProjectRelieverAllocations([]);
+        setSiteAllocations([]);
+        setSiteRelieverAllocations([]);
         loadData();
       } else {
         const errJson = await res.json();
@@ -545,8 +647,20 @@ export default function ManpowerMasterPage() {
     setSelectedProjectId(projectId);
     try {
       const summaryRes = await fetch(`/api/v1/security/projects/${projectId}/deployment-summary`);
+      let summaryData: any = null;
       if (summaryRes.ok) {
-        setProjectSummary(await summaryRes.json());
+        summaryData = await summaryRes.json();
+      }
+      
+      const allocRes = await fetch(`/api/v1/security/projects/${projectId}/allocation-summary`);
+      if (allocRes.ok && summaryData) {
+        const allocData = await allocRes.json();
+        summaryData.manpowerSummary = allocData.manpowerSummary;
+        summaryData.relieverSummary = allocData.relieverSummary;
+      }
+
+      if (summaryData) {
+        setProjectSummary(summaryData);
       }
 
       const matRes = await fetch(`/api/v1/manpower/material-allocations?projectId=${projectId}`);
@@ -744,33 +858,37 @@ export default function ManpowerMasterPage() {
         </div>
 
         {/* Manpower Requirements Table */}
-        <div className="space-y-2">
+        <div className="space-y-2 animate-fade-in">
           <h4 className="text-xs font-bold text-primary flex items-center gap-1">
             <span className="material-symbols-outlined text-[16px]">groups</span>
-            Inherited Manpower Requirements
+            Manpower Requirements & Project Allocation Balances
           </h4>
           <div className="border border-outline-variant rounded-lg overflow-hidden bg-surface text-xs">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-surface-container-low border-b border-outline-variant text-[9px] uppercase text-on-surface-variant font-bold">
                   <th className="px-3 py-2">Position</th>
-                  <th className="px-3 py-2 text-center">Qty</th>
-                  <th className="px-3 py-2">Type</th>
-                  <th className="px-3 py-2">Remarks</th>
+                  <th className="px-3 py-2 text-center">Contract Req</th>
+                  <th className="px-3 py-2 text-center">Project Qty</th>
+                  <th className="px-3 py-2 text-center">Site Alloc</th>
+                  <th className="px-3 py-2 text-center">Avail Bal</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-outline-variant/60">
-                {manpowerRequirements.length === 0 ? (
+                {!projectSummary.manpowerSummary || projectSummary.manpowerSummary.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="p-4 text-center text-on-surface-variant italic">No manpower requirements specified in contract.</td>
+                    <td colSpan={5} className="p-4 text-center text-on-surface-variant italic">No manpower requirements specified.</td>
                   </tr>
                 ) : (
-                  manpowerRequirements.map((mr: any) => (
-                    <tr key={mr.id} className="hover:bg-surface-container-lowest">
-                      <td className="px-3 py-2 font-semibold text-on-surface">{mr.position}</td>
-                      <td className="px-3 py-2 text-center font-bold">{mr.quantity}</td>
-                      <td className="px-3 py-2 uppercase text-[10px] text-on-surface-variant font-semibold">{mr.deploymentType}</td>
-                      <td className="px-3 py-2 text-on-surface-variant italic">{mr.remarks || "—"}</td>
+                  projectSummary.manpowerSummary.map((alloc: any, idx: number) => (
+                    <tr key={idx} className="hover:bg-surface-container-lowest">
+                      <td className="px-3 py-2 font-semibold text-on-surface">{alloc.position}</td>
+                      <td className="px-3 py-2 text-center font-semibold text-on-surface-variant">{alloc.contractQty}</td>
+                      <td className="px-3 py-2 text-center font-bold text-primary">{alloc.allocatedToThis}</td>
+                      <td className="px-3 py-2 text-center font-semibold text-secondary">{alloc.allocatedToSites}</td>
+                      <td className={`px-3 py-2 text-center font-bold ${alloc.remainingForSites > 0 ? "text-status-success" : "text-on-surface-variant"}`}>
+                        {alloc.remainingForSites}
+                      </td>
                     </tr>
                   ))
                 )}
@@ -783,30 +901,34 @@ export default function ManpowerMasterPage() {
         <div className="space-y-2">
           <h4 className="text-xs font-bold text-primary flex items-center gap-1">
             <span className="material-symbols-outlined text-[16px]">shuffle</span>
-            Inherited Reliever Requirements
+            Reliever Requirements & Project Allocation Balances
           </h4>
           <div className="border border-outline-variant rounded-lg overflow-hidden bg-surface text-xs">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-surface-container-low border-b border-outline-variant text-[9px] uppercase text-on-surface-variant font-bold">
                   <th className="px-3 py-2">Position</th>
-                  <th className="px-3 py-2 text-center">Qty</th>
-                  <th className="px-3 py-2">Pref. Source</th>
-                  <th className="px-3 py-2">Remarks</th>
+                  <th className="px-3 py-2 text-center">Contract Req</th>
+                  <th className="px-3 py-2 text-center">Project Qty</th>
+                  <th className="px-3 py-2 text-center">Site Alloc</th>
+                  <th className="px-3 py-2 text-center">Avail Bal</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-outline-variant/60">
-                {relieverRequirements.length === 0 ? (
+                {!projectSummary.relieverSummary || projectSummary.relieverSummary.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="p-4 text-center text-on-surface-variant italic">No reliever requirements specified in contract.</td>
+                    <td colSpan={5} className="p-4 text-center text-on-surface-variant italic">No reliever requirements specified.</td>
                   </tr>
                 ) : (
-                  relieverRequirements.map((rr: any) => (
-                    <tr key={rr.id} className="hover:bg-surface-container-lowest">
-                      <td className="px-3 py-2 font-semibold text-on-surface">{rr.position}</td>
-                      <td className="px-3 py-2 text-center font-bold">{rr.quantity}</td>
-                      <td className="px-3 py-2 text-on-surface-variant">{rr.sourcePreference}</td>
-                      <td className="px-3 py-2 text-on-surface-variant italic">{rr.remarks || "—"}</td>
+                  projectSummary.relieverSummary.map((alloc: any, idx: number) => (
+                    <tr key={idx} className="hover:bg-surface-container-lowest">
+                      <td className="px-3 py-2 font-semibold text-on-surface">{alloc.position}</td>
+                      <td className="px-3 py-2 text-center font-semibold text-on-surface-variant">{alloc.contractQty}</td>
+                      <td className="px-3 py-2 text-center font-bold text-primary">{alloc.allocatedToThis}</td>
+                      <td className="px-3 py-2 text-center font-semibold text-secondary">{alloc.allocatedToSites}</td>
+                      <td className={`px-3 py-2 text-center font-bold ${alloc.remainingForSites > 0 ? "text-status-success" : "text-on-surface-variant"}`}>
+                        {alloc.remainingForSites}
+                      </td>
                     </tr>
                   ))
                 )}
@@ -968,8 +1090,9 @@ export default function ManpowerMasterPage() {
 
     // Toggle Site Active Status
     const handleToggleStatus = async () => {
-      const isSuperOrAdmin = session?.user && (session.user.role === "ADMIN" || session.user.role === "SUPER_ADMIN");
-      const hasPerm = hasPermission(session?.user, "manpower.admin.full_access") || hasPermission(session?.user, "manpower.security.manage");
+      const user = session?.user as any;
+      const isSuperOrAdmin = user && (user.role === "ADMIN" || user.role === "SUPER_ADMIN");
+      const hasPerm = hasPermission(user, "manpower.admin.full_access") || hasPermission(user, "manpower.security.manage");
 
       if (!isSuperOrAdmin && !hasPerm) {
         alert("You do not have permission to enable/disable sites.");
@@ -1821,34 +1944,43 @@ export default function ManpowerMasterPage() {
     setFormData({ ...formData, shiftRequirements: list });
   };
 
-  const addAddendumLine = () => {
+  const addAddendumLine = (itemType: string = "MANPOWER") => {
     const list = addFormLineItems || [];
-    setAddFormLineItems([...list, {
-      id: `new-ali-${Date.now()}`,
-      itemType: "MANPOWER",
+    const listCopy = [...list];
+    listCopy.push({
+      id: `new-ali-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      itemType,
       action: "ADD",
       label: "",
       quantity: 1,
       unitPrice: 0,
       billingPeriodCount: 1,
       lineTotal: 0
-    }]);
+    });
+    setAddFormLineItems(listCopy);
+    
+    const totalImpact = listCopy.reduce((sum, li) => sum + (li.lineTotal || 0), 0);
+    const formattedImpact = (totalImpact >= 0 ? "+" : "") + `QAR ${totalImpact.toFixed(2)}`;
+    setAddendumForm({
+      ...addendumForm,
+      lineItems: listCopy,
+      commercialImpact: formattedImpact
+    });
   };
 
-  const updateAddendumLine = (index: number, field: string, value: any) => {
-    const list = [...addFormLineItems];
-    const item = { ...list[index], [field]: value };
-    
-    // Recalculate line total
-    const qty = parseInt(item.quantity, 10) || 0;
-    const price = parseFloat(item.unitPrice) || 0;
-    const count = parseInt(item.billingPeriodCount, 10) || 1;
-    const absVal = qty * price * count;
-    item.lineTotal = item.action === "REMOVE" ? -absVal : absVal;
+  const updateAddendumLineById = (id: string, field: string, value: any) => {
+    const list = addFormLineItems.map(item => {
+      if (item.id !== id) return item;
+      const updatedItem = { ...item, [field]: value };
+      
+      const qty = parseInt(updatedItem.quantity, 10) || 0;
+      const price = parseFloat(updatedItem.unitPrice) || 0;
+      const count = parseInt(updatedItem.billingPeriodCount, 10) || 1;
+      const absVal = qty * price * count;
+      updatedItem.lineTotal = updatedItem.action === "REMOVE" ? -absVal : absVal;
+      return updatedItem;
+    });
 
-    list[index] = item;
-    
-    // Calculate total net impact and format commercialImpact string automatically!
     const totalImpact = list.reduce((sum, li) => sum + (li.lineTotal || 0), 0);
     const formattedImpact = (totalImpact >= 0 ? "+" : "") + `QAR ${totalImpact.toFixed(2)}`;
 
@@ -1860,9 +1992,8 @@ export default function ManpowerMasterPage() {
     });
   };
 
-  const deleteAddendumLine = (index: number) => {
-    const list = [...addFormLineItems];
-    list.splice(index, 1);
+  const deleteAddendumLineById = (id: string) => {
+    const list = addFormLineItems.filter(item => item.id !== id);
     
     const totalImpact = list.reduce((sum, li) => sum + (li.lineTotal || 0), 0);
     const formattedImpact = (totalImpact >= 0 ? "+" : "") + `QAR ${totalImpact.toFixed(2)}`;
@@ -1975,8 +2106,8 @@ export default function ManpowerMasterPage() {
   };
 
   const addAddendumLineItem = addAddendumLine;
-  const updateAddendumLineItem = updateAddendumLine;
-  const removeAddendumLineItem = deleteAddendumLine;
+  const updateAddendumLineItem = updateAddendumLineById;
+  const removeAddendumLineItem = deleteAddendumLineById;
 
   const handleSaveContract = async (status: "DRAFT" | "ACTIVE") => {
     setFormError("");
@@ -5424,6 +5555,7 @@ export default function ManpowerMasterPage() {
                         <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Project Name</th>
                         <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Contract</th>
                         <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Status</th>
+                        {canManage && <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Actions</th>}
                       </>
                     )}
                     {master === "sites" && (
@@ -5738,6 +5870,41 @@ export default function ManpowerMasterPage() {
                               {item.isActive ? "Active" : "Inactive"}
                             </span>
                           </td>
+                          {canManage && (
+                            <td className="px-4 py-3 text-xs text-on-surface" onClick={(e) => e.stopPropagation()}>
+                              <button
+                                onClick={() => startEdit(item)}
+                                className="text-primary hover:underline text-[11px] font-bold mr-3 animate-fade-in"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                onClick={async () => {
+                                  if (confirm(`Are you sure you want to delete project ${item.name}?`)) {
+                                    try {
+                                      const res = await fetch(`/api/v1/manpower/${business}/projects/${item.id}`, { method: "DELETE" });
+                                      const resJson = await res.json();
+                                      if (res.ok) {
+                                        if (resJson.deactivated) {
+                                          alert(resJson.message || "Project has historical records and was deactivated instead of deleted.");
+                                        } else {
+                                          alert("Project deleted successfully");
+                                        }
+                                        loadData();
+                                      } else {
+                                        alert(resJson.error || "Failed to delete project");
+                                      }
+                                    } catch (e) {
+                                      alert("Failed to connect to server");
+                                    }
+                                  }
+                                }}
+                                className="text-status-error hover:underline text-[11px] font-bold animate-fade-in"
+                              >
+                                Delete
+                              </button>
+                            </td>
+                          )}
                         </>
                       )}
                       {master === "sites" && (
@@ -5981,7 +6148,7 @@ export default function ManpowerMasterPage() {
       {showAddModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className={`bg-surface rounded-xl border border-outline-variant shadow-lg overflow-hidden transition-all ${
-            (master === "clients" || master === "contracts") ? "max-w-5xl w-full" : "max-w-md w-full"
+            (master === "clients" || master === "contracts") ? "max-w-5xl w-full" : (master === "projects" || master === "sites") ? "max-w-2xl w-full" : "max-w-md w-full"
           }`}>
             <div className="px-6 py-4 border-b border-outline-variant flex justify-between items-center bg-surface-container-low">
               <h3 className="text-sm font-bold text-primary">Add New {masterLabel.replace(/s$/, "")}</h3>
@@ -5991,7 +6158,7 @@ export default function ManpowerMasterPage() {
             </div>
             <form onSubmit={handleAddSubmit}>
               <div className={`p-6 space-y-4 overflow-y-auto ${
-                (master === "clients" || master === "contracts") ? "max-h-[80vh]" : "max-h-[60vh]"
+                (master === "clients" || master === "contracts") ? "max-h-[80vh]" : (master === "projects" || master === "sites") ? "max-h-[75vh]" : "max-h-[60vh]"
               }`}>
                 {formError && (
                   <div className="p-3 bg-status-error/10 text-status-error text-xs rounded-lg font-bold">
@@ -6006,141 +6173,327 @@ export default function ManpowerMasterPage() {
                   renderSecurityContractForm()
                 )}
 
-                {master === "projects" && (
-                  <>
-                    <div>
-                      <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Contract</label>
-                      <select
-                        required
-                        className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary"
-                        value={formData.contractId || ""}
-                        onChange={(e) => setFormData({ ...formData, contractId: e.target.value })}
-                      >
-                        <option value="">Select Contract...</option>
-                        {contracts.map(c => <option key={c.id} value={c.id}>{c.title} ({c.contractNumber})</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Project Code</label>
-                      <input
-                        type="text"
-                        required
-                        className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary"
-                        value={formData.code || ""}
-                        onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Project Name</label>
-                      <input
-                        type="text"
-                        required
-                        className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary"
-                        value={formData.name || ""}
-                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      />
-                    </div>
-                  </>
-                )}
+                 {master === "projects" && (
+                   <>
+                     <div>
+                       <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Contract</label>
+                       <select
+                         required
+                         className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary"
+                         value={formData.contractId || ""}
+                         onChange={(e) => {
+                           setFormData({ ...formData, contractId: e.target.value });
+                           if (e.target.value) {
+                             fetchProjectAllocationSummary("new", e.target.value);
+                           } else {
+                             setProjectAllocations([]);
+                             setProjectRelieverAllocations([]);
+                           }
+                         }}
+                       >
+                         <option value="">Select Contract...</option>
+                         {contracts.map(c => <option key={c.id} value={c.id}>{c.title} ({c.contractNumber})</option>)}
+                       </select>
+                     </div>
+                     <div>
+                       <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Project Code</label>
+                       <input
+                         type="text"
+                         required
+                         className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary"
+                         value={formData.code || ""}
+                         onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
+                       />
+                     </div>
+                     <div>
+                       <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Project Name</label>
+                       <input
+                         type="text"
+                         required
+                         className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary"
+                         value={formData.name || ""}
+                         onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                       />
+                     </div>
 
-                {master === "sites" && (
-                  <>
-                    <div>
-                      <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Site Code</label>
-                      <input
-                        type="text"
-                        disabled
-                        className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-xs text-on-surface-variant focus:outline-none"
-                        value={formData.code || ""}
-                        placeholder="Auto-generated (SSITE-XXXX)"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Project</label>
-                      <select
-                        required
-                        className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
-                        value={formData.projectId || ""}
-                        onChange={(e) => setFormData({ ...formData, projectId: e.target.value })}
-                      >
-                        <option value="">Select Project...</option>
-                        {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Site Name</label>
-                      <input
-                        type="text"
-                        required
-                        className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
-                        value={formData.name || ""}
-                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      />
-                    </div>
-                    <div className="grid grid-cols-3 gap-2">
-                      <div>
-                        <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Latitude</label>
-                        <input
-                          type="number"
-                          step="0.000001"
-                          className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
-                          value={formData.lat || ""}
-                          onChange={(e) => setFormData({ ...formData, lat: e.target.value })}
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Longitude</label>
-                        <input
-                          type="number"
-                          step="0.000001"
-                          className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
-                          value={formData.lng || ""}
-                          onChange={(e) => setFormData({ ...formData, lng: e.target.value })}
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Radius (m)</label>
-                        <input
-                          type="number"
-                          className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
-                          value={formData.radiusMeters || "100"}
-                          onChange={(e) => setFormData({ ...formData, radiusMeters: e.target.value })}
-                        />
-                      </div>
-                    </div>
-                    <div className="space-y-3">
-                      <label className="flex items-center gap-2 text-xs text-on-surface cursor-pointer mt-2 font-bold">
-                        <input
-                          type="checkbox"
-                          checked={!!formData.gatePassRequired}
-                          onChange={(e) => setFormData({ ...formData, gatePassRequired: e.target.checked })}
-                          className="rounded border-outline-variant text-primary focus:ring-primary"
-                        />
-                        <span>Gate Pass Required for Entry/Exit</span>
-                      </label>
-                      {formData.gatePassRequired && (
-                        <div>
-                          <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Gate Pass Validation Mode</label>
-                          <select
-                            className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
-                            value={formData.gatePassValidationMode || "WARNING"}
-                            onChange={(e) => setFormData({ ...formData, gatePassValidationMode: e.target.value })}
-                          >
-                            <option value="WARNING">WARNING (Log warning but allow punch)</option>
-                            <option value="STRICT">STRICT (Block punch without valid pass)</option>
-                          </select>
-                        </div>
-                      )}
-                      <div>
-                        <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Remarks</label>
-                        <textarea
-                          className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
-                          rows={2}
-                          value={formData.remarks || ""}
-                          onChange={(e) => setFormData({ ...formData, remarks: e.target.value })}
-                          placeholder="Additional worksite details..."
-                        />
-                      </div>
+                     {formData.contractId && (
+                       <div className="mt-4 p-4 bg-surface-container border border-outline-variant rounded-xl space-y-3 animate-fade-in">
+                         <span className="block text-[10px] font-bold text-primary uppercase tracking-wider font-mono">Contract Manpower Requirements & Project Allocation</span>
+                         {projectAllocations.length === 0 && projectRelieverAllocations.length === 0 ? (
+                           <p className="text-[11px] text-on-surface-variant italic">This contract has no manpower requirements defined.</p>
+                         ) : (
+                           <div className="space-y-4">
+                             {projectAllocations.length > 0 && (
+                               <div className="space-y-2">
+                                 <span className="block text-[9px] font-bold text-on-surface-variant uppercase tracking-wider">Permanent Guard Headcounts</span>
+                                 <div className="border border-outline-variant rounded-lg overflow-hidden divide-y divide-outline-variant">
+                                   {projectAllocations.map((alloc, idx) => (
+                                     <div key={alloc.requirementId || idx} className="grid grid-cols-12 gap-2 p-2.5 bg-surface-container-low items-center text-[11px]">
+                                       <div className="col-span-5 font-bold text-on-surface">{alloc.position}</div>
+                                       <div className="col-span-4 text-on-surface-variant">
+                                         Contract: <span className="font-semibold">{alloc.contractQty}</span> | Avail: <span className="font-bold text-primary">{alloc.remainingAvailable}</span>
+                                       </div>
+                                       <div className="col-span-3 flex items-center gap-1.5 justify-end">
+                                         <label className="text-[10px] text-on-surface-variant font-medium">Allocate:</label>
+                                         <input
+                                           type="number"
+                                           min="0"
+                                           max={alloc.remainingAvailable}
+                                           value={alloc.allocatedToThis}
+                                           onChange={(e) => {
+                                             const val = Math.max(0, parseInt(e.target.value, 10) || 0);
+                                             const updated = [...projectAllocations];
+                                             updated[idx].allocatedToThis = Math.min(val, alloc.remainingAvailable);
+                                             setProjectAllocations(updated);
+                                           }}
+                                           className="w-14 bg-surface-container-lowest border border-outline-variant rounded px-1.5 py-0.5 text-center font-bold text-on-surface focus:outline-none"
+                                         />
+                                       </div>
+                                     </div>
+                                   ))}
+                                 </div>
+                               </div>
+                             )}
+
+                             {projectRelieverAllocations.length > 0 && (
+                               <div className="space-y-2">
+                                 <span className="block text-[9px] font-bold text-on-surface-variant uppercase tracking-wider">Reliever Guard Headcounts</span>
+                                 <div className="border border-outline-variant rounded-lg overflow-hidden divide-y divide-outline-variant">
+                                   {projectRelieverAllocations.map((alloc, idx) => (
+                                     <div key={alloc.requirementId || idx} className="grid grid-cols-12 gap-2 p-2.5 bg-surface-container-low items-center text-[11px]">
+                                       <div className="col-span-5 font-bold text-on-surface">{alloc.position}</div>
+                                       <div className="col-span-4 text-on-surface-variant">
+                                         Contract: <span className="font-semibold">{alloc.contractQty}</span> | Avail: <span className="font-bold text-primary">{alloc.remainingAvailable}</span>
+                                       </div>
+                                       <div className="col-span-3 flex items-center gap-1.5 justify-end">
+                                         <label className="text-[10px] text-on-surface-variant font-medium">Allocate:</label>
+                                         <input
+                                           type="number"
+                                           min="0"
+                                           max={alloc.remainingAvailable}
+                                           value={alloc.allocatedToThis}
+                                           onChange={(e) => {
+                                             const val = Math.max(0, parseInt(e.target.value, 10) || 0);
+                                             const updated = [...projectRelieverAllocations];
+                                             updated[idx].allocatedToThis = Math.min(val, alloc.remainingAvailable);
+                                             setProjectRelieverAllocations(updated);
+                                           }}
+                                           className="w-14 bg-surface-container-lowest border border-outline-variant rounded px-1.5 py-0.5 text-center font-bold text-on-surface focus:outline-none"
+                                         />
+                                       </div>
+                                     </div>
+                                   ))}
+                                 </div>
+                               </div>
+                             )}
+                           </div>
+                         )}
+                       </div>
+                     )}
+                   </>
+                 )}
+
+                 {master === "sites" && (
+                   <>
+                     <div>
+                       <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Site Code</label>
+                       <input
+                         type="text"
+                         disabled
+                         className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-xs text-on-surface-variant focus:outline-none"
+                         value={formData.code || ""}
+                         placeholder="Auto-generated (SSITE-XXXX)"
+                       />
+                     </div>
+                     <div>
+                       <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Project</label>
+                       <select
+                         required
+                         className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                         value={formData.projectId || ""}
+                         onChange={(e) => {
+                           setFormData({ ...formData, projectId: e.target.value });
+                           if (e.target.value) {
+                             fetchSiteAllocationSummary("new", e.target.value);
+                           } else {
+                             setSiteAllocations([]);
+                             setSiteRelieverAllocations([]);
+                           }
+                         }}
+                       >
+                         <option value="">Select Project...</option>
+                         {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                       </select>
+                     </div>
+                     <div>
+                       <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Site Name</label>
+                       <input
+                         type="text"
+                         required
+                         className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                         value={formData.name || ""}
+                         onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                       />
+                     </div>
+                     <div className="grid grid-cols-3 gap-2">
+                       <div>
+                         <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Latitude</label>
+                         <input
+                           type="number"
+                           step="0.000001"
+                           className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                           value={formData.lat || ""}
+                           onChange={(e) => setFormData({ ...formData, lat: e.target.value })}
+                         />
+                       </div>
+                       <div>
+                         <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Longitude</label>
+                         <input
+                           type="number"
+                           step="0.000001"
+                           className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                           value={formData.lng || ""}
+                           onChange={(e) => setFormData({ ...formData, lng: e.target.value })}
+                         />
+                       </div>
+                       <div>
+                         <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Radius (m)</label>
+                         <input
+                           type="number"
+                           className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                           value={formData.radiusMeters || "100"}
+                           onChange={(e) => setFormData({ ...formData, radiusMeters: e.target.value })}
+                         />
+                       </div>
+                     </div>
+                     <div className="space-y-3">
+                       <label className="flex items-center gap-2 text-xs text-on-surface cursor-pointer mt-2 font-bold">
+                         <input
+                           type="checkbox"
+                           checked={!!formData.gatePassRequired}
+                           onChange={(e) => setFormData({ ...formData, gatePassRequired: e.target.checked })}
+                           className="rounded border-outline-variant text-primary focus:ring-primary"
+                         />
+                         <span>Gate Pass Required for Entry/Exit</span>
+                       </label>
+                       {formData.gatePassRequired && (
+                         <div>
+                           <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Gate Pass Validation Mode</label>
+                           <select
+                             className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                             value={formData.gatePassValidationMode || "WARNING"}
+                             onChange={(e) => setFormData({ ...formData, gatePassValidationMode: e.target.value })}
+                           >
+                             <option value="WARNING">WARNING (Log warning but allow punch)</option>
+                             <option value="STRICT">STRICT (Block punch without valid pass)</option>
+                           </select>
+                         </div>
+                       )}
+                       <div>
+                         <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Remarks</label>
+                         <textarea
+                           className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                           rows={2}
+                           value={formData.remarks || ""}
+                           onChange={(e) => setFormData({ ...formData, remarks: e.target.value })}
+                           placeholder="Additional worksite details..."
+                         />
+                       </div>
+
+                       {formData.projectId && (
+                         <div className="mt-4 p-4 bg-surface-container border border-outline-variant rounded-xl space-y-3 animate-fade-in">
+                           <span className="block text-[10px] font-bold text-primary uppercase tracking-wider font-mono">Project Manpower & Site Allocation</span>
+                           {siteAllocations.length === 0 && siteRelieverAllocations.length === 0 ? (
+                             <p className="text-[11px] text-on-surface-variant italic">This project has no manpower allocations defined.</p>
+                           ) : (
+                             <div className="space-y-4">
+                               {siteAllocations.length > 0 && (
+                                 <div className="space-y-2">
+                                   <span className="block text-[9px] font-bold text-on-surface-variant uppercase tracking-wider">Permanent Guard Headcounts</span>
+                                   <div className="border border-outline-variant rounded-lg overflow-hidden divide-y divide-outline-variant">
+                                     {siteAllocations.map((alloc, idx) => (
+                                       <div key={alloc.position || idx} className="grid grid-cols-12 gap-2 p-2.5 bg-surface-container-low items-center text-[11px]">
+                                         <div className="col-span-5 font-bold text-on-surface">{alloc.position}</div>
+                                         <div className="col-span-4 text-on-surface-variant">
+                                           Project Alloc: <span className="font-semibold">{alloc.projectQty}</span> | Avail: <span className="font-bold text-primary">{alloc.remainingAvailable}</span>
+                                         </div>
+                                         <div className="col-span-3 flex items-center gap-1.5 justify-end">
+                                           <label className="text-[10px] text-on-surface-variant font-medium">Allocate:</label>
+                                           <input
+                                             type="number"
+                                             min="0"
+                                             max={alloc.remainingAvailable}
+                                             value={alloc.allocatedToThis}
+                                             onChange={(e) => {
+                                               const val = Math.max(0, parseInt(e.target.value, 10) || 0);
+                                               const updated = [...siteAllocations];
+                                               updated[idx].allocatedToThis = Math.min(val, alloc.remainingAvailable);
+                                               setSiteAllocations(updated);
+                                             }}
+                                             className="w-14 bg-surface-container-lowest border border-outline-variant rounded px-1.5 py-0.5 text-center font-bold text-on-surface focus:outline-none"
+                                           />
+                                         </div>
+                                       </div>
+                                     ))}
+                                   </div>
+                                 </div>
+                               )}
+
+                               {siteRelieverAllocations.length > 0 && (
+                                 <div className="space-y-2">
+                                   <span className="block text-[9px] font-bold text-on-surface-variant uppercase tracking-wider">Reliever Guard Headcounts</span>
+                                   <div className="border border-outline-variant rounded-lg overflow-hidden divide-y divide-outline-variant animate-fade-in">
+                                     {siteRelieverAllocations.map((alloc, idx) => (
+                                       <div key={alloc.position || idx} className="flex flex-col gap-2 p-2.5 bg-surface-container-low text-[11px]">
+                                         <div className="flex justify-between items-center">
+                                           <div className="font-bold text-on-surface">{alloc.position}</div>
+                                           <div className="text-on-surface-variant">
+                                             Project Alloc: <span className="font-semibold">{alloc.projectQty}</span> | Avail: <span className="font-bold text-primary">{alloc.remainingAvailable}</span>
+                                           </div>
+                                         </div>
+                                         <div className="flex justify-between items-center gap-4 mt-1">
+                                           <div className="flex items-center gap-2">
+                                             <span className="text-[10px] text-on-surface-variant">Type:</span>
+                                             <select
+                                               value={alloc.relieverPoolType || "DEDICATED"}
+                                               onChange={(e) => {
+                                                 const updated = [...siteRelieverAllocations];
+                                                 updated[idx].relieverPoolType = e.target.value;
+                                                 setSiteRelieverAllocations(updated);
+                                               }}
+                                               className="bg-surface-container-lowest border border-outline-variant rounded px-2 py-0.5 text-[10px] font-bold text-on-surface focus:outline-none"
+                                             >
+                                               <option value="DEDICATED">Dedicated to Site</option>
+                                               <option value="SHARED">Shared (Reliever Pool)</option>
+                                             </select>
+                                           </div>
+                                           <div className="flex items-center gap-1.5">
+                                             <label className="text-[10px] text-on-surface-variant font-medium">Allocate:</label>
+                                             <input
+                                               type="number"
+                                               min="0"
+                                               max={alloc.remainingAvailable}
+                                               value={alloc.allocatedToThis}
+                                               onChange={(e) => {
+                                                 const val = Math.max(0, parseInt(e.target.value, 10) || 0);
+                                                 const updated = [...siteRelieverAllocations];
+                                                 updated[idx].allocatedToThis = Math.min(val, alloc.remainingAvailable);
+                                                 setSiteRelieverAllocations(updated);
+                                               }}
+                                               className="w-14 bg-surface-container-lowest border border-outline-variant rounded px-1.5 py-0.5 text-center font-bold text-on-surface focus:outline-none"
+                                             />
+                                           </div>
+                                         </div>
+                                       </div>
+                                     ))}
+                                   </div>
+                                 </div>
+                               )}
+                             </div>
+                           )}
+                         </div>
+                       )}
+                     </div>
                       <label className="flex items-center gap-2 text-xs text-on-surface cursor-pointer font-bold">
                         <input
                           type="checkbox"
@@ -6150,7 +6503,6 @@ export default function ManpowerMasterPage() {
                         />
                         <span>Active Worksite</span>
                       </label>
-                    </div>
                   </>
                 )}
 
@@ -6662,7 +7014,7 @@ export default function ManpowerMasterPage() {
         ) : (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
             <div className={`bg-surface rounded-xl border border-outline-variant shadow-lg overflow-hidden transition-all ${
-              master === "clients" ? "max-w-5xl w-full" : "max-w-md w-full"
+              master === "clients" ? "max-w-5xl w-full" : (master === "projects" || master === "sites") ? "max-w-2xl w-full" : "max-w-md w-full"
             }`}>
               <div className="px-6 py-4 border-b border-outline-variant flex justify-between items-center bg-surface-container-low">
                 <h3 className="text-sm font-bold text-primary">Edit {masterLabel.replace(/s$/, "")}</h3>
@@ -6672,7 +7024,7 @@ export default function ManpowerMasterPage() {
               </div>
               <form onSubmit={handleEditSubmit}>
                 <div className={`p-6 space-y-4 overflow-y-auto ${
-                  master === "clients" ? "max-h-[80vh]" : "max-h-[60vh]"
+                  master === "clients" ? "max-h-[80vh]" : (master === "projects" || master === "sites") ? "max-h-[75vh]" : "max-h-[60vh]"
                 }`}>
                   {formError && (
                     <div className="p-3 bg-status-error/10 text-status-error text-xs rounded-lg font-bold">
@@ -6741,141 +7093,331 @@ export default function ManpowerMasterPage() {
                   </>
                 )}
 
-                {master === "projects" && (
-                  <>
-                    <div>
-                      <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Contract</label>
-                      <select
-                        required
-                        className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary"
-                        value={formData.contractId || ""}
-                        onChange={(e) => setFormData({ ...formData, contractId: e.target.value })}
-                      >
-                        <option value="">Select Contract...</option>
-                        {contracts.map(c => <option key={c.id} value={c.id}>{c.title} ({c.contractNumber})</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Project Code</label>
-                      <input
-                        type="text"
-                        required
-                        disabled
-                        className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-xs text-on-surface-variant focus:outline-none"
-                        value={formData.code || ""}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Project Name</label>
-                      <input
-                        type="text"
-                        required
-                        className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary"
-                        value={formData.name || ""}
-                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      />
-                    </div>
-                  </>
-                )}
+                 {master === "projects" && (
+                   <>
+                     <div>
+                       <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Contract</label>
+                       <select
+                         required
+                         className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary"
+                         value={formData.contractId || ""}
+                         onChange={(e) => {
+                           setFormData({ ...formData, contractId: e.target.value });
+                           if (e.target.value) {
+                             fetchProjectAllocationSummary(editItem.id, e.target.value);
+                           } else {
+                             setProjectAllocations([]);
+                             setProjectRelieverAllocations([]);
+                           }
+                         }}
+                       >
+                         <option value="">Select Contract...</option>
+                         {contracts.map(c => <option key={c.id} value={c.id}>{c.title} ({c.contractNumber})</option>)}
+                       </select>
+                     </div>
+                     <div>
+                       <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Project Code</label>
+                       <input
+                         type="text"
+                         required
+                         disabled
+                         className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-xs text-on-surface-variant focus:outline-none"
+                         value={formData.code || ""}
+                       />
+                     </div>
+                     <div>
+                       <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Project Name</label>
+                       <input
+                         type="text"
+                         required
+                         className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary"
+                         value={formData.name || ""}
+                         onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                       />
+                     </div>
 
-                {master === "sites" && (
-                  <>
-                    <div>
-                      <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Site Code</label>
-                      <input
-                        type="text"
-                        disabled
-                        className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-xs text-on-surface-variant focus:outline-none"
-                        value={formData.code || ""}
-                        placeholder="Auto-generated (SSITE-XXXX)"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Project</label>
-                      <select
-                        required
-                        className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
-                        value={formData.projectId || ""}
-                        onChange={(e) => setFormData({ ...formData, projectId: e.target.value })}
-                      >
-                        <option value="">Select Project...</option>
-                        {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Site Name</label>
-                      <input
-                        type="text"
-                        required
-                        className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
-                        value={formData.name || ""}
-                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      />
-                    </div>
-                    <div className="grid grid-cols-3 gap-2">
-                      <div>
-                        <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Latitude</label>
-                        <input
-                          type="number"
-                          step="0.000001"
-                          className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
-                          value={formData.lat || ""}
-                          onChange={(e) => setFormData({ ...formData, lat: e.target.value })}
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Longitude</label>
-                        <input
-                          type="number"
-                          step="0.000001"
-                          className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
-                          value={formData.lng || ""}
-                          onChange={(e) => setFormData({ ...formData, lng: e.target.value })}
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Radius (m)</label>
-                        <input
-                          type="number"
-                          className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
-                          value={formData.radiusMeters || "100"}
-                          onChange={(e) => setFormData({ ...formData, radiusMeters: e.target.value })}
-                        />
-                      </div>
-                    </div>
-                    <div className="space-y-3">
-                      <label className="flex items-center gap-2 text-xs text-on-surface cursor-pointer mt-2 font-bold">
-                        <input
-                          type="checkbox"
-                          checked={!!formData.gatePassRequired}
-                          onChange={(e) => setFormData({ ...formData, gatePassRequired: e.target.checked })}
-                          className="rounded border-outline-variant text-primary focus:ring-primary"
-                        />
-                        <span>Gate Pass Required for Entry/Exit</span>
-                      </label>
-                      {formData.gatePassRequired && (
-                        <div>
-                          <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Gate Pass Validation Mode</label>
-                          <select
-                            className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
-                            value={formData.gatePassValidationMode || "WARNING"}
-                            onChange={(e) => setFormData({ ...formData, gatePassValidationMode: e.target.value })}
-                          >
-                            <option value="WARNING">WARNING (Log warning but allow punch)</option>
-                            <option value="STRICT">STRICT (Block punch without valid pass)</option>
-                          </select>
-                        </div>
-                      )}
-                      <div>
-                        <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Remarks</label>
-                        <textarea
-                          className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
-                          rows={2}
-                          value={formData.remarks || ""}
-                          onChange={(e) => setFormData({ ...formData, remarks: e.target.value })}
-                          placeholder="Additional worksite details..."
-                        />
-                      </div>
+                     {formData.contractId && (
+                       <div className="mt-4 p-4 bg-surface-container border border-outline-variant rounded-xl space-y-3 animate-fade-in">
+                         <span className="block text-[10px] font-bold text-primary uppercase tracking-wider font-mono">Contract Manpower Requirements & Project Allocation</span>
+                         {projectAllocations.length === 0 && projectRelieverAllocations.length === 0 ? (
+                           <p className="text-[11px] text-on-surface-variant italic">This contract has no manpower requirements defined.</p>
+                         ) : (
+                           <div className="space-y-4">
+                             {projectAllocations.length > 0 && (
+                               <div className="space-y-2">
+                                 <span className="block text-[9px] font-bold text-on-surface-variant uppercase tracking-wider">Permanent Guard Headcounts</span>
+                                 <div className="border border-outline-variant rounded-lg overflow-hidden divide-y divide-outline-variant">
+                                   {projectAllocations.map((alloc, idx) => (
+                                     <div key={alloc.requirementId || idx} className="grid grid-cols-12 gap-2 p-2.5 bg-surface-container-low items-center text-[11px]">
+                                       <div className="col-span-5 font-bold text-on-surface">{alloc.position}</div>
+                                       <div className="col-span-4 text-on-surface-variant">
+                                         Contract: <span className="font-semibold">{alloc.contractQty}</span> | Avail: <span className="font-bold text-primary">{alloc.remainingAvailable + alloc.allocatedToThis}</span>
+                                       </div>
+                                       <div className="col-span-3 flex items-center gap-1.5 justify-end">
+                                         <label className="text-[10px] text-on-surface-variant font-medium">Allocate:</label>
+                                         <input
+                                           type="number"
+                                           min="0"
+                                           max={alloc.remainingAvailable + alloc.allocatedToThis}
+                                           value={alloc.allocatedToThis}
+                                           onChange={(e) => {
+                                             const val = Math.max(0, parseInt(e.target.value, 10) || 0);
+                                             const updated = [...projectAllocations];
+                                             const limit = alloc.remainingAvailable + alloc.allocatedToThis;
+                                             updated[idx].allocatedToThis = Math.min(val, limit);
+                                             setProjectAllocations(updated);
+                                           }}
+                                           className="w-14 bg-surface-container-lowest border border-outline-variant rounded px-1.5 py-0.5 text-center font-bold text-on-surface focus:outline-none"
+                                         />
+                                       </div>
+                                     </div>
+                                   ))}
+                                 </div>
+                               </div>
+                             )}
+
+                             {projectRelieverAllocations.length > 0 && (
+                               <div className="space-y-2">
+                                 <span className="block text-[9px] font-bold text-on-surface-variant uppercase tracking-wider">Reliever Guard Headcounts</span>
+                                 <div className="border border-outline-variant rounded-lg overflow-hidden divide-y divide-outline-variant">
+                                   {projectRelieverAllocations.map((alloc, idx) => (
+                                     <div key={alloc.requirementId || idx} className="grid grid-cols-12 gap-2 p-2.5 bg-surface-container-low items-center text-[11px]">
+                                       <div className="col-span-5 font-bold text-on-surface">{alloc.position}</div>
+                                       <div className="col-span-4 text-on-surface-variant">
+                                         Contract: <span className="font-semibold">{alloc.contractQty}</span> | Avail: <span className="font-bold text-primary">{alloc.remainingAvailable + alloc.allocatedToThis}</span>
+                                       </div>
+                                       <div className="col-span-3 flex items-center gap-1.5 justify-end">
+                                         <label className="text-[10px] text-on-surface-variant font-medium">Allocate:</label>
+                                         <input
+                                           type="number"
+                                           min="0"
+                                           max={alloc.remainingAvailable + alloc.allocatedToThis}
+                                           value={alloc.allocatedToThis}
+                                           onChange={(e) => {
+                                             const val = Math.max(0, parseInt(e.target.value, 10) || 0);
+                                             const updated = [...projectRelieverAllocations];
+                                             const limit = alloc.remainingAvailable + alloc.allocatedToThis;
+                                             updated[idx].allocatedToThis = Math.min(val, limit);
+                                             setProjectRelieverAllocations(updated);
+                                           }}
+                                           className="w-14 bg-surface-container-lowest border border-outline-variant rounded px-1.5 py-0.5 text-center font-bold text-on-surface focus:outline-none"
+                                         />
+                                       </div>
+                                     </div>
+                                   ))}
+                                 </div>
+                               </div>
+                             )}
+                           </div>
+                         )}
+                       </div>
+                     )}
+                   </>
+                 )}
+
+                 {master === "sites" && (
+                   <>
+                     <div>
+                       <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Site Code</label>
+                       <input
+                         type="text"
+                         disabled
+                         className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-xs text-on-surface-variant focus:outline-none"
+                         value={formData.code || ""}
+                         placeholder="Auto-generated (SSITE-XXXX)"
+                       />
+                     </div>
+                     <div>
+                       <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Project</label>
+                       <select
+                         required
+                         className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                         value={formData.projectId || ""}
+                         onChange={(e) => {
+                           setFormData({ ...formData, projectId: e.target.value });
+                           if (e.target.value) {
+                             fetchSiteAllocationSummary(editItem.id, e.target.value);
+                           } else {
+                             setSiteAllocations([]);
+                             setSiteRelieverAllocations([]);
+                           }
+                         }}
+                       >
+                         <option value="">Select Project...</option>
+                         {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                       </select>
+                     </div>
+                     <div>
+                       <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Site Name</label>
+                       <input
+                         type="text"
+                         required
+                         className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                         value={formData.name || ""}
+                         onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                       />
+                     </div>
+                     <div className="grid grid-cols-3 gap-2">
+                       <div>
+                         <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Latitude</label>
+                         <input
+                           type="number"
+                           step="0.000001"
+                           className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                           value={formData.lat || ""}
+                           onChange={(e) => setFormData({ ...formData, lat: e.target.value })}
+                         />
+                       </div>
+                       <div>
+                         <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Longitude</label>
+                         <input
+                           type="number"
+                           step="0.000001"
+                           className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                           value={formData.lng || ""}
+                           onChange={(e) => setFormData({ ...formData, lng: e.target.value })}
+                         />
+                       </div>
+                       <div>
+                         <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Radius (m)</label>
+                         <input
+                           type="number"
+                           className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                           value={formData.radiusMeters || "100"}
+                           onChange={(e) => setFormData({ ...formData, radiusMeters: e.target.value })}
+                         />
+                       </div>
+                     </div>
+                     <div className="space-y-3">
+                       <label className="flex items-center gap-2 text-xs text-on-surface cursor-pointer mt-2 font-bold">
+                         <input
+                           type="checkbox"
+                           checked={!!formData.gatePassRequired}
+                           onChange={(e) => setFormData({ ...formData, gatePassRequired: e.target.checked })}
+                           className="rounded border-outline-variant text-primary focus:ring-primary"
+                         />
+                         <span>Gate Pass Required for Entry/Exit</span>
+                       </label>
+                       {formData.gatePassRequired && (
+                         <div>
+                           <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Gate Pass Validation Mode</label>
+                           <select
+                             className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                             value={formData.gatePassValidationMode || "WARNING"}
+                             onChange={(e) => setFormData({ ...formData, gatePassValidationMode: e.target.value })}
+                           >
+                             <option value="WARNING">WARNING (Log warning but allow punch)</option>
+                             <option value="STRICT">STRICT (Block punch without valid pass)</option>
+                           </select>
+                         </div>
+                       )}
+                       <div>
+                         <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Remarks</label>
+                         <textarea
+                           className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                           rows={2}
+                           value={formData.remarks || ""}
+                           onChange={(e) => setFormData({ ...formData, remarks: e.target.value })}
+                           placeholder="Additional worksite details..."
+                         />
+                       </div>
+
+                       {formData.projectId && (
+                         <div className="mt-4 p-4 bg-surface-container border border-outline-variant rounded-xl space-y-3 animate-fade-in">
+                           <span className="block text-[10px] font-bold text-primary uppercase tracking-wider font-mono">Project Manpower & Site Allocation</span>
+                           {siteAllocations.length === 0 && siteRelieverAllocations.length === 0 ? (
+                             <p className="text-[11px] text-on-surface-variant italic">This project has no manpower allocations defined.</p>
+                           ) : (
+                             <div className="space-y-4">
+                               {siteAllocations.length > 0 && (
+                                 <div className="space-y-2">
+                                   <span className="block text-[9px] font-bold text-on-surface-variant uppercase tracking-wider">Permanent Guard Headcounts</span>
+                                   <div className="border border-outline-variant rounded-lg overflow-hidden divide-y divide-outline-variant">
+                                     {siteAllocations.map((alloc, idx) => (
+                                       <div key={alloc.position || idx} className="grid grid-cols-12 gap-2 p-2.5 bg-surface-container-low items-center text-[11px]">
+                                         <div className="col-span-5 font-bold text-on-surface">{alloc.position}</div>
+                                         <div className="col-span-4 text-on-surface-variant">
+                                           Project Alloc: <span className="font-semibold">{alloc.projectQty}</span> | Avail: <span className="font-bold text-primary">{alloc.remainingAvailable + alloc.allocatedToThis}</span>
+                                         </div>
+                                         <div className="col-span-3 flex items-center gap-1.5 justify-end">
+                                           <label className="text-[10px] text-on-surface-variant font-medium">Allocate:</label>
+                                           <input
+                                             type="number"
+                                             min="0"
+                                             max={alloc.remainingAvailable + alloc.allocatedToThis}
+                                             value={alloc.allocatedToThis}
+                                             onChange={(e) => {
+                                               const val = Math.max(0, parseInt(e.target.value, 10) || 0);
+                                               const updated = [...siteAllocations];
+                                               const limit = alloc.remainingAvailable + alloc.allocatedToThis;
+                                               updated[idx].allocatedToThis = Math.min(val, limit);
+                                               setSiteAllocations(updated);
+                                             }}
+                                             className="w-14 bg-surface-container-lowest border border-outline-variant rounded px-1.5 py-0.5 text-center font-bold text-on-surface focus:outline-none"
+                                           />
+                                         </div>
+                                       </div>
+                                     ))}
+                                   </div>
+                                 </div>
+                               )}
+
+                               {siteRelieverAllocations.length > 0 && (
+                                 <div className="space-y-2">
+                                   <span className="block text-[9px] font-bold text-on-surface-variant uppercase tracking-wider">Reliever Guard Headcounts</span>
+                                   <div className="border border-outline-variant rounded-lg overflow-hidden divide-y divide-outline-variant animate-fade-in">
+                                     {siteRelieverAllocations.map((alloc, idx) => (
+                                       <div key={alloc.position || idx} className="flex flex-col gap-2 p-2.5 bg-surface-container-low text-[11px]">
+                                         <div className="flex justify-between items-center">
+                                           <div className="font-bold text-on-surface">{alloc.position}</div>
+                                           <div className="text-on-surface-variant">
+                                             Project Alloc: <span className="font-semibold">{alloc.projectQty}</span> | Avail: <span className="font-bold text-primary">{alloc.remainingAvailable + alloc.allocatedToThis}</span>
+                                           </div>
+                                         </div>
+                                         <div className="flex justify-between items-center gap-4 mt-1">
+                                           <div className="flex items-center gap-2">
+                                             <span className="text-[10px] text-on-surface-variant">Type:</span>
+                                             <select
+                                               value={alloc.relieverPoolType || "DEDICATED"}
+                                               onChange={(e) => {
+                                                 const updated = [...siteRelieverAllocations];
+                                                 updated[idx].relieverPoolType = e.target.value;
+                                                 setSiteRelieverAllocations(updated);
+                                               }}
+                                               className="bg-surface-container-lowest border border-outline-variant rounded px-2 py-0.5 text-[10px] font-bold text-on-surface focus:outline-none"
+                                             >
+                                               <option value="DEDICATED">Dedicated to Site</option>
+                                               <option value="SHARED">Shared (Reliever Pool)</option>
+                                             </select>
+                                           </div>
+                                           <div className="flex items-center gap-1.5">
+                                             <label className="text-[10px] text-on-surface-variant font-medium">Allocate:</label>
+                                             <input
+                                               type="number"
+                                               min="0"
+                                               max={alloc.remainingAvailable + alloc.allocatedToThis}
+                                               value={alloc.allocatedToThis}
+                                               onChange={(e) => {
+                                                 const val = Math.max(0, parseInt(e.target.value, 10) || 0);
+                                                 const updated = [...siteRelieverAllocations];
+                                                 const limit = alloc.remainingAvailable + alloc.allocatedToThis;
+                                                 updated[idx].allocatedToThis = Math.min(val, limit);
+                                                 setSiteRelieverAllocations(updated);
+                                               }}
+                                               className="w-14 bg-surface-container-lowest border border-outline-variant rounded px-1.5 py-0.5 text-center font-bold text-on-surface focus:outline-none"
+                                             />
+                                           </div>
+                                         </div>
+                                       </div>
+                                     ))}
+                                   </div>
+                                 </div>
+                               )}
+                             </div>
+                           )}
+                         </div>
+                       )}
+                     </div>
                       <label className="flex items-center gap-2 text-xs text-on-surface cursor-pointer font-bold">
                         <input
                           type="checkbox"
@@ -6885,7 +7427,6 @@ export default function ManpowerMasterPage() {
                         />
                         <span>Active Worksite</span>
                       </label>
-                    </div>
                   </>
                 )}
 
@@ -7713,13 +8254,14 @@ export default function ManpowerMasterPage() {
           </div>
         </div>
       )}
-
-      {/* Contract Addendum Modal */}
       {addendumContract && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-surface rounded-xl border border-outline-variant shadow-lg max-w-lg w-full overflow-hidden text-on-surface">
+          <div className="bg-surface rounded-xl border border-outline-variant shadow-lg max-w-7xl w-full h-[90vh] flex flex-col overflow-hidden text-on-surface">
             <div className="px-6 py-4 border-b border-outline-variant flex justify-between items-center bg-surface-container-low">
-              <h3 className="text-sm font-bold text-primary">Add Contract Addendum</h3>
+              <div>
+                <h3 className="text-sm font-bold text-primary">Add Contract Addendum</h3>
+                <p className="text-[10px] text-on-surface-variant mt-0.5">Creating addendum for active contract: <span className="font-bold text-primary-container-on">{addendumContract.title} ({addendumContract.contractNumber})</span></p>
+              </div>
               <button onClick={() => setAddendumContract(null)} className="text-on-surface-variant hover:text-primary">
                 <span className="material-symbols-outlined text-[20px]">close</span>
               </button>
@@ -7733,11 +8275,13 @@ export default function ManpowerMasterPage() {
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({
                     ...addendumForm,
+                    lineItems: addFormLineItems,
                     contractNumber: addendumContract.contractNumber
                   })
                 });
                 if (res.ok) {
                   setAddendumContract(null);
+                  setAddFormLineItems([]);
                   setAddendumForm({
                     title: "",
                     addendumType: "Manpower Increase",
@@ -7749,212 +8293,595 @@ export default function ManpowerMasterPage() {
                   });
                   loadData();
                 } else {
-                  alert("Failed to save addendum");
+                  const errJson = await res.json();
+                  alert(errJson.error || "Failed to save addendum");
                 }
               } catch (err) {
                 alert("Network error");
               }
-            }}>
-              <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto text-xs">
-                <div>
-                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Contract</label>
-                  <input
-                    type="text"
-                    disabled
-                    className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-on-surface-variant"
-                    value={`${addendumContract.title} (${addendumContract.contractNumber})`}
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Addendum Title *</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Revised Rate and Guard Count"
-                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 focus:outline-none focus:border-primary text-on-surface"
-                    value={addendumForm.title || ""}
-                    onChange={(e) => setAddendumForm({ ...addendumForm, title: e.target.value })}
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Addendum Date *</label>
-                    <input
-                      type="date"
-                      required
-                      className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 focus:outline-none focus:border-primary text-on-surface"
-                      value={addendumForm.addendumDate || ""}
-                      onChange={(e) => setAddendumForm({ ...addendumForm, addendumDate: e.target.value })}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Effective From *</label>
-                    <input
-                      type="date"
-                      required
-                      className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 focus:outline-none focus:border-primary text-on-surface"
-                      value={addendumForm.effectiveFrom || ""}
-                      onChange={(e) => setAddendumForm({ ...addendumForm, effectiveFrom: e.target.value })}
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Addendum Type *</label>
-                  <select
-                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 focus:outline-none focus:border-primary text-on-surface"
-                    value={addendumForm.addendumType || "Manpower Increase"}
-                    onChange={(e) => setAddendumForm({ ...addendumForm, addendumType: e.target.value })}
+            }} className="flex-1 flex flex-col min-h-0">
+              <div className="flex border-b border-outline-variant gap-2 px-6 py-2 bg-surface-container-low">
+                {[
+                  { id: "summary", label: "Summary", icon: "info" },
+                  { id: "references", label: "References", icon: "description" },
+                  { id: "manpower", label: "Manpower", icon: "groups" },
+                  { id: "reliever", label: "Reliever", icon: "shuffle" },
+                  { id: "shift", label: "Shift", icon: "schedule" },
+                  { id: "commercial", label: "Commercial Notes", icon: "payments" }
+                ].map(tab => (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setAddendumActiveTab(tab.id)}
+                    className={`flex items-center gap-1.5 px-4 py-2 text-xs font-bold border-b-2 transition-all rounded-lg ${
+                      addendumActiveTab === tab.id
+                        ? "border-primary text-primary bg-primary/5"
+                        : "border-transparent text-on-surface-variant hover:text-primary hover:bg-surface-container-low"
+                    }`}
                   >
-                    <option value="Manpower Increase">Manpower Increase</option>
-                    <option value="Manpower Reduction">Manpower Reduction</option>
-                    <option value="Rate Change">Rate Change</option>
-                    <option value="Shift Change">Shift Change</option>
-                    <option value="Site Addition">Site Addition</option>
-                    <option value="Site Removal">Site Removal</option>
-                    <option value="Reliever Change">Reliever Change</option>
-                    <option value="Contract Extension">Contract Extension</option>
-                    <option value="Contract Termination">Contract Termination</option>
-                    <option value="Other">Other</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Description / Reason</label>
-                  <textarea
-                    placeholder="Provide details..."
-                    rows={3}
-                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 focus:outline-none focus:border-primary text-on-surface resize-none"
-                    value={addendumForm.description || ""}
-                    onChange={(e) => setAddendumForm({ ...addendumForm, description: e.target.value })}
-                  />
-                  <div>
-                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Commercial Impact / Revised Rates</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. +QAR 5,000 / month"
-                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 focus:outline-none focus:border-primary text-on-surface"
-                    value={addendumForm.commercialImpact || ""}
-                    onChange={(e) => setAddendumForm({ ...addendumForm, commercialImpact: e.target.value })}
-                  />
-                </div>
+                    <span className="material-symbols-outlined text-[16px]">{tab.icon}</span>
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
 
-                {/* Addendum Line Items Grid */}
-                <div className="bg-surface-container border border-outline-variant p-3.5 rounded-xl space-y-3">
-                  <div className="flex justify-between items-center border-b border-outline-variant/60 pb-1.5">
-                    <span className="block text-[10px] font-bold text-primary uppercase tracking-wider">Addendum Commercial Impact Lines</span>
-                    <button
-                      type="button"
-                      onClick={addAddendumLine}
-                      className="px-2 py-0.5 bg-primary text-white text-[9px] font-bold rounded flex items-center gap-0.5 hover:bg-primary-container transition-colors"
-                    >
-                      <span className="material-symbols-outlined text-[10px]">add</span> Add Line
-                    </button>
+              <div className="flex-1 p-6 overflow-y-auto min-h-0 text-xs">
+                {/* Summary Tab */}
+                {addendumActiveTab === "summary" && (
+                  <div className="space-y-4 max-w-xl mx-auto bg-surface-container-lowest p-6 rounded-xl border border-outline-variant/40 shadow-sm">
+                    <h4 className="text-xs font-bold text-primary flex items-center gap-1.5 border-b border-outline-variant pb-2">
+                      <span className="material-symbols-outlined text-[18px]">info</span>
+                      General Addendum Information
+                    </h4>
+                    <div>
+                      <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Addendum Title *</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. Revised Rate and Guard Count"
+                        className="w-full bg-surface border border-outline-variant rounded-lg px-3 py-2 focus:outline-none focus:border-primary text-on-surface text-xs"
+                        value={addendumForm.title || ""}
+                        onChange={(e) => setAddendumForm({ ...addendumForm, title: e.target.value })}
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Addendum Date *</label>
+                        <input
+                          type="date"
+                          required
+                          className="w-full bg-surface border border-outline-variant rounded-lg px-3 py-2 focus:outline-none focus:border-primary text-on-surface text-xs"
+                          value={addendumForm.addendumDate || ""}
+                          onChange={(e) => setAddendumForm({ ...addendumForm, addendumDate: e.target.value })}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Effective From *</label>
+                        <input
+                          type="date"
+                          required
+                          className="w-full bg-surface border border-outline-variant rounded-lg px-3 py-2 focus:outline-none focus:border-primary text-on-surface text-xs"
+                          value={addendumForm.effectiveFrom || ""}
+                          onChange={(e) => setAddendumForm({ ...addendumForm, effectiveFrom: e.target.value })}
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Addendum Type *</label>
+                      <select
+                        className="w-full bg-surface border border-outline-variant rounded-lg px-3 py-2 focus:outline-none focus:border-primary text-on-surface text-xs"
+                        value={addendumForm.addendumType || "Manpower Increase"}
+                        onChange={(e) => setAddendumForm({ ...addendumForm, addendumType: e.target.value })}
+                      >
+                        <option value="Manpower Increase">Manpower Increase</option>
+                        <option value="Manpower Reduction">Manpower Reduction</option>
+                        <option value="Rate Change">Rate Change</option>
+                        <option value="Shift Change">Shift Change</option>
+                        <option value="Site Addition">Site Addition</option>
+                        <option value="Site Removal">Site Removal</option>
+                        <option value="Reliever Change">Reliever Change</option>
+                        <option value="Contract Extension">Contract Extension</option>
+                        <option value="Contract Termination">Contract Termination</option>
+                        <option value="Other">Other</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Description / Reason</label>
+                      <textarea
+                        placeholder="Provide details..."
+                        rows={4}
+                        className="w-full bg-surface border border-outline-variant rounded-lg px-3 py-2 focus:outline-none focus:border-primary text-on-surface resize-none text-xs"
+                        value={addendumForm.description || ""}
+                        onChange={(e) => setAddendumForm({ ...addendumForm, description: e.target.value })}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Status</label>
+                      <select
+                        className="w-full bg-surface border border-outline-variant rounded-lg px-3 py-2 focus:outline-none focus:border-primary text-on-surface text-xs"
+                        value={addendumForm.status || "DRAFT"}
+                        onChange={(e) => setAddendumForm({ ...addendumForm, status: e.target.value })}
+                      >
+                        <option value="DRAFT">Draft</option>
+                        <option value="APPROVED">Approved</option>
+                        <option value="ACTIVE">Active</option>
+                        <option value="CANCELLED">Cancelled</option>
+                      </select>
+                    </div>
                   </div>
-                  {addFormLineItems.length === 0 ? (
-                    <p className="text-[10px] text-on-surface-variant italic py-1">No impact lines added yet (standard/flat commercial impact).</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {addFormLineItems.map((row: any, idx: number) => (
-                        <div key={row.id || idx} className="grid grid-cols-12 gap-1.5 items-center bg-surface-container-low p-2 rounded-lg border border-outline-variant/30 text-on-surface">
-                          <div className="col-span-2">
-                            <label className="block text-[8px] font-bold text-on-surface-variant uppercase mb-0.5">Type</label>
-                            <select
-                              value={row.itemType || "MANPOWER"}
-                              onChange={(e) => updateAddendumLine(idx, "itemType", e.target.value)}
-                              className="w-full bg-surface-container-lowest border border-outline-variant rounded px-1 py-0.5 text-[10px] focus:outline-none text-on-surface"
-                            >
-                              <option value="MANPOWER">Manpower</option>
-                              <option value="MATERIAL">Material</option>
-                            </select>
-                          </div>
-                          <div className="col-span-2">
-                            <label className="block text-[8px] font-bold text-on-surface-variant uppercase mb-0.5">Action</label>
-                            <select
-                              value={row.action || "ADD"}
-                              onChange={(e) => updateAddendumLine(idx, "action", e.target.value)}
-                              className="w-full bg-surface-container-lowest border border-outline-variant rounded px-1 py-0.5 text-[10px] focus:outline-none text-on-surface"
-                            >
-                              <option value="ADD">Add</option>
-                              <option value="REMOVE">Remove</option>
-                              <option value="UPDATE">Update</option>
-                            </select>
-                          </div>
-                          <div className="col-span-3">
-                            <label className="block text-[8px] font-bold text-on-surface-variant uppercase mb-0.5">Item Label *</label>
-                            <input
-                              type="text"
-                              required
-                              placeholder="e.g. Guard Rate"
-                              value={row.label || ""}
-                              onChange={(e) => updateAddendumLine(idx, "label", e.target.value)}
-                              className="w-full bg-surface-container-lowest border border-outline-variant rounded px-1 py-0.5 text-[10px] focus:outline-none text-on-surface"
-                            />
-                          </div>
-                          <div className="col-span-1">
-                            <label className="block text-[8px] font-bold text-on-surface-variant uppercase mb-0.5">Qty</label>
-                            <input
-                              type="number"
-                              required
-                              min="1"
-                              value={row.quantity || 1}
-                              onChange={(e) => updateAddendumLine(idx, "quantity", parseInt(e.target.value, 10))}
-                              className="w-full bg-surface-container-lowest border border-outline-variant rounded px-0.5 py-0.5 text-[10px] focus:outline-none text-center text-on-surface"
-                            />
-                          </div>
-                          <div className="col-span-2">
-                            <label className="block text-[8px] font-bold text-on-surface-variant uppercase mb-0.5">Price</label>
-                            <input
-                              type="number"
-                              required
-                              min="0"
-                              step="0.01"
-                              value={row.unitPrice || 0}
-                              onChange={(e) => updateAddendumLine(idx, "unitPrice", parseFloat(e.target.value))}
-                              className="w-full bg-surface-container-lowest border border-outline-variant rounded px-0.5 py-0.5 text-[10px] focus:outline-none text-right text-on-surface"
-                            />
-                          </div>
-                          <div className="col-span-1 text-right font-bold text-[9px] text-on-surface pt-2 pr-1">
-                            {(row.lineTotal || 0).toFixed(0)}
-                          </div>
-                          <div className="col-span-1 text-right pt-2">
-                            <button
-                              type="button"
-                              onClick={() => deleteAddendumLine(idx)}
-                              className="text-status-error hover:bg-status-error/10 p-0.5 rounded"
-                            >
-                              <span className="material-symbols-outlined text-[14px]">delete</span>
-                            </button>
+                )}
+
+                {/* References Tab */}
+                {addendumActiveTab === "references" && (
+                  <div className="space-y-6 max-w-4xl mx-auto">
+                    <div className="bg-surface-container-lowest p-5 rounded-xl border border-outline-variant/60">
+                      <span className="block text-xs font-bold text-primary uppercase mb-3 tracking-wider font-mono">Linked Contract Reference</span>
+                      <div className="grid grid-cols-2 gap-4 text-xs">
+                        <div>
+                          <span className="text-on-surface-variant font-bold">Contract Title:</span>
+                          <div className="font-semibold text-on-surface mt-0.5 p-2 bg-surface rounded border border-outline-variant/35">{addendumContract.title}</div>
+                        </div>
+                        <div>
+                          <span className="text-on-surface-variant font-bold">Contract Number:</span>
+                          <div className="font-semibold text-on-surface mt-0.5 p-2 bg-surface rounded border border-outline-variant/35">{addendumContract.contractNumber}</div>
+                        </div>
+                        <div>
+                          <span className="text-on-surface-variant font-bold">Client:</span>
+                          <div className="font-semibold text-on-surface mt-0.5 p-2 bg-surface rounded border border-outline-variant/35">{addendumContract.client?.name || addendumContract.clientId}</div>
+                        </div>
+                        <div>
+                          <span className="text-on-surface-variant font-bold">Contract Period:</span>
+                          <div className="font-semibold text-on-surface mt-0.5 p-2 bg-surface rounded border border-outline-variant/35">
+                            {new Date(addendumContract.startDate).toLocaleDateString()} to {new Date(addendumContract.endDate).toLocaleDateString()}
                           </div>
                         </div>
-                      ))}
+                      </div>
                     </div>
-                  )}
-                </div>                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Status</label>
-                  <select
-                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 focus:outline-none focus:border-primary text-on-surface"
-                    value={addendumForm.status || "DRAFT"}
-                    onChange={(e) => setAddendumForm({ ...addendumForm, status: e.target.value })}
-                  >
-                    <option value="DRAFT">Draft</option>
-                    <option value="APPROVED">Approved</option>
-                    <option value="ACTIVE">Active</option>
-                    <option value="CANCELLED">Cancelled</option>
-                  </select>
-                </div>
+
+                    {/* Inherited Contract Requirements */}
+                    <div className="grid grid-cols-2 gap-4">
+                      {/* Contract Manpower Reqs */}
+                      <div className="bg-surface-container-lowest p-4 rounded-xl border border-outline-variant/60">
+                        <span className="block text-[10px] font-bold text-primary uppercase mb-2 tracking-wider font-mono">Contract Manpower Requirements</span>
+                        <div className="border border-outline-variant rounded-lg overflow-hidden bg-surface text-[11px]">
+                          <table className="w-full text-left border-collapse">
+                            <thead>
+                              <tr className="bg-surface-container-low border-b border-outline-variant text-[9px] uppercase font-bold text-on-surface-variant">
+                                <th className="px-2.5 py-1.5">Position</th>
+                                <th className="px-2.5 py-1.5 text-center">Contract Qty</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-outline-variant/50">
+                              {!(addendumContract.manpowerRequirements || []).length ? (
+                                <tr><td colSpan={2} className="p-3 text-center italic text-on-surface-variant">None</td></tr>
+                              ) : (
+                                (addendumContract.manpowerRequirements || []).map((mr: any, idx: number) => (
+                                  <tr key={idx}>
+                                    <td className="px-2.5 py-1.5 font-semibold text-on-surface">{mr.position || mr.designation}</td>
+                                    <td className="px-2.5 py-1.5 text-center font-bold text-primary">{mr.quantity}</td>
+                                  </tr>
+                                ))
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+
+                      {/* Contract Reliever Reqs */}
+                      <div className="bg-surface-container-lowest p-4 rounded-xl border border-outline-variant/60">
+                        <span className="block text-[10px] font-bold text-primary uppercase mb-2 tracking-wider font-mono">Contract Reliever Requirements</span>
+                        <div className="border border-outline-variant rounded-lg overflow-hidden bg-surface text-[11px]">
+                          <table className="w-full text-left border-collapse">
+                            <thead>
+                              <tr className="bg-surface-container-low border-b border-outline-variant text-[9px] uppercase font-bold text-on-surface-variant">
+                                <th className="px-2.5 py-1.5">Position</th>
+                                <th className="px-2.5 py-1.5 text-center">Contract Qty</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-outline-variant/50">
+                              {!(addendumContract.relieverRequirements || []).length ? (
+                                <tr><td colSpan={2} className="p-3 text-center italic text-on-surface-variant">None</td></tr>
+                              ) : (
+                                (addendumContract.relieverRequirements || []).map((rr: any, idx: number) => (
+                                  <tr key={idx}>
+                                    <td className="px-2.5 py-1.5 font-semibold text-on-surface">{rr.position || rr.designation}</td>
+                                    <td className="px-2.5 py-1.5 text-center font-bold text-primary">{rr.quantity}</td>
+                                  </tr>
+                                ))
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Manpower Tab */}
+                {addendumActiveTab === "manpower" && (
+                  <div className="space-y-4 max-w-4xl mx-auto">
+                    <div className="flex justify-between items-center border-b border-outline-variant/60 pb-2">
+                      <div>
+                        <h4 className="text-xs font-bold text-primary">Manpower Changes</h4>
+                        <p className="text-[10px] text-on-surface-variant">Add, update, or remove contract manpower requirements.</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => addAddendumLine("MANPOWER")}
+                        className="px-3 py-1.5 bg-primary text-white text-[10px] font-bold rounded-lg flex items-center gap-1 hover:bg-primary-container transition-colors"
+                      >
+                        <span className="material-symbols-outlined text-[14px]">add</span> Add Manpower Line
+                      </button>
+                    </div>
+
+                    <div className="space-y-2.5">
+                      {addFormLineItems.filter(li => li.itemType === "MANPOWER").length === 0 ? (
+                        <div className="text-center py-8 bg-surface-container-low border border-outline-variant/40 rounded-xl text-on-surface-variant italic">
+                          No manpower changes added in this addendum yet. Click 'Add Manpower Line' above to log changes.
+                        </div>
+                      ) : (
+                        addFormLineItems.filter(li => li.itemType === "MANPOWER").map((row: any) => (
+                          <div key={row.id} className="grid grid-cols-12 gap-3 items-center bg-surface-container-lowest p-3 rounded-xl border border-outline-variant/60 text-on-surface">
+                            <div className="col-span-2">
+                              <label className="block text-[9px] font-bold text-on-surface-variant uppercase mb-0.5">Action</label>
+                              <select
+                                value={row.action || "ADD"}
+                                onChange={(e) => updateAddendumLineById(row.id, "action", e.target.value)}
+                                className="w-full bg-surface border border-outline-variant rounded-lg px-2 py-1 text-[11px] focus:outline-none text-on-surface font-semibold"
+                              >
+                                <option value="ADD">Add</option>
+                                <option value="REMOVE">Remove</option>
+                                <option value="UPDATE">Update</option>
+                              </select>
+                            </div>
+                            <div className="col-span-4">
+                              <label className="block text-[9px] font-bold text-on-surface-variant uppercase mb-0.5">Position / Designation Label *</label>
+                              <input
+                                type="text"
+                                required
+                                placeholder="e.g. Security Guard, Supervisor"
+                                value={row.label || ""}
+                                onChange={(e) => updateAddendumLineById(row.id, "label", e.target.value)}
+                                className="w-full bg-surface border border-outline-variant rounded-lg px-2.5 py-1 text-[11px] focus:outline-none text-on-surface font-semibold"
+                              />
+                            </div>
+                            <div className="col-span-2">
+                              <label className="block text-[9px] font-bold text-on-surface-variant uppercase mb-0.5 text-center">Qty</label>
+                              <input
+                                type="number"
+                                required
+                                min="1"
+                                value={row.quantity || 1}
+                                onChange={(e) => updateAddendumLineById(row.id, "quantity", parseInt(e.target.value, 10))}
+                                className="w-full bg-surface border border-outline-variant rounded-lg px-1 py-1 text-[11px] focus:outline-none text-center text-on-surface font-bold"
+                              />
+                            </div>
+                            <div className="col-span-3">
+                              <label className="block text-[9px] font-bold text-on-surface-variant uppercase mb-0.5 text-right">Unit Rate (monthly)</label>
+                              <input
+                                type="number"
+                                required
+                                min="0"
+                                step="0.01"
+                                value={row.unitPrice || 0}
+                                onChange={(e) => updateAddendumLineById(row.id, "unitPrice", parseFloat(e.target.value))}
+                                className="w-full bg-surface border border-outline-variant rounded-lg px-2.5 py-1 text-[11px] focus:outline-none text-right text-on-surface font-mono"
+                              />
+                            </div>
+                            <div className="col-span-1 text-right pt-3">
+                              <button
+                                type="button"
+                                onClick={() => deleteAddendumLineById(row.id)}
+                                className="text-status-error hover:bg-status-error/10 p-1 rounded-lg"
+                              >
+                                <span className="material-symbols-outlined text-[16px]">delete</span>
+                              </button>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Reliever Tab */}
+                {addendumActiveTab === "reliever" && (
+                  <div className="space-y-4 max-w-4xl mx-auto">
+                    <div className="flex justify-between items-center border-b border-outline-variant/60 pb-2">
+                      <div>
+                        <h4 className="text-xs font-bold text-primary">Reliever Changes</h4>
+                        <p className="text-[10px] text-on-surface-variant">Log changes to reliever counts and rates.</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => addAddendumLine("RELIEVER")}
+                        className="px-3 py-1.5 bg-primary text-white text-[10px] font-bold rounded-lg flex items-center gap-1 hover:bg-primary-container transition-colors"
+                      >
+                        <span className="material-symbols-outlined text-[14px]">add</span> Add Reliever Line
+                      </button>
+                    </div>
+
+                    <div className="space-y-2.5">
+                      {addFormLineItems.filter(li => li.itemType === "RELIEVER").length === 0 ? (
+                        <div className="text-center py-8 bg-surface-container-low border border-outline-variant/40 rounded-xl text-on-surface-variant italic">
+                          No reliever changes added in this addendum yet. Click 'Add Reliever Line' above to log changes.
+                        </div>
+                      ) : (
+                        addFormLineItems.filter(li => li.itemType === "RELIEVER").map((row: any) => (
+                          <div key={row.id} className="grid grid-cols-12 gap-3 items-center bg-surface-container-lowest p-3 rounded-xl border border-outline-variant/60 text-on-surface">
+                            <div className="col-span-2">
+                              <label className="block text-[9px] font-bold text-on-surface-variant uppercase mb-0.5">Action</label>
+                              <select
+                                value={row.action || "ADD"}
+                                onChange={(e) => updateAddendumLineById(row.id, "action", e.target.value)}
+                                className="w-full bg-surface border border-outline-variant rounded-lg px-2 py-1 text-[11px] focus:outline-none text-on-surface font-semibold"
+                              >
+                                <option value="ADD">Add</option>
+                                <option value="REMOVE">Remove</option>
+                                <option value="UPDATE">Update</option>
+                              </select>
+                            </div>
+                            <div className="col-span-4">
+                              <label className="block text-[9px] font-bold text-on-surface-variant uppercase mb-0.5">Reliever Designation Label *</label>
+                              <input
+                                type="text"
+                                required
+                                placeholder="e.g. Reliever Guard"
+                                value={row.label || ""}
+                                onChange={(e) => updateAddendumLineById(row.id, "label", e.target.value)}
+                                className="w-full bg-surface border border-outline-variant rounded-lg px-2.5 py-1 text-[11px] focus:outline-none text-on-surface font-semibold"
+                              />
+                            </div>
+                            <div className="col-span-2">
+                              <label className="block text-[9px] font-bold text-on-surface-variant uppercase mb-0.5 text-center">Qty</label>
+                              <input
+                                type="number"
+                                required
+                                min="1"
+                                value={row.quantity || 1}
+                                onChange={(e) => updateAddendumLineById(row.id, "quantity", parseInt(e.target.value, 10))}
+                                className="w-full bg-surface border border-outline-variant rounded-lg px-1 py-1 text-[11px] focus:outline-none text-center text-on-surface font-bold"
+                              />
+                            </div>
+                            <div className="col-span-3">
+                              <label className="block text-[9px] font-bold text-on-surface-variant uppercase mb-0.5 text-right">Unit Rate (monthly)</label>
+                              <input
+                                type="number"
+                                required
+                                min="0"
+                                step="0.01"
+                                value={row.unitPrice || 0}
+                                onChange={(e) => updateAddendumLineById(row.id, "unitPrice", parseFloat(e.target.value))}
+                                className="w-full bg-surface border border-outline-variant rounded-lg px-2.5 py-1 text-[11px] focus:outline-none text-right text-on-surface font-mono"
+                              />
+                            </div>
+                            <div className="col-span-1 text-right pt-3">
+                              <button
+                                type="button"
+                                onClick={() => deleteAddendumLineById(row.id)}
+                                className="text-status-error hover:bg-status-error/10 p-1 rounded-lg"
+                              >
+                                <span className="material-symbols-outlined text-[16px]">delete</span>
+                              </button>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Shift Tab */}
+                {addendumActiveTab === "shift" && (
+                  <div className="space-y-4 max-w-4xl mx-auto">
+                    <div className="flex justify-between items-center border-b border-outline-variant/60 pb-2">
+                      <div>
+                        <h4 className="text-xs font-bold text-primary">Shift Changes</h4>
+                        <p className="text-[10px] text-on-surface-variant">Log changes to contract shift patterns or timings.</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => addAddendumLine("SHIFT")}
+                        className="px-3 py-1.5 bg-primary text-white text-[10px] font-bold rounded-lg flex items-center gap-1 hover:bg-primary-container transition-colors"
+                      >
+                        <span className="material-symbols-outlined text-[14px]">add</span> Add Shift Line
+                      </button>
+                    </div>
+
+                    <div className="space-y-2.5">
+                      {addFormLineItems.filter(li => li.itemType === "SHIFT").length === 0 ? (
+                        <div className="text-center py-8 bg-surface-container-low border border-outline-variant/40 rounded-xl text-on-surface-variant italic">
+                          No shift changes added in this addendum yet. Click 'Add Shift Line' above to log changes.
+                        </div>
+                      ) : (
+                        addFormLineItems.filter(li => li.itemType === "SHIFT").map((row: any) => (
+                          <div key={row.id} className="grid grid-cols-12 gap-3 items-center bg-surface-container-lowest p-3 rounded-xl border border-outline-variant/60 text-on-surface">
+                            <div className="col-span-2">
+                              <label className="block text-[9px] font-bold text-on-surface-variant uppercase mb-0.5">Action</label>
+                              <select
+                                value={row.action || "ADD"}
+                                onChange={(e) => updateAddendumLineById(row.id, "action", e.target.value)}
+                                className="w-full bg-surface border border-outline-variant rounded-lg px-2 py-1 text-[11px] focus:outline-none text-on-surface font-semibold"
+                              >
+                                <option value="ADD">Add</option>
+                                <option value="REMOVE">Remove</option>
+                                <option value="UPDATE">Update</option>
+                              </select>
+                            </div>
+                            <div className="col-span-4">
+                              <label className="block text-[9px] font-bold text-on-surface-variant uppercase mb-0.5">Shift Name / Timings Label *</label>
+                              <input
+                                type="text"
+                                required
+                                placeholder="e.g. Night Shift (19:00 - 07:00)"
+                                value={row.label || ""}
+                                onChange={(e) => updateAddendumLineById(row.id, "label", e.target.value)}
+                                className="w-full bg-surface border border-outline-variant rounded-lg px-2.5 py-1 text-[11px] focus:outline-none text-on-surface font-semibold"
+                              />
+                            </div>
+                            <div className="col-span-2">
+                              <label className="block text-[9px] font-bold text-on-surface-variant uppercase mb-0.5 text-center">Required Posts</label>
+                              <input
+                                type="number"
+                                required
+                                min="1"
+                                value={row.quantity || 1}
+                                onChange={(e) => updateAddendumLineById(row.id, "quantity", parseInt(e.target.value, 10))}
+                                className="w-full bg-surface border border-outline-variant rounded-lg px-1 py-1 text-[11px] focus:outline-none text-center text-on-surface font-bold"
+                              />
+                            </div>
+                            <div className="col-span-3">
+                              <label className="block text-[9px] font-bold text-on-surface-variant uppercase mb-0.5 text-right">Extra Cost (if applicable)</label>
+                              <input
+                                type="number"
+                                required
+                                min="0"
+                                step="0.01"
+                                value={row.unitPrice || 0}
+                                onChange={(e) => updateAddendumLineById(row.id, "unitPrice", parseFloat(e.target.value))}
+                                className="w-full bg-surface border border-outline-variant rounded-lg px-2.5 py-1 text-[11px] focus:outline-none text-right text-on-surface font-mono"
+                              />
+                            </div>
+                            <div className="col-span-1 text-right pt-3">
+                              <button
+                                type="button"
+                                onClick={() => deleteAddendumLineById(row.id)}
+                                className="text-status-error hover:bg-status-error/10 p-1 rounded-lg"
+                              >
+                                <span className="material-symbols-outlined text-[16px]">delete</span>
+                              </button>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Commercial Notes Tab */}
+                {addendumActiveTab === "commercial" && (
+                  <div className="space-y-4 max-w-4xl mx-auto">
+                    <div className="grid grid-cols-2 gap-4 bg-surface-container-low p-4 rounded-xl border border-outline-variant/60">
+                      <div>
+                        <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Commercial Impact Summary String</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. +QAR 5,000 / month"
+                          className="w-full bg-surface border border-outline-variant rounded-lg px-3 py-2 focus:outline-none focus:border-primary text-on-surface font-semibold text-xs"
+                          value={addendumForm.commercialImpact || ""}
+                          onChange={(e) => setAddendumForm({ ...addendumForm, commercialImpact: e.target.value })}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Calculated Net Impact</label>
+                        <div className="p-2 border border-outline-variant rounded-lg bg-surface text-sm font-black text-primary font-mono">
+                          {addendumForm.commercialImpact || "QAR 0.00"}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="border border-outline-variant/60 p-4 rounded-xl space-y-4 bg-surface-container-low">
+                      <div className="flex justify-between items-center border-b border-outline-variant/60 pb-2">
+                        <div>
+                          <h4 className="text-xs font-bold text-primary">Other Commercial Items / Materials Changes</h4>
+                          <p className="text-[10px] text-on-surface-variant">Log changes to materials, equipment, or one-off commercial charges.</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => addAddendumLine("MATERIAL")}
+                          className="px-3 py-1.5 bg-primary text-white text-[10px] font-bold rounded-lg flex items-center gap-1 hover:bg-primary-container transition-colors"
+                        >
+                          <span className="material-symbols-outlined text-[14px]">add</span> Add Material Line
+                        </button>
+                      </div>
+
+                      <div className="space-y-2.5">
+                        {addFormLineItems.filter(li => li.itemType === "MATERIAL").length === 0 ? (
+                          <div className="text-center py-6 bg-surface text-on-surface-variant italic border border-outline-variant/30 rounded-lg">
+                            No other commercial or material items changes added.
+                          </div>
+                        ) : (
+                          addFormLineItems.filter(li => li.itemType === "MATERIAL").map((row: any) => (
+                            <div key={row.id} className="grid grid-cols-12 gap-3 items-center bg-surface p-2.5 rounded-lg border border-outline-variant/40 text-on-surface">
+                              <div className="col-span-2">
+                                <label className="block text-[9px] font-bold text-on-surface-variant uppercase mb-0.5">Action</label>
+                                <select
+                                  value={row.action || "ADD"}
+                                  onChange={(e) => updateAddendumLineById(row.id, "action", e.target.value)}
+                                  className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-2 py-1 text-[11px] focus:outline-none text-on-surface font-semibold"
+                                >
+                                  <option value="ADD">Add</option>
+                                  <option value="REMOVE">Remove</option>
+                                  <option value="UPDATE">Update</option>
+                                </select>
+                              </div>
+                              <div className="col-span-4">
+                                <label className="block text-[9px] font-bold text-on-surface-variant uppercase mb-0.5">Item Label *</label>
+                                <input
+                                  type="text"
+                                  required
+                                  placeholder="e.g. Patrol Vehicle, Walkie Talkie"
+                                  value={row.label || ""}
+                                  onChange={(e) => updateAddendumLineById(row.id, "label", e.target.value)}
+                                  className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-2.5 py-1 text-[11px] focus:outline-none text-on-surface font-semibold"
+                                />
+                              </div>
+                              <div className="col-span-2">
+                                <label className="block text-[9px] font-bold text-on-surface-variant uppercase mb-0.5 text-center">Qty</label>
+                                <input
+                                  type="number"
+                                  required
+                                  min="1"
+                                  value={row.quantity || 1}
+                                  onChange={(e) => updateAddendumLineById(row.id, "quantity", parseInt(e.target.value, 10))}
+                                  className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-1 py-1 text-[11px] focus:outline-none text-center text-on-surface font-bold"
+                                />
+                              </div>
+                              <div className="col-span-3">
+                                <label className="block text-[9px] font-bold text-on-surface-variant uppercase mb-0.5 text-right">Price</label>
+                                <input
+                                  type="number"
+                                  required
+                                  min="0"
+                                  step="0.01"
+                                  value={row.unitPrice || 0}
+                                  onChange={(e) => updateAddendumLineById(row.id, "unitPrice", parseFloat(e.target.value))}
+                                  className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-2.5 py-1 text-[11px] focus:outline-none text-right text-on-surface font-mono"
+                                />
+                              </div>
+                              <div className="col-span-1 text-right pt-3">
+                                <button
+                                  type="button"
+                                  onClick={() => deleteAddendumLineById(row.id)}
+                                  className="text-status-error hover:bg-status-error/10 p-1 rounded-lg"
+                                >
+                                  <span className="material-symbols-outlined text-[16px]">delete</span>
+                                </button>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
               
               <div className="px-6 py-4 border-t border-outline-variant flex justify-end gap-3 bg-surface-container-low">
                 <button
                   type="button"
                   onClick={() => setAddendumContract(null)}
-                  className="px-3 py-2 border border-outline-variant rounded-lg text-xs font-bold text-on-surface hover:bg-surface-container-high transition-colors"
+                  className="px-4 py-2 border border-outline-variant rounded-lg text-xs font-bold text-on-surface hover:bg-surface-container-high transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-3 py-2 text-white bg-primary hover:bg-primary-container text-xs font-bold rounded-lg transition-colors"
+                  className="px-4 py-2 text-white bg-primary hover:bg-primary-container text-xs font-bold rounded-lg transition-colors"
                 >
                   Save Addendum
                 </button>

@@ -31,6 +31,35 @@ export async function GET(request: Request) {
   const endDateStr = searchParams.get("endDate") || startDateStr;
 
   try {
+    if (siteId && siteId !== "all" && siteId !== "undefined" && siteId !== "null") {
+      const db = readDb() as any;
+      const siteAllocations = (db.siteManpowerAllocations || []).filter((a: any) => a.siteId === siteId);
+      const totalAllocated = siteAllocations.reduce((sum: number, a: any) => sum + (a.quantity || 0), 0);
+      if (totalAllocated === 0) {
+        return NextResponse.json({
+          success: false,
+          error: "No manpower allocated to this site. Allocate manpower before scheduling."
+        }, { status: 400 });
+      }
+
+      const isDb = isDbConnected();
+      let shiftCount = 0;
+      if (isDb) {
+        shiftCount = await prisma.manpowerShiftRequirement.count({
+          where: { siteId, isActive: true }
+        });
+      } else {
+        const shifts = (db.shiftRequirements || []).filter((s: any) => s.siteId === siteId && s.isActive !== false);
+        shiftCount = shifts.length;
+      }
+      if (shiftCount === 0) {
+        return NextResponse.json({
+          success: false,
+          error: "No site shifts configured. Configure site shifts before scheduling."
+        }, { status: 400 });
+      }
+    }
+
     // Determine database mode
     const isDb = isDbConnected();
 
