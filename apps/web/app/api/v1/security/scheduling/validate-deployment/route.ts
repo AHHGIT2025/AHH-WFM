@@ -163,6 +163,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Shift requirement not found" }, { status: 404 });
     }
 
+    const db = readDb() as any;
+    const projectInstructions = (db.projectInstructions || []).filter(
+      (pi: any) => pi.projectId === site?.projectId && pi.isActive !== false
+    );
+    const siteAllowanceRecord = (db.siteAllowances || []).find(
+      (sa: any) => sa.siteId === site?.id && sa.isActive !== false && sa.siteAllowanceEnabled === true
+    );
+
     // Build siteRequirements configuration dynamically
     const siteReqs: SiteRequirements = {
       requiresMoiLicense: category?.requiresMoiLicense || false,
@@ -173,7 +181,7 @@ export async function POST(request: Request) {
       strictDesignationMatch: false,
       requiredDesignation: category?.name,
       requiredGrade: "G1", // Mock salary grade requirement
-      siteAllowance: site?.name?.toLowerCase().includes("allowance") ? 300 : 0 // Dynamic allowance matching
+      siteAllowance: siteAllowanceRecord ? siteAllowanceRecord.siteAllowanceAmount : 0
     };
 
     const slotInfo = {
@@ -187,7 +195,7 @@ export async function POST(request: Request) {
       deploymentMode
     };
 
-    const validationResult = validateDeploymentEligibility(employee, slotInfo, siteReqs, existingAssignments, leaves);
+    const validationResult = validateDeploymentEligibility(employee, slotInfo, siteReqs, existingAssignments, leaves, projectInstructions);
 
     return NextResponse.json(validationResult);
 

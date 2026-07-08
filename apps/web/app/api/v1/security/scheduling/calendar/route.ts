@@ -25,6 +25,7 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const clientId = searchParams.get("clientId") || undefined;
   const contractId = searchParams.get("contractId") || undefined;
+  const projectId = searchParams.get("projectId") || undefined;
   const siteId = searchParams.get("siteId") || undefined;
   const startDateStr = searchParams.get("startDate") || searchParams.get("date") || new Date().toISOString().split("T")[0];
   const endDateStr = searchParams.get("endDate") || startDateStr;
@@ -117,6 +118,7 @@ export async function GET(request: Request) {
     // Filter sites/projects by client/contract
     const filteredSites = sites.filter(s => {
       if (siteId && siteId !== "all" && s.id !== siteId) return false;
+      if (projectId && projectId !== "all" && s.projectId !== projectId) return false;
       const proj = projects.find(p => p.id === s.projectId);
       if (!proj) return false;
       if (contractId && contractId !== "all" && proj.contractId !== contractId) return false;

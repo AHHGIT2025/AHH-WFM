@@ -66,7 +66,8 @@ export function validateDeploymentEligibility(
   deploymentSlot: any,
   siteRequirements: SiteRequirements,
   existingAssignments: any[],
-  leaves: any[] = []
+  leaves: any[] = [],
+  projectInstructions: any[] = []
 ): ValidationResult {
   const result: ValidationResult = {
     canDeploy: true,
@@ -92,7 +93,8 @@ export function validateDeploymentEligibility(
   };
 
   // Rule 1: Active check
-  if (employee.isActive === false || employee.employmentStatus !== "ACTIVE") {
+  const isEmpInactive = employee.isActive === false || employee.employmentStatus === "INACTIVE" || employee.employmentStatus === "DELETED";
+  if (isEmpInactive) {
     result.canDeploy = false;
     result.severity = "BLOCKED";
     result.blockingIssues.push("Employee is inactive or deactivated in Workforce Directory.");
@@ -289,6 +291,83 @@ export function validateDeploymentEligibility(
   if (deploymentSlot.isReliever || deploymentSlot.deploymentMode === "RELIEVER") {
     result.payrollAdvisories.push("Reliever duty advisory may apply. Temporary reliever incentive calculations should be reviewed.");
     addChecklist("Reliever Check", "INFO", "Assigned as reliever");
+  }
+
+  // Rule 11: Project-level Site Instructions check
+  if (projectInstructions && projectInstructions.length > 0) {
+    for (const pi of projectInstructions) {
+      if (pi.isActive === false) continue;
+      
+      const type = pi.requirementType;
+      const sev = pi.severity || "WARNING_ONLY";
+      const title = pi.instructionTitle;
+
+      let triggered = false;
+      let reasonMsg = "";
+
+      if (type === "LICENSE") {
+        const licExpiry = employee.securityLicenseExpiry || (employee.securityLicense && employee.securityLicense.expiryDate);
+        if (!licExpiry) {
+          triggered = true;
+          reasonMsg = `Missing mandatory license specified by instruction: '${title}'`;
+        } else if (new Date(licExpiry) < new Date(todayStr)) {
+          triggered = true;
+          reasonMsg = `Expired license (${licExpiry}) specified by instruction: '${title}'`;
+        }
+      } else if (type === "GATE_PASS") {
+        const gps = employee.securityGatePasses || employee.gatePasses || [];
+        const siteGp = gps.find((g: any) => g.siteId === deploymentSlot.siteId) || gps[0];
+        const gpExpiry = employee.siteGatePassExpiry || (siteGp && siteGp.expiryDate) || (employee.gatePass && employee.gatePass.expiryDate);
+        if (!gpExpiry) {
+          triggered = true;
+          reasonMsg = `Missing mandatory site gate pass specified by instruction: '${title}'`;
+        } else if (new Date(gpExpiry) < new Date(todayStr)) {
+          triggered = true;
+          reasonMsg = `Expired gate pass (${gpExpiry}) specified by instruction: '${title}'`;
+        }
+      } else if (type === "DOCUMENT") {
+        const qidExpiry = employee.qidExpiryDate;
+        if (qidExpiry && new Date(qidExpiry) < new Date(todayStr)) {
+          triggered = true;
+          reasonMsg = `QID expired (${new Date(qidExpiry).toISOString().split("T")[0]}) specified by instruction: '${title}'`;
+        }
+      } else if (type === "DESIGNATION") {
+        const empDesig = employee.designationName || (employee.designation && employee.designation.name) || employee.designationId;
+        const reqDesig = siteRequirements.requiredDesignation;
+        if (reqDesig && empDesig !== reqDesig) {
+          triggered = true;
+          reasonMsg = `Designation mismatch: post requires '${reqDesig}', guard has '${empDesig}' ('${title}')`;
+        }
+      } else if (type === "GRADE") {
+        const empGrade = employee.salaryGrade || employee.grade;
+        const reqGrade = siteRequirements.requiredGrade;
+        if (reqGrade && empGrade !== reqGrade) {
+          triggered = true;
+          reasonMsg = `Grade mismatch: post requires '${reqGrade}', guard has '${empGrade}' ('${title}')`;
+        }
+      } else if (type === "CLIENT_APPROVAL") {
+        triggered = true;
+        reasonMsg = `Verify client approval status: '${title}'`;
+      } else {
+        triggered = true;
+        reasonMsg = `Roster policy compliance check required: '${title}'`;
+      }
+
+      if (triggered) {
+        if (sev === "HARD_BLOCK") {
+          result.canDeploy = false;
+          result.blockingIssues.push(`Project Instruction Policy Block: ${reasonMsg}`);
+          addChecklist(`Instr: ${title}`, "FAIL", reasonMsg);
+        } else if (sev === "WARNING_ONLY") {
+          result.warnings.push(`Project Instruction Policy Warning: ${reasonMsg}`);
+          addChecklist(`Instr: ${title}`, "WARN", reasonMsg);
+        } else {
+          addChecklist(`Instr: ${title}`, "INFO", reasonMsg);
+        }
+      } else {
+        addChecklist(`Instr: ${title}`, "PASS", "Policy compliant");
+      }
+    }
   }
 
   // Override overall severity if blocked

@@ -21,8 +21,8 @@ export async function GET(request: Request) {
   const search = searchParams.get("search") || "";
   const designation = searchParams.get("designation") || "";
   const grade = searchParams.get("grade") || "";
-  const licenseValid = searchParams.get("licenseValid"); // "true" | "false"
-  const gatePassValid = searchParams.get("gatePassValid"); // "true" | "false"
+  const licenseValid = searchParams.get("licenseValid") || "all";
+  const gatePassValid = searchParams.get("gatePassValid") || "all";
   const siteId = searchParams.get("siteId") || "";
 
   try {
@@ -34,11 +34,16 @@ export async function GET(request: Request) {
     let securityLicenses: any[] = [];
     let securityGatePasses: any[] = [];
 
+    // Let's compute inactive count from all security guards
+    let allSecurityGuards: any[] = [];
+
     if (isDb) {
+      allSecurityGuards = await prisma.employee.findMany({
+        where: { operationType: "SECURITY_GUARDING" }
+      });
       employees = await prisma.employee.findMany({
         where: {
           isActive: true,
-          employmentStatus: "ACTIVE",
           operationType: "SECURITY_GUARDING"
         },
         include: {
@@ -67,7 +72,8 @@ export async function GET(request: Request) {
       });
     } else {
       const db = readDb() as any;
-      employees = (db.employees || []).filter((e: any) => e.isActive !== false && e.employmentStatus === "ACTIVE" && e.operationType === "SECURITY_GUARDING");
+      allSecurityGuards = (db.employees || []).filter((e: any) => e.operationType === "SECURITY_GUARDING");
+      employees = allSecurityGuards.filter((e: any) => e.isActive !== false);
       deployments = (db.manpowerDeployments || []).filter((d: any) => {
         const dStr = String(d.date).split("T")[0];
         return dStr === dateStr && d.operationType === "SECURITY_GUARDING";
@@ -88,6 +94,8 @@ export async function GET(request: Request) {
         };
       });
     }
+
+    const inactiveExcluded = allSecurityGuards.filter(e => e.isActive === false).length;
 
     // Filter by search text (ID or Name)
     let pool = employees.filter(e => {
@@ -135,17 +143,16 @@ export async function GET(request: Request) {
       });
     }
 
-    const availablePool = pool.map(e => {
+    const leaveExcluded = pool.filter(e => leaveEmployeeIds.has(e.id)).length;
+    const conflictExcluded = pool.filter(e => assignedEmployeeIds.has(e.id)).length;
+
+    // Filter pool to only show active, unassigned and not on leave guards
+    const eligiblePool = pool.filter(e => !leaveEmployeeIds.has(e.id) && !assignedEmployeeIds.has(e.id));
+
+    const availablePool = eligiblePool.map(e => {
       const lic = e.securityLicense;
       const gps = e.securityGatePasses || e.gatePasses || [];
       const gp = siteId ? gps.find((g: any) => g.siteId === siteId) : gps[0];
-
-      const onLeave = leaveEmployeeIds.has(e.id);
-      const isAssigned = assignedEmployeeIds.has(e.id);
-
-      let availabilityStatus = "Available";
-      if (onLeave) availabilityStatus = "On Leave";
-      else if (isAssigned) availabilityStatus = "Assigned";
 
       return {
         id: e.id,
@@ -156,18 +163,29 @@ export async function GET(request: Request) {
         defaultSiteId: e.defaultLocationId,
         securityLicenseExpiry: lic?.expiryDate || null,
         siteGatePassExpiry: gp?.expiryDate || null,
-        availabilityStatus,
+        availabilityStatus: "Available",
         isLicenseExpired: lic ? lic.expiryDate < todayStr : true,
         isGatePassExpired: gp ? gp.expiryDate < todayStr : true,
         skills: e.skills || ["General Security"]
       };
     });
 
-    return NextResponse.json(availablePool);
+    return NextResponse.json({
+      success: true,
+      pool: availablePool,
+      debugCounts: {
+        totalSecurityEmployees: allSecurityGuards.length,
+        inactiveExcluded,
+        leaveExcluded,
+        conflictExcluded,
+        eligibleCount: availablePool.length
+      }
+    });
 
   } catch (error: any) {
     console.error("Failed to load available employees API:", error);
     return NextResponse.json({
+      success: false,
       error: error.message || String(error)
     }, { status: 500 });
   }

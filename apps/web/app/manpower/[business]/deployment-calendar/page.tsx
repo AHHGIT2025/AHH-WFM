@@ -72,6 +72,36 @@ interface EmployeeCard {
   skills: string[];
 }
 
+interface DebugCounts {
+  totalSecurityEmployees: number;
+  inactiveExcluded: number;
+  leaveExcluded: number;
+  conflictExcluded: number;
+  eligibleCount: number;
+}
+
+interface ProjectInstruction {
+  id?: string;
+  projectId: string;
+  instructionTitle: string;
+  instructionDescription: string;
+  requirementType: "DOCUMENT" | "LICENSE" | "GATE_PASS" | "TRAINING" | "DESIGNATION" | "GRADE" | "CLIENT_APPROVAL" | "UNIFORM" | "EQUIPMENT" | "GENERAL";
+  severity: "HARD_BLOCK" | "WARNING_ONLY" | "INFO_ONLY";
+  expiryWarningDays: number;
+  isActive: boolean;
+}
+
+interface SiteAllowanceConfig {
+  siteId: string;
+  siteAllowanceEnabled: boolean;
+  siteAllowanceAmount: number;
+  siteAllowanceFrequency: "MONTHLY" | "DAILY" | "FIXED_FOR_PERIOD";
+  allowanceDescription: string;
+  effectiveFrom?: string;
+  effectiveTo?: string;
+  isActive: boolean;
+}
+
 export default function DeploymentCalendarPage() {
   const params = useParams();
   const router = useRouter();
@@ -83,38 +113,75 @@ export default function DeploymentCalendarPage() {
   const isSecurity = business === "security-guarding";
   const businessLabel = isSecurity ? "Security Guarding" : "Facility Management";
 
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [slots, setSlots] = useState<CalendarSlot[]>([]);
   const [summary, setSummary] = useState<CoverageSummary | null>(null);
   const [employeePool, setEmployeePool] = useState<EmployeeCard[]>([]);
+  const [debugCounts, setDebugCounts] = useState<DebugCounts | null>(null);
   
+  // Roster layout tabs
+  const [activeTab, setActiveTab] = useState<"calendar" | "project_details" | "site_shifts" | "site_allowance" | "project_instructions">("calendar");
+
   // Dynamic filter lists
   const [clients, setClients] = useState<any[]>([]);
   const [contracts, setContracts] = useState<any[]>([]);
+  const [projects, setProjects] = useState<any[]>([]);
   const [sites, setSites] = useState<any[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
 
-  // Selected filters
+  // Selected filters (Client -> Contract -> Project -> Site hierarchy)
   const [selectedClient, setSelectedClient] = useState("all");
   const [selectedContract, setSelectedContract] = useState("all");
+  const [selectedProject, setSelectedProject] = useState("all");
   const [selectedSite, setSelectedSite] = useState("all");
   const [selectedDate, setSelectedDate] = useState(() => {
     const today = new Date();
     return today.toISOString().split("T")[0];
   });
-  const [calendarView, setCalendarView] = useState<"day" | "week" | "month">("day");
 
   // Pool Filters
   const [poolSearch, setPoolSearch] = useState("");
   const [poolDesignation, setPoolDesignation] = useState("all");
   const [poolGrade, setPoolGrade] = useState("all");
-  const [poolLicenseValid, setPoolLicenseValid] = useState("all"); // all | true | false
+  const [poolLicenseValid, setPoolLicenseValid] = useState("all");
   const [poolGatePassValid, setPoolGatePassValid] = useState("all");
 
-  // Selected assignment for drawer display
+  // Selected details for inspection drawer
   const [selectedAssignment, setSelectedAssignment] = useState<SlotAssignment | null>(null);
   const [selectedSlotReq, setSelectedSlotReq] = useState<CalendarSlot | null>(null);
-  const [siteRequirements, setSiteRequirements] = useState<any | null>(null);
+
+  // Configuration forms
+  const [siteShifts, setSiteShifts] = useState<any[]>([]);
+  const [newShiftForm, setNewShiftForm] = useState({
+    id: "",
+    categoryId: "",
+    shiftCode: "GEN-001",
+    requiredCount: 1,
+    shiftStartTime: "08:00",
+    shiftEndTime: "20:00",
+    isActive: true
+  });
+
+  const [allowanceConfig, setAllowanceConfig] = useState<SiteAllowanceConfig>({
+    siteId: "",
+    siteAllowanceEnabled: false,
+    siteAllowanceAmount: 0,
+    siteAllowanceFrequency: "MONTHLY",
+    allowanceDescription: "",
+    isActive: true
+  });
+
+  const [projectInstructions, setProjectInstructions] = useState<ProjectInstruction[]>([]);
+  const [newInstructionForm, setNewInstructionForm] = useState<ProjectInstruction>({
+    projectId: "",
+    instructionTitle: "",
+    instructionDescription: "",
+    requirementType: "GENERAL",
+    severity: "WARNING_ONLY",
+    expiryWarningDays: 30,
+    isActive: true
+  });
 
   // Validation modal state
   const [validationModal, setValidationModal] = useState<{
@@ -138,32 +205,80 @@ export default function DeploymentCalendarPage() {
                     hasPermission(user, isSecurity ? "manpower.security.manage" : "manpower.fm.manage") ||
                     hasPermission(user, "security.scheduling.assign");
 
-  // Load filter dropdown values dynamically
-  const fetchFilterMasters = async () => {
+  // Load clients list (Security Guarding clients only)
+  const fetchClients = async () => {
     try {
-      const [clientRes, contractRes, siteRes] = await Promise.all([
-        fetch("/api/v1/masters/companies"), // Clients are holding companies / party A
-        fetch("/api/v1/masters/companies"), // Placeholder or manpower contracts
-        fetch(`/api/v1/masters/locations`) // Sites mapped to locations
-      ]);
-      if (clientRes.ok) setClients(await clientRes.json());
-      if (contractRes.ok) setContracts(await contractRes.json());
-      if (siteRes.ok) {
-        const rawSites = await siteRes.json();
-        setSites(rawSites.filter((s: any) => s.isActive !== false));
-      }
+      const res = await fetch("/api/v1/security/scheduling/clients");
+      if (res.ok) setClients(await res.json());
     } catch (e) {
-      console.error("Failed to load master filters", e);
+      console.error("Failed to load clients", e);
     }
   };
 
-  // Load calendar slots & coverage summary
+  // Load contracts cascading based on selectedClient
+  const fetchContracts = async (clientId: string) => {
+    try {
+      const res = await fetch(`/api/v1/security/scheduling/contracts?clientId=${clientId}`);
+      if (res.ok) {
+        setContracts(await res.json());
+        setSelectedContract("all");
+        setSelectedProject("all");
+        setSelectedSite("all");
+        setProjects([]);
+        setSites([]);
+      }
+    } catch (e) {
+      console.error("Failed to load contracts", e);
+    }
+  };
+
+  // Load projects cascading based on selectedContract
+  const fetchProjects = async (contractId: string) => {
+    try {
+      const res = await fetch(`/api/v1/security/scheduling/projects?contractId=${contractId}`);
+      if (res.ok) {
+        setProjects(await res.json());
+        setSelectedProject("all");
+        setSelectedSite("all");
+        setSites([]);
+      }
+    } catch (e) {
+      console.error("Failed to load projects", e);
+    }
+  };
+
+  // Load sites cascading based on selectedProject
+  const fetchSites = async (projectId: string) => {
+    try {
+      const res = await fetch(`/api/v1/security/scheduling/sites?projectId=${projectId}`);
+      if (res.ok) {
+        setSites(await res.json());
+        setSelectedSite("all");
+      }
+    } catch (e) {
+      console.error("Failed to load sites", e);
+    }
+  };
+
+  // Load designations categories
+  const fetchCategories = async () => {
+    try {
+      const res = await fetch(`/api/v1/manpower/${business}/categories`);
+      if (res.ok) setCategories(await res.json());
+    } catch (e) {
+      console.error("Failed to load categories", e);
+    }
+  };
+
+  // Load Roster Shift Calendar Grid
   const fetchCalendar = async (showIndicator = false) => {
+    if (selectedProject === "all") return;
     if (showIndicator) setRefreshing(true);
     try {
       const params = new URLSearchParams();
       if (selectedClient && selectedClient !== "all") params.set("clientId", selectedClient);
       if (selectedContract && selectedContract !== "all") params.set("contractId", selectedContract);
+      if (selectedProject && selectedProject !== "all") params.set("projectId", selectedProject);
       if (selectedSite && selectedSite !== "all") params.set("siteId", selectedSite);
       params.set("startDate", selectedDate);
       params.set("endDate", selectedDate);
@@ -179,7 +294,6 @@ export default function DeploymentCalendarPage() {
     } catch (e) {
       console.error("Failed to load calendar data", e);
     } finally {
-      setLoading(false);
       setRefreshing(false);
     }
   };
@@ -198,46 +312,117 @@ export default function DeploymentCalendarPage() {
 
       const res = await fetch(`/api/v1/security/scheduling/available-employees?${params.toString()}`);
       if (res.ok) {
-        setEmployeePool(await res.json());
+        const data = await res.json();
+        if (data.success) {
+          setEmployeePool(data.pool);
+          setDebugCounts(data.debugCounts);
+        }
       }
     } catch (e) {
       console.error("Failed to load employee pool", e);
     }
   };
 
-  // Fetch slot checklist details
-  const fetchSlotRequirements = async (slotId: string) => {
+  // Load site shifts setup
+  const fetchSiteShifts = async (siteId: string) => {
     try {
-      const res = await fetch(`/api/v1/security/scheduling/site-requirements?shiftRequirementId=${slotId}`);
-      if (res.ok) {
-        setSiteRequirements(await res.json());
-      }
+      const res = await fetch(`/api/v1/security/scheduling/site-shifts?siteId=${siteId}`);
+      if (res.ok) setSiteShifts(await res.json());
     } catch (e) {
-      console.error("Failed to load site requirements", e);
+      console.error("Failed to load site shifts", e);
     }
   };
 
-  // Trigger load on mount & parameters change
+  // Load allowance config
+  const fetchSiteAllowance = async (siteId: string) => {
+    try {
+      const res = await fetch(`/api/v1/security/scheduling/site-allowance?siteId=${siteId}`);
+      if (res.ok) {
+        const data = await res.json();
+        setAllowanceConfig(data);
+      }
+    } catch (e) {
+      console.error("Failed to load site allowance", e);
+    }
+  };
+
+  // Load project instructions
+  const fetchProjectInstructions = async (projectId: string) => {
+    try {
+      const res = await fetch(`/api/v1/security/scheduling/project-instructions?projectId=${projectId}`);
+      if (res.ok) setProjectInstructions(await res.json());
+    } catch (e) {
+      console.error("Failed to load project instructions", e);
+    }
+  };
+
+  // Trigger load on mount
   useEffect(() => {
     if (canView) {
-      fetchFilterMasters();
+      fetchClients();
+      fetchCategories();
+      fetchEmployeePool();
     }
   }, [session]);
 
+  // Handle cascaded filters
   useEffect(() => {
-    if (canView) {
+    if (selectedClient !== "all") {
+      fetchContracts(selectedClient);
+    } else {
+      setContracts([]);
+      setProjects([]);
+      setSites([]);
+      setSelectedContract("all");
+      setSelectedProject("all");
+      setSelectedSite("all");
+    }
+  }, [selectedClient]);
+
+  useEffect(() => {
+    if (selectedContract !== "all") {
+      fetchProjects(selectedContract);
+    } else {
+      setProjects([]);
+      setSites([]);
+      setSelectedProject("all");
+      setSelectedSite("all");
+    }
+  }, [selectedContract]);
+
+  useEffect(() => {
+    if (selectedProject !== "all") {
+      fetchSites(selectedProject);
+      fetchProjectInstructions(selectedProject);
       fetchCalendar(true);
-      fetchEmployeePool();
+    } else {
+      setSites([]);
+      setSelectedSite("all");
+      setSlots([]);
+      setSummary(null);
     }
-  }, [selectedClient, selectedContract, selectedSite, selectedDate, calendarView]);
+  }, [selectedProject, selectedDate]);
 
+  useEffect(() => {
+    if (selectedSite !== "all") {
+      fetchSiteShifts(selectedSite);
+      fetchSiteAllowance(selectedSite);
+      fetchCalendar(true);
+    } else {
+      setSiteShifts([]);
+      setAllowanceConfig({ siteId: "", siteAllowanceEnabled: false, siteAllowanceAmount: 0, siteAllowanceFrequency: "MONTHLY", allowanceDescription: "", isActive: true });
+      fetchCalendar(true);
+    }
+  }, [selectedSite]);
+
+  // Load pool when filters change
   useEffect(() => {
     if (canView) {
       fetchEmployeePool();
     }
-  }, [poolSearch, poolDesignation, poolGrade, poolLicenseValid, poolGatePassValid]);
+  }, [poolSearch, poolDesignation, poolGrade, poolLicenseValid, poolGatePassValid, selectedDate, selectedSite]);
 
-  // Drag and Drop handlers
+  // Drag-and-drop mechanics
   const handleDragStart = (e: React.DragEvent, employee: EmployeeCard) => {
     e.dataTransfer.setData("application/json", JSON.stringify(employee));
   };
@@ -255,7 +440,6 @@ export default function DeploymentCalendarPage() {
     setApiError("");
     setApiSuccess("");
 
-    // Validate drop target deployment eligibility
     try {
       const valRes = await fetch("/api/v1/security/scheduling/validate-deployment", {
         method: "POST",
@@ -270,11 +454,9 @@ export default function DeploymentCalendarPage() {
 
       if (valRes.ok) {
         const result = await valRes.json();
-        
         if (result.severity === "BLOCKED") {
           setApiError(`Blocked Attempt: ${result.blockingIssues.join(" | ")}`);
         } else if (result.severity === "WARNING") {
-          // Open override validation modal
           setValidationModal({
             isOpen: true,
             employee,
@@ -283,12 +465,11 @@ export default function DeploymentCalendarPage() {
             overrideReason: ""
           });
         } else {
-          // Direct assignment
           await executeAssignment(employee.id, slot.id, "ASSIGNED", [], []);
         }
       }
     } catch (err) {
-      setApiError("Deployment validation call failed.");
+      setApiError("Drop validation call failed.");
     }
   };
 
@@ -323,7 +504,7 @@ export default function DeploymentCalendarPage() {
         fetchEmployeePool();
       } else {
         const err = await res.json();
-        setApiError(err.error || "Failed to finalize assignment");
+        setApiError(err.error || "Failed to save assignment");
       }
     } catch (err) {
       setApiError("Connection failed");
@@ -357,6 +538,119 @@ export default function DeploymentCalendarPage() {
       }
     } catch (err) {
       setApiError("Unassign connection failed");
+    }
+  };
+
+  // Roster Shift Configuration Save
+  const handleSaveShift = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedSite || selectedSite === "all") {
+      setApiError("Select a specific site to add shift requirements.");
+      return;
+    }
+    setApiError("");
+    setApiSuccess("");
+
+    try {
+      const res = await fetch("/api/v1/security/scheduling/site-shifts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...newShiftForm,
+          siteId: selectedSite
+        })
+      });
+      if (res.ok) {
+        setApiSuccess("Shift requirement saved successfully!");
+        fetchSiteShifts(selectedSite);
+        fetchCalendar(false);
+        setNewShiftForm({
+          id: "",
+          categoryId: "",
+          shiftCode: "GEN-001",
+          requiredCount: 1,
+          shiftStartTime: "08:00",
+          shiftEndTime: "20:00",
+          isActive: true
+        });
+      } else {
+        const err = await res.json();
+        setApiError(err.error || "Failed to save shift requirement.");
+      }
+    } catch (e) {
+      setApiError("Failed to save shift.");
+    }
+  };
+
+  // Site Allowance Configuration Save
+  const handleSaveAllowance = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedSite || selectedSite === "all") {
+      setApiError("Select a specific site to save allowance config.");
+      return;
+    }
+    setApiError("");
+    setApiSuccess("");
+
+    try {
+      const res = await fetch("/api/v1/security/scheduling/site-allowance", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...allowanceConfig,
+          siteId: selectedSite
+        })
+      });
+      if (res.ok) {
+        setApiSuccess("Site allowance config saved successfully!");
+        fetchSiteAllowance(selectedSite);
+        fetchCalendar(false);
+      } else {
+        const err = await res.json();
+        setApiError(err.error || "Failed to save allowance.");
+      }
+    } catch (e) {
+      setApiError("Failed to save allowance.");
+    }
+  };
+
+  // Project Instructions Save
+  const handleSaveInstruction = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedProject || selectedProject === "all") {
+      setApiError("Select a specific project to save instructions.");
+      return;
+    }
+    setApiError("");
+    setApiSuccess("");
+
+    try {
+      const res = await fetch("/api/v1/security/scheduling/project-instructions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...newInstructionForm,
+          projectId: selectedProject
+        })
+      });
+      if (res.ok) {
+        setApiSuccess("Project instruction saved successfully!");
+        fetchProjectInstructions(selectedProject);
+        setNewInstructionForm({
+          projectId: selectedProject,
+          instructionTitle: "",
+          instructionDescription: "",
+          requirementType: "GENERAL",
+          severity: "WARNING_ONLY",
+          expiryWarningDays: 30,
+          isActive: true
+        });
+      } else {
+        const err = await res.json();
+        setApiError(err.error || "Failed to save instruction.");
+      }
+    } catch (e) {
+      setApiError("Failed to save instruction.");
     }
   };
 
@@ -431,17 +725,30 @@ export default function DeploymentCalendarPage() {
           </div>
         </div>
 
-        {/* Directory List */}
+        {/* Directory List & Debug Counts */}
         <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+          {debugCounts && (
+            <div className="p-2.5 bg-surface-container-low rounded-lg mb-3 text-[9px] text-on-surface-variant font-semibold space-y-1">
+              <p>Total Security Guards: {debugCounts.totalSecurityEmployees}</p>
+              <p className="text-status-error/95">Inactive Excluded: {debugCounts.inactiveExcluded}</p>
+              <p className="text-pending/95">On Leave Excluded: {debugCounts.leaveExcluded}</p>
+              <p className="text-status-warning/95">Conflict Excluded: {debugCounts.conflictExcluded}</p>
+              <p className="text-status-success font-bold">Eligible Available: {debugCounts.eligibleCount}</p>
+            </div>
+          )}
+
           {employeePool.length === 0 ? (
-            <p className="text-center text-[10px] text-on-surface-variant py-8 font-medium">No available guards matched.</p>
+            <div className="py-8 text-center">
+              <p className="text-[10px] text-on-surface-variant font-medium">No available guards matched.</p>
+              <p className="text-[8px] text-on-surface-variant/80 mt-1">Guards must be active and not double-booked or on leave.</p>
+            </div>
           ) : (
             employeePool.map(emp => (
               <div
                 key={emp.id}
                 draggable
                 onDragStart={(e) => handleDragStart(e, emp)}
-                className={`border rounded-lg p-3 cursor-grab bg-surface hover:border-primary transition-all active:cursor-grabbing border-outline-variant/60 shadow-sm`}
+                className="border rounded-lg p-3 cursor-grab bg-surface hover:border-primary transition-all active:cursor-grabbing border-outline-variant/60 shadow-sm"
               >
                 <div className="flex justify-between items-start">
                   <h4 className="text-xs font-bold text-primary">{emp.name}</h4>
@@ -456,7 +763,7 @@ export default function DeploymentCalendarPage() {
                     <Badge variant="success" className="text-[8px] py-0.5 px-1">MOI Valid</Badge>
                   )}
                   {emp.isGatePassExpired && (
-                    <Badge variant="warning" className="text-[8px] py-0.5 px-1">No Gate Pass</Badge>
+                    <Badge variant="warning" className="text-[8px] py-0.5 px-1 font-semibold">No Gate Pass</Badge>
                   )}
                 </div>
               </div>
@@ -465,7 +772,7 @@ export default function DeploymentCalendarPage() {
         </div>
       </div>
 
-      {/* 2. CENTER PANEL: Roster Calendar Grid */}
+      {/* 2. CENTER PANEL: Roster Calendar & Dynamic Settings Grid */}
       <div className="flex-1 bg-surface-container-lowest p-6 flex flex-col h-full overflow-y-auto">
         
         {/* Header toolbar */}
@@ -478,50 +785,112 @@ export default function DeploymentCalendarPage() {
               <span className="material-symbols-outlined text-[20px]">arrow_back</span>
             </Link>
             <div>
-              <h1 className="text-xl font-bold text-primary">{businessLabel} Smart Scheduling</h1>
-              <p className="text-[10px] text-on-surface-variant">Daily planner, shift allocations, compliance filters, and roster controls</p>
+              <h1 className="text-xl font-bold text-primary">{businessLabel} Shift Planner</h1>
+              <p className="text-[10px] text-on-surface-variant">Define client requirements, configure site shifts, allowances, policies, and run daily rosters</p>
             </div>
           </div>
 
-          {/* Filters strip */}
+          {/* Cascading Hierarchy Filters */}
           <div className="flex flex-wrap items-center gap-2 w-full xl:w-auto">
             <select
-              className="bg-surface border border-outline-variant rounded-lg px-2 py-1.5 text-[11px] focus:outline-none font-semibold text-primary"
+              className="bg-surface border border-outline-variant rounded-lg px-2 py-1.5 text-[11px] focus:outline-none font-bold text-primary"
               value={selectedClient}
               onChange={(e) => setSelectedClient(e.target.value)}
             >
-              <option value="all">All Clients</option>
-              {clients.map(c => <option key={c.id} value={c.id}>{c.companyName || c.name}</option>)}
+              <option value="all">Select Client</option>
+              {clients.map(c => <option key={c.id} value={c.id}>{c.name} ({c.code})</option>)}
             </select>
+            
             <select
-              className="bg-surface border border-outline-variant rounded-lg px-2 py-1.5 text-[11px] focus:outline-none font-semibold text-primary"
+              className="bg-surface border border-outline-variant rounded-lg px-2 py-1.5 text-[11px] focus:outline-none font-bold text-primary disabled:opacity-50"
+              value={selectedContract}
+              disabled={selectedClient === "all"}
+              onChange={(e) => setSelectedContract(e.target.value)}
+            >
+              <option value="all">Select Contract</option>
+              {contracts.map(c => <option key={c.id} value={c.id}>{c.contractNumber} - {c.title}</option>)}
+            </select>
+
+            <select
+              className="bg-surface border border-outline-variant rounded-lg px-2 py-1.5 text-[11px] focus:outline-none font-bold text-primary disabled:opacity-50"
+              value={selectedProject}
+              disabled={selectedContract === "all"}
+              onChange={(e) => setSelectedProject(e.target.value)}
+            >
+              <option value="all">Select Project</option>
+              {projects.map(p => <option key={p.id} value={p.id}>{p.name} ({p.code})</option>)}
+            </select>
+
+            <select
+              className="bg-surface border border-outline-variant rounded-lg px-2 py-1.5 text-[11px] focus:outline-none font-bold text-primary disabled:opacity-50"
               value={selectedSite}
+              disabled={selectedProject === "all"}
               onChange={(e) => setSelectedSite(e.target.value)}
             >
-              <option value="all">All Sites</option>
-              {sites.map(s => <option key={s.id} value={s.id}>{s.locationName || s.name}</option>)}
+              <option value="all">Select Site</option>
+              {sites.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
+
             <input
               type="date"
               className="bg-surface border border-outline-variant rounded-lg px-3 py-1.5 text-[11px] focus:outline-none focus:border-primary font-bold text-primary"
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
             />
-            <Button
-              onClick={() => fetchCalendar(true)}
-              disabled={refreshing}
-              variant="secondary"
-              size="sm"
-              className="font-bold flex items-center gap-1 text-[11px] py-1.5 bg-primary/10 text-primary hover:bg-primary/20"
-            >
-              <span className={`material-symbols-outlined text-[15px] ${refreshing ? "animate-spin" : ""}`}>refresh</span>
-            </Button>
           </div>
         </div>
 
+        {/* Layout Tabs */}
+        {selectedProject !== "all" && (
+          <div className="flex border-b border-outline-variant mb-4">
+            <button
+              onClick={() => setActiveTab("calendar")}
+              className={`px-4 py-2 text-xs font-bold border-b-2 transition-all ${
+                activeTab === "calendar" ? "border-primary text-primary" : "border-transparent text-on-surface-variant hover:text-primary"
+              }`}
+            >
+              Roster Calendar
+            </button>
+            <button
+              onClick={() => setActiveTab("project_details")}
+              className={`px-4 py-2 text-xs font-bold border-b-2 transition-all ${
+                activeTab === "project_details" ? "border-primary text-primary" : "border-transparent text-on-surface-variant hover:text-primary"
+              }`}
+            >
+              Project & Sites Summary
+            </button>
+            <button
+              onClick={() => setActiveTab("site_shifts")}
+              disabled={selectedSite === "all"}
+              className={`px-4 py-2 text-xs font-bold border-b-2 transition-all disabled:opacity-50 ${
+                activeTab === "site_shifts" ? "border-primary text-primary" : "border-transparent text-on-surface-variant hover:text-primary"
+              }`}
+            >
+              Site Shifts Setup
+            </button>
+            <button
+              onClick={() => setActiveTab("site_allowance")}
+              disabled={selectedSite === "all"}
+              className={`px-4 py-2 text-xs font-bold border-b-2 transition-all disabled:opacity-50 ${
+                activeTab === "site_allowance" ? "border-primary text-primary" : "border-transparent text-on-surface-variant hover:text-primary"
+              }`}
+            >
+              Site Allowance Config
+            </button>
+            <button
+              onClick={() => setActiveTab("project_instructions")}
+              className={`px-4 py-2 text-xs font-bold border-b-2 transition-all ${
+                activeTab === "project_instructions" ? "border-primary text-primary" : "border-transparent text-on-surface-variant hover:text-primary"
+              }`}
+            >
+              Project Policy Instructions
+            </button>
+          </div>
+        )}
+
         {/* Coverage summary strip */}
-        {summary && (
-          <section className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-3 mb-6">
+        {summary && activeTab === "calendar" && (
+          <section className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-3 mb-6 animate-fade-in">
             <Card className="p-3 flex flex-col justify-between border-l-2 border-l-primary bg-surface-container-lowest shadow-sm">
               <span className="text-[9px] font-bold text-on-surface-variant uppercase tracking-wider">Required Staff</span>
               <h3 className="text-base font-extrabold text-primary mt-1">{summary.requiredManpower}</h3>
@@ -531,7 +900,7 @@ export default function DeploymentCalendarPage() {
               <h3 className="text-base font-extrabold text-status-success mt-1">{summary.assignedManpower}</h3>
             </Card>
             <Card className="p-3 flex flex-col justify-between border-l-2 border-l-status-error bg-surface-container-lowest shadow-sm">
-              <span className="text-[9px] font-bold text-on-surface-variant uppercase tracking-wider">Vacant Posts</span>
+              <span className="text-[9px] font-bold text-on-surface-variant uppercase tracking-wider">Vacant Slots</span>
               <h3 className="text-base font-extrabold text-status-error mt-1">{summary.vacantPosts}</h3>
             </Card>
             <Card className="p-3 flex flex-col justify-between border-l-2 border-l-status-warning bg-surface-container-lowest shadow-sm">
@@ -563,95 +932,435 @@ export default function DeploymentCalendarPage() {
           </div>
         )}
 
-        {/* Calendar Grid area */}
-        {loading ? (
-          <div className="flex-1 flex items-center justify-center">
-            <span className="material-symbols-outlined text-4xl text-primary animate-spin">sync</span>
-          </div>
-        ) : slots.length === 0 ? (
-          <div className="flex-1 flex flex-col items-center justify-center text-center p-8 bg-surface border border-outline-variant border-dashed rounded-xl">
-            <span className="material-symbols-outlined text-4xl text-on-surface-variant mb-2">schedule</span>
-            <h3 className="text-sm font-bold text-on-surface">No Security Shift Requirements Configured</h3>
-            <p className="text-[11px] text-on-surface-variant mt-1">Configure shift templates or project site targets in Settings.</p>
-          </div>
-        ) : (
-          <div className={`space-y-4 transition-all duration-300 ${refreshing ? "opacity-50" : ""}`}>
-            {slots.map(slot => (
-              <div
-                key={slot.id}
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={(e) => handleDrop(e, slot)}
-                className={`border rounded-xl p-4 transition-all bg-surface border-outline-variant/60 shadow-sm flex flex-col gap-3`}
-              >
-                <div className="flex justify-between items-start">
-                  <div>
-                    <h3 className="text-xs font-bold text-primary">{slot.siteName} · {slot.postName}</h3>
-                    <div className="flex items-center gap-2 mt-1">
-                      <span className="text-[10px] text-on-surface-variant font-mono bg-surface-container-low px-1.5 py-0.5 rounded">{slot.shiftCode} ({slot.shiftStartTime} - {slot.shiftEndTime})</span>
-                      <span className="text-[9px] font-bold text-on-surface-variant">Required: {slot.requiredCount} Guards</span>
+        {/* TAB 1: Roster Calendar */}
+        {activeTab === "calendar" && (
+          <div className="flex-1 flex flex-col">
+            {selectedProject === "all" ? (
+              <div className="flex-1 flex flex-col items-center justify-center text-center p-8 bg-surface border border-outline-variant border-dashed rounded-xl">
+                <span className="material-symbols-outlined text-4xl text-primary mb-2">business_center</span>
+                <h3 className="text-sm font-bold text-on-surface">Select Project Hierarchy</h3>
+                <p className="text-[11px] text-on-surface-variant mt-1"> Roster planning requires choosing a Client, Contract, and Project above.</p>
+              </div>
+            ) : slots.length === 0 ? (
+              <div className="flex-1 flex flex-col items-center justify-center text-center p-8 bg-surface border border-outline-variant border-dashed rounded-xl">
+                <span className="material-symbols-outlined text-4xl text-on-surface-variant mb-2">schedule</span>
+                <h3 className="text-sm font-bold text-on-surface">No Site Shift Requirements Active</h3>
+                <p className="text-[11px] text-on-surface-variant mt-1">Configure shift targets in the "Site Shifts Setup" tab first.</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {slots.map(slot => (
+                  <div
+                    key={slot.id}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => handleDrop(e, slot)}
+                    className="border rounded-xl p-4 transition-all bg-surface border-outline-variant/60 shadow-sm flex flex-col gap-3"
+                  >
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <h3 className="text-xs font-bold text-primary">{slot.siteName} · {slot.postName}</h3>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="text-[10px] text-on-surface-variant font-mono bg-surface-container-low px-1.5 py-0.5 rounded">{slot.shiftCode} ({slot.shiftStartTime} - {slot.shiftEndTime})</span>
+                          <span className="text-[9px] font-bold text-on-surface-variant">Required: {slot.requiredCount} Guards</span>
+                        </div>
+                      </div>
+                      <Badge variant={slot.coverageStatus === "FULL" ? "success" : slot.coverageStatus === "PARTIAL" ? "warning" : "error"}>
+                        {slot.coverageStatus} COVERAGE
+                      </Badge>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 pt-2">
+                      {slot.assignments.map(asg => (
+                        <div
+                          key={asg.id}
+                          onClick={() => {
+                            setSelectedAssignment(asg);
+                            setSelectedSlotReq(slot);
+                          }}
+                          className={`p-3 rounded-lg border cursor-pointer hover:border-primary transition-all flex flex-col gap-1.5 ${
+                            asg.status === "WARNING_APPROVED"
+                              ? "bg-status-warning/5 border-status-warning"
+                              : asg.status === "CANCELLED"
+                              ? "bg-surface-container-high border-outline-variant opacity-60 line-through"
+                              : "bg-surface-container-lowest border-outline-variant/60 shadow-sm"
+                          }`}
+                        >
+                          <div className="flex justify-between items-center">
+                            <span className="text-xs font-bold text-on-surface">{asg.employeeName}</span>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleUnassign(asg.id);
+                              }}
+                              className="text-on-surface-variant hover:text-status-error ml-2"
+                            >
+                              <span className="material-symbols-outlined text-[15px]">delete</span>
+                            </button>
+                          </div>
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            <span className="text-[8px] px-1 bg-surface-container-high rounded text-on-surface-variant font-semibold">{asg.employeeCode}</span>
+                            <span className="text-[8px] px-1 bg-surface-container-high rounded text-on-surface-variant font-semibold">{asg.designation}</span>
+                            {asg.status === "WARNING_APPROVED" && (
+                              <Badge variant="warning" className="text-[8px] py-0.5 px-1">Warning Overridden</Badge>
+                            )}
+                            {asg.isReliever && (
+                              <Badge variant="neutral" className="text-[8px] py-0.5 px-1 bg-secondary/20 text-secondary border-none">Reliever</Badge>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+
+                      {Array.from({ length: Math.max(0, slot.requiredCount - slot.assignedCount) }).map((_, i) => (
+                        <div
+                          key={i}
+                          className="border-2 border-dashed border-outline-variant/40 rounded-lg p-4 flex flex-col items-center justify-center text-center text-on-surface-variant min-h-[70px] bg-surface-container-lowest/50"
+                        >
+                          <span className="material-symbols-outlined text-[18px] text-outline-variant/60 animate-pulse">add_circle</span>
+                          <span className="text-[9px] font-bold mt-1 uppercase tracking-wider text-outline-variant/60">Drop Guard here</span>
+                        </div>
+                      ))}
                     </div>
                   </div>
-                  <Badge variant={slot.coverageStatus === "FULL" ? "success" : slot.coverageStatus === "PARTIAL" ? "warning" : "error"}>
-                    {slot.coverageStatus} COVERAGE
-                  </Badge>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TAB 2: Project & Sites Summary */}
+        {activeTab === "project_details" && (
+          <div className="space-y-6 animate-fade-in">
+            {/* Project Details Panel */}
+            <Card className="p-6 bg-surface-container shadow-sm border border-outline-variant/60">
+              <div className="flex justify-between items-start mb-4">
+                <div>
+                  <span className="text-[10px] font-extrabold text-primary uppercase tracking-wider">Project Context Details</span>
+                  <h2 className="text-lg font-bold text-primary mt-1">
+                    {projects.find(p => p.id === selectedProject)?.name} ({projects.find(p => p.id === selectedProject)?.code})
+                  </h2>
                 </div>
-
-                {/* Drop Zone for Guards */}
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3 pt-2">
-                  {slot.assignments.map(asg => (
-                    <div
-                      key={asg.id}
-                      onClick={() => {
-                        setSelectedAssignment(asg);
-                        setSelectedSlotReq(slot);
-                        fetchSlotRequirements(slot.id);
-                      }}
-                      className={`p-3 rounded-lg border cursor-pointer hover:border-primary transition-all flex flex-col gap-1.5 ${
-                        asg.status === "WARNING_APPROVED"
-                          ? "bg-status-warning/5 border-status-warning"
-                          : asg.status === "CANCELLED"
-                          ? "bg-surface-container-high border-outline-variant opacity-60 line-through"
-                          : "bg-surface-container-lowest border-outline-variant/60 shadow-sm"
-                      }`}
-                    >
-                      <div className="flex justify-between items-center">
-                        <span className="text-xs font-bold text-on-surface">{asg.employeeName}</span>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleUnassign(asg.id);
-                          }}
-                          className="text-on-surface-variant hover:text-status-error ml-2"
-                        >
-                          <span className="material-symbols-outlined text-[15px]">delete</span>
-                        </button>
-                      </div>
-                      <div className="flex flex-wrap gap-1 mt-1">
-                        <span className="text-[8px] px-1 bg-surface-container-high rounded text-on-surface-variant font-semibold">{asg.employeeCode}</span>
-                        <span className="text-[8px] px-1 bg-surface-container-high rounded text-on-surface-variant font-semibold">{asg.designation}</span>
-                        {asg.status === "WARNING_APPROVED" && (
-                          <Badge variant="warning" className="text-[8px] py-0.5 px-1">Warning Overridden</Badge>
-                        )}
-                        {asg.isReliever && (
-                          <Badge variant="neutral" className="text-[8px] py-0.5 px-1 bg-secondary/20 text-secondary border-none">Reliever</Badge>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-
-                  {/* Vacant slots slots indicators */}
-                  {Array.from({ length: Math.max(0, slot.requiredCount - slot.assignedCount) }).map((_, i) => (
-                    <div
-                      key={i}
-                      className="border-2 border-dashed border-outline-variant/40 rounded-lg p-4 flex flex-col items-center justify-center text-center text-on-surface-variant min-h-[70px] bg-surface-container-lowest/50"
-                    >
-                      <span className="material-symbols-outlined text-[18px] text-outline-variant/60 animate-pulse">add_circle</span>
-                      <span className="text-[9px] font-bold mt-1 uppercase tracking-wider text-outline-variant/60">Drop Guard here</span>
-                    </div>
-                  ))}
+                <Badge variant="success">ACTIVE PROJECT</Badge>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-xs mt-2">
+                <div className="p-3 bg-surface-container-lowest rounded-lg border border-outline-variant/30">
+                  <p className="text-on-surface-variant font-bold uppercase tracking-wider text-[9px]">Client / Partner</p>
+                  <p className="font-extrabold text-primary mt-1">{clients.find(c => c.id === selectedClient)?.name}</p>
+                </div>
+                <div className="p-3 bg-surface-container-lowest rounded-lg border border-outline-variant/30">
+                  <p className="text-on-surface-variant font-bold uppercase tracking-wider text-[9px]">Active Contract</p>
+                  <p className="font-extrabold text-primary mt-1">{contracts.find(c => c.id === selectedContract)?.contractNumber}</p>
+                </div>
+                <div className="p-3 bg-surface-container-lowest rounded-lg border border-outline-variant/30">
+                  <p className="text-on-surface-variant font-bold uppercase tracking-wider text-[9px]">Scope of Operations</p>
+                  <p className="font-extrabold text-primary mt-1">{businessLabel}</p>
                 </div>
               </div>
-            ))}
+            </Card>
+
+            {/* Sites Table */}
+            <div>
+              <h3 className="text-xs font-extrabold text-primary uppercase tracking-widest mb-3">Project Sites ({sites.length} Active)</h3>
+              <div className="overflow-x-auto border border-outline-variant/50 rounded-xl bg-surface-container-lowest">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-surface-container-low border-b border-outline-variant text-[10px] font-extrabold uppercase tracking-wider text-primary">
+                      <th className="p-3">Site Code</th>
+                      <th className="p-3">Site Name</th>
+                      <th className="p-3">Geofence Location</th>
+                      <th className="p-3 text-center">Site Allowance</th>
+                      <th className="p-3 text-center">Policies/Instructions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sites.map(s => (
+                      <tr key={s.id} className="border-b border-outline-variant/40 hover:bg-surface-container-lowest/80 text-xs">
+                        <td className="p-3 font-mono text-[10px] font-bold text-primary">{s.id.substring(0, 8).toUpperCase()}</td>
+                        <td className="p-3 font-extrabold text-on-surface">{s.name}</td>
+                        <td className="p-3 text-on-surface-variant font-medium">{s.lat ? `${s.lat.toFixed(4)}, ${s.lng.toFixed(4)} (Radius: ${s.radiusMeters}m)` : "No GPS lock"}</td>
+                        <td className="p-3 text-center font-bold text-primary">QAR 300 / month</td>
+                        <td className="p-3 text-center">
+                          <span className="material-symbols-outlined text-[18px] text-primary">verified_user</span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 3: Site Shifts Setup */}
+        {activeTab === "site_shifts" && (
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 animate-fade-in">
+            {/* Form */}
+            <Card className="xl:col-span-1 p-5 border border-outline-variant shadow-sm flex flex-col gap-4">
+              <h3 className="text-xs font-extrabold text-primary uppercase tracking-widest">Add Shift Target</h3>
+              <form onSubmit={handleSaveShift} className="space-y-3.5">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-extrabold text-primary uppercase">Required Designation Category *</label>
+                  <select
+                    className="w-full bg-surface-container border border-outline-variant rounded-lg p-2 text-xs focus:outline-none focus:border-primary font-bold text-primary"
+                    value={newShiftForm.categoryId}
+                    onChange={(e) => setNewShiftForm({ ...newShiftForm, categoryId: e.target.value })}
+                  >
+                    <option value="">Select Designation</option>
+                    {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] font-extrabold text-primary uppercase">Shift Code *</label>
+                    <input
+                      type="text"
+                      className="w-full bg-surface-container border border-outline-variant rounded-lg p-2 text-xs focus:outline-none focus:border-primary font-bold"
+                      value={newShiftForm.shiftCode}
+                      onChange={(e) => setNewShiftForm({ ...newShiftForm, shiftCode: e.target.value })}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] font-extrabold text-primary uppercase">Guards Count *</label>
+                    <input
+                      type="number"
+                      min="1"
+                      className="w-full bg-surface-container border border-outline-variant rounded-lg p-2 text-xs focus:outline-none focus:border-primary font-bold"
+                      value={newShiftForm.requiredCount}
+                      onChange={(e) => setNewShiftForm({ ...newShiftForm, requiredCount: Number(e.target.value) })}
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] font-extrabold text-primary uppercase">Start Time *</label>
+                    <input
+                      type="time"
+                      className="w-full bg-surface-container border border-outline-variant rounded-lg p-2 text-xs focus:outline-none focus:border-primary font-bold"
+                      value={newShiftForm.shiftStartTime}
+                      onChange={(e) => setNewShiftForm({ ...newShiftForm, shiftStartTime: e.target.value })}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] font-extrabold text-primary uppercase">End Time *</label>
+                    <input
+                      type="time"
+                      className="w-full bg-surface-container border border-outline-variant rounded-lg p-2 text-xs focus:outline-none focus:border-primary font-bold"
+                      value={newShiftForm.shiftEndTime}
+                      onChange={(e) => setNewShiftForm({ ...newShiftForm, shiftEndTime: e.target.value })}
+                    />
+                  </div>
+                </div>
+                <Button type="submit" size="sm" className="w-full font-bold text-xs bg-primary text-white border-none py-2 mt-2">
+                  Save Shift Requirement
+                </Button>
+              </form>
+            </Card>
+
+            {/* List */}
+            <div className="xl:col-span-2 space-y-3">
+              <h3 className="text-xs font-extrabold text-primary uppercase tracking-widest">Active Site Roster Setup</h3>
+              <div className="overflow-x-auto border border-outline-variant/50 rounded-xl bg-surface-container-lowest">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-surface-container-low border-b border-outline-variant text-[10px] font-extrabold uppercase tracking-wider text-primary">
+                      <th className="p-3">Shift Code</th>
+                      <th className="p-3">Required Designation</th>
+                      <th className="p-3">Timing</th>
+                      <th className="p-3 text-center">Required Guards</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {siteShifts.map(ss => (
+                      <tr key={ss.id} className="border-b border-outline-variant/40 hover:bg-surface-container-lowest/80 text-xs">
+                        <td className="p-3 font-mono font-bold text-primary">{ss.shiftCode}</td>
+                        <td className="p-3 font-extrabold text-on-surface">{ss.category?.name || "Security Guard"}</td>
+                        <td className="p-3 text-on-surface-variant font-medium">{ss.shiftStartTime} - {ss.shiftEndTime}</td>
+                        <td className="p-3 text-center font-extrabold text-primary">{ss.requiredCount}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 4: Site Allowance Config */}
+        {activeTab === "site_allowance" && (
+          <div className="max-w-xl animate-fade-in">
+            <Card className="p-6 border border-outline-variant shadow-sm flex flex-col gap-4">
+              <div className="border-b border-outline-variant pb-3">
+                <h3 className="text-xs font-extrabold text-primary uppercase tracking-widest">Site Allowance Configuration</h3>
+                <p className="text-[10px] text-on-surface-variant mt-0.5">Enabling this triggers allowance payroll advisories for deployed guards</p>
+              </div>
+
+              <form onSubmit={handleSaveAllowance} className="space-y-4">
+                <div className="flex items-center gap-2.5">
+                  <input
+                    type="checkbox"
+                    id="siteAllowanceEnabled"
+                    className="w-4 h-4 rounded border-outline-variant accent-primary focus:ring-primary"
+                    checked={allowanceConfig.siteAllowanceEnabled}
+                    onChange={(e) => setAllowanceConfig({ ...allowanceConfig, siteAllowanceEnabled: e.target.checked })}
+                  />
+                  <label htmlFor="siteAllowanceEnabled" className="text-xs font-bold text-primary cursor-pointer select-none">
+                    Enable Site Allowance for this location
+                  </label>
+                </div>
+
+                {allowanceConfig.siteAllowanceEnabled && (
+                  <div className="space-y-4 animate-fade-in">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-[10px] font-extrabold text-primary uppercase">Allowance Amount (QAR) *</label>
+                        <input
+                          type="number"
+                          className="w-full bg-surface-container border border-outline-variant rounded-lg p-2 text-xs focus:outline-none focus:border-primary font-bold"
+                          value={allowanceConfig.siteAllowanceAmount}
+                          onChange={(e) => setAllowanceConfig({ ...allowanceConfig, siteAllowanceAmount: Number(e.target.value) })}
+                        />
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-[10px] font-extrabold text-primary uppercase">Frequency *</label>
+                        <select
+                          className="w-full bg-surface-container border border-outline-variant rounded-lg p-2 text-xs focus:outline-none focus:border-primary font-bold text-primary"
+                          value={allowanceConfig.siteAllowanceFrequency}
+                          onChange={(e) => setAllowanceConfig({ ...allowanceConfig, siteAllowanceFrequency: e.target.value as any })}
+                        >
+                          <option value="MONTHLY">Monthly</option>
+                          <option value="DAILY">Daily</option>
+                          <option value="FIXED_FOR_PERIOD">Fixed for Period</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-[10px] font-extrabold text-primary uppercase">Remarks / Advisory Notes</label>
+                      <textarea
+                        className="w-full bg-surface-container border border-outline-variant rounded-lg p-2.5 text-xs focus:outline-none focus:border-primary min-h-[60px]"
+                        placeholder="State reason (e.g. Remote site allowance, high hazard allowance)..."
+                        value={allowanceConfig.allowanceDescription}
+                        onChange={(e) => setAllowanceConfig({ ...allowanceConfig, allowanceDescription: e.target.value })}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <Button type="submit" size="sm" className="font-bold text-xs bg-primary text-white border-none py-2 px-6">
+                  Save Allowance Policy
+                </Button>
+              </form>
+            </Card>
+          </div>
+        )}
+
+        {/* TAB 5: Project Policy Instructions */}
+        {activeTab === "project_instructions" && (
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 animate-fade-in">
+            {/* Form */}
+            <Card className="xl:col-span-1 p-5 border border-outline-variant shadow-sm flex flex-col gap-4">
+              <h3 className="text-xs font-extrabold text-primary uppercase tracking-widest">Create Policy Instruction</h3>
+              <form onSubmit={handleSaveInstruction} className="space-y-3.5">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-extrabold text-primary uppercase">Instruction Title *</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. MOI License strictly required"
+                    className="w-full bg-surface-container border border-outline-variant rounded-lg p-2 text-xs focus:outline-none focus:border-primary font-bold"
+                    value={newInstructionForm.instructionTitle}
+                    onChange={(e) => setNewInstructionForm({ ...newInstructionForm, instructionTitle: e.target.value })}
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-extrabold text-primary uppercase">Policy Requirement Type *</label>
+                  <select
+                    className="w-full bg-surface-container border border-outline-variant rounded-lg p-2 text-xs focus:outline-none focus:border-primary font-bold text-primary"
+                    value={newInstructionForm.requirementType}
+                    onChange={(e) => setNewInstructionForm({ ...newInstructionForm, requirementType: e.target.value as any })}
+                  >
+                    <option value="GENERAL">General Policy Reminder</option>
+                    <option value="LICENSE">MOI Security License Check</option>
+                    <option value="GATE_PASS">Gate Pass Validation</option>
+                    <option value="DOCUMENT">QID/Document Validation</option>
+                    <option value="DESIGNATION">Designation Matching</option>
+                    <option value="GRADE">Salary Grade Validation</option>
+                    <option value="CLIENT_APPROVAL">Client Approval Requirement</option>
+                  </select>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] font-extrabold text-primary uppercase">Enforcement Severity *</label>
+                    <select
+                      className="w-full bg-surface-container border border-outline-variant rounded-lg p-2 text-xs focus:outline-none focus:border-primary font-bold text-primary"
+                      value={newInstructionForm.severity}
+                      onChange={(e) => setNewInstructionForm({ ...newInstructionForm, severity: e.target.value as any })}
+                    >
+                      <option value="HARD_BLOCK">Hard Block (Cannot Deploy)</option>
+                      <option value="WARNING_ONLY">Warning Only</option>
+                      <option value="INFO_ONLY">Information Only</option>
+                    </select>
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] font-extrabold text-primary uppercase">Warning Buffer (Days)</label>
+                    <input
+                      type="number"
+                      className="w-full bg-surface-container border border-outline-variant rounded-lg p-2 text-xs focus:outline-none focus:border-primary font-bold"
+                      value={newInstructionForm.expiryWarningDays}
+                      onChange={(e) => setNewInstructionForm({ ...newInstructionForm, expiryWarningDays: Number(e.target.value) })}
+                    />
+                  </div>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-extrabold text-primary uppercase">Description / Details</label>
+                  <textarea
+                    className="w-full bg-surface-container border border-outline-variant rounded-lg p-2 text-xs focus:outline-none focus:border-primary min-h-[60px]"
+                    placeholder="Enter compliance validation messages..."
+                    value={newInstructionForm.instructionDescription}
+                    onChange={(e) => setNewInstructionForm({ ...newInstructionForm, instructionDescription: e.target.value })}
+                  />
+                </div>
+                <Button type="submit" size="sm" className="w-full font-bold text-xs bg-primary text-white border-none py-2 mt-2">
+                  Add Project Instruction
+                </Button>
+              </form>
+            </Card>
+
+            {/* List */}
+            <div className="xl:col-span-2 space-y-3">
+              <h3 className="text-xs font-extrabold text-primary uppercase tracking-widest">Active Inherited Project Policies</h3>
+              <div className="overflow-x-auto border border-outline-variant/50 rounded-xl bg-surface-container-lowest">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-surface-container-low border-b border-outline-variant text-[10px] font-extrabold uppercase tracking-wider text-primary">
+                      <th className="p-3">Policy Title</th>
+                      <th className="p-3">Check Type</th>
+                      <th className="p-3 text-center">Severity</th>
+                      <th className="p-3 text-center">Warning Days</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {projectInstructions.map((pi, idx) => (
+                      <tr key={idx} className="border-b border-outline-variant/40 hover:bg-surface-container-lowest/80 text-xs">
+                        <td className="p-3 font-extrabold text-on-surface">{pi.instructionTitle}</td>
+                        <td className="p-3 font-medium text-on-surface-variant">{pi.requirementType}</td>
+                        <td className="p-3 text-center font-bold">
+                          <Badge variant={pi.severity === "HARD_BLOCK" ? "error" : pi.severity === "WARNING_ONLY" ? "warning" : "neutral"}>
+                            {pi.severity}
+                          </Badge>
+                        </td>
+                        <td className="p-3 text-center font-semibold text-primary">{pi.expiryWarningDays}</td>
+                      </tr>
+                    ))}
+                    {projectInstructions.length === 0 && (
+                      <tr>
+                        <td colSpan={4} className="p-8 text-center text-on-surface-variant text-[11px] font-semibold">
+                          No project site policy instructions configured. Sites inherit defaults.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
         )}
       </div>
@@ -668,7 +1377,6 @@ export default function DeploymentCalendarPage() {
               onClick={() => {
                 setSelectedAssignment(null);
                 setSelectedSlotReq(null);
-                setSiteRequirements(null);
               }}
               className="text-on-surface-variant hover:text-primary"
             >
@@ -677,7 +1385,6 @@ export default function DeploymentCalendarPage() {
           </div>
 
           <div className="space-y-4">
-            {/* Slot details */}
             <Card className="p-3 bg-surface-container-low border-none flex flex-col gap-1.5 text-[11px]">
               <p className="text-on-surface"><strong>Site</strong>: {selectedSlotReq.siteName}</p>
               <p className="text-on-surface"><strong>Post</strong>: {selectedSlotReq.postName}</p>
