@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { checkApiAuth } from "@/lib/api-guards";
 import { isDbConnected, readDb } from "@ahh-wfm/mock-data";
 import { prisma } from "@ahh-wfm/database";
+import { getEffectiveContractManpower } from "@/lib/contract-helpers";
 
 export async function GET(
   request: Request,
@@ -27,22 +28,33 @@ export async function GET(
 
     if (isDb) {
       project = await prisma.manpowerProject.findUnique({
-        where: { id: projectId },
-        include: { contract: { include: { client: true } } }
+        where: { id: projectId }
       });
-      if (project) {
-        contract = project.contract;
-        client = contract?.client;
 
-        manpowerRequirements = await prisma.contractManpowerRequirement.findMany({
-          where: { contractId: contract.id }
+      if (project) {
+        // Fetch contract from Prisma with all requirements and addendums
+        contract = await prisma.manpowerContract.findUnique({
+          where: { id: project.contractId },
+          include: {
+            client: true,
+            manpowerRequirements: true,
+            relieverRequirements: true,
+            shiftRequirements: true,
+            addendums: {
+              include: { lineItems: true }
+            }
+          }
         });
-        relieverRequirements = await prisma.contractRelieverRequirement.findMany({
-          where: { contractId: contract.id }
-        });
-        shiftRequirements = await prisma.contractShiftRequirement.findMany({
-          where: { contractId: contract.id }
-        });
+
+        if (contract) {
+          client = contract.client;
+
+          // Compute effective manpower, reliever, and shift requirements
+          const { effectiveManpower, effectiveReliever, effectiveShift } = getEffectiveContractManpower(contract);
+          manpowerRequirements = effectiveManpower;
+          relieverRequirements = effectiveReliever;
+          shiftRequirements = effectiveShift;
+        }
 
         projectSites = await prisma.manpowerSite.findMany({
           where: { projectId: project.id }
@@ -61,9 +73,20 @@ export async function GET(
         if (contract) {
           client = (db.manpowerClients || []).find((c: any) => c.id === contract.clientId);
 
-          manpowerRequirements = (db.contractManpowerRequirements || []).filter((mr: any) => mr.contractId === contract.id);
-          relieverRequirements = (db.contractRelieverRequirements || []).filter((rr: any) => rr.contractId === contract.id);
-          shiftRequirements = (db.contractShiftRequirements || []).filter((sr: any) => sr.contractId === contract.id);
+          // Load contract requirements and addendums from memory fallback
+          contract.manpowerRequirements = contract.manpowerRequirements || (db.contractManpowerRequirements || []).filter((r: any) => r.contractId === contract.id);
+          contract.relieverRequirements = contract.relieverRequirements || (db.contractRelieverRequirements || []).filter((r: any) => r.contractId === contract.id);
+          contract.shiftRequirements = contract.shiftRequirements || (db.contractShiftRequirements || []).filter((r: any) => r.contractId === contract.id);
+          contract.addendums = contract.addendums || (db.manpowerContractAddendums || []).filter((a: any) => a.contractId === contract.id).map((a: any) => {
+            const lineItems = (db.manpowerContractAddendumLineItems || []).filter((li: any) => li.addendumId === a.id);
+            return { ...a, lineItems };
+          });
+
+          // Compute effective manpower, reliever, and shift requirements
+          const { effectiveManpower, effectiveReliever, effectiveShift } = getEffectiveContractManpower(contract);
+          manpowerRequirements = effectiveManpower;
+          relieverRequirements = effectiveReliever;
+          shiftRequirements = effectiveShift;
         }
 
         projectSites = (db.manpowerSites || []).filter((s: any) => s.projectId === projectId);
@@ -99,7 +122,7 @@ export async function GET(
         activeShiftsCount: activeShifts.length,
         requiredGuards: reqGuards,
         allowanceEnabled: !!allowance,
-        allowanceAmount: allowance?.siteAllowanceAmount || 0,
+        allowanceAmount: allowance ? allowance.siteAllowanceAmount : 0,
         instructionsCount: instructions.length
       };
     });
@@ -110,16 +133,16 @@ export async function GET(
         id: project.id,
         name: project.name,
         code: project.code,
-        isActive: project.isActive !== false
+        contractId: project.contractId
       },
       contract: contract ? {
         id: contract.id,
         contractNumber: contract.contractNumber,
         title: contract.title,
+        status: contract.status,
         startDate: contract.startDate,
         endDate: contract.endDate,
-        status: contract.status,
-        clientName: client?.name || "Unknown Client"
+        clientName: client?.name || contract.clientId
       } : null,
       manpowerRequirements,
       relieverRequirements,
@@ -128,13 +151,12 @@ export async function GET(
       distribution: {
         totalContractRequired,
         totalSiteDistributed,
-        remainingUndistributed,
-        totalShifts: siteShifts.length
+        remainingUndistributed
       }
     });
 
   } catch (error: any) {
-    console.error("Failed to load project summary API:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error("Failed to load project deployment summary:", error);
+    return NextResponse.json({ error: error.message || "Failed to load project deployment summary" }, { status: 500 });
   }
 }

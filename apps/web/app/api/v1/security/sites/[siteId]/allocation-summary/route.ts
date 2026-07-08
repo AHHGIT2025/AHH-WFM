@@ -11,37 +11,75 @@ export async function GET(
   if (auth.error) return auth.error;
 
   const siteId = params.siteId;
+  const isDb = isDbConnected();
 
   try {
-    const db = readDb() as any;
-    let site = (db.manpowerSites || []).find((s: any) => s.id === siteId);
-
-    // Fallback if creating a new site
+    let site: any = null;
+    let project: any = null;
     let projectId = "";
-    if (site) {
-      projectId = site.projectId;
+    let siblingSiteIds: string[] = [];
+
+    if (isDb) {
+      if (siteId && siteId !== "new") {
+        site = await prisma.manpowerSite.findUnique({
+          where: { id: siteId }
+        });
+      }
+
+      if (site) {
+        projectId = site.projectId;
+      } else {
+        const { searchParams } = new URL(request.url);
+        projectId = searchParams.get("projectId") || "";
+      }
+
+      if (!projectId) {
+        return NextResponse.json({ error: "Project ID is required" }, { status: 400 });
+      }
+
+      project = await prisma.manpowerProject.findUnique({
+        where: { id: projectId }
+      });
+
+      if (!project) {
+        return NextResponse.json({ error: "Project not found" }, { status: 404 });
+      }
+
+      // Sibling sites
+      const siblingSites = await prisma.manpowerSite.findMany({
+        where: { projectId, NOT: { id: siteId }, isActive: true }
+      });
+      siblingSiteIds = siblingSites.map(s => s.id);
     } else {
-      const { searchParams } = new URL(request.url);
-      projectId = searchParams.get("projectId") || "";
+      const db = readDb() as any;
+      if (siteId && siteId !== "new") {
+        site = (db.manpowerSites || []).find((s: any) => s.id === siteId);
+      }
+
+      if (site) {
+        projectId = site.projectId;
+      } else {
+        const { searchParams } = new URL(request.url);
+        projectId = searchParams.get("projectId") || "";
+      }
+
+      if (!projectId) {
+        return NextResponse.json({ error: "Project ID is required" }, { status: 400 });
+      }
+
+      project = (db.manpowerProjects || []).find((p: any) => p.id === projectId);
+      if (!project) {
+        return NextResponse.json({ error: "Project not found" }, { status: 404 });
+      }
+
+      const siblingSites = (db.manpowerSites || []).filter((s: any) => s.projectId === projectId && s.id !== siteId && s.isActive !== false);
+      siblingSiteIds = siblingSites.map((s: any) => s.id);
     }
 
-    if (!projectId) {
-      return NextResponse.json({ error: "Project ID is required" }, { status: 400 });
-    }
-
-    const project = (db.manpowerProjects || []).find((p: any) => p.id === projectId);
-    if (!project) {
-      return NextResponse.json({ error: "Project not found" }, { status: 404 });
-    }
-
-    // Sibling sites
-    const siblingSites = (db.manpowerSites || []).filter((s: any) => s.projectId === projectId && s.id !== siteId && s.isActive !== false);
-    const siblingSiteIds = siblingSites.map((s: any) => s.id);
-
-    // Project allocations
+    // Load allocations from db.json
+    const db = readDb() as any;
     const projectAllocations = (db.projectManpowerAllocations || []).filter((a: any) => a.projectId === projectId);
     const projectRelievers = (db.projectRelieverAllocations || []).filter((a: any) => a.projectId === projectId);
-
     const siteAllocations = db.siteManpowerAllocations || [];
 
     // Map manpower requirements

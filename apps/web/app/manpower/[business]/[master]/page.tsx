@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { hasPermission, isAdminUser } from "../../../../lib/permissions";
+import { getEffectiveContractManpower } from "../../../../lib/contract-helpers";
 
 interface ChecklistItem {
   itemCode: string;
@@ -579,7 +580,7 @@ export default function ManpowerMasterPage() {
         ];
       }
 
-      const url = master === "materials" ? `${apiBase}/${editItem.id}` : apiBase;
+      const url = (master === "materials" || master === "projects") ? `${apiBase}/${editItem.id}` : apiBase;
       const method = master === "materials" ? "PUT" : "PATCH";
       const res = await fetch(url, {
         method,
@@ -1088,6 +1089,41 @@ export default function ManpowerMasterPage() {
       }
     };
 
+    // Delete Worksite
+    const handleDeleteSite = async () => {
+      const user = session?.user as any;
+      const isSuperOrAdmin = user && (user.role === "ADMIN" || user.role === "SUPER_ADMIN");
+      const hasPerm = hasPermission(user, "manpower.admin.full_access") || hasPermission(user, "manpower.security.manage");
+
+      if (!isSuperOrAdmin && !hasPerm) {
+        alert("You do not have permission to delete sites.");
+        return;
+      }
+
+      if (confirm(`Are you sure you want to delete the site "${siteSummary.site.name}"?`)) {
+        try {
+          const res = await fetch(`/api/v1/security/sites/${selectedSiteId}`, {
+            method: "DELETE"
+          });
+          const result = await res.json();
+          if (res.ok) {
+            if (result.deactivated) {
+              alert(result.message || "This site is already used in deployment records. It has been deactivated instead of permanently deleted.");
+            } else {
+              alert("Site deleted successfully.");
+            }
+            setSelectedSiteId(null);
+            setSiteSummary(null);
+            loadData();
+          } else {
+            alert(result.error || "Failed to delete site");
+          }
+        } catch (err) {
+          alert("Server connection failed");
+        }
+      }
+    };
+
     // Toggle Site Active Status
     const handleToggleStatus = async () => {
       const user = session?.user as any;
@@ -1179,6 +1215,12 @@ export default function ManpowerMasterPage() {
           </div>
           <div className="flex items-center gap-3">
             <button
+              onClick={() => startEdit(siteSummary.site)}
+              className="px-3 py-1.5 bg-primary/10 text-primary border border-primary/20 hover:bg-primary/15 rounded-lg text-xs font-bold transition-all"
+            >
+              Edit Site
+            </button>
+            <button
               onClick={handleToggleStatus}
               className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${
                 siteSummary.site.isActive
@@ -1186,7 +1228,13 @@ export default function ManpowerMasterPage() {
                   : "bg-status-success/10 text-status-success border-status-success/20 hover:bg-status-success/15"
               }`}
             >
-              {siteSummary.site.isActive ? "Disable Site" : "Enable Site"}
+              {siteSummary.site.isActive ? "Disable Site" : "Activate Site"}
+            </button>
+            <button
+              onClick={handleDeleteSite}
+              className="px-3 py-1.5 bg-status-error/10 text-status-error border border-status-error/20 hover:bg-status-error/15 rounded-lg text-xs font-bold transition-all"
+            >
+              Delete Site
             </button>
             <button
               onClick={() => {
@@ -7801,128 +7849,172 @@ export default function ManpowerMasterPage() {
       )}
 
       {/* Contract Detail Drawer */}
-      {selectedContractDetail && (
-        <div className="fixed inset-0 z-50 flex justify-end bg-black/50 p-0 transition-opacity">
-          <div className="bg-surface w-full max-w-2xl h-full shadow-2xl flex flex-col overflow-hidden text-on-surface">
-            <div className="px-6 py-4 border-b border-outline-variant flex justify-between items-center bg-surface-container-low">
-              <div>
-                <span className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded uppercase tracking-wider mr-2">
-                  Contract
-                </span>
-                <h3 className="text-base font-bold text-primary inline-block">{selectedContractDetail.title} ({selectedContractDetail.contractNumber})</h3>
-              </div>
-              <button 
-                onClick={() => setSelectedContractDetail(null)} 
-                className="text-on-surface-variant hover:text-primary w-8 h-8 rounded-lg hover:bg-surface-container-high flex items-center justify-center"
-              >
-                <span className="material-symbols-outlined text-[20px]">close</span>
-              </button>
-            </div>
-            
-            <div className="p-6 space-y-6 flex-1 overflow-y-auto text-xs">
-              <div className="bg-surface-container-low border border-outline-variant p-4 rounded-xl space-y-2">
-                <h4 className="text-[10px] font-bold text-primary uppercase tracking-wider border-b border-outline-variant pb-1">Contract Summary</h4>
-                <p><span className="text-on-surface-variant font-medium">Client:</span> <span className="font-semibold">{selectedContractDetail.client?.name || selectedContractDetail.clientId}</span></p>
-                <p><span className="text-on-surface-variant font-medium">Duration:</span> <span className="font-semibold">{new Date(selectedContractDetail.startDate).toLocaleDateString()} to {new Date(selectedContractDetail.endDate).toLocaleDateString()}</span></p>
-                <p><span className="text-on-surface-variant font-medium">Status:</span> 
-                  <span className={`ml-2 px-1.5 py-0.5 rounded text-[10px] font-bold ${selectedContractDetail.status === "ACTIVE" ? "bg-status-success/15 text-status-success" : "bg-surface-container-high/40 text-on-surface-variant"}`}>
-                    {selectedContractDetail.status}
+      {selectedContractDetail && (() => {
+        const { effectiveManpower, effectiveReliever, effectiveShift } = getEffectiveContractManpower(selectedContractDetail);
+        return (
+          <div className="fixed inset-0 z-50 flex justify-end bg-black/50 p-0 transition-opacity">
+            <div className="bg-surface w-full max-w-2xl h-full shadow-2xl flex flex-col overflow-hidden text-on-surface">
+              <div className="px-6 py-4 border-b border-outline-variant flex justify-between items-center bg-surface-container-low">
+                <div>
+                  <span className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-0.5 rounded uppercase tracking-wider mr-2">
+                    Contract
                   </span>
-                </p>
-                {selectedContractDetail.remarks && <p><span className="text-on-surface-variant font-medium">Remarks:</span> <span>{selectedContractDetail.remarks}</span></p>}
+                  <h3 className="text-base font-bold text-primary inline-block">{selectedContractDetail.title} ({selectedContractDetail.contractNumber})</h3>
+                </div>
+                <button 
+                  onClick={() => setSelectedContractDetail(null)} 
+                  className="text-on-surface-variant hover:text-primary w-8 h-8 rounded-lg hover:bg-surface-container-high flex items-center justify-center"
+                >
+                  <span className="material-symbols-outlined text-[20px]">close</span>
+                </button>
               </div>
+              
+              <div className="p-6 space-y-6 flex-1 overflow-y-auto text-xs">
+                <div className="bg-surface-container-low border border-outline-variant p-4 rounded-xl space-y-2">
+                  <h4 className="text-[10px] font-bold text-primary uppercase tracking-wider border-b border-outline-variant pb-1">Contract Summary</h4>
+                  <p><span className="text-on-surface-variant font-medium">Client:</span> <span className="font-semibold">{selectedContractDetail.client?.name || selectedContractDetail.clientId}</span></p>
+                  <p><span className="text-on-surface-variant font-medium">Duration:</span> <span className="font-semibold">{new Date(selectedContractDetail.startDate).toLocaleDateString()} to {new Date(selectedContractDetail.endDate).toLocaleDateString()}</span></p>
+                  <p><span className="text-on-surface-variant font-medium">Status:</span> 
+                    <span className={`ml-2 px-1.5 py-0.5 rounded text-[10px] font-bold ${selectedContractDetail.status === "ACTIVE" ? "bg-status-success/15 text-status-success" : "bg-surface-container-high/40 text-on-surface-variant"}`}>
+                      {selectedContractDetail.status}
+                    </span>
+                  </p>
+                  {selectedContractDetail.remarks && <p><span className="text-on-surface-variant font-medium">Remarks:</span> <span>{selectedContractDetail.remarks}</span></p>}
+                </div>
 
-              <div className="bg-surface-container-low border border-outline-variant p-4 rounded-xl space-y-3">
-                <h4 className="text-xs font-bold text-primary uppercase tracking-wider border-b border-outline-variant pb-1">Manpower Requirements</h4>
-                {(!selectedContractDetail.manpowerRequirements || selectedContractDetail.manpowerRequirements.length === 0) ? (
-                  <p className="text-[11px] text-on-surface-variant italic">No manpower requirements logged.</p>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs border-collapse">
-                      <thead>
-                        <tr className="border-b border-outline-variant text-[10px] text-on-surface-variant font-bold uppercase tracking-wider">
-                          <th className="pb-2">Position</th>
-                          <th className="pb-2">Quantity</th>
-                          <th className="pb-2">Deployment Type</th>
-                          <th className="pb-2">Remarks</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {selectedContractDetail.manpowerRequirements.map((mr: any) => (
-                          <tr key={mr.id} className="border-b border-outline-variant/30 hover:bg-surface-container-lowest">
-                            <td className="py-2 font-medium text-on-surface">{mr.position}</td>
-                            <td className="py-2 text-on-surface-variant font-bold">{mr.quantity}</td>
-                            <td className="py-2 text-on-surface-variant">{mr.deploymentType}</td>
-                            <td className="py-2 text-on-surface-variant">{mr.remarks || "—"}</td>
+                <div className="bg-surface-container-low border border-outline-variant p-4 rounded-xl space-y-3">
+                  <h4 className="text-xs font-bold text-primary uppercase tracking-wider border-b border-outline-variant pb-1">Manpower Requirements</h4>
+                  {(!effectiveManpower || effectiveManpower.length === 0) ? (
+                    <p className="text-[11px] text-on-surface-variant italic">No manpower requirements logged.</p>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-xs border-collapse">
+                        <thead>
+                          <tr className="border-b border-outline-variant text-[10px] text-on-surface-variant font-bold uppercase tracking-wider">
+                            <th className="pb-2">Position</th>
+                            <th className="pb-2">Quantity</th>
+                            <th className="pb-2">Deployment Type</th>
+                            <th className="pb-2">Source / Status</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
+                        </thead>
+                        <tbody>
+                          {effectiveManpower.map((mr: any, index: number) => (
+                            <tr key={index} className="border-b border-outline-variant/30 hover:bg-surface-container-lowest">
+                              <td className="py-2 font-medium text-on-surface">{mr.position}</td>
+                              <td className="py-2 text-on-surface-variant font-bold">{mr.quantity}</td>
+                              <td className="py-2 text-on-surface-variant">{mr.deploymentType || "PERMANENT"}</td>
+                              <td className="py-2 text-on-surface-variant">
+                                {mr.originalQty !== mr.quantity ? (
+                                  <span className="text-[10px] text-primary bg-primary/10 px-1.5 py-0.5 rounded font-bold">
+                                    Modified by Addendum ({mr.addendumQty >= 0 ? `+${mr.addendumQty}` : mr.addendumQty})
+                                  </span>
+                                ) : mr.originalQty === 0 ? (
+                                  <span className="text-[10px] text-primary bg-primary/10 px-1.5 py-0.5 rounded font-bold">
+                                    Source: Addendum
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] text-on-surface-variant/75 bg-surface-container-high/40 px-1.5 py-0.5 rounded">
+                                    Original Contract
+                                  </span>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
 
-              <div className="bg-surface-container-low border border-outline-variant p-4 rounded-xl space-y-3">
-                <h4 className="text-xs font-bold text-primary uppercase tracking-wider border-b border-outline-variant pb-1">Reliever Requirements</h4>
-                {(!selectedContractDetail.relieverRequirements || selectedContractDetail.relieverRequirements.length === 0) ? (
-                  <p className="text-[11px] text-on-surface-variant italic">No reliever requirements logged.</p>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs border-collapse">
-                      <thead>
-                        <tr className="border-b border-outline-variant text-[10px] text-on-surface-variant font-bold uppercase tracking-wider">
-                          <th className="pb-2">Position</th>
-                          <th className="pb-2">Quantity</th>
-                          <th className="pb-2">Source Preference</th>
-                          <th className="pb-2">Remarks</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {selectedContractDetail.relieverRequirements.map((rr: any) => (
-                          <tr key={rr.id} className="border-b border-outline-variant/30 hover:bg-surface-container-lowest">
-                            <td className="py-2 font-medium text-on-surface">{rr.position}</td>
-                            <td className="py-2 text-on-surface-variant font-bold">{rr.quantity}</td>
-                            <td className="py-2 text-on-surface-variant">{rr.sourcePreference}</td>
-                            <td className="py-2 text-on-surface-variant">{rr.remarks || "—"}</td>
+                <div className="bg-surface-container-low border border-outline-variant p-4 rounded-xl space-y-3">
+                  <h4 className="text-xs font-bold text-primary uppercase tracking-wider border-b border-outline-variant pb-1">Reliever Requirements</h4>
+                  {(!effectiveReliever || effectiveReliever.length === 0) ? (
+                    <p className="text-[11px] text-on-surface-variant italic">No reliever requirements logged.</p>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-xs border-collapse">
+                        <thead>
+                          <tr className="border-b border-outline-variant text-[10px] text-on-surface-variant font-bold uppercase tracking-wider">
+                            <th className="pb-2">Position</th>
+                            <th className="pb-2">Quantity</th>
+                            <th className="pb-2">Source Preference</th>
+                            <th className="pb-2">Source / Status</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
+                        </thead>
+                        <tbody>
+                          {effectiveReliever.map((rr: any, index: number) => (
+                            <tr key={index} className="border-b border-outline-variant/30 hover:bg-surface-container-lowest">
+                              <td className="py-2 font-medium text-on-surface">{rr.position}</td>
+                              <td className="py-2 text-on-surface-variant font-bold">{rr.quantity}</td>
+                              <td className="py-2 text-on-surface-variant">{rr.sourcePreference}</td>
+                              <td className="py-2 text-on-surface-variant">
+                                {rr.originalQty !== rr.quantity ? (
+                                  <span className="text-[10px] text-primary bg-primary/10 px-1.5 py-0.5 rounded font-bold">
+                                    Modified by Addendum ({rr.addendumQty >= 0 ? `+${rr.addendumQty}` : rr.addendumQty})
+                                  </span>
+                                ) : rr.originalQty === 0 ? (
+                                  <span className="text-[10px] text-primary bg-primary/10 px-1.5 py-0.5 rounded font-bold">
+                                    Source: Addendum
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] text-on-surface-variant/75 bg-surface-container-high/40 px-1.5 py-0.5 rounded">
+                                    Original Contract
+                                  </span>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
 
-              <div className="bg-surface-container-low border border-outline-variant p-4 rounded-xl space-y-3">
-                <h4 className="text-xs font-bold text-primary uppercase tracking-wider border-b border-outline-variant pb-1">Shift Requirements</h4>
-                {(!selectedContractDetail.shiftRequirements || selectedContractDetail.shiftRequirements.length === 0) ? (
-                  <p className="text-[11px] text-on-surface-variant italic">No shift requirements logged.</p>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs border-collapse">
-                      <thead>
-                        <tr className="border-b border-outline-variant text-[10px] text-on-surface-variant font-bold uppercase tracking-wider">
-                          <th className="pb-2">Shift Name</th>
-                          <th className="pb-2">Times</th>
-                          <th className="pb-2">Posts Covered</th>
-                          <th className="pb-2">Days Pattern</th>
-                          <th className="pb-2">Remarks</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {selectedContractDetail.shiftRequirements.map((sr: any) => (
-                          <tr key={sr.id} className="border-b border-outline-variant/30 hover:bg-surface-container-lowest">
-                            <td className="py-2 font-medium text-on-surface">{sr.shiftName}</td>
-                            <td className="py-2 text-on-surface-variant">{sr.startTime} - {sr.endTime}</td>
-                            <td className="py-2 text-on-surface-variant font-bold">{sr.postsCovered}</td>
-                            <td className="py-2 text-on-surface-variant">{sr.daysPattern}</td>
-                            <td className="py-2 text-on-surface-variant">{sr.remarks || "—"}</td>
+                <div className="bg-surface-container-low border border-outline-variant p-4 rounded-xl space-y-3">
+                  <h4 className="text-xs font-bold text-primary uppercase tracking-wider border-b border-outline-variant pb-1">Shift Requirements</h4>
+                  {(!effectiveShift || effectiveShift.length === 0) ? (
+                    <p className="text-[11px] text-on-surface-variant italic">No shift requirements logged.</p>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-xs border-collapse">
+                        <thead>
+                          <tr className="border-b border-outline-variant text-[10px] text-on-surface-variant font-bold uppercase tracking-wider">
+                            <th className="pb-2">Shift Name</th>
+                            <th className="pb-2">Times</th>
+                            <th className="pb-2">Posts Covered</th>
+                            <th className="pb-2">Days Pattern</th>
+                            <th className="pb-2">Source / Status</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
+                        </thead>
+                        <tbody>
+                          {effectiveShift.map((sr: any, index: number) => (
+                            <tr key={index} className="border-b border-outline-variant/30 hover:bg-surface-container-lowest">
+                              <td className="py-2 font-medium text-on-surface">{sr.shiftName}</td>
+                              <td className="py-2 text-on-surface-variant">{sr.startTime} - {sr.endTime}</td>
+                              <td className="py-2 text-on-surface-variant font-bold">{sr.postsCovered}</td>
+                              <td className="py-2 text-on-surface-variant">{sr.daysPattern}</td>
+                              <td className="py-2 text-on-surface-variant">
+                                {sr.originalPosts !== sr.quantity ? (
+                                  <span className="text-[10px] text-primary bg-primary/10 px-1.5 py-0.5 rounded font-bold">
+                                    Modified by Addendum ({sr.addendumPosts >= 0 ? `+${sr.addendumPosts}` : sr.addendumPosts})
+                                  </span>
+                                ) : sr.originalPosts === 0 ? (
+                                  <span className="text-[10px] text-primary bg-primary/10 px-1.5 py-0.5 rounded font-bold">
+                                    Source: Addendum
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] text-on-surface-variant/75 bg-surface-container-high/40 px-1.5 py-0.5 rounded">
+                                    Original Contract
+                                  </span>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
 
               <div className="bg-surface-container-low border border-outline-variant p-4 rounded-xl space-y-3">
                 <h4 className="text-xs font-bold text-primary uppercase tracking-wider border-b border-outline-variant pb-1">Contract Addendums / Revisions</h4>
@@ -8253,7 +8345,8 @@ export default function ManpowerMasterPage() {
             </div>
           </div>
         </div>
-      )}
+      );
+    })()}
       {addendumContract && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="bg-surface rounded-xl border border-outline-variant shadow-lg max-w-7xl w-full h-[90vh] flex flex-col overflow-hidden text-on-surface">
