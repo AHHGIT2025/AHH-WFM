@@ -90,12 +90,17 @@ export default function ManpowerMasterPage() {
 
   // Security Projects states
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [projectSummary, setProjectSummary] = useState<any | null>(null);
+  const [selectedSiteId, setSelectedSiteId] = useState<string | null>(null);
+  const [siteSummary, setSiteSummary] = useState<any | null>(null);
   const [projectAllocatedMaterials, setProjectAllocatedMaterials] = useState<any[]>([]);
   const [projectShiftRequirements, setProjectShiftRequirements] = useState<any[]>([]);
   const [projectDeployments, setProjectDeployments] = useState<any[]>([]);
 
   // Patrol Operations Board states
   const [coordinatorSubTab, setCoordinatorSubTab] = useState<"board" | "assignments">("board");
+  const [siteActiveTab, setSiteActiveTab] = useState("overview");
+  const [siteToDisable, setSiteToDisable] = useState<any | null>(null);
   const [patrolVisitsList, setPatrolVisitsList] = useState<any[]>([]);
   const [dailyReportsList, setDailyReportsList] = useState<any[]>([]);
   const [selectedPatrolSite, setSelectedPatrolSite] = useState<any | null>(null);
@@ -539,6 +544,11 @@ export default function ManpowerMasterPage() {
   async function loadProjectDetails(projectId: string) {
     setSelectedProjectId(projectId);
     try {
+      const summaryRes = await fetch(`/api/v1/security/projects/${projectId}/deployment-summary`);
+      if (summaryRes.ok) {
+        setProjectSummary(await summaryRes.json());
+      }
+
       const matRes = await fetch(`/api/v1/manpower/material-allocations?projectId=${projectId}`);
       if (matRes.ok) setProjectAllocatedMaterials(await matRes.json());
 
@@ -565,6 +575,18 @@ export default function ManpowerMasterPage() {
       }
     } catch (e) {
       console.error("Failed to load project details", e);
+    }
+  }
+
+  async function loadSiteDetails(siteId: string) {
+    setSelectedSiteId(siteId);
+    try {
+      const res = await fetch(`/api/v1/security/sites/${siteId}/deployment-summary`);
+      if (res.ok) {
+        setSiteSummary(await res.json());
+      }
+    } catch (e) {
+      console.error("Failed to load site details", e);
     }
   }
 
@@ -635,9 +657,16 @@ export default function ManpowerMasterPage() {
     const project = data.find(p => p.id === selectedProjectId);
     if (!project) return null;
 
-    const totalRequired = projectShiftRequirements.reduce((sum, s) => sum + (s.requiredCount || 0), 0);
-    const totalActual = projectDeployments.reduce((sum, d) => sum + (d.assignments?.length || 0), 0);
-    const coveragePercent = totalRequired > 0 ? Math.round((totalActual / totalRequired) * 100) : 100;
+    if (!projectSummary) {
+      return (
+        <div className="w-1/2 bg-surface border border-outline-variant rounded-xl shadow-sm p-6 flex flex-col items-center justify-center gap-2">
+          <span className="material-symbols-outlined text-3xl animate-spin text-primary">sync</span>
+          <p className="text-xs text-on-surface-variant">Loading project contract summary...</p>
+        </div>
+      );
+    }
+
+    const { contract, manpowerRequirements, relieverRequirements, shiftRequirements, sites: projectSites, distribution } = projectSummary;
 
     return (
       <div className="w-1/2 bg-surface border border-outline-variant rounded-xl shadow-sm p-6 overflow-y-auto flex flex-col gap-6">
@@ -647,149 +676,101 @@ export default function ManpowerMasterPage() {
             <p className="text-[10px] text-on-surface-variant">Project Code: {project.code}</p>
           </div>
           <button
-            onClick={() => setSelectedProjectId(null)}
+            onClick={() => {
+              setSelectedProjectId(null);
+              setProjectSummary(null);
+            }}
             className="w-6 h-6 rounded-full hover:bg-surface-container-high flex items-center justify-center text-on-surface-variant"
           >
             <span className="material-symbols-outlined text-[16px]">close</span>
           </button>
         </div>
 
-        {/* Deployment Coverage Widget */}
+        {/* Contract Summary */}
+        {contract && (
+          <div className="bg-surface-container-low border border-outline-variant p-4 rounded-xl space-y-3">
+            <h4 className="text-xs font-bold text-primary flex items-center gap-1">
+              <span className="material-symbols-outlined text-[16px]">description</span>
+              Linked Contract Summary
+            </h4>
+            <div className="grid grid-cols-2 gap-3 text-xs">
+              <div>
+                <p className="text-[10px] text-on-surface-variant font-medium">Contract Number</p>
+                <p className="font-semibold text-on-surface">{contract.contractNumber}</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-on-surface-variant font-medium">Client</p>
+                <p className="font-semibold text-on-surface">{contract.clientName}</p>
+              </div>
+              <div className="col-span-2">
+                <p className="text-[10px] text-on-surface-variant font-medium">Contract Title</p>
+                <p className="font-semibold text-on-surface">{contract.title}</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-on-surface-variant font-medium">Period</p>
+                <p className="font-semibold text-on-surface">
+                  {contract.startDate?.split("T")[0]} to {contract.endDate?.split("T")[0]}
+                </p>
+              </div>
+              <div>
+                <p className="text-[10px] text-on-surface-variant font-medium">Status</p>
+                <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold mt-0.5 ${contract.status === "ACTIVE" ? "bg-status-success/15 text-status-success" : "bg-status-warning/15 text-status-warning"}`}>
+                  {contract.status}
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Manpower Distribution Metrics */}
         <div className="bg-surface-container-low border border-outline-variant p-4 rounded-xl space-y-2">
-          <p className="text-[9px] uppercase font-bold text-on-surface-variant">Daily Deployment Coverage Today</p>
-          <div className="flex items-center justify-between text-xs font-black">
-            <span className="text-on-surface">Guards Deployed: {totalActual} / {totalRequired}</span>
-            <span className={coveragePercent < 100 ? "text-status-error" : "text-status-success"}>
-              {coveragePercent}%
-            </span>
-          </div>
-          <div className="w-full bg-surface-container-high rounded-full h-2 overflow-hidden">
-            <div
-              className={`h-full rounded-full ${coveragePercent < 100 ? "bg-status-error" : "bg-status-success"}`}
-              style={{ width: `${Math.min(100, coveragePercent)}%` }}
-            ></div>
-          </div>
-        </div>
-
-        {/* Required vs Actual Ledger */}
-        <div className="space-y-2">
-          <h4 className="text-xs font-bold text-primary flex items-center gap-1">
-            <span className="material-symbols-outlined text-[16px]">equalizer</span>
-            Required vs Actual Manpower Ledger
-          </h4>
-          <div className="border border-outline-variant rounded-lg overflow-hidden bg-surface text-xs">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-surface-container-low border-b border-outline-variant text-[9px] uppercase text-on-surface-variant font-bold">
-                  <th className="px-3 py-2">Shift/Site</th>
-                  <th className="px-3 py-2 text-center">Req.</th>
-                  <th className="px-3 py-2 text-center">Act.</th>
-                  <th className="px-3 py-2 text-right">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-outline-variant/60">
-                {projectShiftRequirements.length === 0 ? (
-                  <tr>
-                    <td colSpan={4} className="p-4 text-center text-on-surface-variant italic">No shifts configured for this project.</td>
-                  </tr>
-                ) : (
-                  projectShiftRequirements.map((req: any) => {
-                    const dep = projectDeployments.find((d: any) => d.shiftRequirementId === req.id);
-                    const actCount = dep?.assignments?.length || 0;
-                    const reqCount = req.requiredCount || 0;
-                    const statusStr = actCount < reqCount ? "UNDER" : actCount > reqCount ? "OVER" : "OK";
-                    return (
-                      <tr key={req.id} className="hover:bg-surface-container-lowest">
-                        <td className="px-3 py-2 font-semibold text-on-surface">
-                          {req.shiftCode} <span className="text-[10px] text-on-surface-variant font-normal">({req.site?.name || req.siteId})</span>
-                        </td>
-                        <td className="px-3 py-2 text-center">{reqCount}</td>
-                        <td className="px-3 py-2 text-center font-bold">{actCount}</td>
-                        <td className="px-3 py-2 text-right">
-                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${statusStr === "UNDER" ? "bg-status-error/15 text-status-error" : statusStr === "OVER" ? "bg-primary/15 text-primary" : "bg-status-success/15 text-status-success"}`}>
-                            {statusStr}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
+          <p className="text-[9px] uppercase font-bold text-on-surface-variant">Manpower Allocation Progress</p>
+          <div className="grid grid-cols-3 gap-2 text-center text-xs border border-outline-variant/60 rounded-lg p-2 bg-surface">
+            <div>
+              <p className="text-[10px] text-on-surface-variant font-medium">Contract Req.</p>
+              <p className="text-sm font-black text-on-surface">{distribution?.totalContractRequired || 0}</p>
+            </div>
+            <div>
+              <p className="text-[10px] text-on-surface-variant font-medium">Distributed</p>
+              <p className="text-sm font-black text-primary">{distribution?.totalSiteDistributed || 0}</p>
+            </div>
+            <div>
+              <p className="text-[10px] text-on-surface-variant font-medium">Remaining</p>
+              <p className={`text-sm font-black ${distribution?.remainingUndistributed > 0 ? "text-status-error" : "text-status-success"}`}>
+                {distribution?.remainingUndistributed || 0}
+              </p>
+            </div>
           </div>
         </div>
 
-        {/* Reliever Pools */}
+        {/* Manpower Requirements Table */}
         <div className="space-y-2">
           <h4 className="text-xs font-bold text-primary flex items-center gap-1">
             <span className="material-symbols-outlined text-[16px]">groups</span>
-            Reliever Pools
+            Inherited Manpower Requirements
           </h4>
           <div className="border border-outline-variant rounded-lg overflow-hidden bg-surface text-xs">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-surface-container-low border-b border-outline-variant text-[9px] uppercase text-on-surface-variant font-bold">
-                  <th className="px-3 py-2">Pool Name</th>
-                  <th className="px-3 py-2 text-center">Assigned</th>
-                  <th className="px-3 py-2 text-center">Target</th>
-                  <th className="px-3 py-2 text-right">Status</th>
+                  <th className="px-3 py-2">Position</th>
+                  <th className="px-3 py-2 text-center">Qty</th>
+                  <th className="px-3 py-2">Type</th>
+                  <th className="px-3 py-2">Remarks</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-outline-variant/60">
-                {relieverPoolsList.filter(p => p.projectId === selectedProjectId).length === 0 ? (
+                {manpowerRequirements.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="p-4 text-center text-on-surface-variant italic">No reliever pools for this project.</td>
+                    <td colSpan={4} className="p-4 text-center text-on-surface-variant italic">No manpower requirements specified in contract.</td>
                   </tr>
                 ) : (
-                  relieverPoolsList.filter(p => p.projectId === selectedProjectId).map((pool: any) => {
-                    const assignedCount = relieverAssignmentsList.filter(a => a.poolId === pool.id).length;
-                    const reqCount = pool.requiredRelieverCount || 3;
-                    const short = Math.max(0, reqCount - assignedCount);
-                    return (
-                      <tr key={pool.id} className="hover:bg-surface-container-lowest">
-                        <td className="px-3 py-2 font-semibold text-on-surface">{pool.poolName}</td>
-                        <td className="px-3 py-2 text-center">{assignedCount}</td>
-                        <td className="px-3 py-2 text-center">{reqCount}</td>
-                        <td className="px-3 py-2 text-right">
-                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${short > 0 ? "bg-status-error/15 text-status-error" : "bg-status-success/15 text-status-success"}`}>
-                            {short > 0 ? `${short} Short` : "Full"}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Material & Equipment Allocations */}
-        <div className="space-y-2">
-          <h4 className="text-xs font-bold text-primary flex items-center gap-1">
-            <span className="material-symbols-outlined text-[16px]">devices_other</span>
-            Material & Equipment Allocations
-          </h4>
-          <div className="border border-outline-variant rounded-lg overflow-hidden bg-surface text-xs">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-surface-container-low border-b border-outline-variant text-[9px] uppercase text-on-surface-variant font-bold">
-                  <th className="px-3 py-2">Item Name</th>
-                  <th className="px-3 py-2">Category</th>
-                  <th className="px-3 py-2 text-center">Allocated</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-outline-variant/60">
-                {projectAllocatedMaterials.length === 0 ? (
-                  <tr>
-                    <td colSpan={3} className="p-4 text-center text-on-surface-variant italic">No equipment allocated to this project.</td>
-                  </tr>
-                ) : (
-                  projectAllocatedMaterials.map((mat: any) => (
-                    <tr key={mat.id} className="hover:bg-surface-container-lowest">
-                      <td className="px-3 py-2 font-semibold text-on-surface">{mat.contractMaterial?.materialName || "Material"}</td>
-                      <td className="px-3 py-2 text-on-surface-variant">{mat.contractMaterial?.category || "Equipment"}</td>
-                      <td className="px-3 py-2 text-center font-bold">{mat.quantityAllocated}</td>
+                  manpowerRequirements.map((mr: any) => (
+                    <tr key={mr.id} className="hover:bg-surface-container-lowest">
+                      <td className="px-3 py-2 font-semibold text-on-surface">{mr.position}</td>
+                      <td className="px-3 py-2 text-center font-bold">{mr.quantity}</td>
+                      <td className="px-3 py-2 uppercase text-[10px] text-on-surface-variant font-semibold">{mr.deploymentType}</td>
+                      <td className="px-3 py-2 text-on-surface-variant italic">{mr.remarks || "—"}</td>
                     </tr>
                   ))
                 )}
@@ -797,6 +778,705 @@ export default function ManpowerMasterPage() {
             </table>
           </div>
         </div>
+
+        {/* Reliever Requirements Table */}
+        <div className="space-y-2">
+          <h4 className="text-xs font-bold text-primary flex items-center gap-1">
+            <span className="material-symbols-outlined text-[16px]">shuffle</span>
+            Inherited Reliever Requirements
+          </h4>
+          <div className="border border-outline-variant rounded-lg overflow-hidden bg-surface text-xs">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-surface-container-low border-b border-outline-variant text-[9px] uppercase text-on-surface-variant font-bold">
+                  <th className="px-3 py-2">Position</th>
+                  <th className="px-3 py-2 text-center">Qty</th>
+                  <th className="px-3 py-2">Pref. Source</th>
+                  <th className="px-3 py-2">Remarks</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-outline-variant/60">
+                {relieverRequirements.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="p-4 text-center text-on-surface-variant italic">No reliever requirements specified in contract.</td>
+                  </tr>
+                ) : (
+                  relieverRequirements.map((rr: any) => (
+                    <tr key={rr.id} className="hover:bg-surface-container-lowest">
+                      <td className="px-3 py-2 font-semibold text-on-surface">{rr.position}</td>
+                      <td className="px-3 py-2 text-center font-bold">{rr.quantity}</td>
+                      <td className="px-3 py-2 text-on-surface-variant">{rr.sourcePreference}</td>
+                      <td className="px-3 py-2 text-on-surface-variant italic">{rr.remarks || "—"}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Shift Requirements Table */}
+        <div className="space-y-2">
+          <h4 className="text-xs font-bold text-primary flex items-center gap-1">
+            <span className="material-symbols-outlined text-[16px]">schedule</span>
+            Inherited Shift Templates
+          </h4>
+          <div className="border border-outline-variant rounded-lg overflow-hidden bg-surface text-xs">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-surface-container-low border-b border-outline-variant text-[9px] uppercase text-on-surface-variant font-bold">
+                  <th className="px-3 py-2">Shift Name</th>
+                  <th className="px-3 py-2">Timing</th>
+                  <th className="px-3 py-2 text-center">Posts</th>
+                  <th className="px-3 py-2">Pattern</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-outline-variant/60">
+                {shiftRequirements.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="p-4 text-center text-on-surface-variant italic">No shift templates specified in contract.</td>
+                  </tr>
+                ) : (
+                  shiftRequirements.map((sr: any) => (
+                    <tr key={sr.id} className="hover:bg-surface-container-lowest">
+                      <td className="px-3 py-2 font-semibold text-on-surface">{sr.shiftName}</td>
+                      <td className="px-3 py-2 text-on-surface-variant">{sr.startTime} - {sr.endTime}</td>
+                      <td className="px-3 py-2 text-center font-bold">{sr.postsCovered}</td>
+                      <td className="px-3 py-2 text-[10px] text-on-surface-variant font-medium">{sr.daysPattern}</td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Connected Sites List Summary */}
+        <div className="space-y-2">
+          <h4 className="text-xs font-bold text-primary flex items-center gap-1">
+            <span className="material-symbols-outlined text-[16px]">location_on</span>
+            Connected Sites & Roster Setup
+          </h4>
+          <div className="border border-outline-variant rounded-lg overflow-hidden bg-surface text-xs">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-surface-container-low border-b border-outline-variant text-[9px] uppercase text-on-surface-variant font-bold">
+                  <th className="px-3 py-2">Site Name</th>
+                  <th className="px-3 py-2 text-center">Shifts</th>
+                  <th className="px-3 py-2 text-center">Req Guards</th>
+                  <th className="px-3 py-2 text-right">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-outline-variant/60">
+                {projectSites.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="p-4 text-center text-on-surface-variant italic">No sites linked to this project.</td>
+                  </tr>
+                ) : (
+                  projectSites.map((s: any) => (
+                    <tr key={s.id} className="hover:bg-surface-container-lowest">
+                      <td className="px-3 py-2 font-semibold text-on-surface">
+                        <div>{s.name}</div>
+                        <div className="text-[10px] text-on-surface-variant font-mono">{s.code}</div>
+                      </td>
+                      <td className="px-3 py-2 text-center font-bold">{s.activeShiftsCount}</td>
+                      <td className="px-3 py-2 text-center font-bold">{s.requiredGuards}</td>
+                      <td className="px-3 py-2 text-right">
+                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${s.isActive ? "bg-status-success/15 text-status-success" : "bg-status-error/15 text-status-error"}`}>
+                          {s.isActive ? "Active" : "Inactive"}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  function renderSiteDetailsPanel() {
+    const site = data.find(s => s.id === selectedSiteId);
+    if (!site) return null;
+
+    if (!siteSummary) {
+      return (
+        <div className="w-[85%] bg-surface border border-outline-variant rounded-xl shadow-2xl p-6 flex flex-col items-center justify-center gap-2">
+          <span className="material-symbols-outlined text-3xl animate-spin text-primary">sync</span>
+          <p className="text-xs text-on-surface-variant">Loading site deployment summary...</p>
+        </div>
+      );
+    }
+
+    const { project, contract, client, siteShifts, siteAllowance, projectInstructions } = siteSummary;
+
+    // Allow adding site shift config based on inherited contract shifts
+    const handleAddSiteShift = async (e: React.FormEvent) => {
+      e.preventDefault();
+      const form = e.target as HTMLFormElement;
+      const formDataObj = new FormData(form);
+
+      const contractShiftId = formDataObj.get("contractShiftId") as string;
+      const designation = formDataObj.get("designation") as string;
+      const requiredCount = parseInt(formDataObj.get("requiredCount") as string, 10);
+      const postName = formDataObj.get("postName") as string;
+
+      if (!contractShiftId || !designation || isNaN(requiredCount)) {
+        alert("Please fill all required fields");
+        return;
+      }
+
+      // Find the inherited contract shift details
+      const inheritedShift = (projectSummary?.shiftRequirements || []).find((s: any) => s.id === contractShiftId);
+      const shiftName = inheritedShift ? inheritedShift.shiftName : "Site Shift";
+      const startTime = inheritedShift ? inheritedShift.startTime : "07:00";
+      const endTime = inheritedShift ? inheritedShift.endTime : "19:00";
+
+      const payload = {
+        siteId: selectedSiteId,
+        categoryId: designation,
+        shiftCode: shiftName.toUpperCase(),
+        startTime,
+        endTime,
+        requiredCount,
+        allowanceCode: siteAllowance?.siteAllowanceEnabled ? "SITE_ALLOW" : null,
+        operationType: "SECURITY_GUARDING",
+        isActive: true,
+        postName
+      };
+
+      try {
+        const res = await fetch("/api/v1/security/scheduling/site-shifts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        if (res.ok) {
+          form.reset();
+          loadSiteDetails(selectedSiteId!);
+          loadData();
+        } else {
+          const err = await res.json();
+          alert(err.error || "Failed to save site shift requirement");
+        }
+      } catch (err) {
+        alert("Server connection failed");
+      }
+    };
+
+    // Toggle Site Active Status
+    const handleToggleStatus = async () => {
+      const isSuperOrAdmin = session?.user && (session.user.role === "ADMIN" || session.user.role === "SUPER_ADMIN");
+      const hasPerm = hasPermission(session?.user, "manpower.admin.full_access") || hasPermission(session?.user, "manpower.security.manage");
+
+      if (!isSuperOrAdmin && !hasPerm) {
+        alert("You do not have permission to enable/disable sites.");
+        return;
+      }
+
+      if (siteSummary.site.isActive) {
+        setSiteToDisable(siteSummary.site);
+      } else {
+        await executeStatusUpdate(true);
+      }
+    };
+
+    const executeStatusUpdate = async (newStatus: boolean) => {
+      try {
+        const res = await fetch(`/api/v1/security/sites/${selectedSiteId}/status`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ isActive: newStatus })
+        });
+        if (res.ok) {
+          setSiteToDisable(null);
+          loadSiteDetails(selectedSiteId!);
+          loadData();
+        } else {
+          const err = await res.json();
+          alert(err.error || "Failed to update site status");
+        }
+      } catch (err) {
+        alert("Server connection failed");
+      }
+    };
+
+    // Save site allowance
+    const handleSaveAllowance = async (e: React.FormEvent) => {
+      e.preventDefault();
+      const form = e.target as HTMLFormElement;
+      const formDataObj = new FormData(form);
+
+      const enabled = formDataObj.get("siteAllowanceEnabled") === "true";
+      const amount = parseFloat(formDataObj.get("siteAllowanceAmount") as string);
+      const frequency = formDataObj.get("siteAllowanceFrequency") as string;
+      const description = formDataObj.get("allowanceDescription") as string;
+
+      const payload = {
+        siteId: selectedSiteId,
+        siteAllowanceEnabled: enabled,
+        siteAllowanceAmount: enabled ? amount : 0,
+        siteAllowanceFrequency: enabled ? frequency : "MONTHLY",
+        allowanceDescription: description,
+        isActive: true
+      };
+
+      try {
+        const res = await fetch("/api/v1/security/scheduling/site-allowance", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        if (res.ok) {
+          alert("Allowance policy saved successfully.");
+          loadSiteDetails(selectedSiteId!);
+        } else {
+          const err = await res.json();
+          alert(err.error || "Failed to save allowance configuration");
+        }
+      } catch (err) {
+        alert("Server connection failed");
+      }
+    };
+
+    return (
+      <div className="w-[85%] bg-surface border border-outline-variant rounded-xl shadow-2xl p-6 overflow-y-auto flex flex-col gap-6">
+        {/* Site Header Summary */}
+        <div className="flex justify-between items-start border-b border-outline-variant pb-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="text-lg font-black text-primary">{siteSummary.site.name}</h3>
+              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${siteSummary.site.isActive ? "bg-status-success/15 text-status-success" : "bg-status-error/15 text-status-error"}`}>
+                {siteSummary.site.isActive ? "Active" : "Inactive"}
+              </span>
+            </div>
+            <p className="text-xs font-mono uppercase text-on-surface-variant mt-1">Site Code: {siteSummary.site.code}</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleToggleStatus}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${
+                siteSummary.site.isActive
+                  ? "bg-status-error/10 text-status-error border-status-error/20 hover:bg-status-error/15"
+                  : "bg-status-success/10 text-status-success border-status-success/20 hover:bg-status-success/15"
+              }`}
+            >
+              {siteSummary.site.isActive ? "Disable Site" : "Enable Site"}
+            </button>
+            <button
+              onClick={() => {
+                setSelectedSiteId(null);
+                setSiteSummary(null);
+              }}
+              className="w-8 h-8 rounded-full hover:bg-surface-container-high flex items-center justify-center text-on-surface-variant"
+            >
+              <span className="material-symbols-outlined text-[20px]">close</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Hierarchy Context Breadcrumbs */}
+        <div className="grid grid-cols-3 gap-3 bg-surface-container-lowest p-3 rounded-lg border border-outline-variant/60 text-xs">
+          <div>
+            <span className="text-[10px] text-on-surface-variant font-medium">Client</span>
+            <p className="font-semibold text-on-surface">{client?.name || "Unknown Client"}</p>
+          </div>
+          <div>
+            <span className="text-[10px] text-on-surface-variant font-medium">Contract</span>
+            <p className="font-semibold text-on-surface">{contract?.contractNumber || "—"}</p>
+          </div>
+          <div>
+            <span className="text-[10px] text-on-surface-variant font-medium">Project</span>
+            <p className="font-semibold text-on-surface">{project?.name || "—"}</p>
+          </div>
+        </div>
+
+        {/* Tabs Bar */}
+        <div className="flex border-b border-outline-variant gap-2 p-1 bg-surface-container-low rounded-xl">
+          {[
+            { id: "overview", label: "Overview", icon: "dashboard" },
+            { id: "contract_requirements", label: "Contract Roster Reqs", icon: "description" },
+            { id: "site_shifts", label: "Configure Site Shifts", icon: "schedule" },
+            { id: "site_allowance", label: "Site Allowance Setup", icon: "payments" },
+            { id: "project_instructions", label: "Project Instructions", icon: "assignment" }
+          ].map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setSiteActiveTab(tab.id)}
+              className={`flex items-center gap-1.5 px-4 py-2 text-xs font-bold border-b-2 transition-all rounded-lg ${
+                siteActiveTab === tab.id
+                  ? "border-primary text-primary bg-primary/5"
+                  : "border-transparent text-on-surface-variant hover:text-primary hover:bg-surface-container-low"
+              }`}
+            >
+              <span className="material-symbols-outlined text-[16px]">{tab.icon}</span>
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Tab Content Panels */}
+        {siteActiveTab === "overview" && (
+          <div className="space-y-4">
+            <div className="grid grid-cols-3 gap-4">
+              <div className="bg-surface border border-outline-variant p-4 rounded-xl text-center space-y-1">
+                <p className="text-[10px] text-on-surface-variant font-bold uppercase">Required Manpower</p>
+                <p className="text-2xl font-black text-primary">{siteSummary.site.requiredManpower || 0}</p>
+              </div>
+              <div className="bg-surface border border-outline-variant p-4 rounded-xl text-center space-y-1">
+                <p className="text-[10px] text-on-surface-variant font-bold uppercase">Deployed Guards</p>
+                <p className="text-2xl font-black text-status-success">{siteSummary.site.assignedManpower || 0}</p>
+              </div>
+              <div className="bg-surface border border-outline-variant p-4 rounded-xl text-center space-y-1">
+                <p className="text-[10px] text-on-surface-variant font-bold uppercase">Vacant Slots</p>
+                <p className={`text-2xl font-black ${siteSummary.site.remainingVacant > 0 ? "text-status-error" : "text-status-success"}`}>
+                  {siteSummary.site.remainingVacant || 0}
+                </p>
+              </div>
+            </div>
+
+            {/* Allowance Summary Card */}
+            <div className="bg-surface border border-outline-variant p-4 rounded-xl space-y-2">
+              <h4 className="text-xs font-bold text-primary flex items-center gap-1">
+                <span className="material-symbols-outlined text-[16px]">payments</span>
+                Active Site Allowance
+              </h4>
+              {siteAllowance?.siteAllowanceEnabled ? (
+                <div className="text-xs space-y-1 bg-surface-container-lowest p-3 rounded-lg border border-outline-variant/60">
+                  <p className="font-bold text-on-surface">Allowance Status: <span className="text-status-success">ENABLED</span></p>
+                  <p className="font-semibold text-on-surface">Amount: QAR {siteAllowance.siteAllowanceAmount} ({siteAllowance.siteAllowanceFrequency})</p>
+                  {siteAllowance.allowanceDescription && (
+                    <p className="text-on-surface-variant italic mt-1">Description: {siteAllowance.allowanceDescription}</p>
+                  )}
+                </div>
+              ) : (
+                <p className="text-xs text-on-surface-variant italic">No site allowance configured. Guards deployed to this site will receive default standard grade parameters.</p>
+              )}
+            </div>
+          </div>
+        )}
+
+        {siteActiveTab === "contract_requirements" && (
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <h4 className="text-xs font-bold text-primary">Manpower Requirements</h4>
+              <div className="border border-outline-variant rounded-lg overflow-hidden bg-surface text-xs">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-surface-container-low border-b border-outline-variant text-[9px] uppercase text-on-surface-variant font-bold">
+                      <th className="px-3 py-2">Position</th>
+                      <th className="px-3 py-2 text-center">Qty</th>
+                      <th className="px-3 py-2">Deployment Type</th>
+                      <th className="px-3 py-2">Remarks</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-outline-variant/60">
+                    {(projectSummary?.manpowerRequirements || []).length === 0 ? (
+                      <tr>
+                        <td colSpan={4} className="p-4 text-center text-on-surface-variant italic">No manpower requirements inherited from contract.</td>
+                      </tr>
+                    ) : (
+                      (projectSummary.manpowerRequirements || []).map((mr: any) => (
+                        <tr key={mr.id} className="hover:bg-surface-container-lowest">
+                          <td className="px-3 py-2 font-semibold text-on-surface">{mr.position}</td>
+                          <td className="px-3 py-2 text-center font-bold">{mr.quantity}</td>
+                          <td className="px-3 py-2 uppercase text-[10px] text-on-surface-variant font-semibold">{mr.deploymentType}</td>
+                          <td className="px-3 py-2 text-on-surface-variant italic">{mr.remarks || "—"}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <h4 className="text-xs font-bold text-primary">Reliever Requirements</h4>
+              <div className="border border-outline-variant rounded-lg overflow-hidden bg-surface text-xs">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-surface-container-low border-b border-outline-variant text-[9px] uppercase text-on-surface-variant font-bold">
+                      <th className="px-3 py-2">Position</th>
+                      <th className="px-3 py-2 text-center">Qty</th>
+                      <th className="px-3 py-2">Pref. Source</th>
+                      <th className="px-3 py-2">Remarks</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-outline-variant/60">
+                    {(projectSummary?.relieverRequirements || []).length === 0 ? (
+                      <tr>
+                        <td colSpan={4} className="p-4 text-center text-on-surface-variant italic">No reliever requirements inherited from contract.</td>
+                      </tr>
+                    ) : (
+                      (projectSummary.relieverRequirements || []).map((rr: any) => (
+                        <tr key={rr.id} className="hover:bg-surface-container-lowest">
+                          <td className="px-3 py-2 font-semibold text-on-surface">{rr.position}</td>
+                          <td className="px-3 py-2 text-center font-bold">{rr.quantity}</td>
+                          <td className="px-3 py-2 text-on-surface-variant">{rr.sourcePreference}</td>
+                          <td className="px-3 py-2 text-on-surface-variant italic">{rr.remarks || "—"}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {siteActiveTab === "site_shifts" && (
+          <div className="space-y-4">
+            {/* Configure Site Shift Form using Inherited Shifts */}
+            {canManage && (
+              <form onSubmit={handleAddSiteShift} className="bg-surface-container-low border border-outline-variant p-4 rounded-xl space-y-4">
+                <h4 className="text-xs font-bold text-primary flex items-center gap-1">
+                  <span className="material-symbols-outlined text-[16px]">add_circle</span>
+                  Create Site-Specific Shift requirement
+                </h4>
+                <div className="grid grid-cols-2 gap-4 text-xs">
+                  <div>
+                    <label className="block text-[10px] text-on-surface-variant font-bold uppercase mb-1">Inherited Contract Shift</label>
+                    <select
+                      name="contractShiftId"
+                      className="w-full bg-surface border border-outline-variant rounded px-2.5 py-1.5 text-xs text-on-surface focus:outline-none focus:border-primary"
+                      required
+                    >
+                      <option value="">Select Contract Shift...</option>
+                      {(projectSummary?.shiftRequirements || []).map((s: any) => (
+                        <option key={s.id} value={s.id}>
+                          {s.shiftName} ({s.startTime} - {s.endTime})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-on-surface-variant font-bold uppercase mb-1">Required Designation</label>
+                    <select
+                      name="designation"
+                      className="w-full bg-surface border border-outline-variant rounded px-2.5 py-1.5 text-xs text-on-surface focus:outline-none focus:border-primary"
+                      required
+                    >
+                      <option value="">Select Designation...</option>
+                      {categories.map((c: any) => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-on-surface-variant font-bold uppercase mb-1">Required Guard Count</label>
+                    <input
+                      name="requiredCount"
+                      type="number"
+                      min="1"
+                      placeholder="e.g. 2"
+                      className="w-full bg-surface border border-outline-variant rounded px-2.5 py-1.5 text-xs text-on-surface focus:outline-none focus:border-primary"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-on-surface-variant font-bold uppercase mb-1">Post / Gate / Zone Name</label>
+                    <input
+                      name="postName"
+                      type="text"
+                      placeholder="e.g. Main Gate, Tower A"
+                      className="w-full bg-surface border border-outline-variant rounded px-2.5 py-1.5 text-xs text-on-surface focus:outline-none focus:border-primary"
+                      required
+                    />
+                  </div>
+                </div>
+                <div className="flex justify-end">
+                  <button
+                    type="submit"
+                    className="px-4 py-2 bg-primary text-white text-xs font-bold rounded-lg hover:bg-primary/90 transition-colors"
+                  >
+                    Save Site Shift requirement
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {/* Configured Site Shifts Table */}
+            <div className="space-y-2">
+              <h4 className="text-xs font-bold text-primary">Active Configured Shifts for this Site</h4>
+              <div className="border border-outline-variant rounded-lg overflow-hidden bg-surface text-xs">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-surface-container-low border-b border-outline-variant text-[9px] uppercase text-on-surface-variant font-bold">
+                      <th className="px-3 py-2">Shift Code</th>
+                      <th className="px-3 py-2">Post / Gate</th>
+                      <th className="px-3 py-2">Designation</th>
+                      <th className="px-3 py-2">Timing</th>
+                      <th className="px-3 py-2 text-center">Req Qty</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-outline-variant/60">
+                    {siteShifts.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="p-4 text-center text-on-surface-variant italic">No site shift requirements configured. Add site shift requirement.</td>
+                      </tr>
+                    ) : (
+                      siteShifts.map((ss: any) => (
+                        <tr key={ss.id} className="hover:bg-surface-container-lowest">
+                          <td className="px-3 py-2 font-semibold text-on-surface">{ss.shiftCode}</td>
+                          <td className="px-3 py-2 text-on-surface font-medium">{ss.postName || "General Post"}</td>
+                          <td className="px-3 py-2 text-on-surface-variant">{ss.category?.name || ss.categoryId}</td>
+                          <td className="px-3 py-2 text-on-surface-variant">{ss.startTime} - {ss.endTime}</td>
+                          <td className="px-3 py-2 text-center font-bold">{ss.requiredCount}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {siteActiveTab === "site_allowance" && (
+          <div className="space-y-4">
+            <form onSubmit={handleSaveAllowance} className="bg-surface border border-outline-variant p-5 rounded-xl space-y-4">
+              <h4 className="text-xs font-bold text-primary flex items-center gap-1">
+                <span className="material-symbols-outlined text-[16px]">payments</span>
+                Edit Site Allowance
+              </h4>
+              <div className="grid grid-cols-2 gap-4 text-xs">
+                <div className="col-span-2">
+                  <label className="flex items-center gap-2 font-semibold text-on-surface">
+                    <input
+                      name="siteAllowanceEnabled"
+                      type="checkbox"
+                      defaultChecked={siteAllowance?.siteAllowanceEnabled}
+                      value="true"
+                      className="rounded border-outline-variant text-primary focus:ring-primary"
+                    />
+                    <span>Enable Site Allowance Policy</span>
+                  </label>
+                  <p className="text-[10px] text-on-surface-variant ml-5 mt-1 italic">
+                    When enabled, guards deployed to this site will generate a payroll advisory flag.
+                  </p>
+                </div>
+                <div>
+                  <label className="block text-[10px] text-on-surface-variant font-bold uppercase mb-1">Allowance Amount (QAR)</label>
+                  <input
+                    name="siteAllowanceAmount"
+                    type="number"
+                    step="0.01"
+                    defaultValue={siteAllowance?.siteAllowanceAmount || 0}
+                    placeholder="e.g. 300.00"
+                    className="w-full bg-surface border border-outline-variant rounded px-2.5 py-1.5 text-xs text-on-surface focus:outline-none focus:border-primary"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] text-on-surface-variant font-bold uppercase mb-1">Frequency</label>
+                  <select
+                    name="siteAllowanceFrequency"
+                    defaultValue={siteAllowance?.siteAllowanceFrequency || "MONTHLY"}
+                    className="w-full bg-surface border border-outline-variant rounded px-2.5 py-1.5 text-xs text-on-surface focus:outline-none focus:border-primary"
+                  >
+                    <option value="MONTHLY">Monthly</option>
+                    <option value="DAILY">Daily</option>
+                    <option value="FIXED_FOR_PERIOD">Fixed for Period</option>
+                  </select>
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-[10px] text-on-surface-variant font-bold uppercase mb-1">Allowance Description</label>
+                  <textarea
+                    name="allowanceDescription"
+                    defaultValue={siteAllowance?.allowanceDescription || ""}
+                    placeholder="Provide context or eligibility rules for this site allowance..."
+                    className="w-full bg-surface border border-outline-variant rounded px-2.5 py-1.5 text-xs text-on-surface focus:outline-none focus:border-primary h-20"
+                  ></textarea>
+                </div>
+              </div>
+              <div className="flex justify-end pt-2 border-t border-outline-variant/60">
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-primary text-white text-xs font-bold rounded-lg hover:bg-primary/90 transition-colors"
+                >
+                  Save Allowance configuration
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+
+        {siteActiveTab === "project_instructions" && (
+          <div className="space-y-4">
+            <h4 className="text-xs font-bold text-primary">Inherited Project Instructions & Policies</h4>
+            <div className="border border-outline-variant rounded-lg overflow-hidden bg-surface text-xs">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-surface-container-low border-b border-outline-variant text-[9px] uppercase text-on-surface-variant font-bold">
+                    <th className="px-3 py-2">Instruction / Rule</th>
+                    <th className="px-3 py-2">Rule Type</th>
+                    <th className="px-3 py-2">Severity</th>
+                    <th className="px-3 py-2">Source</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-outline-variant/60">
+                  {projectInstructions.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="p-4 text-center text-on-surface-variant italic">No compliance instructions inherited from Project.</td>
+                    </tr>
+                  ) : (
+                    projectInstructions.map((pi: any) => (
+                      <tr key={pi.id} className="hover:bg-surface-container-lowest">
+                        <td className="px-3 py-2">
+                          <div className="font-semibold text-on-surface">{pi.ruleName}</div>
+                          <div className="text-[10px] text-on-surface-variant">{pi.description}</div>
+                        </td>
+                        <td className="px-3 py-2 uppercase text-[10px] text-on-surface-variant font-semibold">{pi.ruleType}</td>
+                        <td className="px-3 py-2">
+                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                            pi.severity === "HARD_BLOCK" ? "bg-status-error/15 text-status-error" :
+                            pi.severity === "WARNING_ONLY" ? "bg-status-warning/15 text-status-warning" :
+                            "bg-primary/15 text-primary"
+                          }`}>
+                            {pi.severity}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2 text-on-surface-variant">Project</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* Confirmation modal wrapper */}
+        {siteToDisable && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4">
+            <div className="bg-surface rounded-xl border border-outline-variant shadow-2xl p-6 max-w-md w-full text-xs space-y-4">
+              <h3 className="text-sm font-black text-status-error flex items-center gap-1">
+                <span className="material-symbols-outlined text-[20px]">warning</span>
+                Confirm Disable Site
+              </h3>
+              <p className="text-on-surface-variant leading-relaxed">
+                Disabling this site will prevent future deployment planning and scheduling for this site. Historical records will remain available.
+              </p>
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  onClick={() => setSiteToDisable(null)}
+                  className="px-3 py-1.5 border border-outline-variant hover:bg-surface-container-high rounded text-xs font-bold"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => executeStatusUpdate(false)}
+                  className="px-3 py-1.5 bg-status-error hover:bg-status-error/95 text-white rounded text-xs font-bold"
+                >
+                  Confirm Disable
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -4690,7 +5370,8 @@ export default function ManpowerMasterPage() {
       ) : (
         <div className="flex gap-6 flex-1 min-h-0">
         <div className={`bg-surface border border-outline-variant rounded-xl shadow-sm overflow-hidden flex flex-col ${
-          (isSecurity && master === "projects" && selectedProjectId) ? "w-1/2" : "w-full"
+          (isSecurity && master === "projects" && selectedProjectId) ? "w-1/2" :
+          (isSecurity && master === "sites" && selectedSiteId) ? "hidden md:flex w-[15%]" : "w-full"
         }`}>
           {loading ? (
             <div className="h-64 flex items-center justify-center flex-1">
@@ -4747,6 +5428,7 @@ export default function ManpowerMasterPage() {
                     )}
                     {master === "sites" && (
                       <>
+                        <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Site Code</th>
                         <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Worksite Name</th>
                         <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Project</th>
                         <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Radius (Meters)</th>
@@ -4826,10 +5508,13 @@ export default function ManpowerMasterPage() {
                       onClick={() => {
                         if (isSecurity && master === "projects") {
                           loadProjectDetails(item.id);
+                        } else if (isSecurity && master === "sites") {
+                          loadSiteDetails(item.id);
                         }
                       }}
                       className={`border-b border-outline-variant/40 hover:bg-surface-container-lowest cursor-pointer ${
-                        (isSecurity && master === "projects" && selectedProjectId === item.id) ? "bg-primary/10 font-bold" : ""
+                        (isSecurity && master === "projects" && selectedProjectId === item.id) ? "bg-primary/10 font-bold" :
+                        (isSecurity && master === "sites" && selectedSiteId === item.id) ? "bg-primary/10 font-bold" : ""
                       }`}
                     >
                       {master === "clients" && (
@@ -5057,6 +5742,17 @@ export default function ManpowerMasterPage() {
                       )}
                       {master === "sites" && (
                         <>
+                          <td className="px-4 py-3 text-xs font-bold">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                loadSiteDetails(item.id);
+                              }}
+                              className="text-primary hover:underline font-mono uppercase text-xs"
+                            >
+                              {item.code || item.id.substring(0, 8).toUpperCase()}
+                            </button>
+                          </td>
                           <td className="px-4 py-3 text-xs font-bold text-on-surface">{item.name}</td>
                           <td className="px-4 py-3 text-xs text-on-surface">{item.project?.name || item.projectId}</td>
                           <td className="px-4 py-3 text-xs text-on-surface-variant">{item.radiusMeters}m</td>
@@ -5277,6 +5973,7 @@ export default function ManpowerMasterPage() {
         </div>
 
         {isSecurity && master === "projects" && selectedProjectId && renderProjectDetailsPanel()}
+        {isSecurity && master === "sites" && selectedSiteId && renderSiteDetailsPanel()}
       </div>
       )}
 

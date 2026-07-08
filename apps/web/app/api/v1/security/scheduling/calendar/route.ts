@@ -117,6 +117,7 @@ export async function GET(request: Request) {
 
     // Filter sites/projects by client/contract
     const filteredSites = sites.filter(s => {
+      if (s.isActive === false) return false;
       if (siteId && siteId !== "all" && s.id !== siteId) return false;
       if (projectId && projectId !== "all" && s.projectId !== projectId) return false;
       const proj = projects.find(p => p.id === s.projectId);
