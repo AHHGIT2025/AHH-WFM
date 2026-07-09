@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { checkApiAuth } from "@/lib/api-guards";
 import { isDbConnected, readDb } from "@ahh-wfm/mock-data";
 import { prisma } from "@ahh-wfm/database";
+import { getActiveSiteShiftConfigs } from "@/lib/server-helpers";
 
 export async function GET(
   request: Request,
@@ -33,10 +34,16 @@ export async function GET(
         contract = project?.contract;
         client = contract?.client;
 
-        siteShifts = await prisma.manpowerShiftRequirement.findMany({
-          where: { siteId, operationType: "SECURITY_GUARDING" },
-          include: { category: true }
-        });
+        const activeShifts = await getActiveSiteShiftConfigs(siteId);
+        const shiftsWithCategory = [];
+        for (const s of activeShifts) {
+          const loaded = await prisma.manpowerShiftRequirement.findUnique({
+            where: { id: s.id },
+            include: { category: true }
+          });
+          if (loaded) shiftsWithCategory.push(loaded);
+        }
+        siteShifts = shiftsWithCategory;
       }
     } else {
       const db = readDb() as any;
@@ -51,8 +58,9 @@ export async function GET(
         }
 
         const cats = db.manpowerCategories || [];
-        siteShifts = (db.shiftRequirements || [])
-          .filter((r: any) => r.siteId === siteId && r.operationType === "SECURITY_GUARDING")
+        const activeShifts = await getActiveSiteShiftConfigs(siteId, db);
+        siteShifts = activeShifts
+          .filter((r: any) => r.operationType === "SECURITY_GUARDING")
           .map((r: any) => ({
             ...r,
             category: cats.find((c: any) => c.id === r.categoryId) || null
@@ -100,29 +108,49 @@ export async function GET(
       assignmentsCount = rawAsgs.length;
     }
 
-    const remainingVacant = Math.max(0, requiredManpower - assignmentsCount);
-
     return NextResponse.json({
       success: true,
       site: {
         id: site.id,
         name: site.name,
         code: site.code || site.id.substring(0, 8).toUpperCase(),
+        projectId: site.projectId,
         isActive: site.isActive !== false,
+        radiusMeters: site.radiusMeters || 100,
+        gatePassRequired: !!site.gatePassRequired
+      },
+      project: project ? {
+        id: project.id,
+        name: project.name,
+        code: project.code
+      } : null,
+      contract: contract ? {
+        id: contract.id,
+        contractNumber: contract.contractNumber,
+        title: contract.title
+      } : null,
+      client: client ? {
+        id: client.id,
+        name: client.name
+      } : null,
+      siteShifts,
+      siteAllowance: siteAllowance ? {
+        id: siteAllowance.id,
+        siteAllowanceEnabled: !!siteAllowance.siteAllowanceEnabled,
+        siteAllowanceAmount: siteAllowance.siteAllowanceAmount || 0,
+        siteAllowanceFrequency: siteAllowance.siteAllowanceFrequency || "MONTHLY",
+        allowanceDescription: siteAllowance.allowanceDescription || ""
+      } : null,
+      projectInstructions,
+      todaySummary: {
         requiredManpower,
         assignedManpower: assignmentsCount,
-        remainingVacant
-      },
-      project: project ? { id: project.id, name: project.name, code: project.code } : null,
-      contract: contract ? { id: contract.id, contractNumber: contract.contractNumber, title: contract.title } : null,
-      client: client ? { id: client.id, name: client.name, code: client.code } : null,
-      siteShifts,
-      siteAllowance: siteAllowance || { siteAllowanceEnabled: false },
-      projectInstructions
+        vacantPosts: Math.max(0, requiredManpower - assignmentsCount)
+      }
     });
 
   } catch (error: any) {
-    console.error("Failed to load site summary API:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error("Failed to load site deployment summary:", error);
+    return NextResponse.json({ error: error.message || "Failed to load site deployment summary" }, { status: 500 });
   }
 }

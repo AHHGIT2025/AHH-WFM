@@ -4,6 +4,8 @@ import { hasPermission } from "@/lib/permissions";
 import { mockDb, isDbConnected, readDb } from "@ahh-wfm/mock-data";
 import { prisma } from "@ahh-wfm/database";
 
+import { getActiveSiteShiftConfigs } from "@/lib/server-helpers";
+
 function parseDate(val: any): string {
   if (!val) return new Date().toISOString().split("T")[0];
   if (val instanceof Date) return val.toISOString().split("T")[0];
@@ -42,16 +44,8 @@ export async function GET(request: Request) {
         }, { status: 400 });
       }
 
-      const isDb = isDbConnected();
-      let shiftCount = 0;
-      if (isDb) {
-        shiftCount = await prisma.manpowerShiftRequirement.count({
-          where: { siteId, isActive: true }
-        });
-      } else {
-        const shifts = (db.shiftRequirements || []).filter((s: any) => s.siteId === siteId && s.isActive !== false);
-        shiftCount = shifts.length;
-      }
+      const activeShifts = await getActiveSiteShiftConfigs(siteId);
+      const shiftCount = activeShifts.length;
       if (shiftCount === 0) {
         return NextResponse.json({
           success: false,

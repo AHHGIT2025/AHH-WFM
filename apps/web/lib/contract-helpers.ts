@@ -295,3 +295,5 @@ export function getEffectiveContractManpower(contract: any) {
     effectiveShift
   };
 }
+
+

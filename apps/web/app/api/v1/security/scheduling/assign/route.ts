@@ -3,6 +3,7 @@ import { checkApiAuth } from "@/lib/api-guards";
 import { hasPermission } from "@/lib/permissions";
 import { mockDb, isDbConnected, readDb, writeDb } from "@ahh-wfm/mock-data";
 import { prisma } from "@ahh-wfm/database";
+import { getActiveSiteShiftConfigs } from "@/lib/server-helpers";
 
 export async function POST(request: Request) {
   const auth = await checkApiAuth();
@@ -18,7 +19,7 @@ export async function POST(request: Request) {
 
   try {
     const payload = await request.json();
-    const { employeeId, shiftRequirementId, date, deploymentMode, overrideReason, payrollAdvisories, validationIssues, validationStatus } = payload;
+    const { employeeId, shiftRequirementId, date, deploymentMode, overrideReason, payrollAdvisories, validationIssues, validationStatus, status: requestedStatus } = payload;
 
     if (!employeeId || !shiftRequirementId || !date) {
       return NextResponse.json({ error: "employeeId, shiftRequirementId, and date are required" }, { status: 400 });
@@ -71,16 +72,9 @@ export async function POST(request: Request) {
       }, { status: 400 });
     }
 
-    // Check configured shifts
-    let shiftCount = 0;
-    if (isDb) {
-      shiftCount = await prisma.manpowerShiftRequirement.count({
-        where: { siteId, isActive: true }
-      });
-    } else {
-      const shifts = (db.shiftRequirements || []).filter((s: any) => s.siteId === siteId && s.isActive !== false);
-      shiftCount = shifts.length;
-    }
+    // Check configured shifts using getActiveSiteShiftConfigs
+    const activeShifts = await getActiveSiteShiftConfigs(siteId);
+    const shiftCount = activeShifts.length;
     if (shiftCount === 0) {
       return NextResponse.json({
         error: "No site shifts configured. Configure site shifts before scheduling."

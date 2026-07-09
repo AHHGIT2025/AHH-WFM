@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { checkApiAuth } from "@/lib/api-guards";
 import { hasPermission } from "@/lib/permissions";
-import { isDbConnected, readDb, writeDb, mockDb } from "@ahh-wfm/mock-data";
+import { isDbConnected, readDb, writeDb } from "@ahh-wfm/mock-data";
 import { prisma } from "@ahh-wfm/database";
+import { getSiteDependencies } from "@/lib/site-helpers";
 
 export async function DELETE(
   request: Request,
@@ -22,98 +23,13 @@ export async function DELETE(
   const isDb = isDbConnected();
 
   try {
-    let hasHistoricalRecords = false;
-    let hasConfiguration = false;
-
-    if (isDb) {
-      // 1. Check database site existence
-      const site = await prisma.manpowerSite.findUnique({
-        where: { id: siteId }
-      });
-      if (!site) {
-        return NextResponse.json({ error: "Site not found" }, { status: 404 });
-      }
-
-      // 2. Check shift requirements
-      const shifts = await prisma.manpowerShiftRequirement.findMany({
-        where: { siteId }
-      });
-      const shiftIds = shifts.map(s => s.id);
-
-      if (shiftIds.length > 0) {
-        hasConfiguration = true;
-
-        // Check deployments
-        const depCount = await prisma.manpowerDeployment.count({
-          where: { shiftRequirementId: { in: shiftIds } }
-        });
-        const asgCount = await prisma.manpowerDeploymentAssignment.count({
-          where: { deployment: { shiftRequirementId: { in: shiftIds } } }
-        });
-
-        if (depCount > 0 || asgCount > 0) {
-          hasHistoricalRecords = true;
-        }
-      }
-
-      // 3. Check attendance records
-      const attendanceCount = await prisma.attendanceRecord.count({
-        where: { siteId }
-      });
-      if (attendanceCount > 0) {
-        hasHistoricalRecords = true;
-      }
-
-      // 4. Check JSON DB configuration files (allocations, site allowances, instructions)
-      const db = readDb() as any;
-      const siteAllocations = (db.siteManpowerAllocations || []).filter((sa: any) => sa.siteId === siteId);
-      const siteAllowances = (db.siteAllowances || []).filter((sa: any) => sa.siteId === siteId);
-
-      if (siteAllocations.length > 0 || siteAllowances.length > 0) {
-        hasConfiguration = true;
-      }
-    } else {
-      // Memory DB checks
-      const db = readDb() as any;
-      const site = (db.manpowerSites || []).find((s: any) => s.id === siteId);
-      if (!site) {
-        return NextResponse.json({ error: "Site not found" }, { status: 404 });
-      }
-
-      // Check shift requirements
-      const shifts = (db.shiftRequirements || []).filter((s: any) => s.siteId === siteId);
-      const shiftIds = shifts.map((s: any) => s.id);
-
-      if (shiftIds.length > 0) {
-        hasConfiguration = true;
-
-        const depCount = (db.manpowerDeployments || []).filter((d: any) => shiftIds.includes(d.shiftRequirementId)).length;
-        const asgCount = (db.manpowerDeploymentAssignments || []).filter((a: any) => {
-          const dep = (db.manpowerDeployments || []).find((d: any) => d.id === a.deploymentId);
-          return dep && shiftIds.includes(dep.shiftRequirementId);
-        }).length;
-
-        if (depCount > 0 || asgCount > 0) {
-          hasHistoricalRecords = true;
-        }
-      }
-
-      // Check attendance
-      const attendanceCount = (db.attendance || []).filter((a: any) => a.siteId === siteId).length;
-      if (attendanceCount > 0) {
-        hasHistoricalRecords = true;
-      }
-
-      const siteAllocations = (db.siteManpowerAllocations || []).filter((sa: any) => sa.siteId === siteId);
-      const siteAllowances = (db.siteAllowances || []).filter((sa: any) => sa.siteId === siteId);
-
-      if (siteAllocations.length > 0 || siteAllowances.length > 0) {
-        hasConfiguration = true;
-      }
+    const report = await getSiteDependencies(siteId);
+    if (!report) {
+      return NextResponse.json({ error: "Site not found" }, { status: 404 });
     }
 
-    // 1. If site has historical deployment/attendance: de-activate
-    if (hasHistoricalRecords) {
+    // 1. Historical deployment/attendance/roster exists: de-activate
+    if (report.suggestedAction === "DEACTIVATE") {
       if (isDb) {
         await prisma.manpowerSite.update({
           where: { id: siteId },
@@ -131,31 +47,54 @@ export async function DELETE(
       return NextResponse.json({
         success: true,
         deactivated: true,
-        message: "This site is already used in deployment records. It has been deactivated instead of permanently deleted."
+        canDelete: false,
+        suggestedAction: "DEACTIVATE",
+        dependencies: report.dependencyCounts,
+        message: report.message
       });
     }
 
-    // 2. If site has configuration but no historical deployment: block delete
-    if (hasConfiguration) {
+    // 2. Active config exists but no history: block delete
+    if (report.suggestedAction === "REMOVE_CONFIG") {
       return NextResponse.json({
-        error: "This site has active shift configurations, allocations, or allowances. Please remove these configurations first, or deactivate the site instead."
+        success: false,
+        canDelete: false,
+        suggestedAction: "REMOVE_CONFIG",
+        dependencies: report.dependencyCounts,
+        error: report.message,
+        message: report.message
       }, { status: 400 });
     }
 
-    // 3. Otherwise: allow hard delete
+    // 3. Otherwise: allow hard delete with cleanup of stale/inactive config
+    const db = readDb() as any;
+    
+    // Cleanup shift configurations from memory DB if in memory mode
+    if (!isDb) {
+      db.shiftRequirements = (db.shiftRequirements || []).filter((s: any) => s.siteId !== siteId);
+    }
+    
+    // Cleanup site allocations and site allowances (stored in db.json for both modes)
+    db.siteManpowerAllocations = (db.siteManpowerAllocations || []).filter((sa: any) => sa.siteId !== siteId);
+    db.siteAllowances = (db.siteAllowances || []).filter((sa: any) => sa.siteId !== siteId);
+    
     if (isDb) {
+      // Prisma has cascade delete for ManpowerShiftRequirement, so it deletes shifts automatically
       await prisma.manpowerSite.delete({
         where: { id: siteId }
       });
+      writeDb(db); // Save the cleaned up allocations/allowances
     } else {
-      const db = readDb() as any;
       db.manpowerSites = (db.manpowerSites || []).filter((s: any) => s.id !== siteId);
-      db.siteManpowerAllocations = (db.siteManpowerAllocations || []).filter((sa: any) => sa.siteId !== siteId);
-      db.siteAllowances = (db.siteAllowances || []).filter((sa: any) => sa.siteId !== siteId);
       writeDb(db);
     }
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({
+      success: true,
+      canDelete: true,
+      suggestedAction: "HARD_DELETE_ALLOWED",
+      dependencies: report.dependencyCounts
+    });
 
   } catch (error: any) {
     console.error("Failed to delete site:", error);

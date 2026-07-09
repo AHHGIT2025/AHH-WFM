@@ -102,6 +102,7 @@ export default function ManpowerMasterPage() {
   const [coordinatorSubTab, setCoordinatorSubTab] = useState<"board" | "assignments">("board");
   const [siteActiveTab, setSiteActiveTab] = useState("overview");
   const [siteToDisable, setSiteToDisable] = useState<any | null>(null);
+  const [deleteSiteReport, setDeleteSiteReport] = useState<any | null>(null);
   const [patrolVisitsList, setPatrolVisitsList] = useState<any[]>([]);
   const [dailyReportsList, setDailyReportsList] = useState<any[]>([]);
   const [selectedPatrolSite, setSelectedPatrolSite] = useState<any | null>(null);
@@ -1100,27 +1101,61 @@ export default function ManpowerMasterPage() {
         return;
       }
 
-      if (confirm(`Are you sure you want to delete the site "${siteSummary.site.name}"?`)) {
-        try {
-          const res = await fetch(`/api/v1/security/sites/${selectedSiteId}`, {
-            method: "DELETE"
-          });
-          const result = await res.json();
-          if (res.ok) {
-            if (result.deactivated) {
-              alert(result.message || "This site is already used in deployment records. It has been deactivated instead of permanently deleted.");
-            } else {
-              alert("Site deleted successfully.");
-            }
-            setSelectedSiteId(null);
-            setSiteSummary(null);
-            loadData();
-          } else {
-            alert(result.error || "Failed to delete site");
-          }
-        } catch (err) {
-          alert("Server connection failed");
+      try {
+        const res = await fetch(`/api/v1/security/sites/${selectedSiteId}/dependencies`);
+        if (res.ok) {
+          const report = await res.json();
+          setDeleteSiteReport(report);
+        } else {
+          alert("Failed to load site dependency report.");
         }
+      } catch (err) {
+        alert("Server connection failed checking dependencies");
+      }
+    };
+
+    const executeActualDelete = async () => {
+      try {
+        const res = await fetch(`/api/v1/security/sites/${selectedSiteId}`, {
+          method: "DELETE"
+        });
+        const result = await res.json();
+        setDeleteSiteReport(null);
+        if (res.ok) {
+          if (result.deactivated) {
+            alert(result.message || "This site is already used in deployment records. It has been deactivated instead of permanently deleted.");
+          } else {
+            alert("Site deleted successfully.");
+          }
+          setSelectedSiteId(null);
+          setSiteSummary(null);
+          loadData();
+        } else {
+          alert(result.error || "Failed to delete site");
+        }
+      } catch (err) {
+        alert("Server connection failed executing delete");
+      }
+    };
+
+    const executeDeactivateOnly = async () => {
+      try {
+        const res = await fetch(`/api/v1/security/sites/${selectedSiteId}/status`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ isActive: false })
+        });
+        setDeleteSiteReport(null);
+        if (res.ok) {
+          alert("Site deactivated successfully.");
+          loadSiteDetails(selectedSiteId!);
+          loadData();
+        } else {
+          const err = await res.json();
+          alert(err.error || "Failed to deactivate site");
+        }
+      } catch (err) {
+        alert("Server connection failed executing deactivation");
       }
     };
 
@@ -1644,6 +1679,110 @@ export default function ManpowerMasterPage() {
                 >
                   Confirm Disable
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+        
+        {/* Delete Dependency Diagnostic Modal */}
+        {deleteSiteReport && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4 animate-fade-in">
+            <div className="bg-surface rounded-xl border border-outline-variant shadow-2xl p-6 max-w-md w-full text-xs space-y-4 text-on-surface">
+              <h3 className="text-sm font-black text-status-error flex items-center gap-1.5 border-b border-outline-variant/60 pb-2">
+                <span className="material-symbols-outlined text-[20px]">delete_forever</span>
+                Delete Site: {deleteSiteReport.siteName}
+              </h3>
+              
+              <div className="space-y-2">
+                <span className="block font-bold text-on-surface-variant uppercase tracking-wider text-[10px]">Dependency Diagnostic:</span>
+                <ul className="space-y-1.5 bg-surface-container-low p-3 rounded-lg border border-outline-variant/40 font-mono text-[10px]">
+                  <li className="flex justify-between">
+                    <span>Active Site Shifts:</span>
+                    <span className={`font-bold ${deleteSiteReport.dependencyCounts.activeSiteShifts > 0 ? "text-status-error" : "text-status-success"}`}>
+                      {deleteSiteReport.dependencyCounts.activeSiteShifts}
+                    </span>
+                  </li>
+                  <li className="flex justify-between">
+                    <span>Manpower Allocations:</span>
+                    <span className={`font-bold ${deleteSiteReport.dependencyCounts.manpowerAllocations > 0 ? "text-status-error" : "text-status-success"}`}>
+                      {deleteSiteReport.dependencyCounts.manpowerAllocations}
+                    </span>
+                  </li>
+                  <li className="flex justify-between">
+                    <span>Active Allowances:</span>
+                    <span className={`font-bold ${deleteSiteReport.dependencyCounts.activeAllowances > 0 ? "text-status-error" : "text-status-success"}`}>
+                      {deleteSiteReport.dependencyCounts.activeAllowances}
+                    </span>
+                  </li>
+                  <li className="flex justify-between">
+                    <span>Deployment History:</span>
+                    <span className={`font-bold ${deleteSiteReport.dependencyCounts.deploymentHistory > 0 ? "text-status-warning" : "text-on-surface-variant"}`}>
+                      {deleteSiteReport.dependencyCounts.deploymentHistory}
+                    </span>
+                  </li>
+                  <li className="flex justify-between">
+                    <span>Attendance History:</span>
+                    <span className={`font-bold ${deleteSiteReport.dependencyCounts.attendanceHistory > 0 ? "text-status-warning" : "text-on-surface-variant"}`}>
+                      {deleteSiteReport.dependencyCounts.attendanceHistory}
+                    </span>
+                  </li>
+                  {deleteSiteReport.dependencyCounts.inactiveSiteShifts > 0 && (
+                    <li className="flex justify-between text-on-surface-variant/70 italic">
+                      <span>Stale Inactive Shifts (Will clean):</span>
+                      <span>{deleteSiteReport.dependencyCounts.inactiveSiteShifts}</span>
+                    </li>
+                  )}
+                  {deleteSiteReport.dependencyCounts.inactiveAllowances > 0 && (
+                    <li className="flex justify-between text-on-surface-variant/70 italic">
+                      <span>Stale Inactive Allowances (Will clean):</span>
+                      <span>{deleteSiteReport.dependencyCounts.inactiveAllowances}</span>
+                    </li>
+                  )}
+                </ul>
+              </div>
+
+              <div className={`p-3 rounded-lg text-[11px] leading-relaxed border ${
+                deleteSiteReport.canHardDelete 
+                  ? "bg-status-success/10 text-status-success border-status-success/20" 
+                  : deleteSiteReport.suggestedAction === "DEACTIVATE"
+                    ? "bg-status-warning/10 text-status-warning border-status-warning/20"
+                    : "bg-status-error/10 text-status-error border-status-error/20"
+              }`}>
+                <p className="font-bold mb-0.5">Recommended Action: {deleteSiteReport.suggestedAction}</p>
+                <p>{deleteSiteReport.message}</p>
+              </div>
+
+              <div className="flex justify-end gap-2.5 pt-2 border-t border-outline-variant/60">
+                <button
+                  onClick={() => setDeleteSiteReport(null)}
+                  className="px-3 py-1.5 border border-outline-variant hover:bg-surface-container-high rounded text-xs font-bold transition-all"
+                >
+                  Cancel
+                </button>
+                {deleteSiteReport.canDeactivate && (
+                  <button
+                    onClick={executeDeactivateOnly}
+                    className="px-3 py-1.5 bg-primary/10 text-primary border border-primary/20 hover:bg-primary/15 rounded text-xs font-bold transition-all"
+                  >
+                    Deactivate Site
+                  </button>
+                )}
+                {deleteSiteReport.canHardDelete ? (
+                  <button
+                    onClick={executeActualDelete}
+                    className="px-3 py-1.5 bg-status-error hover:bg-status-error/90 text-white rounded text-xs font-bold transition-all"
+                  >
+                    Delete Permanently
+                  </button>
+                ) : (
+                  <button
+                    disabled
+                    title="Active configurations or history prevent permanent deletion."
+                    className="px-3 py-1.5 bg-on-surface/10 text-on-surface/40 cursor-not-allowed rounded text-xs font-bold transition-all"
+                  >
+                    Delete Anyway
+                  </button>
+                )}
               </div>
             </div>
           </div>
