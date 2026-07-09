@@ -6,7 +6,7 @@ import { prisma } from "@ahh-wfm/database";
 import { getActiveSiteShiftConfigs } from "@/lib/server-helpers";
 
 export async function POST(request: Request) {
-  const auth = await checkApiAuth();
+  const auth = await checkApiAuth(undefined, { requiredOperation: "SECURITY_GUARDING" });
   if (auth.error) return auth.error;
 
   const isSuperOrAdmin = auth.session?.user && (auth.session.user.role === "ADMIN" || auth.session.user.role === "SUPER_ADMIN");
@@ -23,6 +23,14 @@ export async function POST(request: Request) {
 
     if (!employeeId || !shiftRequirementId || !date) {
       return NextResponse.json({ error: "employeeId, shiftRequirementId, and date are required" }, { status: 400 });
+    }
+
+    // Check generic Security Guarding period lock
+    const period = date.substring(0, 7); // "YYYY-MM"
+    const locks = await mockDb.getSecurityOperationsPeriodLocks("SECURITY_GUARDING");
+    const isLocked = locks.some(l => l.period === period && l.locked);
+    if (isLocked) {
+      return NextResponse.json({ error: `Security Guarding operations for period ${period} are locked. Modifications are blocked.` }, { status: 400 });
     }
 
     const isDb = isDbConnected();
@@ -194,6 +202,17 @@ export async function POST(request: Request) {
       db.manpowerDeploymentAssignments.push(assignment);
       writeDb(db);
     }
+
+    await mockDb.createUserActivityLog({
+      userId: (auth.session?.user as any)?.id || "system",
+      action: "ASSIGN_GUARD",
+      entityType: "ManpowerDeploymentAssignment",
+      entityId: assignment?.id || employeeId,
+      beforeJson: undefined,
+      afterJson: JSON.stringify({ employeeId, shiftRequirementId, date, deploymentMode }),
+      ipAddress: undefined,
+      userAgent: undefined
+    });
 
     return NextResponse.json({
       success: true,

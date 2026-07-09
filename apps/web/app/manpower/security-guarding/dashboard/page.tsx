@@ -211,7 +211,28 @@ export default function SecurityGuardingDashboard() {
           <h1 className="text-xl font-bold text-primary">Security Guarding Command Center</h1>
           <p className="text-[11px] text-on-surface-variant">Live operations compliance, reliever allocations, and inspections ledger</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center flex-wrap gap-2">
+          <Link
+            href="/manpower/security-guarding/exceptions"
+            className="px-3 py-2 bg-rose-600 text-white text-xs font-bold rounded-lg hover:bg-rose-700 transition-colors inline-flex items-center gap-2"
+          >
+            <span className="material-symbols-outlined text-[16px]">report_problem</span>
+            Exceptions Queue
+          </Link>
+          <Link
+            href="/manpower/security-guarding/payroll-advisory"
+            className="px-3 py-2 bg-amber-600 text-white text-xs font-bold rounded-lg hover:bg-amber-700 transition-colors inline-flex items-center gap-2"
+          >
+            <span className="material-symbols-outlined text-[16px]">receipt_long</span>
+            Payroll Advisory Prep
+          </Link>
+          <Link
+            href="/manpower/security-guarding/billing-support"
+            className="px-3 py-2 bg-emerald-600 text-white text-xs font-bold rounded-lg hover:bg-emerald-700 transition-colors inline-flex items-center gap-2"
+          >
+            <span className="material-symbols-outlined text-[16px]">analytics</span>
+            Billing-Support Reports
+          </Link>
           <Link
             href="/manpower/security-guarding/coordinators"
             className="px-3 py-2 bg-secondary text-white text-xs font-bold rounded-lg hover:bg-secondary/90 transition-colors inline-flex items-center gap-2"

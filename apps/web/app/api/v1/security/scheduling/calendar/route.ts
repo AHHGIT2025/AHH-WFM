@@ -13,7 +13,7 @@ function parseDate(val: any): string {
 }
 
 export async function GET(request: Request) {
-  const auth = await checkApiAuth();
+  const auth = await checkApiAuth(undefined, { requiredOperation: "SECURITY_GUARDING" });
   if (auth.error) return auth.error;
 
   const isSuperOrAdmin = auth.session?.user && (auth.session.user.role === "ADMIN" || auth.session.user.role === "SUPER_ADMIN");
@@ -153,7 +153,12 @@ export async function GET(request: Request) {
     });
 
     const siteIds = filteredSites.map(s => s.id);
-    const filteredRequirements = shiftRequirements.filter(r => siteIds.includes(r.siteId));
+    const activeRequirements: any[] = [];
+    for (const sId of siteIds) {
+      const activeShifts = await getActiveSiteShiftConfigs(sId);
+      activeRequirements.push(...activeShifts);
+    }
+    const filteredRequirements = activeRequirements;
 
     // Construct slots and map assignments
     const slots = filteredRequirements.map(req => {

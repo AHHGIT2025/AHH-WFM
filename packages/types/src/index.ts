@@ -526,6 +526,18 @@ export interface SapPayrollPeriodLock {
   updatedAt?: string;
 }
 
+export interface SecurityOperationsPeriodLock {
+  id: string;
+  operationType: string;
+  period: string;
+  locked: boolean;
+  lockedById?: string;
+  lockedAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+
 export interface SavedReport {
   id: string;
   name: string;

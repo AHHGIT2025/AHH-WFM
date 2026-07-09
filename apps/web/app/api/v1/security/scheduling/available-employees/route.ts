@@ -3,9 +3,11 @@ import { checkApiAuth } from "@/lib/api-guards";
 import { hasPermission } from "@/lib/permissions";
 import { mockDb, isDbConnected, readDb } from "@ahh-wfm/mock-data";
 import { prisma } from "@ahh-wfm/database";
+import { validateDeploymentEligibility } from "@/lib/scheduling-validator";
+import { getActiveSiteShiftConfigs } from "@/lib/server-helpers";
 
 export async function GET(request: Request) {
-  const auth = await checkApiAuth();
+  const auth = await checkApiAuth(undefined, { requiredOperation: "SECURITY_GUARDING" });
   if (auth.error) return auth.error;
 
   const isSuperOrAdmin = auth.session?.user && (auth.session.user.role === "ADMIN" || auth.session.user.role === "SUPER_ADMIN");
@@ -33,9 +35,13 @@ export async function GET(request: Request) {
     let leaves: any[] = [];
     let securityLicenses: any[] = [];
     let securityGatePasses: any[] = [];
+    let site: any = null;
+    let projectInstructions: any[] = [];
 
     // Let's compute inactive count from all security guards
     let allSecurityGuards: any[] = [];
+
+    const db = readDb() as any;
 
     if (isDb) {
       allSecurityGuards = await prisma.employee.findMany({
@@ -44,7 +50,10 @@ export async function GET(request: Request) {
       employees = await prisma.employee.findMany({
         where: {
           isActive: true,
-          operationType: "SECURITY_GUARDING"
+          operationType: "SECURITY_GUARDING",
+          NOT: {
+            employmentStatus: { in: ["INACTIVE", "DELETED"] }
+          }
         },
         include: {
           securityLicense: true,
@@ -70,10 +79,15 @@ export async function GET(request: Request) {
       leaves = await prisma.leaveRequest.findMany({
         where: { status: "Approved" }
       });
+
+      if (siteId) {
+        site = await prisma.manpowerSite.findUnique({
+          where: { id: siteId }
+        });
+      }
     } else {
-      const db = readDb() as any;
       allSecurityGuards = (db.employees || []).filter((e: any) => e.operationType === "SECURITY_GUARDING");
-      employees = allSecurityGuards.filter((e: any) => e.isActive !== false);
+      employees = allSecurityGuards.filter((e: any) => e.isActive !== false && e.employmentStatus !== "INACTIVE" && e.employmentStatus !== "DELETED");
       deployments = (db.manpowerDeployments || []).filter((d: any) => {
         const dStr = String(d.date).split("T")[0];
         return dStr === dateStr && d.operationType === "SECURITY_GUARDING";
@@ -93,9 +107,19 @@ export async function GET(request: Request) {
           gatePasses: gps
         };
       });
+
+      if (siteId) {
+        site = (db.manpowerSites || []).find((s: any) => s.id === siteId);
+      }
     }
 
-    const inactiveExcluded = allSecurityGuards.filter(e => e.isActive === false).length;
+    if (site) {
+      projectInstructions = (db.projectInstructions || []).filter(
+        (pi: any) => pi.projectId === site.projectId && pi.isActive !== false
+      );
+    }
+
+    const inactiveExcluded = allSecurityGuards.filter(e => e.isActive === false || e.employmentStatus === "INACTIVE" || e.employmentStatus === "DELETED").length;
 
     // Filter by search text (ID or Name)
     let pool = employees.filter(e => {
@@ -147,7 +171,50 @@ export async function GET(request: Request) {
     const conflictExcluded = pool.filter(e => assignedEmployeeIds.has(e.id)).length;
 
     // Filter pool to only show active, unassigned and not on leave guards
-    const eligiblePool = pool.filter(e => !leaveEmployeeIds.has(e.id) && !assignedEmployeeIds.has(e.id));
+    let eligiblePool = pool.filter(e => !leaveEmployeeIds.has(e.id) && !assignedEmployeeIds.has(e.id));
+
+    // Validate eligibility using validateDeploymentEligibility when siteId is provided
+    if (siteId && site) {
+      const activeShifts = await getActiveSiteShiftConfigs(siteId);
+      const categories = db.manpowerCategories || [];
+      
+      if (activeShifts.length > 0) {
+        eligiblePool = eligiblePool.filter(e => {
+          // Check if employee is eligible for at least one active shift config of this site
+          return activeShifts.some((req: any) => {
+            const category = categories.find((c: any) => c.id === req.categoryId) || req.category;
+            const slotInfo = {
+              date: dateStr,
+              siteId,
+              siteName: site.name,
+              shiftStartTime: req.shiftStartTime,
+              shiftEndTime: req.shiftEndTime,
+              shiftCode: req.shiftCode,
+              isReliever: false
+            };
+            const siteReqs = {
+              requiresMoiLicense: category?.requiresMoiLicense || false,
+              requiresGatePassCheck: category?.requiresGatePassCheck || site.gatePassRequired || false,
+              gatePassRequired: site.gatePassRequired || false,
+              gatePassValidationMode: site.gatePassValidationMode || "WARNING",
+              clientApprovalRequired: site.clientApprovalRequired || false,
+              strictDesignationMatch: false
+            };
+            
+            const validation = validateDeploymentEligibility(
+              e,
+              slotInfo,
+              siteReqs,
+              [], // already filtered assigned employees
+              [], // already filtered leave employees
+              projectInstructions
+            );
+            
+            return validation.severity !== "BLOCKED";
+          });
+        });
+      }
+    }
 
     const availablePool = eligiblePool.map(e => {
       const lic = e.securityLicense;

@@ -5,7 +5,7 @@ import { mockDb, isDbConnected, readDb, writeDb } from "@ahh-wfm/mock-data";
 import { prisma } from "@ahh-wfm/database";
 
 export async function POST(request: Request) {
-  const auth = await checkApiAuth();
+  const auth = await checkApiAuth(undefined, { requiredOperation: "SECURITY_GUARDING" });
   if (auth.error) return auth.error;
 
   const isSuperOrAdmin = auth.session?.user && (auth.session.user.role === "ADMIN" || auth.session.user.role === "SUPER_ADMIN");
@@ -25,23 +25,50 @@ export async function POST(request: Request) {
     }
 
     const isDb = isDbConnected();
+    let asgData: any = null;
+    let depDateStr = "";
 
     if (isDb) {
-      const asg = await prisma.manpowerDeploymentAssignment.findUnique({
+      asgData = await prisma.manpowerDeploymentAssignment.findUnique({
         where: { id: assignmentId },
-        include: { deployment: true }
+        include: { deployment: true, employee: true }
       });
-      
-      if (!asg) {
-        return NextResponse.json({ error: "Assignment not found" }, { status: 404 });
+      if (asgData) {
+        depDateStr = asgData.deployment.date.toISOString().split("T")[0];
       }
+    } else {
+      const db = readDb() as any;
+      const asg = (db.manpowerDeploymentAssignments || []).find((x: any) => x.id === assignmentId);
+      if (asg) {
+        const dep = (db.manpowerDeployments || []).find((d: any) => d.id === asg.deploymentId);
+        if (dep) {
+          depDateStr = String(dep.date).split("T")[0];
+        }
+        const emp = (db.employees || []).find((e: any) => e.id === asg.employeeId);
+        asgData = { ...asg, deployment: dep, employee: emp };
+      }
+    }
 
-      const todayStr = new Date().toISOString().split("T")[0];
-      const depDate = asg.deployment.date.toISOString().split("T")[0];
+    if (!asgData) {
+      return NextResponse.json({ error: "Assignment not found" }, { status: 404 });
+    }
+
+    // Verify operations period lock
+    const period = depDateStr.substring(0, 7); // "YYYY-MM"
+    const locks = await mockDb.getSecurityOperationsPeriodLocks("SECURITY_GUARDING");
+    const isLocked = locks.some(l => l.period === period && l.locked);
+    if (isLocked) {
+      return NextResponse.json({ error: `Security Guarding operations for period ${period} are locked. Modifications are blocked.` }, { status: 400 });
+    }
+
+    const todayStr = new Date().toISOString().split("T")[0];
+
+    if (isDb) {
+      const depDate = asgData.deployment.date.toISOString().split("T")[0];
 
       if (depDate < todayStr) {
         // Historical: Mark status as CANCELLED
-        const prevWarnings = typeof asg.validationWarnings === "object" ? (asg.validationWarnings as any) : {};
+        const prevWarnings = typeof asgData.validationWarnings === "object" ? (asgData.validationWarnings as any) : {};
         await prisma.manpowerDeploymentAssignment.update({
           where: { id: assignmentId },
           data: {
@@ -62,13 +89,8 @@ export async function POST(request: Request) {
       const asgs = db.manpowerDeploymentAssignments || [];
       const asgIndex = asgs.findIndex((x: any) => x.id === assignmentId);
       
-      if (asgIndex === -1) {
-        return NextResponse.json({ error: "Assignment not found in memory" }, { status: 404 });
-      }
-
       const asg = asgs[asgIndex];
       const dep = (db.manpowerDeployments || []).find((d: any) => d.id === asg.deploymentId);
-      const todayStr = new Date().toISOString().split("T")[0];
       const depDate = String(dep?.date || "").split("T")[0];
 
       if (depDate < todayStr) {
@@ -80,6 +102,17 @@ export async function POST(request: Request) {
       }
       writeDb(db);
     }
+
+    await mockDb.createUserActivityLog({
+      userId: (auth.session?.user as any)?.id || "system",
+      action: "UNASSIGN_GUARD",
+      entityType: "ManpowerDeploymentAssignment",
+      entityId: assignmentId,
+      beforeJson: JSON.stringify(asgData),
+      afterJson: undefined,
+      ipAddress: undefined,
+      userAgent: undefined
+    });
 
     return NextResponse.json({ success: true });
 

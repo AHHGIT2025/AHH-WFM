@@ -95,7 +95,10 @@ export async function getSiteDependencies(siteId: string): Promise<SiteDependenc
 
   // 5. Active instructions count (linked to project of this site)
   const activeInstructions = (db.projectInstructions || []).filter(
-    (pi: any) => pi.projectId === projectId && pi.isActive !== false
+    (pi: any) =>
+      pi.projectId === projectId &&
+      pi.isActive !== false &&
+      (!pi.siteId || pi.siteId === siteId || pi.appliesToAllSites === true)
   );
   const activeInstructionsCount = activeInstructions.length;
 
@@ -104,16 +107,29 @@ export async function getSiteDependencies(siteId: string): Promise<SiteDependenc
   let attendanceHistoryCount = 0;
   let futureAssignmentsCount = 0;
 
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  const todayStr = today.toISOString().split("T")[0];
+
+  function parseDate(val: any): string {
+    if (!val) return "";
+    if (val instanceof Date) return val.toISOString().split("T")[0];
+    return String(val).split("T")[0];
+  }
+
   if (isDb) {
     if (allShiftIds.length > 0) {
       deploymentHistoryCount = await prisma.manpowerDeployment.count({
-        where: { shiftRequirementId: { in: allShiftIds } }
+        where: {
+          shiftRequirementId: { in: allShiftIds },
+          date: { lt: today }
+        }
       });
       futureAssignmentsCount = await prisma.manpowerDeploymentAssignment.count({
         where: {
           deployment: {
             shiftRequirementId: { in: allShiftIds },
-            date: { gte: new Date() }
+            date: { gte: today }
           }
         }
       });
@@ -123,10 +139,13 @@ export async function getSiteDependencies(siteId: string): Promise<SiteDependenc
     });
   } else {
     if (allShiftIds.length > 0) {
-      deploymentHistoryCount = (db.manpowerDeployments || []).filter((d: any) => allShiftIds.includes(d.shiftRequirementId)).length;
+      deploymentHistoryCount = (db.manpowerDeployments || []).filter((d: any) => 
+        allShiftIds.includes(d.shiftRequirementId) && parseDate(d.date) < todayStr
+      ).length;
+
       futureAssignmentsCount = (db.manpowerDeploymentAssignments || []).filter((a: any) => {
         const dep = (db.manpowerDeployments || []).find((d: any) => d.id === a.deploymentId);
-        return dep && allShiftIds.includes(dep.shiftRequirementId) && new Date(dep.date) >= new Date();
+        return dep && allShiftIds.includes(dep.shiftRequirementId) && parseDate(dep.date) >= todayStr;
       }).length;
     }
     attendanceHistoryCount = (db.attendance || []).filter((a: any) => a.siteId === siteId).length;
@@ -134,18 +153,16 @@ export async function getSiteDependencies(siteId: string): Promise<SiteDependenc
 
   // 7. Calculate rules
   const blockingReasons: string[] = [];
-  if (activeShiftsCount > 0) {
-    blockingReasons.push(`Active shift configurations exist (${activeShiftsCount} shifts).`);
-  }
-  if (manpowerAllocationsCount > 0) {
-    blockingReasons.push(`Manpower allocations exist (${manpowerAllocationsCount} positions allocated).`);
-  }
-  if (activeAllowancesCount > 0) {
-    blockingReasons.push(`Active allowance configurations exist (${activeAllowancesCount} allowances active).`);
-  }
+  if (activeShiftsCount > 0) blockingReasons.push("activeSiteShifts");
+  if (manpowerAllocationsCount > 0) blockingReasons.push("manpowerAllocations");
+  if (activeAllowancesCount > 0) blockingReasons.push("activeAllowances");
+  if (activeInstructionsCount > 0) blockingReasons.push("activeInstructions");
+  if (futureAssignmentsCount > 0) blockingReasons.push("futureAssignments");
+  if (deploymentHistoryCount > 0) blockingReasons.push("deploymentHistory");
+  if (attendanceHistoryCount > 0) blockingReasons.push("attendanceHistory");
 
-  const hasHistory = deploymentHistoryCount > 0 || attendanceHistoryCount > 0 || futureAssignmentsCount > 0;
-  const hasActiveConfig = activeShiftsCount > 0 || manpowerAllocationsCount > 0 || activeAllowancesCount > 0;
+  const hasHistory = deploymentHistoryCount > 0 || attendanceHistoryCount > 0;
+  const hasActiveConfig = activeShiftsCount > 0 || manpowerAllocationsCount > 0 || activeAllowancesCount > 0 || activeInstructionsCount > 0 || futureAssignmentsCount > 0;
 
   let canHardDelete = false;
   let suggestedAction: "DEACTIVATE" | "REMOVE_CONFIG" | "HARD_DELETE_ALLOWED" = "HARD_DELETE_ALLOWED";
@@ -154,18 +171,20 @@ export async function getSiteDependencies(siteId: string): Promise<SiteDependenc
   if (hasHistory) {
     canHardDelete = false;
     suggestedAction = "DEACTIVATE";
-    message = "This site is already used in deployment records. It must be deactivated instead of permanently deleted.";
+    message = "This site has historical deployment or attendance records. It must be deactivated instead of permanently deleted.";
   } else if (hasActiveConfig) {
     canHardDelete = false;
     suggestedAction = "REMOVE_CONFIG";
     
     // Construct exact configuration message
     const configs: string[] = [];
-    if (activeShiftsCount > 0) configs.push("active shift configuration");
-    if (manpowerAllocationsCount > 0) configs.push("manpower allocation");
-    if (activeAllowancesCount > 0) configs.push("allowance configuration");
+    if (activeShiftsCount > 0) configs.push("active site shifts");
+    if (manpowerAllocationsCount > 0) configs.push("manpower allocations");
+    if (activeAllowancesCount > 0) configs.push("active allowances");
+    if (activeInstructionsCount > 0) configs.push("active instructions");
+    if (futureAssignmentsCount > 0) configs.push("future assignments");
     
-    message = `Cannot delete because this site has ${configs.join(" and ")}. Please remove these configurations or deactivate the site.`;
+    message = `Cannot delete because this site has active configuration or scheduled records: ${configs.join(", ")}. Please remove these or deactivate the site.`;
   } else {
     canHardDelete = true;
     suggestedAction = "HARD_DELETE_ALLOWED";

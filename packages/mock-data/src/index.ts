@@ -1,4 +1,4 @@
-import { Employee, AttendanceRecord, Shift, LeaveRequest, SapMapping, SyncLog, Announcement, Department, Worksite, AttendanceCorrection, LeaveType, LeaveBalance, LeaveBalanceLedger, Holiday, LeaveApprovalWorkflow, LeaveApprovalStep, LeaveApprovalHistory, LeaveApprovalDelegation, ShiftTemplate, RotationTemplate, ShiftAssignment, ShiftSwapRequest, OvertimeRate, SapConnection, SapSyncJob, SapSyncLog, SapFieldMapping, SapRetryQueue, SapExportQueue, SapPayrollStage, SapReconciliationLog, SapPayrollPeriodLock, SavedReport, ReportExportLog, UserActivityLog, ProductionCheckLog, BackupJob, BackupAuditLog, EmployeeBulkUploadJob, SystemRole, SystemPermission, RolePermission, UserRoleAssignment, BlueCollarPositionCategory, Project, ProjectSite, EmployeeDeployment, Designation, TradeClassification, LocationMaster, CostCenter, ShiftRelieverAssignment, RelieverStandbyRule, Company, AllowedPunchLocation, EmployeeAllowedPunchLocation, ManpowerClient, ManpowerContract, ManpowerProject, ManpowerSite, ManpowerLocationUnit, ManpowerCategory, ManpowerShiftRequirement, ManpowerDeployment, ManpowerDeploymentAssignment, ManpowerRelieverAssignment, UserOperationAccess } from "@ahh-wfm/types";
+import { Employee, AttendanceRecord, Shift, LeaveRequest, SapMapping, SyncLog, Announcement, Department, Worksite, AttendanceCorrection, LeaveType, LeaveBalance, LeaveBalanceLedger, Holiday, LeaveApprovalWorkflow, LeaveApprovalStep, LeaveApprovalHistory, LeaveApprovalDelegation, ShiftTemplate, RotationTemplate, ShiftAssignment, ShiftSwapRequest, OvertimeRate, SapConnection, SapSyncJob, SapSyncLog, SapFieldMapping, SapRetryQueue, SapExportQueue, SapPayrollStage, SapReconciliationLog, SapPayrollPeriodLock, SecurityOperationsPeriodLock, SavedReport, ReportExportLog, UserActivityLog, ProductionCheckLog, BackupJob, BackupAuditLog, EmployeeBulkUploadJob, SystemRole, SystemPermission, RolePermission, UserRoleAssignment, BlueCollarPositionCategory, Project, ProjectSite, EmployeeDeployment, Designation, TradeClassification, LocationMaster, CostCenter, ShiftRelieverAssignment, RelieverStandbyRule, Company, AllowedPunchLocation, EmployeeAllowedPunchLocation, ManpowerClient, ManpowerContract, ManpowerProject, ManpowerSite, ManpowerLocationUnit, ManpowerCategory, ManpowerShiftRequirement, ManpowerDeployment, ManpowerDeploymentAssignment, ManpowerRelieverAssignment, UserOperationAccess } from "@ahh-wfm/types";
 const uuid = () => Math.random().toString(36).substring(2) + Date.now().toString(36);
 import * as fs from "fs";
 import * as path from "path";
@@ -410,6 +410,7 @@ let memoryDb: {
   sapPayrollStages: SapPayrollStage[];
   sapReconciliationLogs: SapReconciliationLog[];
   sapPayrollPeriodLocks: SapPayrollPeriodLock[];
+  securityOperationsPeriodLocks: SecurityOperationsPeriodLock[];
   savedReports: SavedReport[];
   reportExportLogs: ReportExportLog[];
   userActivityLogs: UserActivityLog[];
@@ -617,6 +618,7 @@ let memoryDb: {
   sapPayrollStages: [],
   sapReconciliationLogs: [],
   sapPayrollPeriodLocks: [],
+  securityOperationsPeriodLocks: [],
   savedReports: [],
   reportExportLogs: [],
   userActivityLogs: [],
@@ -6768,6 +6770,79 @@ export const mockDb = {
     return index === -1 ? lockData : db.sapPayrollPeriodLocks[index];
   },
 
+  getSecurityOperationsPeriodLocks: async (operationType: string = "SECURITY_GUARDING"): Promise<SecurityOperationsPeriodLock[]> => {
+    if (isDbConnected()) {
+      return await prismaClient.securityOperationsPeriodLock.findMany({
+        where: { operationType }
+      }) as any;
+    }
+    const db = readDb();
+    db.securityOperationsPeriodLocks = db.securityOperationsPeriodLocks || [];
+    return db.securityOperationsPeriodLocks.filter((l: any) => l.operationType === operationType);
+  },
+
+  lockSecurityOperationsPeriod: async (period: string, locked: boolean, operationType: string = "SECURITY_GUARDING", lockedBy?: string): Promise<SecurityOperationsPeriodLock> => {
+    const id = `OPLOCK-${operationType}-${period}`;
+    const lockData: SecurityOperationsPeriodLock = {
+      id,
+      operationType,
+      period,
+      locked,
+      lockedById: lockedBy || undefined,
+      lockedAt: locked ? new Date().toISOString() : undefined,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    if (isDbConnected()) {
+      const updated = await prismaClient.securityOperationsPeriodLock.upsert({
+        where: {
+          operationType_period: {
+            operationType,
+            period
+          }
+        },
+        update: {
+          locked,
+          lockedById: lockedBy || null,
+          lockedAt: locked ? new Date() : null
+        },
+        create: {
+          operationType,
+          period,
+          locked,
+          lockedById: lockedBy || null,
+          lockedAt: locked ? new Date() : null
+        }
+      });
+      return {
+        ...updated,
+        lockedById: updated.lockedById || undefined,
+        lockedAt: updated.lockedAt ? updated.lockedAt.toISOString() : undefined,
+        createdAt: updated.createdAt.toISOString(),
+        updatedAt: updated.updatedAt.toISOString()
+      };
+    }
+
+    const db = readDb();
+    db.securityOperationsPeriodLocks = db.securityOperationsPeriodLocks || [];
+    const index = db.securityOperationsPeriodLocks.findIndex((l: any) => l.period === period && l.operationType === operationType);
+    if (index === -1) {
+      db.securityOperationsPeriodLocks.push(lockData);
+    } else {
+      db.securityOperationsPeriodLocks[index] = {
+        ...db.securityOperationsPeriodLocks[index],
+        locked,
+        lockedById: lockedBy || undefined,
+        lockedAt: locked ? new Date().toISOString() : undefined,
+        updatedAt: new Date().toISOString()
+      };
+    }
+    writeDb(db);
+    return index === -1 ? lockData : db.securityOperationsPeriodLocks[index];
+  },
+
+
   stageSapPayrollPeriod: async (period: string): Promise<SapPayrollStage[]> => {
     // 1. Check if period is locked
     const locks = await mockDb.getSapPayrollPeriodLocks();
@@ -12146,6 +12221,9 @@ export const mockDb = {
         where: { id }
       });
       if (!contract) throw new Error("Contract not found");
+      if (contract.status !== "APPROVED") {
+        throw new Error("Only approved contracts can be activated.");
+      }
       
       await prismaClient.manpowerContract.update({
         where: { id },
@@ -12163,6 +12241,9 @@ export const mockDb = {
     const db = readDb();
     const contract = (db.manpowerContracts || []).find((c: any) => c.id === id);
     if (!contract) throw new Error("Contract not found");
+    if (contract.status !== "APPROVED") {
+      throw new Error("Only approved contracts can be activated.");
+    }
     contract.status = "ACTIVE";
     contract.approvalStatus = "ACTIVE";
     contract.activatedAt = new Date().toISOString();

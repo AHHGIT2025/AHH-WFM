@@ -4,7 +4,7 @@ import { hasPermission } from "@/lib/permissions";
 import { mockDb, readDb, writeDb } from "@ahh-wfm/mock-data";
 
 export async function GET(request: Request) {
-  const auth = await checkApiAuth();
+  const auth = await checkApiAuth(undefined, { requiredOperation: "SECURITY_GUARDING" });
   if (auth.error) return auth.error;
 
   const { searchParams } = new URL(request.url);
@@ -26,7 +26,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const auth = await checkApiAuth();
+  const auth = await checkApiAuth(undefined, { requiredOperation: "SECURITY_GUARDING" });
   if (auth.error) return auth.error;
 
   const isSuperOrAdmin = auth.session?.user && (auth.session.user.role === "ADMIN" || auth.session.user.role === "SUPER_ADMIN");
@@ -39,7 +39,7 @@ export async function POST(request: Request) {
 
   try {
     const payload = await request.json();
-    const { id, projectId, instructionTitle, instructionDescription, requirementType, severity, expiryWarningDays, isActive } = payload;
+    const { id, projectId, siteId, appliesToAllSites, instructionTitle, instructionDescription, requirementType, severity, expiryWarningDays, isActive } = payload;
 
     if (!projectId || !instructionTitle) {
       return NextResponse.json({ error: "projectId and instructionTitle are required" }, { status: 400 });
@@ -55,6 +55,8 @@ export async function POST(request: Request) {
       if (idx !== -1) {
         db.projectInstructions[idx] = {
           ...db.projectInstructions[idx],
+          siteId: siteId || null,
+          appliesToAllSites: appliesToAllSites === true,
           instructionTitle,
           instructionDescription,
           requirementType,
@@ -71,6 +73,8 @@ export async function POST(request: Request) {
       record = {
         id: `pi-${Date.now()}`,
         projectId,
+        siteId: siteId || null,
+        appliesToAllSites: appliesToAllSites === true,
         instructionTitle,
         instructionDescription,
         requirementType,

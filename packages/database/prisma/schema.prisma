@@ -595,6 +595,22 @@ model SapPayrollPeriodLock {
   updatedAt     DateTime    @updatedAt
 }
 
+model SecurityOperationsPeriodLock {
+  id            String      @id @default(uuid())
+  operationType String      @default("SECURITY_GUARDING")
+  period        String
+  locked        Boolean     @default(false)
+  lockedById    String?
+  lockedAt      DateTime?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@unique([operationType, period])
+  @@index([operationType])
+  @@index([period])
+}
+
+
 model SavedReport {
   id          String   @id @default(uuid())
   name        String
