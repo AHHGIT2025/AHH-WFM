@@ -538,6 +538,16 @@ export interface SecurityOperationsPeriodLock {
 }
 
 
+export interface SecurityProjectManpowerAllocation {
+  id: string;
+  projectId: string;
+  contractRequirementId: string;
+  position: string;
+  quantity: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface SavedReport {
   id: string;
   name: string;

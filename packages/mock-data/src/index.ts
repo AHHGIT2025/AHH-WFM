@@ -10273,7 +10273,8 @@ export const mockDb = {
   },
   createManpowerProject: async (data: any): Promise<any> => {
     const code = data.code || await getNextSequenceCode("SPROJ");
-    const dataWithCode = { ...data, code };
+    const { allocations, relieverAllocations, ...cleanData } = data;
+    const dataWithCode = { ...cleanData, code };
     if (isDbConnected()) {
       const res = await prismaClient.manpowerProject.create({ data: dataWithCode });
       return { ...res, createdAt: res.createdAt?.toISOString(), updatedAt: res.updatedAt?.toISOString() };

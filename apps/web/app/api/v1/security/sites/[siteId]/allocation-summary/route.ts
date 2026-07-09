@@ -76,11 +76,39 @@ export async function GET(
       siblingSiteIds = siblingSites.map((s: any) => s.id);
     }
 
-    // Load allocations from db.json
+    // Load allocations (database in SQL mode, db.json in mock mode)
+    let projectAllocations: any[] = [];
+    let projectRelievers: any[] = [];
     const db = readDb() as any;
-    const projectAllocations = (db.projectManpowerAllocations || []).filter((a: any) => a.projectId === projectId);
-    const projectRelievers = (db.projectRelieverAllocations || []).filter((a: any) => a.projectId === projectId);
     const siteAllocations = db.siteManpowerAllocations || [];
+
+    if (isDb) {
+      const dbAllocations = await prisma.securityProjectManpowerAllocation.findMany({
+        where: { projectId }
+      });
+      projectAllocations = dbAllocations.map(a => ({
+        id: a.id,
+        projectId: a.projectId,
+        contractRequirementId: a.contractRequirementId,
+        position: a.position,
+        quantity: a.quantity
+      }));
+
+      const dbRelieverPools = await prisma.securityProjectRelieverPool.findMany({
+        where: { projectId },
+        include: { category: true }
+      });
+      projectRelievers = dbRelieverPools.map(p => ({
+        id: p.id,
+        projectId: p.projectId,
+        contractRequirementId: "",
+        position: p.category?.name || "",
+        quantity: p.requiredRelieverCount
+      }));
+    } else {
+      projectAllocations = (db.projectManpowerAllocations || []).filter((a: any) => a.projectId === projectId);
+      projectRelievers = (db.projectRelieverAllocations || []).filter((a: any) => a.projectId === projectId);
+    }
 
     // Map manpower requirements
     const manpowerSummary = projectAllocations.map((pAlloc: any) => {

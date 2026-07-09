@@ -1333,6 +1333,7 @@ model ManpowerProject {
   coordinatorAssignments SecurityProjectCoordinatorAssignment[]
   siteInspections        SecuritySiteInspection[]
   materials              ManpowerProjectMaterialAllocation[]
+  manpowerAllocations   SecurityProjectManpowerAllocation[]
 }
 
 model ManpowerSite {
@@ -1506,6 +1507,22 @@ model SecurityProjectRelieverPool {
   createdAt             DateTime                            @default(now())
   updatedAt             DateTime                            @updatedAt
   assignments           SecurityProjectRelieverAssignment[]
+}
+
+model SecurityProjectManpowerAllocation {
+  id                    String          @id @default(uuid())
+  projectId             String
+  project               ManpowerProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  contractRequirementId String
+  position              String
+  quantity              Int             @default(0)
+
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+
+  @@index([projectId])
+  @@index([contractRequirementId])
 }
 
 model SecurityProjectRelieverAssignment {

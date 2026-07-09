@@ -116,11 +116,39 @@ export async function GET(
     // 3. Compute effective manpower, reliever, and shift requirements
     const { effectiveManpower, effectiveReliever, effectiveShift } = getEffectiveContractManpower(contract);
 
-    // 4. Retrieve allocations from db.json (allocations are NOT in Prisma schema)
+    // 4. Retrieve allocations (database in SQL mode, db.json in mock mode)
+    let allAllocations: any[] = [];
+    let allRelieverAllocations: any[] = [];
     const db = readDb() as any;
-    const allAllocations = db.projectManpowerAllocations || [];
-    const allRelieverAllocations = db.projectRelieverAllocations || [];
     const siteAllocations = db.siteManpowerAllocations || [];
+
+    if (isDb) {
+      const dbAllocations = await prisma.securityProjectManpowerAllocation.findMany({
+        where: { project: { contractId: contract.id } }
+      });
+      allAllocations = dbAllocations.map(a => ({
+        id: a.id,
+        projectId: a.projectId,
+        contractRequirementId: a.contractRequirementId,
+        position: a.position,
+        quantity: a.quantity
+      }));
+
+      const dbRelieverPools = await prisma.securityProjectRelieverPool.findMany({
+        where: { project: { contractId: contract.id } },
+        include: { category: true }
+      });
+      allRelieverAllocations = dbRelieverPools.map(p => ({
+        id: p.id,
+        projectId: p.projectId,
+        contractRequirementId: "",
+        position: p.category?.name || "",
+        quantity: p.requiredRelieverCount
+      }));
+    } else {
+      allAllocations = db.projectManpowerAllocations || [];
+      allRelieverAllocations = db.projectRelieverAllocations || [];
+    }
 
     // Map manpower requirements
     const manpowerSummary = effectiveManpower.map((req: any) => {
