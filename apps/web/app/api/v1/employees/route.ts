@@ -102,13 +102,27 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url);
   const operationType = searchParams.get("operationType") || "WHITE_COLLAR";
+  const employeeCategory = searchParams.get("employeeCategory");
+  const companyId = searchParams.get("companyId");
 
   try {
     const employees = await mockDb.getEmployees();
     const canView = canViewIdentity(auth.session?.user);
 
     const filtered = employees.filter(emp => {
+      // Apply strict White Collar filtering only if explicitly requested
+      if (employeeCategory === "WHITE_COLLAR" || operationType === "WHITE_COLLAR_STRICT") {
+        if (emp.employeeCategory !== "WHITE_COLLAR") return false;
+        if (emp.isActive === false) return false;
+        if (emp.employmentStatus === "INACTIVE" || emp.employmentStatus === "DELETED") return false;
+      }
+
+      // Apply company filter if provided
+      if (companyId && emp.companyId !== companyId) return false;
+
       if (operationType === "ALL") return true;
+      
+      // Default fallback compatibility logic
       return emp.operationType === operationType || (operationType === "WHITE_COLLAR" && !emp.operationType);
     });
 

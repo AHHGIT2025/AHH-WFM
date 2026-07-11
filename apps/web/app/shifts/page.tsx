@@ -140,7 +140,7 @@ export default function ShiftsPage() {
   const fetchDb = async () => {
     try {
       const [empRes, tempRes, rotRes, assignRes, leavesRes, swapsRes, otRes, ratesRes, covRes, projRes, catRes, deployRes] = await Promise.all([
-        fetch("/api/v1/employees"),
+        fetch("/api/v1/employees?employeeCategory=WHITE_COLLAR"),
         fetch("/api/v1/shifts/templates"),
         fetch("/api/v1/shifts/rotations"),
         fetch("/api/v1/shifts/assignments"),

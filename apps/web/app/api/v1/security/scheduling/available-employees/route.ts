@@ -6,6 +6,16 @@ import { prisma } from "@ahh-wfm/database";
 import { validateDeploymentEligibility } from "@/lib/scheduling-validator";
 import { getActiveSiteShiftConfigs } from "@/lib/server-helpers";
 
+function formatDateToYYYYMMDD(d: any): string {
+  if (!d) return "";
+  const dateObj = new Date(d);
+  if (isNaN(dateObj.getTime())) return "";
+  const year = dateObj.getFullYear();
+  const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+  const day = String(dateObj.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
 export async function GET(request: Request) {
   const auth = await checkApiAuth(undefined, { requiredOperation: "SECURITY_GUARDING" });
   if (auth.error) return auth.error;
@@ -27,6 +37,10 @@ export async function GET(request: Request) {
   const gatePassValid = searchParams.get("gatePassValid") || "all";
   const siteId = searchParams.get("siteId") || "";
 
+  const shiftId = searchParams.get("shiftId") || "";
+  const shiftStart = searchParams.get("shiftStart") || "";
+  const shiftEnd = searchParams.get("shiftEnd") || "";
+
   try {
     const isDb = isDbConnected();
     let employees: any[] = [];
@@ -38,19 +52,23 @@ export async function GET(request: Request) {
     let site: any = null;
     let projectInstructions: any[] = [];
 
-    // Let's compute inactive count from all security guards
+    // Compute inactive count from all security guards
     let allSecurityGuards: any[] = [];
 
     const db = readDb() as any;
 
     if (isDb) {
       allSecurityGuards = await prisma.employee.findMany({
-        where: { operationType: "SECURITY_GUARDING" }
+        where: { 
+          operationType: "SECURITY_GUARDING",
+          employeeCategory: "BLUE_COLLAR"
+        }
       });
       employees = await prisma.employee.findMany({
         where: {
           isActive: true,
           operationType: "SECURITY_GUARDING",
+          employeeCategory: "BLUE_COLLAR",
           NOT: {
             employmentStatus: { in: ["INACTIVE", "DELETED"] }
           }
@@ -61,10 +79,9 @@ export async function GET(request: Request) {
         }
       });
 
-      const start = new Date(dateStr);
-      start.setHours(0,0,0,0);
-      const end = new Date(dateStr);
-      end.setHours(23,59,59,999);
+      const [year, month, day] = dateStr.split("-").map(Number);
+      const start = new Date(year, month - 1, day, 0, 0, 0, 0);
+      const end = new Date(year, month - 1, day, 23, 59, 59, 999);
 
       deployments = await prisma.manpowerDeployment.findMany({
         where: {
@@ -86,7 +103,7 @@ export async function GET(request: Request) {
         });
       }
     } else {
-      allSecurityGuards = (db.employees || []).filter((e: any) => e.operationType === "SECURITY_GUARDING");
+      allSecurityGuards = (db.employees || []).filter((e: any) => e.operationType === "SECURITY_GUARDING" && e.employeeCategory === "BLUE_COLLAR");
       employees = allSecurityGuards.filter((e: any) => e.isActive !== false && e.employmentStatus !== "INACTIVE" && e.employmentStatus !== "DELETED");
       deployments = (db.manpowerDeployments || []).filter((d: any) => {
         const dStr = String(d.date).split("T")[0];
@@ -148,9 +165,9 @@ export async function GET(request: Request) {
 
     // Remove employees who have overlapping assignments on this date or are on approved leave
     const leaveEmployeeIds = new Set(leaves.filter(l => {
-      const lStart = String(l.startDate || l.from || "").split("T")[0];
-      const lEnd = String(l.endDate || l.to || "").split("T")[0];
-      return dateStr >= lStart && dateStr <= lEnd;
+      const lStart = formatDateToYYYYMMDD(l.startDate || l.from || "");
+      const lEnd = formatDateToYYYYMMDD(l.endDate || l.to || "");
+      return lStart && lEnd && dateStr >= lStart && dateStr <= lEnd;
     }).map(l => l.employeeId));
 
     const assignedEmployeeIds = new Set();
@@ -173,9 +190,10 @@ export async function GET(request: Request) {
     // Filter pool to only show active, unassigned and not on leave guards
     let eligiblePool = pool.filter(e => !leaveEmployeeIds.has(e.id) && !assignedEmployeeIds.has(e.id));
 
-    // Validate eligibility using validateDeploymentEligibility when siteId is provided
-    if (siteId && site) {
-      const activeShifts = await getActiveSiteShiftConfigs(siteId);
+    // Validate eligibility strictly ONLY when enough shift/slot context is available
+    const hasShiftContext = !!(shiftId || shiftStart || shiftEnd);
+    if (siteId && site && hasShiftContext) {
+      const activeShifts = await getActiveSiteShiftConfigs(siteId, db);
       const categories = db.manpowerCategories || [];
       
       if (activeShifts.length > 0) {
@@ -187,8 +205,8 @@ export async function GET(request: Request) {
               date: dateStr,
               siteId,
               siteName: site.name,
-              shiftStartTime: req.shiftStartTime,
-              shiftEndTime: req.shiftEndTime,
+              shiftStartTime: shiftStart || req.shiftStartTime,
+              shiftEndTime: shiftEnd || req.shiftEndTime,
               shiftCode: req.shiftCode,
               isReliever: false
             };
