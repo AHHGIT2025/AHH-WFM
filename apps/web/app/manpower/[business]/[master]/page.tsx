@@ -575,30 +575,72 @@ export default function ManpowerMasterPage() {
 
     try {
       if (master === "sites" && isSecurity) {
-        const totalAllocByPos: Record<string, number> = {};
+        for (const shift of formSiteShifts) {
+          if (!shift.categoryId) {
+            setFormError("All shift requirements must have a position selected.");
+            return;
+          }
+          if (!shift.shiftCode) {
+            setFormError("All shift requirements must have a shift name.");
+            return;
+          }
+          if (!shift.shiftStartTime || !shift.shiftEndTime) {
+            setFormError(`Start time and End time are required for shift ${shift.shiftCode}.`);
+            return;
+          }
+          if (Number(shift.requiredCount) <= 0) {
+            setFormError(`Required headcount for shift ${shift.shiftCode} must be greater than 0.`);
+            return;
+          }
+          if (Number(shift.requiredRelieverCount || 0) < 0) {
+            setFormError(`Required relievers count for shift ${shift.shiftCode} cannot be negative.`);
+            return;
+          }
+        }
+
+        const permAllocByPos: Record<string, number> = {};
+        const relAllocByPos: Record<string, number> = {};
+
         siteAllocations.forEach(a => {
-          totalAllocByPos[a.position] = (totalAllocByPos[a.position] || 0) + (a.allocatedToThis || 0);
+          permAllocByPos[a.position] = (permAllocByPos[a.position] || 0) + (a.allocatedToThis || 0);
         });
         siteRelieverAllocations.forEach(a => {
-          totalAllocByPos[a.position] = (totalAllocByPos[a.position] || 0) + (a.allocatedToThis || 0);
+          relAllocByPos[a.position] = (relAllocByPos[a.position] || 0) + (a.allocatedToThis || 0);
         });
 
-        const totalShiftByPos: Record<string, number> = {};
+        const permShiftByPos: Record<string, number> = {};
+        const relShiftByPos: Record<string, number> = {};
+
         formSiteShifts.forEach(s => {
           const categoryName = categories.find(c => c.id === s.categoryId)?.name || "";
           if (categoryName) {
-            totalShiftByPos[categoryName] = (totalShiftByPos[categoryName] || 0) + (Number(s.requiredCount) || 0);
+            const isRel = siteRelieverAllocations.some(a => a.position === categoryName);
+            if (isRel) {
+              relShiftByPos[categoryName] = (relShiftByPos[categoryName] || 0) + (Number(s.requiredCount) || 0);
+            } else {
+              permShiftByPos[categoryName] = (permShiftByPos[categoryName] || 0) + (Number(s.requiredCount) || 0);
+            }
           }
         });
 
         let hasExceeded = false;
         let exceededMessage = "";
-        for (const pos in totalShiftByPos) {
-          const allocQty = totalAllocByPos[pos] || 0;
-          const shiftQty = totalShiftByPos[pos];
+
+        for (const pos in permShiftByPos) {
+          const allocQty = permAllocByPos[pos] || 0;
+          const shiftQty = permShiftByPos[pos];
           if (shiftQty > allocQty) {
             hasExceeded = true;
-            exceededMessage += `\n- Position "${pos}": shift requirement is ${shiftQty} but allocated manpower is only ${allocQty}.`;
+            exceededMessage += `\n- Position "${pos}" (Permanent): shift requirement is ${shiftQty} but allocated manpower is only ${allocQty}.`;
+          }
+        }
+
+        for (const pos in relShiftByPos) {
+          const allocQty = relAllocByPos[pos] || 0;
+          const shiftQty = relShiftByPos[pos];
+          if (shiftQty > allocQty) {
+            hasExceeded = true;
+            exceededMessage += `\n- Position "${pos}" (Reliever): shift requirement is ${shiftQty} but allocated manpower is only ${allocQty}.`;
           }
         }
 
@@ -671,30 +713,72 @@ export default function ManpowerMasterPage() {
 
     try {
       if (master === "sites" && isSecurity) {
-        const totalAllocByPos: Record<string, number> = {};
+        for (const shift of formSiteShifts) {
+          if (!shift.categoryId) {
+            setFormError("All shift requirements must have a position selected.");
+            return;
+          }
+          if (!shift.shiftCode) {
+            setFormError("All shift requirements must have a shift name.");
+            return;
+          }
+          if (!shift.shiftStartTime || !shift.shiftEndTime) {
+            setFormError(`Start time and End time are required for shift ${shift.shiftCode}.`);
+            return;
+          }
+          if (Number(shift.requiredCount) <= 0) {
+            setFormError(`Required headcount for shift ${shift.shiftCode} must be greater than 0.`);
+            return;
+          }
+          if (Number(shift.requiredRelieverCount || 0) < 0) {
+            setFormError(`Required relievers count for shift ${shift.shiftCode} cannot be negative.`);
+            return;
+          }
+        }
+
+        const permAllocByPos: Record<string, number> = {};
+        const relAllocByPos: Record<string, number> = {};
+
         siteAllocations.forEach(a => {
-          totalAllocByPos[a.position] = (totalAllocByPos[a.position] || 0) + (a.allocatedToThis || 0);
+          permAllocByPos[a.position] = (permAllocByPos[a.position] || 0) + (a.allocatedToThis || 0);
         });
         siteRelieverAllocations.forEach(a => {
-          totalAllocByPos[a.position] = (totalAllocByPos[a.position] || 0) + (a.allocatedToThis || 0);
+          relAllocByPos[a.position] = (relAllocByPos[a.position] || 0) + (a.allocatedToThis || 0);
         });
 
-        const totalShiftByPos: Record<string, number> = {};
+        const permShiftByPos: Record<string, number> = {};
+        const relShiftByPos: Record<string, number> = {};
+
         formSiteShifts.forEach(s => {
           const categoryName = categories.find(c => c.id === s.categoryId)?.name || "";
           if (categoryName) {
-            totalShiftByPos[categoryName] = (totalShiftByPos[categoryName] || 0) + (Number(s.requiredCount) || 0);
+            const isRel = siteRelieverAllocations.some(a => a.position === categoryName);
+            if (isRel) {
+              relShiftByPos[categoryName] = (relShiftByPos[categoryName] || 0) + (Number(s.requiredCount) || 0);
+            } else {
+              permShiftByPos[categoryName] = (permShiftByPos[categoryName] || 0) + (Number(s.requiredCount) || 0);
+            }
           }
         });
 
         let hasExceeded = false;
         let exceededMessage = "";
-        for (const pos in totalShiftByPos) {
-          const allocQty = totalAllocByPos[pos] || 0;
-          const shiftQty = totalShiftByPos[pos];
+
+        for (const pos in permShiftByPos) {
+          const allocQty = permAllocByPos[pos] || 0;
+          const shiftQty = permShiftByPos[pos];
           if (shiftQty > allocQty) {
             hasExceeded = true;
-            exceededMessage += `\n- Position "${pos}": shift requirement is ${shiftQty} but allocated manpower is only ${allocQty}.`;
+            exceededMessage += `\n- Position "${pos}" (Permanent): shift requirement is ${shiftQty} but allocated manpower is only ${allocQty}.`;
+          }
+        }
+
+        for (const pos in relShiftByPos) {
+          const allocQty = relAllocByPos[pos] || 0;
+          const shiftQty = relShiftByPos[pos];
+          if (shiftQty > allocQty) {
+            hasExceeded = true;
+            exceededMessage += `\n- Position "${pos}" (Reliever): shift requirement is ${shiftQty} but allocated manpower is only ${allocQty}.`;
           }
         }
 
@@ -2599,6 +2683,74 @@ export default function ManpowerMasterPage() {
     }
   };
 
+  const getSiteShiftPositionOptions = () => {
+    const allocatedPositions = new Set<string>();
+
+    siteAllocations.forEach((a: any) => {
+      const qty = Number(a.allocatedToThis || a.allocatedQty || a.quantity || 0);
+      if (qty > 0 && a.position) {
+        allocatedPositions.add(a.position);
+      }
+    });
+
+    siteRelieverAllocations.forEach((a: any) => {
+      const qty = Number(a.allocatedToThis || a.allocatedQty || a.quantity || 0);
+      if (qty > 0 && a.position) {
+        allocatedPositions.add(a.position);
+      }
+    });
+
+    formSiteShifts.forEach((s: any) => {
+      const cat = categories.find((c: any) => c.id === s.categoryId);
+      if (cat?.name) {
+        allocatedPositions.add(cat.name);
+      } else {
+        const fallback = [
+          { id: "PM-CAT-SEC-02", name: "Security Guard", code: "SECURITY_GUARD" },
+          { id: "PM-CAT-SEC-03", name: "Head Guard", code: "HEAD_GUARD" },
+          { id: "PM-CAT-SEC-04", name: "Security Supervisor", code: "SECURITY_SUPERVISOR" },
+          { id: "PM-CAT-SEC-05", name: "CCTV Operator", code: "CCTV_OPERATOR" },
+          { id: "PM-CAT-SEC-06", name: "Patrolling Supervisor", code: "PATROL_SUPERVISOR" },
+          { id: "PM-CAT-SEC-07", name: "Reliever Guard", code: "RELIEVER_GUARD" },
+          { id: "PM-CAT-SEC-11", name: "Other Security Manpower", code: "OTHER_SEC" }
+        ].find(c => c.id === s.categoryId);
+        if (fallback?.name) {
+          allocatedPositions.add(fallback.name);
+        }
+      }
+    });
+
+    const options: Array<{ id: string; name: string }> = [];
+
+    const orderedPositionNames = [
+      ...siteAllocations.map((a: any) => a.position),
+      ...siteRelieverAllocations.map((a: any) => a.position)
+    ].filter(pos => allocatedPositions.has(pos));
+
+    const uniqueNames = Array.from(new Set(orderedPositionNames));
+
+    uniqueNames.forEach(posName => {
+      let cat = categories.find((c: any) => c.name === posName && c.operationType === "SECURITY_GUARDING");
+      if (!cat) {
+        cat = [
+          { id: "PM-CAT-SEC-02", name: "Security Guard", code: "SECURITY_GUARD" },
+          { id: "PM-CAT-SEC-03", name: "Head Guard", code: "HEAD_GUARD" },
+          { id: "PM-CAT-SEC-04", name: "Security Supervisor", code: "SECURITY_SUPERVISOR" },
+          { id: "PM-CAT-SEC-05", name: "CCTV Operator", code: "CCTV_OPERATOR" },
+          { id: "PM-CAT-SEC-06", name: "Patrolling Supervisor", code: "PATROL_SUPERVISOR" },
+          { id: "PM-CAT-SEC-07", name: "Reliever Guard", code: "RELIEVER_GUARD" },
+          { id: "PM-CAT-SEC-11", name: "Other Security Manpower", code: "OTHER_SEC" }
+        ].find(c => c.name === posName);
+      }
+
+      if (cat) {
+        options.push({ id: cat.id, name: cat.name });
+      }
+    });
+
+    return options;
+  };
+
   function renderSiteAllowanceAndShiftsFields() {
     if (!isSecurity) return null;
 
@@ -2614,7 +2766,7 @@ export default function ManpowerMasterPage() {
               checked={siteAllowanceApplicable}
               onChange={(e) => {
                 setSiteAllowanceApplicable(e.target.checked);
-                setFormSiteAllowance(prev => ({
+                setFormSiteAllowance((prev: any) => ({
                   ...prev,
                   siteAllowanceEnabled: e.target.checked
                 }));
@@ -2638,7 +2790,7 @@ export default function ManpowerMasterPage() {
                     step="0.01"
                     required
                     value={formSiteAllowance.siteAllowanceAmount || 0}
-                    onChange={(e) => setFormSiteAllowance(prev => ({
+                    onChange={(e) => setFormSiteAllowance((prev: any) => ({
                       ...prev,
                       siteAllowanceAmount: parseFloat(e.target.value) || 0
                     }))}
@@ -2649,7 +2801,7 @@ export default function ManpowerMasterPage() {
                   <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Frequency</label>
                   <select
                     value={formSiteAllowance.siteAllowanceFrequency || "MONTHLY"}
-                    onChange={(e) => setFormSiteAllowance(prev => ({
+                    onChange={(e) => setFormSiteAllowance((prev: any) => ({
                       ...prev,
                       siteAllowanceFrequency: e.target.value
                     }))}
@@ -2667,7 +2819,7 @@ export default function ManpowerMasterPage() {
                 <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Description</label>
                 <textarea
                   value={formSiteAllowance.allowanceDescription || ""}
-                  onChange={(e) => setFormSiteAllowance(prev => ({
+                  onChange={(e) => setFormSiteAllowance((prev: any) => ({
                     ...prev,
                     allowanceDescription: e.target.value
                   }))}
@@ -2684,7 +2836,7 @@ export default function ManpowerMasterPage() {
                     type="date"
                     required
                     value={formSiteAllowance.effectiveFrom ? formSiteAllowance.effectiveFrom.substring(0, 10) : ""}
-                    onChange={(e) => setFormSiteAllowance(prev => ({
+                    onChange={(e) => setFormSiteAllowance((prev: any) => ({
                       ...prev,
                       effectiveFrom: e.target.value
                     }))}
@@ -2696,7 +2848,7 @@ export default function ManpowerMasterPage() {
                   <input
                     type="date"
                     value={formSiteAllowance.effectiveTo ? formSiteAllowance.effectiveTo.substring(0, 10) : ""}
-                    onChange={(e) => setFormSiteAllowance(prev => ({
+                    onChange={(e) => setFormSiteAllowance((prev: any) => ({
                       ...prev,
                       effectiveTo: e.target.value
                     }))}
@@ -2710,7 +2862,7 @@ export default function ManpowerMasterPage() {
                   <input
                     type="checkbox"
                     checked={formSiteAllowance.appliesToAllPositions !== false}
-                    onChange={(e) => setFormSiteAllowance(prev => ({
+                    onChange={(e) => setFormSiteAllowance((prev: any) => ({
                       ...prev,
                       appliesToAllPositions: e.target.checked
                     }))}
@@ -2725,7 +2877,7 @@ export default function ManpowerMasterPage() {
                     <select
                       required
                       value={formSiteAllowance.position || ""}
-                      onChange={(e) => setFormSiteAllowance(prev => ({
+                      onChange={(e) => setFormSiteAllowance((prev: any) => ({
                         ...prev,
                         position: e.target.value
                       }))}
@@ -2748,6 +2900,24 @@ export default function ManpowerMasterPage() {
             <button
               type="button"
               onClick={() => {
+                const options = getSiteShiftPositionOptions();
+                const firstPermanent = siteAllocations.find(a => Number(a.allocatedToThis || 0) > 0);
+                let defaultCategoryId = "";
+                if (firstPermanent) {
+                  const matched = options.find(o => o.name === firstPermanent.position);
+                  if (matched) defaultCategoryId = matched.id;
+                }
+                if (!defaultCategoryId) {
+                  const firstReliever = siteRelieverAllocations.find(a => Number(a.allocatedToThis || 0) > 0);
+                  if (firstReliever) {
+                    const matched = options.find(o => o.name === firstReliever.position);
+                    if (matched) defaultCategoryId = matched.id;
+                  }
+                }
+                if (!defaultCategoryId && options.length > 0) {
+                  defaultCategoryId = options[0].id;
+                }
+
                 setFormSiteShifts(prev => [
                   ...prev,
                   {
@@ -2757,7 +2927,7 @@ export default function ManpowerMasterPage() {
                     shiftEndTime: "20:00",
                     requiredCount: 1,
                     requiredRelieverCount: 0,
-                    categoryId: secCategories[0]?.id || "",
+                    categoryId: defaultCategoryId,
                     isInherited: false,
                     isOverride: false
                   }
@@ -2820,7 +2990,14 @@ export default function ManpowerMasterPage() {
                         className="w-full bg-surface-container-lowest border border-outline-variant rounded px-2 py-1 text-xs focus:outline-none focus:border-primary text-on-surface"
                       >
                         <option value="">Select Position...</option>
-                        {secCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                        {getSiteShiftPositionOptions().map(opt => {
+                          const isReliever = siteRelieverAllocations.some((ra: any) => ra.position === opt.name);
+                          return (
+                            <option key={opt.id} value={opt.id}>
+                              {opt.name}{isReliever ? " (Reliever)" : ""}
+                            </option>
+                          );
+                        })}
                       </select>
                     </div>
                   </div>

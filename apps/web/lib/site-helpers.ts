@@ -27,6 +27,10 @@ export async function getSiteDependencies(siteId: string): Promise<SiteDependenc
   const isDb = isDbConnected();
   let siteName = "";
   let projectId = "";
+  let db: any = null;
+  if (!isDb) {
+    db = readDb() as any;
+  }
 
   // 1. Resolve site name and project
   if (isDb) {
@@ -37,7 +41,6 @@ export async function getSiteDependencies(siteId: string): Promise<SiteDependenc
     siteName = site.name;
     projectId = site.projectId;
   } else {
-    const db = readDb() as any;
     const site = (db.manpowerSites || []).find((s: any) => s.id === siteId);
     if (!site) return null;
     siteName = site.name;
@@ -57,7 +60,6 @@ export async function getSiteDependencies(siteId: string): Promise<SiteDependenc
     allShiftsCount = allShifts.length;
     allShiftIds = allShifts.map(s => s.id);
   } else {
-    const db = readDb() as any;
     const allShifts = (db.shiftRequirements || []).filter((s: any) => s.siteId === siteId);
     allShiftsCount = allShifts.length;
     allShiftIds = allShifts.map((s: any) => s.id);
@@ -71,8 +73,7 @@ export async function getSiteDependencies(siteId: string): Promise<SiteDependenc
       where: { siteId, quantity: { gt: 0 } }
     });
   } else {
-    const dbData = readDb() as any;
-    const siteAllocations = (dbData.siteManpowerAllocations || []).filter((sa: any) => sa.siteId === siteId && (sa.quantity || 0) > 0);
+    const siteAllocations = (db.siteManpowerAllocations || []).filter((sa: any) => sa.siteId === siteId && (sa.quantity || 0) > 0);
     manpowerAllocationsCount = siteAllocations.length;
   }
 
@@ -97,8 +98,7 @@ export async function getSiteDependencies(siteId: string): Promise<SiteDependenc
       }
     });
   } else {
-    const dbData = readDb() as any;
-    const siteAllowances = (dbData.siteAllowances || []).filter((sa: any) => sa.siteId === siteId);
+    const siteAllowances = (db.siteAllowances || []).filter((sa: any) => sa.siteId === siteId);
     siteAllowances.forEach((sa: any) => {
       let isActive = true;
       if (sa.isActive === false) isActive = false;
