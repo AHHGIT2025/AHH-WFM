@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
-import { mockDb } from "@ahh-wfm/mock-data";
+import { mockDb, isDbConnected } from "@ahh-wfm/mock-data";
 import { checkApiAuth } from "@/lib/api-guards";
 import { hasPermission } from "@/lib/permissions";
+import { prisma } from "@ahh-wfm/database";
 
 export async function GET(request: Request) {
   const auth = await checkApiAuth();
@@ -113,18 +114,37 @@ export async function POST(request: Request) {
     const employees = await mockDb.getEmployees();
     const existing = employees.find(e => e.id === payload.id);
 
+    const isDb = isDbConnected();
+    let companyIdToUse = "COMP-002";
+
+    if (isDb) {
+      if (existing && existing.companyId) {
+        companyIdToUse = existing.companyId;
+      } else {
+        const company = await prisma.company.findFirst({
+          where: { companyCode: "HS01" }
+        });
+        if (!company) {
+          return NextResponse.json({ error: "AHH Security Services (HS01) company not found in database." }, { status: 400 });
+        }
+        companyIdToUse = company.id;
+      }
+    } else {
+      companyIdToUse = (existing && existing.companyId) || "COMP-002";
+    }
+
     if (existing) {
       // Promote existing workforce directory employee to security guarding
       const updated = await mockDb.updateEmployee(payload.id, {
         operationType: "SECURITY_GUARDING",
         manpowerCategoryId: payload.manpowerCategoryId,
-        companyId: "COMP-002",
+        companyId: companyIdToUse,
         isActive: true,
         status: "Active"
       });
       return NextResponse.json(updated);
     } else {
-      // Create a brand new employee in the workforce directory, defaulting to Al Hattab Security (COMP-002)
+      // Create a brand new employee in the workforce directory
       if (!payload.name || !payload.email) {
         return NextResponse.json({ error: "Name and Email are required for new employees" }, { status: 400 });
       }
@@ -134,7 +154,7 @@ export async function POST(request: Request) {
         email: payload.email,
         department: payload.department || "Operations",
         manpowerCategoryId: payload.manpowerCategoryId,
-        companyId: "COMP-002",
+        companyId: companyIdToUse,
         role: "EMPLOYEE",
         status: "Active",
         employeeCategory: "BLUE_COLLAR",

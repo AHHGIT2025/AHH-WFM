@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
-import { mockDb } from "@ahh-wfm/mock-data";
+import { mockDb, isDbConnected } from "@ahh-wfm/mock-data";
 import { checkApiAuth } from "@/lib/api-guards";
 import { hasPermission } from "@/lib/permissions";
+import { prisma } from "@ahh-wfm/database";
 
 export async function GET(request: Request) {
   const auth = await checkApiAuth();
@@ -77,12 +78,31 @@ export async function POST(request: Request) {
     const employees = await mockDb.getEmployees();
     const existing = employees.find(e => e.id === payload.id);
 
+    const isDb = isDbConnected();
+    let companyIdToUse = "COMP-003";
+
+    if (isDb) {
+      if (existing && existing.companyId) {
+        companyIdToUse = existing.companyId;
+      } else {
+        const company = await prisma.company.findFirst({
+          where: { companyCode: "TC01" }
+        });
+        if (!company) {
+          return NextResponse.json({ error: "Facility Management company (TC01) not found in database." }, { status: 400 });
+        }
+        companyIdToUse = company.id;
+      }
+    } else {
+      companyIdToUse = (existing && existing.companyId) || "COMP-003";
+    }
+
     if (existing) {
       // Promote existing workforce directory employee to facility management
       const updated = await mockDb.updateEmployee(payload.id, {
         operationType: "FACILITY_MANAGEMENT",
         manpowerCategoryId: payload.manpowerCategoryId,
-        companyId: "COMP-003",
+        companyId: companyIdToUse,
         isActive: true,
         status: "Active"
       });
@@ -97,7 +117,7 @@ export async function POST(request: Request) {
         email: payload.email,
         department: payload.department || "Operations",
         manpowerCategoryId: payload.manpowerCategoryId,
-        companyId: "COMP-003",
+        companyId: companyIdToUse,
         role: "EMPLOYEE",
         status: "Active",
         employeeCategory: "BLUE_COLLAR",
