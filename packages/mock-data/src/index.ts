@@ -11031,13 +11031,22 @@ export const mockDb = {
         where,
         include: {
           project: true,
-          relieverAssignments: {
-            include: { relieverEmployee: true }
+          category: true,
+          assignments: {
+            include: { employee: true }
           }
         }
       });
       return res.map((x: any) => ({
         ...x,
+        poolName: x.poolName || x.category?.name || "Reliever Pool",
+        relieverAssignments: x.assignments.map((a: any) => ({
+          ...a,
+          poolId: a.relieverPoolId,
+          relieverEmployeeId: a.employeeId,
+          employeeId: a.employeeId,
+          relieverEmployee: a.employee
+        })),
         createdAt: x.createdAt?.toISOString(),
         updatedAt: x.updatedAt?.toISOString()
       }));
@@ -11053,6 +11062,7 @@ export const mockDb = {
       }));
       return {
         ...x,
+        poolName: x.poolName || "Reliever Pool",
         project: (db.manpowerProjects || []).find((p: any) => p.id === x.projectId),
         relieverAssignments
       };
@@ -11062,7 +11072,15 @@ export const mockDb = {
     const code = data.code || await getNextSequenceCode("SRP");
     const dataWithCode = { ...data, code };
     if (isDbConnected()) {
-      const res = await prismaClient.securityProjectRelieverPool.create({ data: dataWithCode });
+      const prismaData = {
+        projectId: dataWithCode.projectId,
+        siteId: dataWithCode.siteId || null,
+        requiredRelieverCount: Number(dataWithCode.requiredRelieverCount || 0),
+        categoryId: dataWithCode.categoryId,
+        isActive: dataWithCode.isActive !== false,
+        code: dataWithCode.code
+      };
+      const res = await prismaClient.securityProjectRelieverPool.create({ data: prismaData });
       return {
         ...res,
         createdAt: res.createdAt?.toISOString(),
@@ -11084,9 +11102,16 @@ export const mockDb = {
   },
   updateSecurityProjectRelieverPool: async (id: string, data: any): Promise<any> => {
     if (isDbConnected()) {
+      const prismaData: any = {};
+      if (data.projectId !== undefined) prismaData.projectId = data.projectId;
+      if (data.siteId !== undefined) prismaData.siteId = data.siteId;
+      if (data.requiredRelieverCount !== undefined) prismaData.requiredRelieverCount = Number(data.requiredRelieverCount);
+      if (data.categoryId !== undefined) prismaData.categoryId = data.categoryId;
+      if (data.isActive !== undefined) prismaData.isActive = data.isActive;
+      
       const res = await prismaClient.securityProjectRelieverPool.update({
         where: { id },
-        data
+        data: prismaData
       });
       return {
         ...res,
@@ -11124,14 +11149,27 @@ export const mockDb = {
   getSecurityProjectRelieverAssignments: async (poolId?: string, relieverEmployeeId?: string): Promise<any[]> => {
     if (isDbConnected()) {
       const where: any = {};
-      if (poolId) where.poolId = poolId;
-      if (relieverEmployeeId) where.relieverEmployeeId = relieverEmployeeId;
+      if (poolId) where.relieverPoolId = poolId;
+      if (relieverEmployeeId) where.employeeId = relieverEmployeeId;
       const res = await prismaClient.securityProjectRelieverAssignment.findMany({
         where,
-        include: { pool: true, relieverEmployee: true }
+        include: {
+          relieverPool: {
+            include: { category: true }
+          },
+          employee: true
+        }
       });
       return res.map((x: any) => ({
         ...x,
+        poolId: x.relieverPoolId,
+        relieverEmployeeId: x.employeeId,
+        employeeId: x.employeeId,
+        pool: x.relieverPool ? {
+          ...x.relieverPool,
+          poolName: x.relieverPool.poolName || x.relieverPool.category?.name || "Reliever Pool"
+        } : null,
+        relieverEmployee: x.employee,
         createdAt: x.createdAt?.toISOString(),
         updatedAt: x.updatedAt?.toISOString()
       }));
@@ -11148,9 +11186,19 @@ export const mockDb = {
   },
   createSecurityProjectRelieverAssignment: async (data: any): Promise<any> => {
     if (isDbConnected()) {
-      const res = await prismaClient.securityProjectRelieverAssignment.create({ data });
+      const prismaData = {
+        relieverPoolId: data.poolId || data.relieverPoolId,
+        employeeId: data.relieverEmployeeId || data.employeeId,
+        startDate: new Date(data.startDate || Date.now()),
+        endDate: data.endDate ? new Date(data.endDate) : null,
+        isActive: data.isActive !== false
+      };
+      const res = await prismaClient.securityProjectRelieverAssignment.create({ data: prismaData });
       return {
         ...res,
+        poolId: res.relieverPoolId,
+        relieverEmployeeId: res.employeeId,
+        employeeId: res.employeeId,
         createdAt: res.createdAt?.toISOString(),
         updatedAt: res.updatedAt?.toISOString()
       };
@@ -11170,12 +11218,26 @@ export const mockDb = {
   },
   updateSecurityProjectRelieverAssignment: async (id: string, data: any): Promise<any> => {
     if (isDbConnected()) {
+      const prismaData: any = {};
+      if (data.poolId !== undefined || data.relieverPoolId !== undefined) {
+        prismaData.relieverPoolId = data.poolId || data.relieverPoolId;
+      }
+      if (data.relieverEmployeeId !== undefined || data.employeeId !== undefined) {
+        prismaData.employeeId = data.relieverEmployeeId || data.employeeId;
+      }
+      if (data.startDate !== undefined) prismaData.startDate = new Date(data.startDate);
+      if (data.endDate !== undefined) prismaData.endDate = data.endDate ? new Date(data.endDate) : null;
+      if (data.isActive !== undefined) prismaData.isActive = data.isActive;
+
       const res = await prismaClient.securityProjectRelieverAssignment.update({
         where: { id },
-        data
+        data: prismaData
       });
       return {
         ...res,
+        poolId: res.relieverPoolId,
+        relieverEmployeeId: res.employeeId,
+        employeeId: res.employeeId,
         createdAt: res.createdAt?.toISOString(),
         updatedAt: res.updatedAt?.toISOString()
       };
