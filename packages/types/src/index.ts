@@ -548,6 +548,33 @@ export interface SecurityProjectManpowerAllocation {
   updatedAt?: string;
 }
 
+export interface SecuritySiteManpowerAllocation {
+  id: string;
+  siteId: string;
+  position: string;
+  quantity: number;
+  deploymentType: string;
+  relieverPoolType: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface SecuritySiteAllowance {
+  id: string;
+  siteId: string;
+  siteAllowanceEnabled: boolean;
+  siteAllowanceAmount: number;
+  siteAllowanceFrequency: string;
+  allowanceDescription?: string;
+  appliesToAllPositions: boolean;
+  position?: string;
+  effectiveFrom?: string;
+  effectiveTo?: string;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface SavedReport {
   id: string;
   name: string;

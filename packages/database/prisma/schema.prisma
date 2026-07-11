@@ -5,7 +5,7 @@ datasource db {
 
 generator client {
   provider = "prisma-client-js"
-  output   = "../src/generated/client"
+  output   = "../src/generated/client2"
 }
 
 model Employee {
@@ -1359,6 +1359,51 @@ model ManpowerSite {
   relieverPools          SecurityProjectRelieverPool[]
   coordinatorAssignments SecurityProjectCoordinatorAssignment[]
   siteInspections        SecuritySiteInspection[]
+  manpowerAllocations   SecuritySiteManpowerAllocation[]
+  siteAllowances        SecuritySiteAllowance[]
+}
+
+model SecuritySiteManpowerAllocation {
+  id               String       @id @default(uuid())
+  siteId           String
+  site             ManpowerSite @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  position         String
+  quantity         Int          @default(0)
+  deploymentType   String       @default("PERMANENT")
+  relieverPoolType String       @default("DEDICATED")
+
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  @@index([siteId])
+  @@index([position])
+  @@index([deploymentType])
+}
+
+model SecuritySiteAllowance {
+  id                     String       @id @default(uuid())
+  siteId                 String
+  site                   ManpowerSite @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  siteAllowanceEnabled   Boolean      @default(false)
+  siteAllowanceAmount    Float        @default(0)
+  siteAllowanceFrequency String       @default("MONTHLY")
+  allowanceDescription   String?      @db.Text
+
+  appliesToAllPositions  Boolean      @default(true)
+  position               String?
+
+  effectiveFrom          DateTime?
+  effectiveTo            DateTime?
+  isActive               Boolean      @default(true)
+
+  createdAt              DateTime     @default(now())
+  updatedAt              DateTime     @updatedAt
+
+  @@index([siteId])
+  @@index([siteId, isActive])
+  @@index([position])
 }
 
 model ManpowerLocationUnit {

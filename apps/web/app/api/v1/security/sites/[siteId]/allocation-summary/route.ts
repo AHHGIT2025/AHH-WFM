@@ -79,10 +79,20 @@ export async function GET(
     // Load allocations (database in SQL mode, db.json in mock mode)
     let projectAllocations: any[] = [];
     let projectRelievers: any[] = [];
-    const db = readDb() as any;
-    const siteAllocations = db.siteManpowerAllocations || [];
+    let siteAllocations: any[] = [];
 
     if (isDb) {
+      const dbSiteAllocations = await prisma.securitySiteManpowerAllocation.findMany({
+        where: { siteId }
+      });
+      siteAllocations = dbSiteAllocations.map(sa => ({
+        id: sa.id,
+        siteId: sa.siteId,
+        position: sa.position,
+        quantity: sa.quantity,
+        deploymentType: sa.deploymentType,
+        relieverPoolType: sa.relieverPoolType
+      }));
       const dbAllocations = await prisma.securityProjectManpowerAllocation.findMany({
         where: { projectId }
       });
@@ -106,8 +116,10 @@ export async function GET(
         quantity: p.requiredRelieverCount
       }));
     } else {
+      const db = readDb() as any;
       projectAllocations = (db.projectManpowerAllocations || []).filter((a: any) => a.projectId === projectId);
       projectRelievers = (db.projectRelieverAllocations || []).filter((a: any) => a.projectId === projectId);
+      siteAllocations = db.siteManpowerAllocations || [];
     }
 
     // Map manpower requirements

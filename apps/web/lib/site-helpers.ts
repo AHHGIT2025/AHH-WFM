@@ -65,33 +65,59 @@ export async function getSiteDependencies(siteId: string): Promise<SiteDependenc
   const inactiveShiftsCount = Math.max(0, allShiftsCount - activeShiftsCount);
 
   // 3. Allocations counts (quantity > 0)
-  const db = readDb() as any;
-  const siteAllocations = (db.siteManpowerAllocations || []).filter((sa: any) => sa.siteId === siteId && (sa.quantity || 0) > 0);
-  const manpowerAllocationsCount = siteAllocations.length;
+  let manpowerAllocationsCount = 0;
+  if (isDb) {
+    manpowerAllocationsCount = await prisma.securitySiteManpowerAllocation.count({
+      where: { siteId, quantity: { gt: 0 } }
+    });
+  } else {
+    const dbData = readDb() as any;
+    const siteAllocations = (dbData.siteManpowerAllocations || []).filter((sa: any) => sa.siteId === siteId && (sa.quantity || 0) > 0);
+    manpowerAllocationsCount = siteAllocations.length;
+  }
 
   // 4. Allowance counts (active vs inactive)
-  const siteAllowances = (db.siteAllowances || []).filter((sa: any) => sa.siteId === siteId);
   let activeAllowancesCount = 0;
   let inactiveAllowancesCount = 0;
 
-  siteAllowances.forEach((sa: any) => {
-    let isActive = true;
-    if (sa.isActive === false) isActive = false;
-    if (sa.active === false) isActive = false;
-    if (sa.siteAllowanceEnabled === false) isActive = false;
-    if (sa.status && ["INACTIVE", "CANCELLED", "DELETED"].includes(String(sa.status).toUpperCase())) {
-      isActive = false;
-    }
-    const now = new Date();
-    if (sa.effectiveFrom && new Date(sa.effectiveFrom) > now) isActive = false;
-    if (sa.effectiveTo && new Date(sa.effectiveTo) < now) isActive = false;
+  if (isDb) {
+    const dbAllowances = await prisma.securitySiteAllowance.findMany({
+      where: { siteId }
+    });
+    dbAllowances.forEach((sa: any) => {
+      let isActive = sa.isActive && sa.siteAllowanceEnabled;
+      const now = new Date();
+      if (sa.effectiveFrom && new Date(sa.effectiveFrom) > now) isActive = false;
+      if (sa.effectiveTo && new Date(sa.effectiveTo) < now) isActive = false;
 
-    if (isActive) {
-      activeAllowancesCount++;
-    } else {
-      inactiveAllowancesCount++;
-    }
-  });
+      if (isActive) {
+        activeAllowancesCount++;
+      } else {
+        inactiveAllowancesCount++;
+      }
+    });
+  } else {
+    const dbData = readDb() as any;
+    const siteAllowances = (dbData.siteAllowances || []).filter((sa: any) => sa.siteId === siteId);
+    siteAllowances.forEach((sa: any) => {
+      let isActive = true;
+      if (sa.isActive === false) isActive = false;
+      if (sa.active === false) isActive = false;
+      if (sa.siteAllowanceEnabled === false) isActive = false;
+      if (sa.status && ["INACTIVE", "CANCELLED", "DELETED"].includes(String(sa.status).toUpperCase())) {
+        isActive = false;
+      }
+      const now = new Date();
+      if (sa.effectiveFrom && new Date(sa.effectiveFrom) > now) isActive = false;
+      if (sa.effectiveTo && new Date(sa.effectiveTo) < now) isActive = false;
+
+      if (isActive) {
+        activeAllowancesCount++;
+      } else {
+        inactiveAllowancesCount++;
+      }
+    });
+  }
 
   // 5. Active instructions count (linked to project of this site)
   const activeInstructions = (db.projectInstructions || []).filter(

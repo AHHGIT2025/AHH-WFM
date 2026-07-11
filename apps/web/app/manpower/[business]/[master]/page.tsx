@@ -109,6 +109,11 @@ export default function ManpowerMasterPage() {
   const [showPatrolDrawer, setShowPatrolDrawer] = useState(false);
   const [patrolActiveTab, setPatrolActiveTab] = useState("verification");
 
+  // Site Creation/Edit additional states
+  const [formSiteShifts, setFormSiteShifts] = useState<any[]>([]);
+  const [formSiteAllowance, setFormSiteAllowance] = useState<any>({ siteAllowanceEnabled: false });
+  const [siteAllowanceApplicable, setSiteAllowanceApplicable] = useState(false);
+
   // Form states inside Patrol Drawer
   const [verificationRecords, setVerificationRecords] = useState<Record<string, any>>({});
   const [checklistAnswers, setChecklistAnswers] = useState<Record<string, { status: "OK" | "NOT_OK" | "NA"; remarks: string }>>({});
@@ -237,6 +242,41 @@ export default function ManpowerMasterPage() {
     }
   };
 
+  const handleProjectChange = async (projId: string, siteId: string) => {
+    if (projId) {
+      fetchSiteAllocationSummary(siteId, projId);
+      if (isSecurity) {
+        const project = projects.find(p => p.id === projId);
+        if (project && project.contractId) {
+          try {
+            const cRes = await fetch(`/api/v1/manpower/${business}/contracts/${project.contractId}`);
+            if (cRes.ok) {
+              const contract = await cRes.json();
+              const inherited = (contract.shiftRequirements || []).map((sr: any) => ({
+                id: `inherited-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+                shiftCode: sr.shiftName || sr.shiftCode,
+                shiftStartTime: sr.startTime || sr.shiftStartTime,
+                shiftEndTime: sr.endTime || sr.shiftEndTime,
+                requiredCount: sr.postsCovered || sr.requiredCount || 0,
+                requiredRelieverCount: sr.requiredRelieverCount || 0,
+                categoryId: sr.categoryId || (categories[0]?.id || ""),
+                isInherited: true,
+                isOverride: false
+              }));
+              setFormSiteShifts(inherited);
+            }
+          } catch (err) {
+            console.error("Failed to load contract shifts:", err);
+          }
+        }
+      }
+    } else {
+      setSiteAllocations([]);
+      setSiteRelieverAllocations([]);
+      setFormSiteShifts([]);
+    }
+  };
+
   const startEdit = (item: any) => {
     setEditItem(item);
     setFormData({ ...item });
@@ -247,6 +287,44 @@ export default function ManpowerMasterPage() {
       fetchProjectAllocationSummary(item.id, item.contractId);
     } else if (master === "sites") {
       fetchSiteAllocationSummary(item.id, item.projectId);
+      if (isSecurity) {
+        fetch(`/api/v1/security/scheduling/site-allowance?siteId=${item.id}`)
+          .then(res => res.ok ? res.json() : null)
+          .then(data => {
+            if (data && data.siteAllowanceEnabled) {
+              setFormSiteAllowance(data);
+              setSiteAllowanceApplicable(true);
+            } else {
+              setFormSiteAllowance({ siteAllowanceEnabled: false });
+              setSiteAllowanceApplicable(false);
+            }
+          })
+          .catch(() => {
+            setFormSiteAllowance({ siteAllowanceEnabled: false });
+            setSiteAllowanceApplicable(false);
+          });
+        fetch(`/api/v1/security/scheduling/site-shifts?siteId=${item.id}`)
+          .then(res => res.ok ? res.json() : [])
+          .then(data => {
+            if (Array.isArray(data)) {
+              setFormSiteShifts(data.map((s: any) => ({
+                id: s.id,
+                shiftCode: s.shiftCode,
+                shiftStartTime: s.shiftStartTime,
+                shiftEndTime: s.shiftEndTime,
+                requiredCount: s.requiredCount,
+                requiredRelieverCount: s.requiredRelieverCount,
+                categoryId: s.categoryId,
+                isOverride: true
+              })));
+            } else {
+              setFormSiteShifts([]);
+            }
+          })
+          .catch(() => {
+            setFormSiteShifts([]);
+          });
+      }
     }
   };
 
@@ -496,6 +574,41 @@ export default function ManpowerMasterPage() {
     setFormError("");
 
     try {
+      if (master === "sites" && isSecurity) {
+        const totalAllocByPos: Record<string, number> = {};
+        siteAllocations.forEach(a => {
+          totalAllocByPos[a.position] = (totalAllocByPos[a.position] || 0) + (a.allocatedToThis || 0);
+        });
+        siteRelieverAllocations.forEach(a => {
+          totalAllocByPos[a.position] = (totalAllocByPos[a.position] || 0) + (a.allocatedToThis || 0);
+        });
+
+        const totalShiftByPos: Record<string, number> = {};
+        formSiteShifts.forEach(s => {
+          const categoryName = categories.find(c => c.id === s.categoryId)?.name || "";
+          if (categoryName) {
+            totalShiftByPos[categoryName] = (totalShiftByPos[categoryName] || 0) + (Number(s.requiredCount) || 0);
+          }
+        });
+
+        let hasExceeded = false;
+        let exceededMessage = "";
+        for (const pos in totalShiftByPos) {
+          const allocQty = totalAllocByPos[pos] || 0;
+          const shiftQty = totalShiftByPos[pos];
+          if (shiftQty > allocQty) {
+            hasExceeded = true;
+            exceededMessage += `\n- Position "${pos}": shift requirement is ${shiftQty} but allocated manpower is only ${allocQty}.`;
+          }
+        }
+
+        if (hasExceeded) {
+          if (!confirm(`Warning: The total shift requirements exceed the allocated manpower for the following positions:${exceededMessage}\n\nDo you want to proceed anyway?`)) {
+            return;
+          }
+        }
+      }
+
       let submitBody = { ...formData };
       if (master === "projects") {
         submitBody.allocations = projectAllocations.map(a => ({
@@ -523,6 +636,11 @@ export default function ManpowerMasterPage() {
             relieverPoolType: a.relieverPoolType || "DEDICATED"
           }))
         ];
+        if (isSecurity) {
+          submitBody.siteAllowanceApplicable = siteAllowanceApplicable;
+          submitBody.siteAllowance = formSiteAllowance;
+          submitBody.siteShiftRequirements = formSiteShifts;
+        }
       }
 
       const res = await fetch(apiBase, {
@@ -552,6 +670,41 @@ export default function ManpowerMasterPage() {
     setFormError("");
 
     try {
+      if (master === "sites" && isSecurity) {
+        const totalAllocByPos: Record<string, number> = {};
+        siteAllocations.forEach(a => {
+          totalAllocByPos[a.position] = (totalAllocByPos[a.position] || 0) + (a.allocatedToThis || 0);
+        });
+        siteRelieverAllocations.forEach(a => {
+          totalAllocByPos[a.position] = (totalAllocByPos[a.position] || 0) + (a.allocatedToThis || 0);
+        });
+
+        const totalShiftByPos: Record<string, number> = {};
+        formSiteShifts.forEach(s => {
+          const categoryName = categories.find(c => c.id === s.categoryId)?.name || "";
+          if (categoryName) {
+            totalShiftByPos[categoryName] = (totalShiftByPos[categoryName] || 0) + (Number(s.requiredCount) || 0);
+          }
+        });
+
+        let hasExceeded = false;
+        let exceededMessage = "";
+        for (const pos in totalShiftByPos) {
+          const allocQty = totalAllocByPos[pos] || 0;
+          const shiftQty = totalShiftByPos[pos];
+          if (shiftQty > allocQty) {
+            hasExceeded = true;
+            exceededMessage += `\n- Position "${pos}": shift requirement is ${shiftQty} but allocated manpower is only ${allocQty}.`;
+          }
+        }
+
+        if (hasExceeded) {
+          if (!confirm(`Warning: The total shift requirements exceed the allocated manpower for the following positions:${exceededMessage}\n\nDo you want to proceed anyway?`)) {
+            return;
+          }
+        }
+      }
+
       let submitBody = { id: editItem.id, ...formData };
       if (master === "projects") {
         submitBody.allocations = projectAllocations.map(a => ({
@@ -579,6 +732,11 @@ export default function ManpowerMasterPage() {
             relieverPoolType: a.relieverPoolType || "DEDICATED"
           }))
         ];
+        if (isSecurity) {
+          submitBody.siteAllowanceApplicable = siteAllowanceApplicable;
+          submitBody.siteAllowance = formSiteAllowance;
+          submitBody.siteShiftRequirements = formSiteShifts;
+        }
       }
 
       const url = (master === "materials" || master === "projects") ? `${apiBase}/${editItem.id}` : apiBase;
@@ -2440,6 +2598,308 @@ export default function ManpowerMasterPage() {
       setFormError("Server connection failed");
     }
   };
+
+  function renderSiteAllowanceAndShiftsFields() {
+    if (!isSecurity) return null;
+
+    const secCategories = categories.filter((c: any) => c.operationType === "SECURITY_GUARDING");
+
+    return (
+      <div className="space-y-4 border-t border-outline-variant pt-4 mt-4">
+        {/* Site Allowance section */}
+        <div className="p-4 bg-surface-container border border-outline-variant rounded-xl space-y-3">
+          <label className="flex items-center gap-2 text-xs text-on-surface cursor-pointer font-bold">
+            <input
+              type="checkbox"
+              checked={siteAllowanceApplicable}
+              onChange={(e) => {
+                setSiteAllowanceApplicable(e.target.checked);
+                setFormSiteAllowance(prev => ({
+                  ...prev,
+                  siteAllowanceEnabled: e.target.checked
+                }));
+              }}
+              className="rounded border-outline-variant text-primary focus:ring-primary"
+            />
+            <span>Enable Site Allowance (Payroll Advisory Only)</span>
+          </label>
+          <p className="text-[10px] text-on-surface-variant italic">
+            This is for payroll advisory only. It does not calculate salary.
+          </p>
+
+          {siteAllowanceApplicable && (
+            <div className="space-y-3 pt-2 border-t border-outline-variant animate-fade-in">
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Allowance Amount</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    required
+                    value={formSiteAllowance.siteAllowanceAmount || 0}
+                    onChange={(e) => setFormSiteAllowance(prev => ({
+                      ...prev,
+                      siteAllowanceAmount: parseFloat(e.target.value) || 0
+                    }))}
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Frequency</label>
+                  <select
+                    value={formSiteAllowance.siteAllowanceFrequency || "MONTHLY"}
+                    onChange={(e) => setFormSiteAllowance(prev => ({
+                      ...prev,
+                      siteAllowanceFrequency: e.target.value
+                    }))}
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                  >
+                    <option value="HOURLY">Hourly</option>
+                    <option value="PER_SHIFT">Per Shift</option>
+                    <option value="PER_DAY">Per Day</option>
+                    <option value="MONTHLY">Monthly</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Description</label>
+                <textarea
+                  value={formSiteAllowance.allowanceDescription || ""}
+                  onChange={(e) => setFormSiteAllowance(prev => ({
+                    ...prev,
+                    allowanceDescription: e.target.value
+                  }))}
+                  rows={2}
+                  placeholder="Details about this allowance..."
+                  className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Effective From</label>
+                  <input
+                    type="date"
+                    required
+                    value={formSiteAllowance.effectiveFrom ? formSiteAllowance.effectiveFrom.substring(0, 10) : ""}
+                    onChange={(e) => setFormSiteAllowance(prev => ({
+                      ...prev,
+                      effectiveFrom: e.target.value
+                    }))}
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Effective To (Optional)</label>
+                  <input
+                    type="date"
+                    value={formSiteAllowance.effectiveTo ? formSiteAllowance.effectiveTo.substring(0, 10) : ""}
+                    onChange={(e) => setFormSiteAllowance(prev => ({
+                      ...prev,
+                      effectiveTo: e.target.value
+                    }))}
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 text-xs text-on-surface cursor-pointer font-bold">
+                  <input
+                    type="checkbox"
+                    checked={formSiteAllowance.appliesToAllPositions !== false}
+                    onChange={(e) => setFormSiteAllowance(prev => ({
+                      ...prev,
+                      appliesToAllPositions: e.target.checked
+                    }))}
+                    className="rounded border-outline-variant text-primary focus:ring-primary"
+                  />
+                  <span>Applies to all guard positions</span>
+                </label>
+
+                {formSiteAllowance.appliesToAllPositions === false && (
+                  <div className="animate-fade-in">
+                    <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Specific Position</label>
+                    <select
+                      required
+                      value={formSiteAllowance.position || ""}
+                      onChange={(e) => setFormSiteAllowance(prev => ({
+                        ...prev,
+                        position: e.target.value
+                      }))}
+                      className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                    >
+                      <option value="">Select Position...</option>
+                      {secCategories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                    </select>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Site Shifts requirements section */}
+        <div className="p-4 bg-surface-container border border-outline-variant rounded-xl space-y-3">
+          <div className="flex justify-between items-center">
+            <span className="block text-[10px] font-bold text-primary uppercase tracking-wider font-mono">Site Shift Requirements</span>
+            <button
+              type="button"
+              onClick={() => {
+                setFormSiteShifts(prev => [
+                  ...prev,
+                  {
+                    id: `manual-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+                    shiftCode: "Custom Shift",
+                    shiftStartTime: "08:00",
+                    shiftEndTime: "20:00",
+                    requiredCount: 1,
+                    requiredRelieverCount: 0,
+                    categoryId: secCategories[0]?.id || "",
+                    isInherited: false,
+                    isOverride: false
+                  }
+                ]);
+              }}
+              className="px-2.5 py-1 text-[10px] font-bold text-primary bg-primary/10 hover:bg-primary/20 rounded-lg transition-colors"
+            >
+              + Add Custom Shift
+            </button>
+          </div>
+
+          {formSiteShifts.length === 0 ? (
+            <p className="text-[11px] text-on-surface-variant italic">No shift requirements defined for this site.</p>
+          ) : (
+            <div className="space-y-3">
+              {formSiteShifts.map((shift, idx) => (
+                <div key={shift.id || idx} className="p-3 bg-surface-container-low border border-outline-variant rounded-lg space-y-2 text-xs">
+                  <div className="flex justify-between items-center">
+                    <span className="font-mono text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-surface-variant text-on-surface-variant">
+                      {shift.isInherited ? (shift.isOverride ? "Site Override" : "Inherited from Contract") : "Manual Site Shift"}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFormSiteShifts(prev => prev.filter(s => s.id !== shift.id));
+                      }}
+                      className="text-status-error hover:text-status-error/80 text-[10px] font-bold"
+                    >
+                      Remove
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[9px] text-on-surface-variant mb-0.5">Shift Name</label>
+                      <input
+                        type="text"
+                        required
+                        value={shift.shiftCode || ""}
+                        onChange={(e) => {
+                          const updated = [...formSiteShifts];
+                          updated[idx].shiftCode = e.target.value;
+                          if (updated[idx].isInherited) updated[idx].isOverride = true;
+                          setFormSiteShifts(updated);
+                        }}
+                        className="w-full bg-surface-container-lowest border border-outline-variant rounded px-2 py-1 text-xs focus:outline-none focus:border-primary text-on-surface"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[9px] text-on-surface-variant mb-0.5">Position</label>
+                      <select
+                        required
+                        value={shift.categoryId || ""}
+                        onChange={(e) => {
+                          const updated = [...formSiteShifts];
+                          updated[idx].categoryId = e.target.value;
+                          if (updated[idx].isInherited) updated[idx].isOverride = true;
+                          setFormSiteShifts(updated);
+                        }}
+                        className="w-full bg-surface-container-lowest border border-outline-variant rounded px-2 py-1 text-xs focus:outline-none focus:border-primary text-on-surface"
+                      >
+                        <option value="">Select Position...</option>
+                        {secCategories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[9px] text-on-surface-variant mb-0.5">Start Time</label>
+                      <input
+                        type="time"
+                        required
+                        value={shift.shiftStartTime || ""}
+                        onChange={(e) => {
+                          const updated = [...formSiteShifts];
+                          updated[idx].shiftStartTime = e.target.value;
+                          if (updated[idx].isInherited) updated[idx].isOverride = true;
+                          setFormSiteShifts(updated);
+                        }}
+                        className="w-full bg-surface-container-lowest border border-outline-variant rounded px-2 py-1 text-xs focus:outline-none focus:border-primary text-on-surface"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[9px] text-on-surface-variant mb-0.5">End Time</label>
+                      <input
+                        type="time"
+                        required
+                        value={shift.shiftEndTime || ""}
+                        onChange={(e) => {
+                          const updated = [...formSiteShifts];
+                          updated[idx].shiftEndTime = e.target.value;
+                          if (updated[idx].isInherited) updated[idx].isOverride = true;
+                          setFormSiteShifts(updated);
+                        }}
+                        className="w-full bg-surface-container-lowest border border-outline-variant rounded px-2 py-1 text-xs focus:outline-none focus:border-primary text-on-surface"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[9px] text-on-surface-variant mb-0.5">Required Headcount</label>
+                      <input
+                        type="number"
+                        min="1"
+                        required
+                        value={shift.requiredCount || 0}
+                        onChange={(e) => {
+                          const updated = [...formSiteShifts];
+                          updated[idx].requiredCount = parseInt(e.target.value, 10) || 0;
+                          if (updated[idx].isInherited) updated[idx].isOverride = true;
+                          setFormSiteShifts(updated);
+                        }}
+                        className="w-full bg-surface-container-lowest border border-outline-variant rounded px-2 py-1 text-xs focus:outline-none focus:border-primary text-on-surface"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[9px] text-on-surface-variant mb-0.5">Required Relievers</label>
+                      <input
+                        type="number"
+                        min="0"
+                        required
+                        value={shift.requiredRelieverCount || 0}
+                        onChange={(e) => {
+                          const updated = [...formSiteShifts];
+                          updated[idx].requiredRelieverCount = parseInt(e.target.value, 10) || 0;
+                          if (updated[idx].isInherited) updated[idx].isOverride = true;
+                          setFormSiteShifts(updated);
+                        }}
+                        className="w-full bg-surface-container-lowest border border-outline-variant rounded px-2 py-1 text-xs focus:outline-none focus:border-primary text-on-surface"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   function renderSecurityContractForm() {
     const currentScope = isSecurity ? "SECURITY_GUARDING" : "FACILITY_MANAGEMENT";
@@ -5516,6 +5976,19 @@ export default function ManpowerMasterPage() {
               if (master === "contracts") {
                 setWorkflowLevels([]);
               }
+              if (master === "sites") {
+                setFormSiteShifts([]);
+                setFormSiteAllowance({
+                  siteAllowanceEnabled: false,
+                  siteAllowanceAmount: 0,
+                  siteAllowanceFrequency: "MONTHLY",
+                  allowanceDescription: "",
+                  effectiveFrom: "",
+                  effectiveTo: "",
+                  appliesToAllPositions: true
+                });
+                setSiteAllowanceApplicable(false);
+              }
               setFormData(master === "manpower" ? { mode: "promote", isActive: true } : master === "contracts" ? { status: "DRAFT", manpowerRequirements: [], relieverRequirements: [], shiftRequirements: [], relieverRequired: "No" } : {});
               setFormError("");
               setShowAddModal(true);
@@ -6499,13 +6972,9 @@ export default function ManpowerMasterPage() {
                          className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
                          value={formData.projectId || ""}
                          onChange={(e) => {
-                           setFormData({ ...formData, projectId: e.target.value });
-                           if (e.target.value) {
-                             fetchSiteAllocationSummary("new", e.target.value);
-                           } else {
-                             setSiteAllocations([]);
-                             setSiteRelieverAllocations([]);
-                           }
+                           const val = e.target.value;
+                           setFormData({ ...formData, projectId: val });
+                           handleProjectChange(val, "new");
                          }}
                        >
                          <option value="">Select Project...</option>
@@ -6681,6 +7150,7 @@ export default function ManpowerMasterPage() {
                          </div>
                        )}
                      </div>
+                      {renderSiteAllowanceAndShiftsFields()}
                       <label className="flex items-center gap-2 text-xs text-on-surface cursor-pointer font-bold">
                         <input
                           type="checkbox"
@@ -7421,13 +7891,9 @@ export default function ManpowerMasterPage() {
                          className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
                          value={formData.projectId || ""}
                          onChange={(e) => {
-                           setFormData({ ...formData, projectId: e.target.value });
-                           if (e.target.value) {
-                             fetchSiteAllocationSummary(editItem.id, e.target.value);
-                           } else {
-                             setSiteAllocations([]);
-                             setSiteRelieverAllocations([]);
-                           }
+                           const val = e.target.value;
+                           setFormData({ ...formData, projectId: val });
+                           handleProjectChange(val, editItem.id);
                          }}
                        >
                          <option value="">Select Project...</option>
@@ -7605,6 +8071,7 @@ export default function ManpowerMasterPage() {
                          </div>
                        )}
                      </div>
+                      {renderSiteAllowanceAndShiftsFields()}
                       <label className="flex items-center gap-2 text-xs text-on-surface cursor-pointer font-bold">
                         <input
                           type="checkbox"

@@ -1,4 +1,4 @@
-import { PrismaClient } from "./generated/client";
+import { PrismaClient } from "./generated/client2";
 
 declare global {
   var prismaGlobal: PrismaClient | undefined;
@@ -10,5 +10,5 @@ if (process.env.NODE_ENV !== "production") {
   globalThis.prismaGlobal = prisma;
 }
 
-export * from "./generated/client";
-export type { Employee, AttendanceRecord, Shift, LeaveRequest, SapMapping, SyncLog, Announcement } from "./generated/client";
+export * from "./generated/client2";
+export type { Employee, AttendanceRecord, Shift, LeaveRequest, SapMapping, SyncLog, Announcement } from "./generated/client2";
