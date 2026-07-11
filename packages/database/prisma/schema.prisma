@@ -123,6 +123,7 @@ model Employee {
   relieverAssignments   SecurityProjectRelieverAssignment[]
   coordinatorAssignments SecurityProjectCoordinatorAssignment[]
   siteInspections       SecuritySiteInspection[]
+  securityOperationalEmployee SecurityOperationalEmployee?
 }
 
 model Department {
@@ -1873,3 +1874,39 @@ model WorkflowDelegation {
   createdAt                   DateTime @default(now())
   updatedAt                   DateTime @updatedAt
 }
+
+model SecurityOperationalEmployee {
+  id                 String   @id @default(uuid())
+  sourceEmployeeId   String   @unique
+  sourceEmployee     Employee @relation(fields: [sourceEmployeeId], references: [id], onDelete: Restrict)
+
+  employeeCode       String?
+  fullName           String
+  companyId          String?
+  companyCode        String?
+  employeeCategory   String   @default("BLUE_COLLAR")
+  operationType      String   @default("SECURITY_GUARDING")
+
+  designation        String?
+  position           String?
+  grade              String?
+  department         String?
+  defaultLocation    String?
+
+  mobile             String?
+  email              String?
+
+  isActive           Boolean  @default(true)
+  employmentStatus   String?
+  syncStatus         String   @default("SYNCED")
+  lastSyncedAt       DateTime @default(now())
+
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([companyCode])
+  @@index([operationType])
+  @@index([employeeCategory])
+  @@index([isActive])
+}
+

@@ -58,13 +58,13 @@ export async function GET(request: Request) {
     const db = readDb() as any;
 
     if (isDb) {
-      allSecurityGuards = await prisma.employee.findMany({
+      allSecurityGuards = await prisma.securityOperationalEmployee.findMany({
         where: { 
           operationType: "SECURITY_GUARDING",
           employeeCategory: "BLUE_COLLAR"
         }
       });
-      employees = await prisma.employee.findMany({
+      const operationalGuards = await prisma.securityOperationalEmployee.findMany({
         where: {
           isActive: true,
           operationType: "SECURITY_GUARDING",
@@ -74,10 +74,38 @@ export async function GET(request: Request) {
           }
         },
         include: {
-          securityLicense: true,
-          securityGatePasses: true
+          sourceEmployee: {
+            include: {
+              securityLicense: true,
+              securityGatePasses: true
+            }
+          }
         }
       });
+
+      employees = operationalGuards.map((op: any) => ({
+        id: op.sourceEmployeeId,
+        sourceEmployeeId: op.sourceEmployeeId,
+        operationalEmployeeId: op.id,
+        employeeCode: op.employeeCode || op.sourceEmployeeId,
+        name: op.fullName,
+        fullName: op.fullName,
+        email: op.email,
+        phone: op.mobile,
+        companyId: op.companyId,
+        companyCode: op.companyCode,
+        employeeCategory: op.employeeCategory,
+        operationType: op.operationType,
+        isActive: op.isActive,
+        employmentStatus: op.employmentStatus,
+        syncStatus: op.syncStatus,
+        lastSyncedAt: op.lastSyncedAt,
+        designation: op.designation ? { name: op.designation } : null,
+        position: op.position || op.designation,
+        securityLicense: op.sourceEmployee?.securityLicense || null,
+        gatePasses: op.sourceEmployee?.securityGatePasses || [],
+        dutyStatus: op.sourceEmployee?.dutyStatus || "OFF_DUTY"
+      }));
 
       const [year, month, day] = dateStr.split("-").map(Number);
       const start = new Date(year, month - 1, day, 0, 0, 0, 0);
@@ -103,8 +131,9 @@ export async function GET(request: Request) {
         });
       }
     } else {
-      allSecurityGuards = (db.employees || []).filter((e: any) => e.operationType === "SECURITY_GUARDING" && e.employeeCategory === "BLUE_COLLAR");
-      employees = allSecurityGuards.filter((e: any) => e.isActive !== false && e.employmentStatus !== "INACTIVE" && e.employmentStatus !== "DELETED");
+      allSecurityGuards = (db.securityOperationalEmployees || []).filter((op: any) => op.operationType === "SECURITY_GUARDING" && op.employeeCategory === "BLUE_COLLAR");
+      const opGuards = allSecurityGuards.filter((op: any) => op.isActive !== false && op.employmentStatus !== "INACTIVE" && op.employmentStatus !== "DELETED");
+      
       deployments = (db.manpowerDeployments || []).filter((d: any) => {
         const dStr = String(d.date).split("T")[0];
         return dStr === dateStr && d.operationType === "SECURITY_GUARDING";
@@ -114,14 +143,33 @@ export async function GET(request: Request) {
       securityLicenses = db.securityLicenses || [];
       securityGatePasses = db.securityGatePasses || [];
 
-      // Map sub-relations to employees
-      employees = employees.map((e: any) => {
-        const lic = securityLicenses.find((l: any) => l.employeeId === e.id);
-        const gps = securityGatePasses.filter((g: any) => g.employeeId === e.id);
+      employees = opGuards.map((op: any) => {
+        const lic = securityLicenses.find((l: any) => l.employeeId === op.sourceEmployeeId);
+        const gps = securityGatePasses.filter((g: any) => g.employeeId === op.sourceEmployeeId);
+        const sourceEmp = (db.employees || []).find((e: any) => e.id === op.sourceEmployeeId);
+        
         return {
-          ...e,
+          id: op.sourceEmployeeId,
+          sourceEmployeeId: op.sourceEmployeeId,
+          operationalEmployeeId: op.id,
+          employeeCode: op.employeeCode || op.sourceEmployeeId,
+          name: op.fullName,
+          fullName: op.fullName,
+          email: op.email,
+          phone: op.mobile,
+          companyId: op.companyId,
+          companyCode: op.companyCode,
+          employeeCategory: op.employeeCategory,
+          operationType: op.operationType,
+          isActive: op.isActive,
+          employmentStatus: op.employmentStatus,
+          syncStatus: op.syncStatus,
+          lastSyncedAt: op.lastSyncedAt,
+          designation: op.designation ? { name: op.designation } : null,
+          position: op.position || op.designation,
           securityLicense: lic || null,
-          gatePasses: gps
+          gatePasses: gps,
+          dutyStatus: sourceEmp?.dutyStatus || "OFF_DUTY"
         };
       });
 
@@ -240,18 +288,30 @@ export async function GET(request: Request) {
       const gp = siteId ? gps.find((g: any) => g.siteId === siteId) : gps[0];
 
       return {
-        id: e.id,
-        employeeCode: e.employeeCode || e.id,
+        id: e.sourceEmployeeId,
+        sourceEmployeeId: e.sourceEmployeeId,
+        operationalEmployeeId: e.operationalEmployeeId,
+        employeeCode: e.employeeCode || e.sourceEmployeeId,
         name: e.name,
-        designation: e.designationId || e.designationName || "Security Guard",
-        grade: e.salaryGrade || e.grade || "G1",
-        defaultSiteId: e.defaultLocationId,
+        fullName: e.name,
+        companyCode: e.companyCode,
+        employeeCategory: e.employeeCategory,
+        operationType: e.operationType,
+        designation: e.designation ? (typeof e.designation === 'object' ? e.designation.name : e.designation) : "Security Guard",
+        position: e.position || (e.designation ? (typeof e.designation === 'object' ? e.designation.name : e.designation) : "Security Guard"),
+        isActive: e.isActive,
+        employmentStatus: e.employmentStatus,
+        syncStatus: e.syncStatus,
+        lastSyncedAt: e.lastSyncedAt,
+
+        grade: e.grade || "G1",
+        defaultSiteId: e.defaultSiteId || null,
         securityLicenseExpiry: lic?.expiryDate || null,
         siteGatePassExpiry: gp?.expiryDate || null,
         availabilityStatus: "Available",
         isLicenseExpired: lic ? lic.expiryDate < todayStr : true,
         isGatePassExpired: gp ? gp.expiryDate < todayStr : true,
-        skills: e.skills || ["General Security"]
+        skills: ["General Security"]
       };
     });
 

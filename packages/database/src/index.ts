@@ -11,4 +11,4 @@ if (process.env.NODE_ENV !== "production") {
 }
 
 export * from "./generated/client2";
-export type { Employee, AttendanceRecord, Shift, LeaveRequest, SapMapping, SyncLog, Announcement } from "./generated/client2";
+export type { Employee, AttendanceRecord, Shift, LeaveRequest, SapMapping, SyncLog, Announcement, SecurityOperationalEmployee } from "./generated/client2";

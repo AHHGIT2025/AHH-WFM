@@ -469,6 +469,7 @@ let memoryDb: {
   workflowTemplateLevels: any[];
   workflowTemplateApprovers: any[];
   workflowDelegations: any[];
+  securityOperationalEmployees: any[];
 } = {
   companies: [
     { id: "COMP-001", companyCode: "AHH", companyName: "Al Hattab Holding", isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
@@ -747,7 +748,8 @@ let memoryDb: {
   workflowTemplates: [],
   workflowTemplateLevels: [],
   workflowTemplateApprovers: [],
-  workflowDelegations: []
+  workflowDelegations: [],
+  securityOperationalEmployees: []
 };
 
 // Seeding helper to pre-fill MySQL with mock data if it is empty
@@ -12881,6 +12883,60 @@ export const mockDb = {
     db.dailyPatrolReports.push(newRecord);
     writeDb(db);
     return newRecord;
+  },
+  getSecurityOperationalEmployees: async (): Promise<any[]> => {
+    if (isDbConnected()) {
+      return await prismaClient.securityOperationalEmployee.findMany({
+        include: { sourceEmployee: true }
+      });
+    }
+    const db = readDb();
+    const ops = db.securityOperationalEmployees || [];
+    return ops.map((op: any) => ({
+      ...op,
+      sourceEmployee: (db.employees || []).find((e: any) => e.id === op.sourceEmployeeId)
+    }));
+  },
+  createOrUpdateSecurityOperationalEmployee: async (data: any): Promise<any> => {
+    if (isDbConnected()) {
+      return await prismaClient.securityOperationalEmployee.upsert({
+        where: { sourceEmployeeId: data.sourceEmployeeId },
+        update: {
+          ...data,
+          updatedAt: new Date()
+        },
+        create: {
+          ...data,
+          id: data.id || uuid(),
+          createdAt: new Date(),
+          updatedAt: new Date()
+        }
+      });
+    }
+    const db = readDb();
+    db.securityOperationalEmployees = db.securityOperationalEmployees || [];
+    const idx = db.securityOperationalEmployees.findIndex((op: any) => op.sourceEmployeeId === data.sourceEmployeeId);
+    const nowStr = new Date().toISOString();
+    let record: any;
+    if (idx >= 0) {
+      record = {
+        ...db.securityOperationalEmployees[idx],
+        ...data,
+        updatedAt: nowStr
+      };
+      db.securityOperationalEmployees[idx] = record;
+    } else {
+      record = {
+        ...data,
+        id: data.id || `op-emp-${uuid()}`,
+        createdAt: nowStr,
+        updatedAt: nowStr
+      };
+      db.securityOperationalEmployees.push(record);
+    }
+    writeDb(db);
+    return record;
   }
 };
+
 

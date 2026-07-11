@@ -1452,4 +1452,29 @@ export interface ContractShiftRequirement {
   updatedAt?: string;
 }
 
+export interface SecurityOperationalEmployee {
+  id: string;
+  sourceEmployeeId: string;
+  employeeCode?: string | null;
+  fullName: string;
+  companyId?: string | null;
+  companyCode?: string | null;
+  employeeCategory: string;
+  operationType: string;
+  designation?: string | null;
+  position?: string | null;
+  grade?: string | null;
+  department?: string | null;
+  defaultLocation?: string | null;
+  mobile?: string | null;
+  email?: string | null;
+  isActive: boolean;
+  employmentStatus?: string | null;
+  syncStatus: string;
+  lastSyncedAt: Date | string;
+  createdAt?: Date | string;
+  updatedAt?: Date | string;
+}
+
+
 

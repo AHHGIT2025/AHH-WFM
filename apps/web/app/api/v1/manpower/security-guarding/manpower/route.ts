@@ -31,6 +31,7 @@ export async function GET(request: Request) {
     };
 
     let allEmployees = await mockDb.getEmployees();
+    let opEmployees = await mockDb.getSecurityOperationalEmployees();
 
     // Debugging counters
     const totalFetched = allEmployees.length;
@@ -51,6 +52,42 @@ export async function GET(request: Request) {
       const isBlueCollar = category === "BLUE_COLLAR";
       
       return isSecCompany && isBlueCollar;
+    });
+
+    // Merge operational copy snapshot if synced
+    employees = employees.map(e => {
+      const op = opEmployees.find((o: any) => o.sourceEmployeeId === e.id);
+      if (op) {
+        return {
+          ...e,
+          name: op.fullName,
+          email: op.email || e.email,
+          phone: op.mobile || e.phone,
+          companyCode: op.companyCode || (e.company?.companyCode || (e as any).companyCode),
+          employeeCategory: op.employeeCategory || e.employeeCategory,
+          operationType: op.operationType || "SECURITY_GUARDING",
+          isActive: op.isActive,
+          employmentStatus: op.employmentStatus || e.employmentStatus,
+          syncStatus: op.syncStatus || "SYNCED",
+          lastSyncedAt: op.lastSyncedAt,
+          designation: op.designation ? {
+            id: e.designationId || "temp-designation-id",
+            code: op.designation.toUpperCase().replace(/\s+/g, "_"),
+            name: op.designation,
+            employeeCategory: "BLUE_COLLAR",
+            isSupervisorPosition: false,
+            isRelieverEligible: false,
+            isActive: true
+          } : e.designation,
+          manpowerCategoryId: e.manpowerCategoryId
+        };
+      } else {
+        return {
+          ...e,
+          operationType: "", // Set empty so UI shows "Operation Type Needs Sync"
+          syncStatus: "NEEDS_SYNC"
+        };
+      }
     });
 
     // 2. Filter by isActive
@@ -116,10 +153,12 @@ export async function POST(request: Request) {
 
     const isDb = isDbConnected();
     let companyIdToUse = "COMP-002";
+    let companyCodeToUse = "HS01";
 
     if (isDb) {
       if (existing && existing.companyId) {
         companyIdToUse = existing.companyId;
+        companyCodeToUse = existing.company?.companyCode || "HS01";
       } else {
         const company = await prisma.company.findFirst({
           where: { companyCode: "HS01" }
@@ -128,13 +167,40 @@ export async function POST(request: Request) {
           return NextResponse.json({ error: "AHH Security Services (HS01) company not found in database." }, { status: 400 });
         }
         companyIdToUse = company.id;
+        companyCodeToUse = company.companyCode;
       }
     } else {
       companyIdToUse = (existing && existing.companyId) || "COMP-002";
+      companyCodeToUse = (existing && (existing.company?.companyCode || (existing as any).companyCode)) || "HS01";
     }
 
     if (existing) {
-      // Promote existing workforce directory employee to security guarding
+      // 1. Create or update SecurityOperationalEmployee snapshot/copy
+      const designationName = existing.designation?.name || null;
+      const operationalData = {
+        sourceEmployeeId: existing.id,
+        employeeCode: existing.id,
+        fullName: existing.name,
+        companyId: companyIdToUse,
+        companyCode: companyCodeToUse,
+        employeeCategory: "BLUE_COLLAR",
+        operationType: "SECURITY_GUARDING",
+        designation: designationName,
+        position: designationName,
+        grade: null,
+        department: existing.department || "Operations",
+        defaultLocation: existing.defaultLocation?.locationName || null,
+        mobile: existing.phone,
+        email: existing.email,
+        isActive: true,
+        employmentStatus: "ACTIVE",
+        syncStatus: "SYNCED",
+        lastSyncedAt: new Date()
+      };
+      
+      await mockDb.createOrUpdateSecurityOperationalEmployee(operationalData);
+
+      // 2. Promote existing workforce directory employee operationType for backward compatibility only
       const updated = await mockDb.updateEmployee(payload.id, {
         operationType: "SECURITY_GUARDING",
         manpowerCategoryId: payload.manpowerCategoryId,
@@ -144,11 +210,12 @@ export async function POST(request: Request) {
       });
       return NextResponse.json(updated);
     } else {
-      // Create a brand new employee in the workforce directory
+      // Create a brand new employee in the workforce directory AND create operational copy
       if (!payload.name || !payload.email) {
         return NextResponse.json({ error: "Name and Email are required for new employees" }, { status: 400 });
       }
-      const employee = await mockDb.createEmployee({
+      
+      const newEmp = await mockDb.createEmployee({
         id: payload.id,
         name: payload.name,
         email: payload.email,
@@ -163,7 +230,32 @@ export async function POST(request: Request) {
         employmentStatus: "ACTIVE",
         dutyStatus: "OFF_DUTY"
       });
-      return NextResponse.json(employee);
+
+      const designationName = null;
+      const operationalData = {
+        sourceEmployeeId: newEmp.id,
+        employeeCode: newEmp.id,
+        fullName: newEmp.name,
+        companyId: companyIdToUse,
+        companyCode: companyCodeToUse,
+        employeeCategory: "BLUE_COLLAR",
+        operationType: "SECURITY_GUARDING",
+        designation: designationName,
+        position: designationName,
+        grade: null,
+        department: newEmp.department || "Operations",
+        defaultLocation: null,
+        mobile: newEmp.phone,
+        email: newEmp.email,
+        isActive: true,
+        employmentStatus: "ACTIVE",
+        syncStatus: "SYNCED",
+        lastSyncedAt: new Date()
+      };
+
+      await mockDb.createOrUpdateSecurityOperationalEmployee(operationalData);
+
+      return NextResponse.json(newEmp);
     }
   } catch (e: any) {
     return NextResponse.json({ error: e.message || "Failed to save security employee" }, { status: 500 });
