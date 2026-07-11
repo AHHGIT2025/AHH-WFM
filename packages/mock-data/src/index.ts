@@ -1189,27 +1189,7 @@ const seedMySQL = async () => {
         });
       }
 
-      // Seed Manpower Categories
-      const mpCatCount = await prismaClient.manpowerCategory.count();
-      if (mpCatCount === 0) {
-        console.log("Seeding Manpower Categories...");
-        for (const cat of memoryDb.manpowerCategories) {
-          await prismaClient.manpowerCategory.create({
-            data: {
-              id: cat.id,
-              name: cat.name,
-              code: cat.code,
-              operationType: cat.operationType,
-              isActive: cat.isActive !== false,
-              isBlueCollar: cat.isBlueCollar !== false,
-              isDeployableInRoster: cat.isDeployableInRoster !== false,
-              canWorkOvertime: cat.canWorkOvertime !== false,
-              requiresMoiLicense: !!cat.requiresMoiLicense,
-              requiresGatePassCheck: !!cat.requiresGatePassCheck
-            }
-          });
-        }
-      }
+
 
       // Seed Manpower Clients
       const mpClientCount = await prismaClient.manpowerClient.count();
@@ -1283,6 +1263,31 @@ const seedMySQL = async () => {
 
       console.log("MySQL Database seeded successfully!");
     }
+
+    // Seed Manpower Categories (Always ensure they are seeded)
+    console.log("Checking/Seeding Manpower Categories...");
+    for (const cat of memoryDb.manpowerCategories) {
+      const exists = await prismaClient.manpowerCategory.findUnique({
+        where: { id: cat.id }
+      });
+      if (!exists) {
+        await prismaClient.manpowerCategory.create({
+          data: {
+            id: cat.id,
+            name: cat.name,
+            code: cat.code,
+            operationType: cat.operationType,
+            isActive: cat.isActive !== false,
+            isBlueCollar: cat.isBlueCollar !== false,
+            isDeployableInRoster: cat.isDeployableInRoster !== false,
+            canWorkOvertime: cat.canWorkOvertime !== false,
+            requiresMoiLicense: !!cat.requiresMoiLicense,
+            requiresGatePassCheck: !!cat.requiresGatePassCheck
+          }
+        });
+      }
+    }
+
     isSeeded = true;
   } catch (e) {
     console.error("Failed to seed MySQL database", e);

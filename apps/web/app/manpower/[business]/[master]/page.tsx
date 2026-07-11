@@ -2706,12 +2706,15 @@ export default function ManpowerMasterPage() {
         allocatedPositions.add(cat.name);
       } else {
         const fallback = [
-          { id: "PM-CAT-SEC-02", name: "Security Guard", code: "SECURITY_GUARD" },
+          { id: "PM-CAT-SEC-01", name: "CCTV Operator", code: "CCTV" },
+          { id: "PM-CAT-SEC-02", name: "Security Guard", code: "GUARD" },
           { id: "PM-CAT-SEC-03", name: "Head Guard", code: "HEAD_GUARD" },
-          { id: "PM-CAT-SEC-04", name: "Security Supervisor", code: "SECURITY_SUPERVISOR" },
-          { id: "PM-CAT-SEC-05", name: "CCTV Operator", code: "CCTV_OPERATOR" },
-          { id: "PM-CAT-SEC-06", name: "Patrolling Supervisor", code: "PATROL_SUPERVISOR" },
-          { id: "PM-CAT-SEC-07", name: "Reliever Guard", code: "RELIEVER_GUARD" },
+          { id: "PM-CAT-SEC-04", name: "Security Supervisor", code: "SEC_SUPERVISOR" },
+          { id: "PM-CAT-SEC-06", name: "Reliever Guard", code: "RELIEVER_GUARD" },
+          { id: "PM-CAT-SEC-07", name: "Patrolling Supervisor", code: "PATROL_SUPERVISOR" },
+          { id: "PM-CAT-SEC-08", name: "Patrolling Guard", code: "PATROL_GUARD" },
+          { id: "PM-CAT-SEC-09", name: "Project Coordinator", code: "COORDINATOR" },
+          { id: "PM-CAT-SEC-10", name: "Event Guard", code: "EVENT_GUARD" },
           { id: "PM-CAT-SEC-11", name: "Other Security Manpower", code: "OTHER_SEC" }
         ].find(c => c.id === s.categoryId);
         if (fallback?.name) {
@@ -2733,12 +2736,15 @@ export default function ManpowerMasterPage() {
       let cat = categories.find((c: any) => c.name === posName && c.operationType === "SECURITY_GUARDING");
       if (!cat) {
         cat = [
-          { id: "PM-CAT-SEC-02", name: "Security Guard", code: "SECURITY_GUARD" },
+          { id: "PM-CAT-SEC-01", name: "CCTV Operator", code: "CCTV" },
+          { id: "PM-CAT-SEC-02", name: "Security Guard", code: "GUARD" },
           { id: "PM-CAT-SEC-03", name: "Head Guard", code: "HEAD_GUARD" },
-          { id: "PM-CAT-SEC-04", name: "Security Supervisor", code: "SECURITY_SUPERVISOR" },
-          { id: "PM-CAT-SEC-05", name: "CCTV Operator", code: "CCTV_OPERATOR" },
-          { id: "PM-CAT-SEC-06", name: "Patrolling Supervisor", code: "PATROL_SUPERVISOR" },
-          { id: "PM-CAT-SEC-07", name: "Reliever Guard", code: "RELIEVER_GUARD" },
+          { id: "PM-CAT-SEC-04", name: "Security Supervisor", code: "SEC_SUPERVISOR" },
+          { id: "PM-CAT-SEC-06", name: "Reliever Guard", code: "RELIEVER_GUARD" },
+          { id: "PM-CAT-SEC-07", name: "Patrolling Supervisor", code: "PATROL_SUPERVISOR" },
+          { id: "PM-CAT-SEC-08", name: "Patrolling Guard", code: "PATROL_GUARD" },
+          { id: "PM-CAT-SEC-09", name: "Project Coordinator", code: "COORDINATOR" },
+          { id: "PM-CAT-SEC-10", name: "Event Guard", code: "EVENT_GUARD" },
           { id: "PM-CAT-SEC-11", name: "Other Security Manpower", code: "OTHER_SEC" }
         ].find(c => c.name === posName);
       }
@@ -3084,12 +3090,15 @@ export default function ManpowerMasterPage() {
     
     const secCategories = categories.filter((c: any) => c.operationType === "SECURITY_GUARDING");
     const fallbackCategories = [
-      { id: "PM-CAT-SEC-02", name: "Security Guard", code: "SECURITY_GUARD" },
+      { id: "PM-CAT-SEC-01", name: "CCTV Operator", code: "CCTV" },
+      { id: "PM-CAT-SEC-02", name: "Security Guard", code: "GUARD" },
       { id: "PM-CAT-SEC-03", name: "Head Guard", code: "HEAD_GUARD" },
-      { id: "PM-CAT-SEC-04", name: "Security Supervisor", code: "SECURITY_SUPERVISOR" },
-      { id: "PM-CAT-SEC-05", name: "CCTV Operator", code: "CCTV_OPERATOR" },
-      { id: "PM-CAT-SEC-06", name: "Patrolling Supervisor", code: "PATROL_SUPERVISOR" },
-      { id: "PM-CAT-SEC-07", name: "Reliever Guard", code: "RELIEVER_GUARD" },
+      { id: "PM-CAT-SEC-04", name: "Security Supervisor", code: "SEC_SUPERVISOR" },
+      { id: "PM-CAT-SEC-06", name: "Reliever Guard", code: "RELIEVER_GUARD" },
+      { id: "PM-CAT-SEC-07", name: "Patrolling Supervisor", code: "PATROL_SUPERVISOR" },
+      { id: "PM-CAT-SEC-08", name: "Patrolling Guard", code: "PATROL_GUARD" },
+      { id: "PM-CAT-SEC-09", name: "Project Coordinator", code: "COORDINATOR" },
+      { id: "PM-CAT-SEC-10", name: "Event Guard", code: "EVENT_GUARD" },
       { id: "PM-CAT-SEC-11", name: "Other Security Manpower", code: "OTHER_SEC" }
     ];
     const displayCategories = secCategories.length > 0 ? secCategories : fallbackCategories;

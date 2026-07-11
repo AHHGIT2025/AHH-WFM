@@ -78,6 +78,55 @@ export async function POST(request: Request) {
     }
 
     const isDb = isDbConnected();
+
+    // Validate and resolve shift categories
+    if (siteShiftRequirements && Array.isArray(siteShiftRequirements)) {
+      const dbCategories = isDb ? await prisma.manpowerCategory.findMany({
+        where: { operationType: "SECURITY_GUARDING" }
+      }) : await mockDb.getManpowerCategories("SECURITY_GUARDING");
+
+      for (const shift of siteShiftRequirements) {
+        if (!shift.shiftCode || !shift.categoryId) {
+          return NextResponse.json({ error: "Shift name and position are required." }, { status: 400 });
+        }
+        if (!shift.shiftStartTime || !shift.shiftEndTime) {
+          return NextResponse.json({ error: `Start time and End time are required for shift ${shift.shiftCode}.` }, { status: 400 });
+        }
+        if (Number(shift.requiredCount) <= 0) {
+          return NextResponse.json({ error: `Required count for shift ${shift.shiftCode} must be greater than 0.` }, { status: 400 });
+        }
+
+        let resolvedId = "";
+        const matchById = dbCategories.find((c: any) => c.id === shift.categoryId);
+        if (matchById) {
+          resolvedId = matchById.id;
+        } else {
+          const searchName = (shift.position || shift.categoryId || "").replace(/\s*\(Reliever\)\s*/i, "").trim();
+          const matches = dbCategories.filter((c: any) => c.name.toLowerCase() === searchName.toLowerCase() || c.code.toLowerCase() === searchName.toLowerCase());
+          
+          if (matches.length === 1) {
+            resolvedId = matches[0].id;
+          } else if (matches.length > 1) {
+            const exactCode = matches.find((c: any) => c.code.toLowerCase() === searchName.toLowerCase());
+            if (exactCode) {
+              resolvedId = exactCode.id;
+            } else {
+              const exactName = matches.find((c: any) => c.name === searchName);
+              if (exactName) resolvedId = exactName.id;
+            }
+          }
+        }
+
+        if (!resolvedId) {
+          return NextResponse.json({
+            error: `Invalid shift position/category "${shift.categoryId || shift.position}". Please select a valid category.`
+          }, { status: 400 });
+        }
+
+        shift.categoryId = resolvedId;
+      }
+    }
+
     if (isDb) {
       // 1. Validate project exists and belongs to SECURITY_GUARDING
       const project = await prisma.manpowerProject.findUnique({
@@ -149,21 +198,6 @@ export async function POST(request: Request) {
         }
         if (isNaN(Number(siteAllowance.siteAllowanceAmount || 0)) || Number(siteAllowance.siteAllowanceAmount || 0) < 0) {
           return NextResponse.json({ error: "Site allowance amount must be a non-negative number." }, { status: 400 });
-        }
-      }
-
-      // Validate site shifts
-      if (siteShiftRequirements && Array.isArray(siteShiftRequirements)) {
-        for (const shift of siteShiftRequirements) {
-          if (!shift.shiftCode || !shift.categoryId) {
-            return NextResponse.json({ error: "Shift name and position are required." }, { status: 400 });
-          }
-          if (!shift.shiftStartTime || !shift.shiftEndTime) {
-            return NextResponse.json({ error: `Start time and End time are required for shift ${shift.shiftCode}.` }, { status: 400 });
-          }
-          if (Number(shift.requiredCount) <= 0) {
-            return NextResponse.json({ error: `Required count for shift ${shift.shiftCode} must be greater than 0.` }, { status: 400 });
-          }
         }
       }
 
@@ -371,6 +405,55 @@ export async function PATCH(request: Request) {
     }
 
     const isDb = isDbConnected();
+
+    // Validate and resolve shift categories
+    if (siteShiftRequirements && Array.isArray(siteShiftRequirements)) {
+      const dbCategories = isDb ? await prisma.manpowerCategory.findMany({
+        where: { operationType: "SECURITY_GUARDING" }
+      }) : await mockDb.getManpowerCategories("SECURITY_GUARDING");
+
+      for (const shift of siteShiftRequirements) {
+        if (!shift.shiftCode || !shift.categoryId) {
+          return NextResponse.json({ error: "Shift name and position are required." }, { status: 400 });
+        }
+        if (!shift.shiftStartTime || !shift.shiftEndTime) {
+          return NextResponse.json({ error: `Start time and End time are required for shift ${shift.shiftCode}.` }, { status: 400 });
+        }
+        if (Number(shift.requiredCount) <= 0) {
+          return NextResponse.json({ error: `Required count for shift ${shift.shiftCode} must be greater than 0.` }, { status: 400 });
+        }
+
+        let resolvedId = "";
+        const matchById = dbCategories.find((c: any) => c.id === shift.categoryId);
+        if (matchById) {
+          resolvedId = matchById.id;
+        } else {
+          const searchName = (shift.position || shift.categoryId || "").replace(/\s*\(Reliever\)\s*/i, "").trim();
+          const matches = dbCategories.filter((c: any) => c.name.toLowerCase() === searchName.toLowerCase() || c.code.toLowerCase() === searchName.toLowerCase());
+          
+          if (matches.length === 1) {
+            resolvedId = matches[0].id;
+          } else if (matches.length > 1) {
+            const exactCode = matches.find((c: any) => c.code.toLowerCase() === searchName.toLowerCase());
+            if (exactCode) {
+              resolvedId = exactCode.id;
+            } else {
+              const exactName = matches.find((c: any) => c.name === searchName);
+              if (exactName) resolvedId = exactName.id;
+            }
+          }
+        }
+
+        if (!resolvedId) {
+          return NextResponse.json({
+            error: `Invalid shift position/category "${shift.categoryId || shift.position}". Please select a valid category.`
+          }, { status: 400 });
+        }
+
+        shift.categoryId = resolvedId;
+      }
+    }
+
     if (isDb) {
       // 1. Validate site exists
       const existingSite = await prisma.manpowerSite.findUnique({
@@ -444,21 +527,6 @@ export async function PATCH(request: Request) {
         }
         if (isNaN(Number(siteAllowance.siteAllowanceAmount || 0)) || Number(siteAllowance.siteAllowanceAmount || 0) < 0) {
           return NextResponse.json({ error: "Site allowance amount must be a non-negative number." }, { status: 400 });
-        }
-      }
-
-      // Validate site shifts
-      if (siteShiftRequirements && Array.isArray(siteShiftRequirements)) {
-        for (const shift of siteShiftRequirements) {
-          if (!shift.shiftCode || !shift.categoryId) {
-            return NextResponse.json({ error: "Shift name and position are required." }, { status: 400 });
-          }
-          if (!shift.shiftStartTime || !shift.shiftEndTime) {
-            return NextResponse.json({ error: `Start time and End time are required for shift ${shift.shiftCode}.` }, { status: 400 });
-          }
-          if (Number(shift.requiredCount) <= 0) {
-            return NextResponse.json({ error: `Required count for shift ${shift.shiftCode} must be greater than 0.` }, { status: 400 });
-          }
         }
       }
 
