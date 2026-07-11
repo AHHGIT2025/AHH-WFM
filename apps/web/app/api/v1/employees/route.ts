@@ -101,7 +101,7 @@ export async function GET(request: Request) {
   if (auth.error) return auth.error;
 
   const { searchParams } = new URL(request.url);
-  const operationType = searchParams.get("operationType") || "WHITE_COLLAR";
+  const operationType = searchParams.get("operationType") || "ALL";
   const employeeCategory = searchParams.get("employeeCategory");
   const companyId = searchParams.get("companyId");
 

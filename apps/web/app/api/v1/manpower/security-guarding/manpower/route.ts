@@ -200,9 +200,8 @@ export async function POST(request: Request) {
       
       await mockDb.createOrUpdateSecurityOperationalEmployee(operationalData);
 
-      // 2. Promote existing workforce directory employee operationType for backward compatibility only
+      // 2. Update existing workforce directory employee properties (category, company) but do NOT overwrite operationType
       const updated = await mockDb.updateEmployee(payload.id, {
-        operationType: "SECURITY_GUARDING",
         manpowerCategoryId: payload.manpowerCategoryId,
         companyId: companyIdToUse,
         isActive: true,
@@ -225,7 +224,6 @@ export async function POST(request: Request) {
         role: "EMPLOYEE",
         status: "Active",
         employeeCategory: "BLUE_COLLAR",
-        operationType: "SECURITY_GUARDING",
         isActive: true,
         employmentStatus: "ACTIVE",
         dutyStatus: "OFF_DUTY"
