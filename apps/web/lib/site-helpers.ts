@@ -120,7 +120,8 @@ export async function getSiteDependencies(siteId: string): Promise<SiteDependenc
   }
 
   // 5. Active instructions count (linked to project of this site)
-  const activeInstructions = (db.projectInstructions || []).filter(
+  const fallbackDb = db || (readDb() as any);
+  const activeInstructions = (fallbackDb.projectInstructions || []).filter(
     (pi: any) =>
       pi.projectId === projectId &&
       pi.isActive !== false &&
