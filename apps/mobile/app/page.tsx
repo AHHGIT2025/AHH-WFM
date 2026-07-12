@@ -36,13 +36,15 @@ export default function MobileDashboard() {
             <div className="flex justify-between items-center mb-1">
               <span className="text-[10px] text-white/70">Current Duty</span>
               <span className="text-[10px] font-bold bg-white/20 px-2 py-0.5 rounded-full">
-                {data?.currentDuty?.source === "DEFAULT_LOCATION" ? "OFFICE" : data?.assignmentType?.replace("_", " ")}
+                {data?.dutySource === "EMPLOYEE_DEFAULT_LOCATION" || data?.currentDuty?.source === "DEFAULT_LOCATION" ? "OFFICE" : data?.assignmentType?.replace("_", " ")}
               </span>
             </div>
             <p className="text-sm font-bold truncate">
-              {data?.currentDuty?.displayName || data?.currentAssignment?.name || "Not Assigned"}
+              {data?.dutySource === "EMPLOYEE_DEFAULT_LOCATION"
+                ? (data?.currentDuty || "Default Office Not Configured")
+                : (data?.currentDuty?.displayName || data?.currentAssignment?.name || "Not Assigned")}
             </p>
-            {data?.currentDuty?.source === "DEFAULT_LOCATION" && data?.currentDuty?.locationCode ? (
+            {(data?.dutySource === "EMPLOYEE_DEFAULT_LOCATION" || data?.currentDuty?.source === "DEFAULT_LOCATION") && data?.currentDuty?.locationCode ? (
               <p className="text-[10px] text-white/80 truncate mt-0.5">{data.currentDuty.locationCode}</p>
             ) : (
               <p className="text-[10px] text-white/80 truncate mt-0.5">{data?.currentAssignment?.site}</p>

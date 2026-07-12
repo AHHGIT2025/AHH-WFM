@@ -14,6 +14,8 @@ export async function GET() {
 
     const today = new Date();
     const todayStr = today.toISOString().split("T")[0];
+    const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59, 999);
 
     // Get employee details — include BOTH defaultLocation and officeLocation
     const employee = await prisma.employee.findUnique({
@@ -36,18 +38,20 @@ export async function GET() {
       return NextResponse.json({ error: "Employee not found" }, { status: 404 });
     }
 
+    const isSecurityGuard = employee.employeeCategory === "BLUE_COLLAR" && employee.operationType === "SECURITY_GUARDING";
+
     // 1. Get Active Deployment (for Blue Collar)
-    const activeDeployment = await prisma.employeeDeployment.findFirst({
+    const activeDeployment = !isSecurityGuard ? await prisma.employeeDeployment.findFirst({
       where: {
         employeeId: employee.id,
-        deploymentDate: todayStr,
+        deploymentDate: { gte: startOfDay, lte: endOfDay },
         status: { in: ["PLANNED", "ACTIVE"] }
       },
       include: {
         project: true,
         site: true
       }
-    });
+    }) : null;
 
     // 2. Get Active Shift Assignment
     const activeShift = await prisma.shiftAssignment.findFirst({
@@ -62,10 +66,10 @@ export async function GET() {
     });
 
     // 3. Get Active On-Call Assignment (for Blue Collar)
-    const activeOnCall = await prisma.onCallAssignment.findFirst({
+    const activeOnCall = !isSecurityGuard ? await prisma.onCallAssignment.findFirst({
       where: {
         employeeId: employee.id,
-        assignmentDate: todayStr,
+        assignmentDate: { gte: startOfDay, lte: endOfDay },
         status: "ACTIVE"
       },
       include: {
@@ -73,12 +77,9 @@ export async function GET() {
         site: true,
         allowedPunchLocation: true
       }
-    });
+    }) : null;
 
     // 4. Get Today's Attendance Record
-    const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-    const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59, 999);
-
     const todaysAttendance = await prisma.attendanceRecord.findFirst({
       where: {
         employeeId: employee.id,
@@ -94,17 +95,23 @@ export async function GET() {
     // CURRENT DUTY LOGIC — differentiated by employee category
     // ─────────────────────────────────────────────────────
     const isWhiteCollar = employee.employeeCategory === "WHITE_COLLAR";
+    const isFMBlueCollar = employee.employeeCategory === "BLUE_COLLAR" && employee.operationType === "FACILITY_MANAGEMENT";
 
-    type DutySource = "DEFAULT_LOCATION" | "SHIFT_PLANNER" | "DEPLOYMENT" | "ON_CALL" | "NONE";
+    let dutySource: "EMPLOYEE_DEFAULT_LOCATION" | "SHIFT_PLANNER" | "EMPLOYEE_DEPLOYMENT" | "NONE" = "NONE";
+    let currentDutyStr = "Not Assigned";
+    let currentLocationVal: any = null;
+    let reason: string | null = null;
+    let activeAssignmentObj: any = null;
+    let siteObj: any = null;
 
-    let currentDuty: {
-      source: DutySource;
-      locationId: string | null;
-      locationCode: string | null;
-      locationName: string | null;
-      worksiteName: string | null;
-      siteName: string | null;
-      displayName: string;
+    let currentDutyObj: any = {
+      source: "NONE",
+      locationId: null,
+      locationCode: null,
+      locationName: null,
+      worksiteName: null,
+      siteName: null,
+      displayName: "Not Assigned"
     };
 
     // Legacy fields kept for backward compatibility with existing UI
@@ -112,23 +119,30 @@ export async function GET() {
     let assignmentType = "OFFICE";
 
     if (isWhiteCollar) {
-      // White Collar — work location comes from Default Location in Employee Profile
-      let loc = employee.defaultLocation as any;
-
-      // Fallback: if relation wasn't populated but FK exists, query directly
-      if (!loc && (employee as any).defaultLocationId) {
-        console.log("[DASHBOARD] defaultLocation relation not loaded — querying by ID:", (employee as any).defaultLocationId);
+      dutySource = "EMPLOYEE_DEFAULT_LOCATION";
+      let loc = employee.defaultLocation;
+      if (!loc && employee.defaultLocationId) {
+        console.log("[DASHBOARD] defaultLocation relation not loaded — querying by ID:", employee.defaultLocationId);
         loc = await prisma.locationMaster.findUnique({
-          where: { id: (employee as any).defaultLocationId }
+          where: { id: employee.defaultLocationId }
         });
       }
 
       if (loc) {
-
+        currentDutyStr = loc.locationName;
+        currentLocationVal = {
+          id: loc.id,
+          name: loc.locationName,
+          locationName: loc.locationName,
+          lat: loc.latitude,
+          lng: loc.longitude,
+          radiusMeters: loc.defaultGeofenceRadiusMeters
+        };
         const displayName = loc.locationCode
           ? `${loc.locationCode} \u2014 ${loc.locationName}`
           : loc.locationName;
-        currentDuty = {
+
+        currentDutyObj = {
           source: "DEFAULT_LOCATION",
           locationId: loc.id,
           locationCode: loc.locationCode ?? null,
@@ -144,9 +158,81 @@ export async function GET() {
         };
         assignmentType = "OFFICE";
       } else {
-        // No default location configured for this White Collar employee
-        currentDuty = {
-          source: "NONE",
+        currentDutyStr = "Default Office Not Configured";
+        reason = "DEFAULT_LOCATION_NOT_CONFIGURED";
+        currentDutyObj = {
+          source: "DEFAULT_LOCATION",
+          locationId: null,
+          locationCode: null,
+          locationName: null,
+          worksiteName: null,
+          siteName: null,
+          displayName: "Default Office Not Configured"
+        };
+        currentAssignment = null;
+        assignmentType = "OFFICE";
+      }
+    } else if (isSecurityGuard) {
+      dutySource = "SHIFT_PLANNER";
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      const todayEnd = new Date();
+      todayEnd.setHours(23, 59, 59, 999);
+
+      const activeAssignment = await prisma.manpowerDeploymentAssignment.findFirst({
+        where: {
+          employeeId: employee.id,
+          deployment: {
+            date: { gte: todayStart, lte: todayEnd },
+            operationType: "SECURITY_GUARDING"
+          }
+        },
+        include: {
+          deployment: {
+            include: {
+              shiftRequirement: {
+                include: {
+                  site: {
+                    include: { project: true }
+                  }
+                }
+              }
+            }
+          }
+        }
+      });
+
+      if (activeAssignment && activeAssignment.deployment?.shiftRequirement?.site) {
+        const site = activeAssignment.deployment.shiftRequirement.site;
+        currentDutyStr = site.name;
+        currentLocationVal = site.name;
+        activeAssignmentObj = activeAssignment;
+        siteObj = site;
+
+        const displayName = site.project?.name
+          ? `${site.project.name} \u2014 ${site.name}`
+          : site.name;
+
+        currentDutyObj = {
+          source: "SHIFT_PLANNER",
+          locationId: null,
+          locationCode: site.code ?? null,
+          locationName: site.name,
+          worksiteName: site.project?.name ?? null,
+          siteName: site.name,
+          displayName
+        };
+        currentAssignment = {
+          name: site.project?.name || "Security Duty",
+          site: site.name,
+          type: "PROJECT_SITE"
+        };
+        assignmentType = "DEPLOYMENT";
+      } else {
+        currentDutyStr = "Not Assigned";
+        reason = "NO_ACTIVE_ASSIGNMENT";
+        currentDutyObj = {
+          source: "SHIFT_PLANNER",
           locationId: null,
           locationCode: null,
           locationName: null,
@@ -158,13 +244,17 @@ export async function GET() {
         assignmentType = "OFFICE";
       }
     } else {
-      // Blue Collar — location comes from dynamic Shift Planner / Deployment / On-Call
+      dutySource = "EMPLOYEE_DEPLOYMENT";
       if (activeDeployment) {
+        currentDutyStr = activeDeployment.site?.siteName || activeDeployment.project.projectName;
+        currentLocationVal = currentDutyStr;
+        siteObj = activeDeployment.site;
+
         const displayName = activeDeployment.site?.siteName
           ? `${activeDeployment.project.projectName} \u2014 ${activeDeployment.site.siteName}`
           : activeDeployment.project.projectName;
 
-        currentDuty = {
+        currentDutyObj = {
           source: "DEPLOYMENT",
           locationId: null,
           locationCode: null,
@@ -186,7 +276,12 @@ export async function GET() {
           activeOnCall.project?.projectName ||
           "On-Call Duty";
 
-        currentDuty = {
+        currentDutyStr = activeOnCall.site?.siteName || activeOnCall.allowedPunchLocation?.name || "On-Call Duty";
+        currentLocationVal = currentDutyStr;
+        activeAssignmentObj = activeOnCall;
+        siteObj = activeOnCall.site;
+
+        currentDutyObj = {
           source: "ON_CALL",
           locationId: null,
           locationCode: null,
@@ -202,8 +297,8 @@ export async function GET() {
         };
         assignmentType = "ON_CALL";
       } else {
-        // No active deployment/on-call — Blue Collar shows Not Assigned
-        currentDuty = {
+        currentDutyStr = "Not Assigned";
+        currentDutyObj = {
           source: "NONE",
           locationId: null,
           locationCode: null,
@@ -217,17 +312,39 @@ export async function GET() {
       }
     }
 
-    console.log("[DASHBOARD] currentDuty:", JSON.stringify(currentDuty));
+    console.log("[DASHBOARD] currentDutyStr:", currentDutyStr);
 
     return NextResponse.json({
+      employeeId: employee.id,
+      employeeCode: employee.id,
+      fullName: employee.name,
       employeeName: employee.name,
       employeeCategory: employee.employeeCategory,
+      operationType: employee.operationType,
       designation: employee.designation?.name,
       dutyStatus: employee.dutyStatus,
-      // New structured currentDuty object for richer consumers
-      currentDuty,
-      // Legacy currentAssignment fields — kept for backward-compat with existing UI
-      currentAssignment: currentAssignment ?? { name: currentDuty.displayName, site: null, type: "NONE" },
+      
+      currentDuty: currentDutyStr,
+      currentLocation: currentLocationVal,
+      dutySource,
+      reason,
+      defaultLocation: employee.defaultLocation ? {
+        id: employee.defaultLocation.id,
+        name: employee.defaultLocation.locationName,
+        locationName: employee.defaultLocation.locationName,
+        lat: employee.defaultLocation.latitude,
+        lng: employee.defaultLocation.longitude,
+        radiusMeters: employee.defaultLocation.defaultGeofenceRadiusMeters
+      } : null,
+      activeAssignment: activeAssignmentObj,
+      site: siteObj,
+
+      // Legacy currentDuty object for backward compatibility
+      currentDutyObject: currentDutyObj,
+      currentDutyCompat: currentDutyObj,
+      // Provide legacy property for dashboard screen rendering
+      currentDutyLegacy: currentDutyObj,
+      currentAssignment: currentAssignment ?? { name: currentDutyObj.displayName, site: null, type: "NONE" },
       assignmentType,
       todayShift: activeShift?.shiftTemplate?.name || "Standard Shift",
       attendanceStatus: todaysAttendance
