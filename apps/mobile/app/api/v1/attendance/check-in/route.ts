@@ -37,6 +37,7 @@ export async function POST(request: Request) {
       include: { 
         company: true,
         officeLocation: true,
+        defaultLocation: true,
         defaultPunchLocation: true,
         allowedPunchLocations: { 
           where: { isActive: true },
@@ -55,93 +56,149 @@ export async function POST(request: Request) {
 
     if (!employee) return NextResponse.json({ error: "Employee not found" }, { status: 404 });
 
+    const isSecurityGuard = employee.employeeCategory === "BLUE_COLLAR" && employee.operationType === "SECURITY_GUARDING";
+    const isFMBlueCollar = employee.employeeCategory === "BLUE_COLLAR" && employee.operationType === "FACILITY_MANAGEMENT";
+    const isWhiteCollar = employee.employeeCategory === "WHITE_COLLAR";
+
     // Collect all possible valid locations for this employee today
     type ValidLocation = { type: string, id: string | null, lat: number, lng: number, radius: number, priority: number, originalId: string | null };
     const validLocations: ValidLocation[] = [];
 
-    // 1. Active Deployment Location
-    for (const dep of employee.deployments) {
-      if (dep.site?.latitude && dep.site?.longitude) {
+    if (isSecurityGuard) {
+      // Security Guarding: only use today's active ManpowerDeploymentAssignment
+      const activeAssignment = await prisma.manpowerDeploymentAssignment.findFirst({
+        where: {
+          employeeId: employee.id,
+          deployment: {
+            date: { gte: todayStart, lte: todayEnd },
+            operationType: "SECURITY_GUARDING"
+          }
+        },
+        include: {
+          deployment: {
+            include: {
+              shiftRequirement: {
+                include: {
+                  site: true
+                }
+              }
+            }
+          }
+        }
+      });
+
+      if (activeAssignment && activeAssignment.deployment?.shiftRequirement?.site) {
+        const site = activeAssignment.deployment.shiftRequirement.site;
+        if (site.lat !== null && site.lng !== null && site.lat !== undefined && site.lng !== undefined) {
+          validLocations.push({
+            type: "DEPLOYMENT",
+            id: site.id,
+            lat: site.lat,
+            lng: site.lng,
+            radius: site.radiusMeters || 100,
+            priority: 1,
+            originalId: null
+          });
+        }
+      }
+    } else if (isFMBlueCollar) {
+      // Facility Management: use EmployeeDeployment site
+      for (const dep of employee.deployments) {
+        if (dep.site?.latitude && dep.site?.longitude) {
+          validLocations.push({
+            type: "DEPLOYMENT",
+            id: dep.siteId,
+            lat: dep.site.latitude,
+            lng: dep.site.longitude,
+            radius: dep.site.geofenceRadiusMeters || 150,
+            priority: 1,
+            originalId: null
+          });
+        }
+      }
+
+      // Check On-Call Location for FM
+      for (const oc of employee.onCallAssignments) {
+        if (oc.allowedPunchLocation) {
+          validLocations.push({
+            type: "ON_CALL",
+            id: oc.allowedPunchLocationId,
+            lat: oc.allowedPunchLocation.latitude,
+            lng: oc.allowedPunchLocation.longitude,
+            radius: oc.allowedPunchLocation.radiusMeters || 150,
+            priority: 2,
+            originalId: oc.allowedPunchLocationId
+          });
+        } else if (oc.site?.latitude && oc.site?.longitude) {
+          validLocations.push({
+            type: "ON_CALL_SITE",
+            id: oc.siteId,
+            lat: oc.site.latitude,
+            lng: oc.site.longitude,
+            radius: oc.site.geofenceRadiusMeters || 150,
+            priority: 2,
+            originalId: null
+          });
+        }
+      }
+    } else if (isWhiteCollar) {
+      // White Collar: use defaultLocation
+      const loc = employee.defaultLocation;
+      if (loc && loc.latitude !== null && loc.longitude !== null && loc.latitude !== undefined && loc.longitude !== undefined) {
         validLocations.push({
-          type: "DEPLOYMENT",
-          id: dep.siteId,
-          lat: dep.site.latitude,
-          lng: dep.site.longitude,
-          radius: dep.site.geofenceRadiusMeters || 150,
+          type: "EMPLOYEE_DEFAULT_LOCATION",
+          id: loc.id,
+          lat: loc.latitude,
+          lng: loc.longitude,
+          radius: loc.defaultGeofenceRadiusMeters || 100,
           priority: 1,
           originalId: null
         });
       }
     }
 
-    // 2. Active On-Call Location
-    for (const oc of employee.onCallAssignments) {
-      if (oc.allowedPunchLocation) {
+    // General Custom Fallbacks (only if not a Security Guard, or if we want custom punch allowed overrides)
+    // Custom Allowed Locations (Fallback)
+    if (!isSecurityGuard) {
+      if (employee.defaultPunchLocation && employee.defaultPunchLocation.isActive) {
         validLocations.push({
-          type: "ON_CALL",
-          id: oc.allowedPunchLocationId,
-          lat: oc.allowedPunchLocation.latitude,
-          lng: oc.allowedPunchLocation.longitude,
-          radius: oc.allowedPunchLocation.radiusMeters || 150,
-          priority: 2,
-          originalId: oc.allowedPunchLocationId
+          type: "DEFAULT_PUNCH",
+          id: employee.defaultPunchLocation.id,
+          lat: employee.defaultPunchLocation.latitude,
+          lng: employee.defaultPunchLocation.longitude,
+          radius: employee.geofenceRadiusOverrideMeters || employee.defaultPunchLocation.radiusMeters || 150,
+          priority: 4,
+          originalId: employee.defaultPunchLocation.id
         });
-      } else if (oc.site?.latitude && oc.site?.longitude) {
+      }
+
+      if (employee.allowMultiplePunchLocations) {
+        for (const al of employee.allowedPunchLocations) {
+          if (al.allowedPunchLocation && al.allowedPunchLocation.isActive) {
+            validLocations.push({
+              type: "ALLOWED_PUNCH",
+              id: al.allowedPunchLocationId,
+              lat: al.allowedPunchLocation.latitude,
+              lng: al.allowedPunchLocation.longitude,
+              radius: employee.geofenceRadiusOverrideMeters || al.allowedPunchLocation.radiusMeters || 150,
+              priority: 5 + (al.priority * 0.1),
+              originalId: al.allowedPunchLocationId
+            });
+          }
+        }
+      }
+
+      if (employee.allowOfficePunch && employee.officeLocation && employee.officeLocation.latitude && employee.officeLocation.longitude) {
         validLocations.push({
-          type: "ON_CALL_SITE",
-          id: oc.siteId,
-          lat: oc.site.latitude,
-          lng: oc.site.longitude,
-          radius: oc.site.geofenceRadiusMeters || 150,
-          priority: 2,
+          type: "OFFICE",
+          id: employee.officeLocation.id,
+          lat: employee.officeLocation.latitude,
+          lng: employee.officeLocation.longitude,
+          radius: employee.geofenceRadiusOverrideMeters || 150,
+          priority: 6,
           originalId: null
         });
       }
-    }
-
-    // 3. Shift Assignment (Skip for now as it's typically tied to site)
-
-    // 4. Employee Default Punch Location
-    if (employee.defaultPunchLocation && employee.defaultPunchLocation.isActive) {
-      validLocations.push({
-        type: "DEFAULT_PUNCH",
-        id: employee.defaultPunchLocation.id,
-        lat: employee.defaultPunchLocation.latitude,
-        lng: employee.defaultPunchLocation.longitude,
-        radius: employee.geofenceRadiusOverrideMeters || employee.defaultPunchLocation.radiusMeters || 150,
-        priority: 4,
-        originalId: employee.defaultPunchLocation.id
-      });
-    }
-
-    // 5. Employee Allowed Punch Locations
-    if (employee.allowMultiplePunchLocations) {
-      for (const al of employee.allowedPunchLocations) {
-        if (al.allowedPunchLocation && al.allowedPunchLocation.isActive) {
-          validLocations.push({
-            type: "ALLOWED_PUNCH",
-            id: al.allowedPunchLocationId,
-            lat: al.allowedPunchLocation.latitude,
-            lng: al.allowedPunchLocation.longitude,
-            radius: employee.geofenceRadiusOverrideMeters || al.allowedPunchLocation.radiusMeters || 150,
-            priority: 5 + (al.priority * 0.1), // lower priority number means higher priority. Keep it relative to 5.
-            originalId: al.allowedPunchLocationId
-          });
-        }
-      }
-    }
-
-    // 6. Office Location
-    if (employee.allowOfficePunch && employee.officeLocation && employee.officeLocation.latitude && employee.officeLocation.longitude) {
-      validLocations.push({
-        type: "OFFICE",
-        id: employee.officeLocation.id,
-        lat: employee.officeLocation.latitude,
-        lng: employee.officeLocation.longitude,
-        radius: employee.geofenceRadiusOverrideMeters || 150,
-        priority: 6,
-        originalId: null
-      });
     }
 
     // Sort by priority (1 is highest)
@@ -195,7 +252,7 @@ export async function POST(request: Request) {
         locationName: matchedLocation ? matchedLocation.type : "Unknown",
         punchLocationType: matchedLocation ? matchedLocation.type : "UNKNOWN",
         companyId: employee.companyId || null,
-        officeLocationId: matchedLocation?.type === "OFFICE" ? matchedLocation.id : null,
+        officeLocationId: matchedLocation?.type === "OFFICE" || matchedLocation?.type === "EMPLOYEE_DEFAULT_LOCATION" ? matchedLocation.id : null,
         allowedPunchLocationId: matchedLocation ? matchedLocation.originalId : null,
         siteId: matchedLocation?.type === "DEPLOYMENT" || matchedLocation?.type === "ON_CALL_SITE" ? matchedLocation.id : null,
       }

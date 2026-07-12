@@ -119,13 +119,34 @@ export default function PunchPage() {
             <div className="flex items-start gap-2 mb-1">
               <span className="material-symbols-outlined text-[18px] text-primary mt-0.5">location_on</span>
               <div>
-                <p className="text-sm font-bold text-on-surface">{allowedLocation?.name || "Not Configured"}</p>
-                <p className="text-[10px] text-on-surface-variant">Type: {allowedLocation?.type?.replace("_", " ")}</p>
-                <p className="text-[10px] text-on-surface-variant">Radius: {allowedLocation?.radiusMeters}m</p>
+                {allowedLocation?.geofenceConfigured === false ? (
+                  <>
+                    <p className="text-sm font-bold text-on-surface">Not Configured</p>
+                    <p className="text-[10px] text-status-error font-semibold mt-1">
+                      Reason: {
+                        allowedLocation.reason === "SITE_GEOFENCE_NOT_CONFIGURED" 
+                          ? "Site geofence coordinates are missing" 
+                          : allowedLocation.reason === "EMPLOYEE_DEFAULT_LOCATION_GEOFENCE_NOT_CONFIGURED"
+                          ? "Default office location geofence is missing"
+                          : allowedLocation.reason === "NO_ACTIVE_ASSIGNMENT"
+                          ? "No active assignment for today"
+                          : "Geofence coordinates are not configured"
+                      }
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm font-bold text-on-surface">{allowedLocation?.locationName || allowedLocation?.name || "Not Configured"}</p>
+                    <p className="text-[10px] text-on-surface-variant">Type: {allowedLocation?.dutySource?.replace(/_/g, " ") || allowedLocation?.type?.replace(/_/g, " ")}</p>
+                    {allowedLocation?.radiusMeters !== undefined && allowedLocation?.radiusMeters > 0 && (
+                      <p className="text-[10px] text-on-surface-variant">Radius: {allowedLocation?.radiusMeters}m</p>
+                    )}
+                  </>
+                )}
               </div>
             </div>
             
-            {currentCoords && allowedLocation?.lat && (
+            {currentCoords && allowedLocation?.geofenceConfigured !== false && allowedLocation?.lat && (
               <div className="mt-3 pt-3 border-t border-outline-variant/20">
                 <p className="text-[10px] text-status-success font-semibold flex items-center gap-1">
                   <span className="material-symbols-outlined text-[14px]">my_location</span>
