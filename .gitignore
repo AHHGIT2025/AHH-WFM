@@ -26,5 +26,8 @@ vibe.config.json
 .vscode/
 .mcp.json
 .vibe/
-
-
+# Test artifacts
+test-results/
+playwright-report/
+.env.test
+.k6/
