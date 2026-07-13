@@ -119,8 +119,8 @@ export async function GET(
     // 4. Retrieve allocations (database in SQL mode, db.json in mock mode)
     let allAllocations: any[] = [];
     let allRelieverAllocations: any[] = [];
+    let siteAllocations: any[] = [];
     const db = readDb() as any;
-    const siteAllocations = db.siteManpowerAllocations || [];
 
     if (isDb) {
       const dbAllocations = await prisma.securityProjectManpowerAllocation.findMany({
@@ -145,9 +145,29 @@ export async function GET(
         position: p.category?.name || "",
         quantity: p.requiredRelieverCount
       }));
+
+      // Fetch sites under this project + sibling projects
+      const targetProjectIds = siblingProjectIds.concat(projectId || []);
+      const allSites = await prisma.manpowerSite.findMany({
+        where: { projectId: { in: targetProjectIds } }
+      });
+      const allSiteIds = allSites.map(s => s.id);
+
+      const dbSiteAllocations = await prisma.securitySiteManpowerAllocation.findMany({
+        where: { siteId: { in: allSiteIds } }
+      });
+      siteAllocations = dbSiteAllocations.map(sa => ({
+        id: sa.id,
+        siteId: sa.siteId,
+        position: sa.position,
+        quantity: sa.quantity,
+        deploymentType: sa.deploymentType,
+        relieverPoolType: sa.relieverPoolType
+      }));
     } else {
       allAllocations = db.projectManpowerAllocations || [];
       allRelieverAllocations = db.projectRelieverAllocations || [];
+      siteAllocations = db.siteManpowerAllocations || [];
     }
 
     // Map manpower requirements

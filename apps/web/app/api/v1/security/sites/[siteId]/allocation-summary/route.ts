@@ -83,7 +83,7 @@ export async function GET(
 
     if (isDb) {
       const dbSiteAllocations = await prisma.securitySiteManpowerAllocation.findMany({
-        where: { siteId }
+        where: { siteId: { in: [...siblingSiteIds, siteId] } }
       });
       siteAllocations = dbSiteAllocations.map(sa => ({
         id: sa.id,

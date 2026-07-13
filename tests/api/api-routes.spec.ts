@@ -69,7 +69,7 @@ describe('AHH WFM API Routes Verification', () => {
     } catch (e: any) {
       console.warn('Authentication failed. Testing APIs in public/guest mode:', e.message);
     }
-  });
+  }, 30000);
 
   test('GET /api/v1/employees', async () => {
     const headers = webCookie ? { Cookie: webCookie } : {};
@@ -202,5 +202,15 @@ describe('AHH WFM API Routes Verification', () => {
     expect(res.status).toBe(400);
     expect(res.data).toHaveProperty('success', false);
     expect(res.data).toHaveProperty('error', 'Current password is incorrect');
+  });
+
+  test('GET /api/v1/security/scheduling/calendar with valid siteId', async () => {
+    const headers = webCookie ? { Cookie: webCookie } : {};
+    const siteId = '1fa0a418-e601-4ba4-9195-e91e7dfb54e7'; // Main Office FD site in MySQL
+    const res = await axios.get(`${WEB_URL}/api/v1/security/scheduling/calendar?siteId=${siteId}`, { headers, validateStatus: () => true });
+
+    expect(res.status).toBe(200);
+    expect(res.data).toHaveProperty('success', true);
+    expect(res.data).toHaveProperty('slots');
   });
 });

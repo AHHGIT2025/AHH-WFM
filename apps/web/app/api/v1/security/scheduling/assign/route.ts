@@ -71,9 +71,17 @@ export async function POST(request: Request) {
 
     // Block assignment if site has no manpower allocation
     const siteId = shiftRequirement.siteId;
-    const db = readDb() as any;
-    const siteAllocations = (db.siteManpowerAllocations || []).filter((a: any) => a.siteId === siteId);
-    const totalAllocated = siteAllocations.reduce((sum: number, a: any) => sum + (a.quantity || 0), 0);
+    let totalAllocated = 0;
+    if (isDb) {
+      const siteAllocations = await prisma.securitySiteManpowerAllocation.findMany({
+        where: { siteId }
+      });
+      totalAllocated = siteAllocations.reduce((sum: number, a: any) => sum + (a.quantity || 0), 0);
+    } else {
+      const db = readDb() as any;
+      const siteAllocations = (db.siteManpowerAllocations || []).filter((a: any) => a.siteId === siteId);
+      totalAllocated = siteAllocations.reduce((sum: number, a: any) => sum + (a.quantity || 0), 0);
+    }
     if (totalAllocated === 0) {
       return NextResponse.json({
         error: "No manpower allocated to this site. Allocate manpower before scheduling."
