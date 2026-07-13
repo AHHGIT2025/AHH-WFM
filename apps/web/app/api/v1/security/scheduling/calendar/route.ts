@@ -4,7 +4,7 @@ import { hasPermission } from "@/lib/permissions";
 import { mockDb, isDbConnected, readDb } from "@ahh-wfm/mock-data";
 import { prisma } from "@ahh-wfm/database";
 
-import { getActiveSiteShiftConfigs } from "@/lib/server-helpers";
+import { getActiveSiteShiftConfigs, getAssignmentOperationalStatus, isActiveRosterAssignment, isInactiveRosterAssignment, isRelieverAssignment } from "@/lib/server-helpers";
 
 function parseDate(val: any): string {
   if (!val) return new Date().toISOString().split("T")[0];
@@ -182,8 +182,22 @@ export async function GET(request: Request) {
       reqDeps.forEach(dep => {
         (dep.assignments || []).forEach((asg: any) => {
           const emp = asg.employee;
-          const status = asg.status || (asg.validationWarnings ? "WARNING" : "ASSIGNED");
-          
+          const asgStatus = getAssignmentOperationalStatus(asg);
+          const isRel = isRelieverAssignment(asg);
+
+          let valStatus = asg.validationStatus || "OK";
+          let valIssues: string[] = [];
+          const warnings = asg.validationWarnings;
+          if (warnings && typeof warnings === "object") {
+            valStatus = (warnings as any).validationStatus || (warnings as any).status || valStatus;
+            valIssues = (warnings as any).validationIssues || [];
+          }
+          if (valStatus === "WARNING" && valIssues.length === 0) {
+            if (Array.isArray(asg.validationWarnings)) {
+              valIssues = asg.validationWarnings;
+            }
+          }
+
           mappedAssignments.push({
             id: asg.id,
             deploymentId: dep.id,
@@ -196,11 +210,11 @@ export async function GET(request: Request) {
             shiftEndTime: req.shiftEndTime,
             shiftCode: req.shiftCode,
             postName: req.locationUnitId || "Post HQ",
-            status,
-            isReliever: asg.isReliever,
+            status: asgStatus,
+            isReliever: isRel,
             isOvertime: asg.isOvertime,
-            validationStatus: asg.validationStatus || (asg.validationWarnings ? "WARNING" : "OK"),
-            validationIssues: asg.validationWarnings || [],
+            validationStatus: valStatus,
+            validationIssues: valIssues,
             payrollAdvisories: asg.payrollAdvisory || [],
             overrideReason: asg.overrideReason || "",
             overriddenBy: asg.overriddenBy || "",
@@ -234,6 +248,18 @@ export async function GET(request: Request) {
         });
       });
 
+      const activePermanent = mappedAssignments.filter((a: any) => !a.isReliever && a.status === "ASSIGNED");
+      const activeReliever = mappedAssignments.filter((a: any) => a.isReliever && a.status === "ASSIGNED");
+
+      const assignedCount = activePermanent.length;
+      const assignedRelieverCount = activeReliever.length;
+
+      const requiredCount = req.requiredCount;
+      const requiredRelieverCount = req.requiredRelieverCount || 0;
+
+      const vacantCount = Math.max(0, requiredCount - assignedCount);
+      const vacantRelieverCount = Math.max(0, requiredRelieverCount - assignedRelieverCount);
+
       return {
         id: req.id,
         siteId: req.siteId,
@@ -244,9 +270,13 @@ export async function GET(request: Request) {
         shiftCode: req.shiftCode,
         shiftStartTime: req.shiftStartTime,
         shiftEndTime: req.shiftEndTime,
-        requiredCount: req.requiredCount,
-        assignedCount: mappedAssignments.length,
-        coverageStatus: mappedAssignments.length >= req.requiredCount ? "FULL" : mappedAssignments.length > 0 ? "PARTIAL" : "VACANT",
+        requiredCount,
+        requiredRelieverCount,
+        assignedCount,
+        assignedRelieverCount,
+        vacantCount,
+        vacantRelieverCount,
+        coverageStatus: (assignedCount + assignedRelieverCount) >= (requiredCount + requiredRelieverCount) ? "FULL" : (assignedCount + assignedRelieverCount) > 0 ? "PARTIAL" : "VACANT",
         assignments: mappedAssignments
       };
     });
@@ -257,15 +287,52 @@ export async function GET(request: Request) {
     let vacantPosts = 0;
     let warningDeployments = 0;
     let relieversCount = 0;
+    const warningDetails: any[] = [];
 
     slots.forEach(slot => {
-      requiredManpower += slot.requiredCount;
-      assignedManpower += slot.assignedCount;
-      if (slot.assignedCount === 0) {
-        vacantPosts++;
-      }
+      requiredManpower += slot.requiredCount + slot.requiredRelieverCount;
+      assignedManpower += slot.assignedCount + slot.assignedRelieverCount;
+      vacantPosts += slot.vacantCount + slot.vacantRelieverCount;
+
       slot.assignments.forEach((asg: any) => {
-        if (asg.validationStatus === "WARNING") warningDeployments++;
+        const asgStatus = asg.status;
+        if (["LEAVE", "ABSENT", "NO_SHOW"].includes(asgStatus)) {
+          warningDetails.push({
+            type: asgStatus,
+            severity: asgStatus === "LEAVE" ? "WARNING" : "BLOCKING",
+            employeeId: asg.employeeId,
+            employeeName: asg.employeeName,
+            date: startDateStr,
+            shiftId: slot.id,
+            siteId: slot.siteId,
+            reason: `${asg.employeeName} is marked as ${asgStatus} on this date.`,
+            suggestedAction: "Assign a reliever or temporary replacement guard."
+          });
+        }
+
+        if (asg.validationStatus === "WARNING") {
+          warningDeployments++;
+          (asg.validationIssues || []).forEach((issue: string) => {
+            let type = "ELIGIBILITY";
+            if (issue.toUpperCase().includes("LEAVE")) type = "LEAVE";
+            else if (issue.toUpperCase().includes("OVERLAP") || issue.toUpperCase().includes("BOOKING")) type = "OVERLAP";
+            else if (issue.toUpperCase().includes("LOCK")) type = "PERIOD_LOCK";
+            else if (issue.toUpperCase().includes("ALLOCATION")) type = "ALLOCATION";
+
+            warningDetails.push({
+              type,
+              severity: "WARNING",
+              employeeId: asg.employeeId,
+              employeeName: asg.employeeName,
+              date: startDateStr,
+              shiftId: slot.id,
+              siteId: slot.siteId,
+              reason: issue,
+              suggestedAction: "Review warning details or enter an override justification to proceed."
+            });
+          });
+        }
+
         if (asg.isReliever) relieversCount++;
       });
     });
@@ -274,7 +341,7 @@ export async function GET(request: Request) {
       requiredManpower,
       assignedManpower,
       vacantPosts,
-      overstaffedPosts: slots.filter(s => s.assignedCount > s.requiredCount).length,
+      overstaffedPosts: slots.filter(s => (s.assignedCount + s.assignedRelieverCount) > (s.requiredCount + s.requiredRelieverCount)).length,
       warningDeployments,
       blockedAttempts: 0, // Mock log-based value
       pendingApprovals: deployments.filter(d => d.approvalStatus === "SUBMITTED").length,
@@ -284,7 +351,8 @@ export async function GET(request: Request) {
     return NextResponse.json({
       success: true,
       summary,
-      slots
+      slots,
+      warningDetails
     });
 
   } catch (error: any) {

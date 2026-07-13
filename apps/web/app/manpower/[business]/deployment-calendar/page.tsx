@@ -19,7 +19,7 @@ interface SlotAssignment {
   shiftEndTime: string;
   shiftCode: string;
   postName: string;
-  status: "ASSIGNED" | "WARNING_APPROVED" | "BLOCKED" | "CANCELLED" | "RELIEVER";
+  status: "ASSIGNED" | "WARNING_APPROVED" | "BLOCKED" | "CANCELLED" | "RELIEVER" | "LEAVE" | "ABSENT" | "NO_SHOW" | "REPLACED";
   isReliever: boolean;
   isOvertime: boolean;
   validationStatus: "OK" | "WARNING" | "BLOCKED";
@@ -41,7 +41,11 @@ interface CalendarSlot {
   shiftStartTime: string;
   shiftEndTime: string;
   requiredCount: number;
+  requiredRelieverCount?: number;
   assignedCount: number;
+  assignedRelieverCount?: number;
+  vacantCount?: number;
+  vacantRelieverCount?: number;
   coverageStatus: "FULL" | "PARTIAL" | "VACANT";
   assignments: SlotAssignment[];
 }
@@ -117,6 +121,8 @@ export default function DeploymentCalendarPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [slots, setSlots] = useState<CalendarSlot[]>([]);
   const [summary, setSummary] = useState<CoverageSummary | null>(null);
+  const [warningDetails, setWarningDetails] = useState<any[]>([]);
+  const [isWarningPanelExpanded, setIsWarningPanelExpanded] = useState(false);
   const [employeePool, setEmployeePool] = useState<EmployeeCard[]>([]);
   const [debugCounts, setDebugCounts] = useState<DebugCounts | null>(null);
   
@@ -289,6 +295,7 @@ export default function DeploymentCalendarPage() {
         if (json.success) {
           setSlots(json.slots);
           setSummary(json.summary);
+          setWarningDetails(json.warningDetails || []);
         }
       }
     } catch (e) {
@@ -932,6 +939,62 @@ export default function DeploymentCalendarPage() {
           </div>
         )}
 
+        {/* Compliance Warning Accordion Panel */}
+        {activeTab === "calendar" && selectedProject !== "all" && (
+          <div className="mb-4 border border-outline-variant/60 rounded-xl overflow-hidden shadow-sm bg-surface">
+            <button
+              onClick={() => setIsWarningPanelExpanded(!isWarningPanelExpanded)}
+              className="w-full px-4 py-3 flex justify-between items-center bg-surface-container-low/60 hover:bg-surface-container-low transition-all"
+            >
+              <div className="flex items-center gap-2">
+                <span className={`material-symbols-outlined text-[18px] ${warningDetails.length > 0 ? "text-status-warning animate-bounce" : "text-status-success"}`}>
+                  {warningDetails.length > 0 ? "warning" : "verified"}
+                </span>
+                <span className="text-xs font-extrabold uppercase tracking-wider text-on-surface">
+                  Roster Compliance Warnings
+                </span>
+                <Badge variant={warningDetails.length > 0 ? "warning" : "success"} className="text-[10px] ml-1">
+                  {warningDetails.length > 0 ? `${warningDetails.length} Warnings` : "No Warnings"}
+                </Badge>
+              </div>
+              <span className="material-symbols-outlined text-[18px] text-on-surface-variant">
+                {isWarningPanelExpanded ? "expand_less" : "expand_more"}
+              </span>
+            </button>
+
+            {isWarningPanelExpanded && (
+              <div className="p-4 border-t border-outline-variant/40 bg-surface-container-lowest divide-y divide-outline-variant/30 max-h-[300px] overflow-y-auto">
+                {warningDetails.length === 0 ? (
+                  <p className="text-xs text-on-surface-variant text-center py-2 font-medium">
+                    No roster warnings for selected period.
+                  </p>
+                ) : (
+                  warningDetails.map((w, idx) => (
+                    <div key={idx} className="py-3 first:pt-0 last:pb-0 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
+                      <div className="flex flex-col gap-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant={w.severity === "BLOCKING" ? "error" : "warning"} className="text-[8px] py-0.5 px-1 uppercase tracking-wider font-extrabold">
+                            {w.type} · {w.severity}
+                          </Badge>
+                          <span className="font-bold text-on-surface">{w.employeeName} ({w.employeeId})</span>
+                          <span className="text-[10px] text-on-surface-variant font-mono bg-surface-container-low px-1 py-0.5 rounded">
+                            {w.date} · Shift {w.shiftId.substring(0, 8)}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-on-surface font-medium">{w.reason}</p>
+                      </div>
+                      <div className="md:text-right flex flex-col gap-0.5">
+                        <span className="text-[9px] font-extrabold text-primary uppercase tracking-wider">Suggested Action:</span>
+                        <span className="text-[10px] text-on-surface-variant font-semibold">{w.suggestedAction}</span>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* TAB 1: Roster Calendar */}
         {activeTab === "calendar" && (
           <div className="flex-1 flex flex-col">
@@ -961,7 +1024,7 @@ export default function DeploymentCalendarPage() {
                         <h3 className="text-xs font-bold text-primary">{slot.siteName} · {slot.postName}</h3>
                         <div className="flex items-center gap-2 mt-1">
                           <span className="text-[10px] text-on-surface-variant font-mono bg-surface-container-low px-1.5 py-0.5 rounded">{slot.shiftCode} ({slot.shiftStartTime} - {slot.shiftEndTime})</span>
-                          <span className="text-[9px] font-bold text-on-surface-variant">Required: {slot.requiredCount} Guards</span>
+                          <span className="text-[9px] font-bold text-on-surface-variant">Required: {slot.requiredCount} Permanent {isSecurity && (slot.requiredRelieverCount || 0) > 0 && `+ ${slot.requiredRelieverCount} Reliever`}</span>
                         </div>
                       </div>
                       <Badge variant={slot.coverageStatus === "FULL" ? "success" : slot.coverageStatus === "PARTIAL" ? "warning" : "error"}>
@@ -980,7 +1043,7 @@ export default function DeploymentCalendarPage() {
                           className={`p-3 rounded-lg border cursor-pointer hover:border-primary transition-all flex flex-col gap-1.5 ${
                             asg.status === "WARNING_APPROVED"
                               ? "bg-status-warning/5 border-status-warning"
-                              : asg.status === "CANCELLED"
+                              : ["CANCELLED", "LEAVE", "ABSENT", "NO_SHOW", "REPLACED"].includes(asg.status)
                               ? "bg-surface-container-high border-outline-variant opacity-60 line-through"
                               : "bg-surface-container-lowest border-outline-variant/60 shadow-sm"
                           }`}
@@ -1001,22 +1064,39 @@ export default function DeploymentCalendarPage() {
                             <span className="text-[8px] px-1 bg-surface-container-high rounded text-on-surface-variant font-semibold">{asg.employeeCode}</span>
                             <span className="text-[8px] px-1 bg-surface-container-high rounded text-on-surface-variant font-semibold">{asg.designation}</span>
                             {asg.status === "WARNING_APPROVED" && (
-                              <Badge variant="warning" className="text-[8px] py-0.5 px-1">Warning Overridden</Badge>
+                              <Badge variant="warning" className="text-[8px] py-0.5 px-1 font-bold">Warning Overridden</Badge>
                             )}
                             {asg.isReliever && (
-                              <Badge variant="neutral" className="text-[8px] py-0.5 px-1 bg-secondary/20 text-secondary border-none">Reliever</Badge>
+                              <Badge variant="neutral" className="text-[8px] py-0.5 px-1 bg-secondary/20 text-secondary border-none font-bold">Reliever</Badge>
+                            )}
+                            {asg.status !== "ASSIGNED" && asg.status !== "WARNING_APPROVED" && (
+                              <Badge variant={asg.status === "LEAVE" ? "warning" : asg.status === "CANCELLED" ? "neutral" : "error"} className="text-[8px] py-0.5 px-1 uppercase font-bold">
+                                {asg.status}
+                              </Badge>
                             )}
                           </div>
                         </div>
                       ))}
 
-                      {Array.from({ length: Math.max(0, slot.requiredCount - slot.assignedCount) }).map((_, i) => (
+                      {/* Permanent vacant slots */}
+                      {Array.from({ length: slot.vacantCount !== undefined ? slot.vacantCount : Math.max(0, slot.requiredCount - slot.assignedCount) }).map((_, i) => (
                         <div
-                          key={i}
+                          key={`vacant-${i}`}
                           className="border-2 border-dashed border-outline-variant/40 rounded-lg p-4 flex flex-col items-center justify-center text-center text-on-surface-variant min-h-[70px] bg-surface-container-lowest/50"
                         >
                           <span className="material-symbols-outlined text-[18px] text-outline-variant/60 animate-pulse">add_circle</span>
                           <span className="text-[9px] font-bold mt-1 uppercase tracking-wider text-outline-variant/60">Drop Guard here</span>
+                        </div>
+                      ))}
+
+                      {/* Reliever vacant slots */}
+                      {isSecurity && Array.from({ length: slot.vacantRelieverCount !== undefined ? slot.vacantRelieverCount : Math.max(0, (slot.requiredRelieverCount || 0) - (slot.assignedRelieverCount || 0)) }).map((_, i) => (
+                        <div
+                          key={`reliever-vacant-${i}`}
+                          className="border-2 border-dashed border-secondary/30 rounded-lg p-4 flex flex-col items-center justify-center text-center text-secondary min-h-[70px] bg-secondary/5"
+                        >
+                          <span className="material-symbols-outlined text-[18px] text-secondary/60 animate-pulse">support_agent</span>
+                          <span className="text-[9px] font-bold mt-1 uppercase tracking-wider text-secondary/60">Drop Reliever here</span>
                         </div>
                       ))}
                     </div>

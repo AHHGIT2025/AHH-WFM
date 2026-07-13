@@ -212,5 +212,17 @@ describe('AHH WFM API Routes Verification', () => {
     expect(res.status).toBe(200);
     expect(res.data).toHaveProperty('success', true);
     expect(res.data).toHaveProperty('slots');
+    expect(res.data).toHaveProperty('warningDetails');
+    expect(Array.isArray(res.data.slots)).toBe(true);
+
+    if (res.data.slots.length > 0) {
+      const slot = res.data.slots[0];
+      expect(slot).toHaveProperty('assignedCount');
+      expect(slot).toHaveProperty('assignedRelieverCount');
+      expect(slot).toHaveProperty('vacantCount');
+      expect(slot).toHaveProperty('vacantRelieverCount');
+      expect(slot).toHaveProperty('requiredCount');
+      expect(slot).toHaveProperty('requiredRelieverCount');
+    }
   });
 });
