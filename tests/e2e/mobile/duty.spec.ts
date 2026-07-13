@@ -31,6 +31,10 @@ test.describe('AHH WFM Mobile E2E Duty & Geofence Checks', () => {
     const currentDutyHeader = page.locator('span:has-text("Current Duty")');
     await expect(currentDutyHeader).toBeVisible();
 
+    // Ensure Guard Tour link is hidden for White Collar (admin)
+    const guardTourLink = page.locator('a[href="/guard-tour"]');
+    await expect(guardTourLink).not.toBeVisible();
+    
     // 4. White Collar current duty shows default office when configured (e.g. Doha Headquarters)
     const dutyText = await page.locator('p.text-sm.font-bold.truncate').first().textContent();
     console.log('Resolved current duty:', dutyText);

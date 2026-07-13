@@ -151,6 +151,10 @@ describe('AHH WFM API Routes Verification', () => {
     if (res.status === 200) {
       expect(res.data).toHaveProperty('employeeCategory');
       expect(res.data).toHaveProperty('currentDuty');
+      expect(res.data).toHaveProperty('featureEntitlements');
+      expect(res.data.featureEntitlements).toHaveProperty('canPunch');
+      expect(res.data.featureEntitlements).toHaveProperty('canViewGuardTour');
+      expect(res.data.featureEntitlements).toHaveProperty('canScanCheckpoint');
     } else {
       expect([302, 307, 401]).toContain(res.status);
     }

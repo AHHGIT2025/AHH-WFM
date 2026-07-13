@@ -144,6 +144,17 @@ async function runDbIntegrityTests() {
     }
   });
 
+  // Rule 12: ManpowerLocationUnit Guard Tour schema validation
+  await runTest('ManpowerLocationUnit Guard Tour schema fields default values', async () => {
+    const units = await prisma.manpowerLocationUnit.findMany();
+    for (const unit of units) {
+      if (unit.guardTourRequired === undefined || unit.checkpointRequired === undefined || unit.checkpointCount === undefined) {
+        throw new Error(`Location Unit ${unit.id} is missing Guard Tour schema properties`);
+      }
+    }
+    console.log(`       (Verified: ${units.length} location units check out with default schema fields)`);
+  });
+
   console.log(`\n=== DB Integrity Tests Completed with Exit Code ${exitCode} ===`);
   process.exit(exitCode);
 }

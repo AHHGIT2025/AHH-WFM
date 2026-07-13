@@ -73,6 +73,22 @@ export default function MobileDashboard() {
           <span className="text-[11px] font-bold text-on-surface text-center">Request Leave</span>
         </Link>
       </div>
+ 
+      {/* Guard Tour Card */}
+      {data?.featureEntitlements?.canViewGuardTour ? (
+        <Link href="/guard-tour" className="bg-[#58002a] text-white p-4 rounded-2xl flex items-center justify-between shadow-sm active:scale-95 transition-transform">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
+              <span className="material-symbols-outlined text-[20px]">verified_user</span>
+            </div>
+            <div>
+              <p className="text-sm font-bold">Guard Tour Patrol</p>
+              <p className="text-[10px] text-white/80">Active duty checkpoint scans</p>
+            </div>
+          </div>
+          <span className="material-symbols-outlined">chevron_right</span>
+        </Link>
+      ) : null}
 
       {/* Quick Stats */}
       <div className="bg-surface border border-outline-variant/30 rounded-2xl p-4 shadow-sm">

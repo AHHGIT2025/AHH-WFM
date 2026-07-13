@@ -1408,18 +1408,21 @@ model SecuritySiteAllowance {
 }
 
 model ManpowerLocationUnit {
-  id                String                     @id @default(uuid())
-  code              String?                    @unique
-  siteId            String
-  site              ManpowerSite               @relation(fields: [siteId], references: [id], onDelete: Cascade)
-  name              String
-  type              String                     // "GATE" | "POST" | "ZONE" | "AREA" | "FLOOR" | "BLOCK" | "CLEANING_ZONE"
-  operationType     String                     // "SECURITY_GUARDING" | "FACILITY_MANAGEMENT"
-  isActive          Boolean                    @default(true)
-  remarks           String?                    @db.Text
-  createdAt         DateTime                   @default(now())
-  updatedAt         DateTime                   @updatedAt
-  shiftRequirements ManpowerShiftRequirement[]
+  id                 String                     @id @default(uuid())
+  code               String?                    @unique
+  siteId             String
+  site               ManpowerSite               @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  name               String
+  type               String                     // "GATE" | "POST" | "ZONE" | "AREA" | "FLOOR" | "BLOCK" | "CLEANING_ZONE"
+  operationType      String                     // "SECURITY_GUARDING" | "FACILITY_MANAGEMENT"
+  isActive           Boolean                    @default(true)
+  remarks            String?                    @db.Text
+  guardTourRequired  Boolean                    @default(false)
+  checkpointRequired Boolean                    @default(false)
+  checkpointCount    Int                        @default(0)
+  createdAt          DateTime                   @default(now())
+  updatedAt          DateTime                   @updatedAt
+  shiftRequirements  ManpowerShiftRequirement[]
 }
 
 model ManpowerCategory {

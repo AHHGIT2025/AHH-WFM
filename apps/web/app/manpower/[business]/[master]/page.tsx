@@ -101,6 +101,9 @@ export default function ManpowerMasterPage() {
   // Patrol Operations Board states
   const [coordinatorSubTab, setCoordinatorSubTab] = useState<"board" | "assignments">("board");
   const [siteActiveTab, setSiteActiveTab] = useState("overview");
+  const [siteLocationUnits, setSiteLocationUnits] = useState<any[]>([]);
+  const [editingLocationUnitId, setEditingLocationUnitId] = useState<string | null>(null);
+  const [locationUnitForm, setLocationUnitForm] = useState<any>({ name: "", type: "POST", remarks: "", guardTourRequired: false, checkpointRequired: false, checkpointCount: 0 });
   const [siteToDisable, setSiteToDisable] = useState<any | null>(null);
   const [deleteSiteReport, setDeleteSiteReport] = useState<any | null>(null);
   const [patrolVisitsList, setPatrolVisitsList] = useState<any[]>([]);
@@ -943,6 +946,11 @@ export default function ManpowerMasterPage() {
       if (res.ok) {
         setSiteSummary(await res.json());
       }
+      const unitsRes = await fetch(`/api/v1/security/sites/${siteId}/location-units`);
+      if (unitsRes.ok) {
+        const result = await unitsRes.json();
+        setSiteLocationUnits(result.locationUnits || []);
+      }
     } catch (e) {
       console.error("Failed to load site details", e);
     }
@@ -1547,6 +1555,7 @@ export default function ManpowerMasterPage() {
             { id: "overview", label: "Overview", icon: "dashboard" },
             { id: "contract_requirements", label: "Contract Roster Reqs", icon: "description" },
             { id: "site_shifts", label: "Configure Site Shifts", icon: "schedule" },
+            { id: "location_units", label: "Zones & Posts", icon: "location_on" },
             { id: "site_allowance", label: "Site Allowance Setup", icon: "payments" },
             { id: "project_instructions", label: "Project Instructions", icon: "assignment" }
           ].map(tab => (
@@ -1893,6 +1902,294 @@ export default function ManpowerMasterPage() {
                   )}
                 </tbody>
               </table>
+            </div>
+          </div>
+        )}
+
+        {siteActiveTab === "location_units" && (
+          <div className="space-y-6">
+            <div className="flex justify-between items-center">
+              <h4 className="text-sm font-black text-primary">Zones, Gates & Posts Master</h4>
+              <button
+                onClick={() => {
+                  setEditingLocationUnitId(null);
+                  setLocationUnitForm({
+                    name: "",
+                    type: "POST",
+                    remarks: "",
+                    guardTourRequired: false,
+                    checkpointRequired: false,
+                    checkpointCount: 0
+                  });
+                }}
+                className="px-3 py-1.5 bg-primary text-white hover:bg-primary/95 rounded-lg text-xs font-bold transition-all flex items-center gap-1"
+              >
+                <span className="material-symbols-outlined text-[16px]">add</span>
+                Add New Post/Zone
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* List Section */}
+              <div className="md:col-span-2 space-y-4">
+                <div className="border border-outline-variant rounded-lg overflow-hidden bg-surface text-xs">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-surface-container-low border-b border-outline-variant text-[9px] uppercase text-on-surface-variant font-bold">
+                        <th className="px-3 py-2">Name / Code</th>
+                        <th className="px-3 py-2">Type</th>
+                        <th className="px-3 py-2">Guard Tour</th>
+                        <th className="px-3 py-2">Checkpoints</th>
+                        <th className="px-3 py-2 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-outline-variant/60">
+                      {siteLocationUnits.length === 0 ? (
+                        <tr>
+                          <td colSpan={5} className="p-4 text-center text-on-surface-variant italic">No zones, gates, or posts configured for this site yet.</td>
+                        </tr>
+                      ) : (
+                        siteLocationUnits.map((unit: any) => (
+                          <tr key={unit.id} className="hover:bg-surface-container-lowest">
+                            <td className="px-3 py-2">
+                              <div className="font-semibold text-on-surface">{unit.name}</div>
+                              <div className="text-[10px] text-on-surface-variant font-mono">{unit.code}</div>
+                            </td>
+                            <td className="px-3 py-2">
+                              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-primary/10 text-primary uppercase">
+                                {unit.type}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2">
+                              {unit.type === "POST" ? (
+                                <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                  unit.guardTourRequired 
+                                    ? "bg-status-success/15 text-status-success" 
+                                    : "bg-on-surface-variant/10 text-on-surface-variant"
+                                }`}>
+                                  {unit.guardTourRequired ? "REQUIRED" : "OPTIONAL"}
+                                </span>
+                              ) : (
+                                <span className="text-on-surface-variant/40">—</span>
+                              )}
+                            </td>
+                            <td className="px-3 py-2">
+                              {unit.type === "POST" ? (
+                                <div className="flex items-center gap-1.5">
+                                  <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                    unit.checkpointRequired 
+                                      ? "bg-status-success/15 text-status-success" 
+                                      : "bg-on-surface-variant/10 text-on-surface-variant"
+                                  }`}>
+                                    {unit.checkpointRequired ? "YES" : "NO"}
+                                  </span>
+                                  {unit.checkpointRequired && (
+                                    <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-primary/10 text-primary">
+                                      Count: {unit.checkpointCount || 0}
+                                    </span>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-on-surface-variant/40">—</span>
+                              )}
+                            </td>
+                            <td className="px-3 py-2 text-right space-x-2">
+                              <button
+                                onClick={() => {
+                                  setEditingLocationUnitId(unit.id);
+                                  setLocationUnitForm({
+                                    name: unit.name,
+                                    type: unit.type,
+                                    remarks: unit.remarks || "",
+                                    guardTourRequired: !!unit.guardTourRequired,
+                                    checkpointRequired: !!unit.checkpointRequired,
+                                    checkpointCount: unit.checkpointCount || 0
+                                  });
+                                }}
+                                className="text-primary hover:underline font-bold"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                onClick={async () => {
+                                  if (!confirm("Are you sure you want to delete this location unit?")) return;
+                                  try {
+                                    const res = await fetch(`/api/v1/security/sites/${selectedSiteId}/location-units/${unit.id}`, {
+                                      method: "DELETE"
+                                    });
+                                    if (res.ok) {
+                                      loadSiteDetails(selectedSiteId!);
+                                    } else {
+                                      const err = await res.json();
+                                      alert(err.error || "Failed to delete unit");
+                                    }
+                                  } catch (e) {
+                                    alert("Server connection failed");
+                                  }
+                                }}
+                                className="text-status-error hover:underline font-bold"
+                              >
+                                Delete
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Form Section */}
+              <div className="bg-surface border border-outline-variant p-4 rounded-xl flex flex-col gap-4 text-xs">
+                <h5 className="font-bold text-primary text-xs border-b border-outline-variant pb-2">
+                  {editingLocationUnitId ? "Edit Post/Zone" : "Create New Post/Zone"}
+                </h5>
+                <form
+                  onSubmit={async (e) => {
+                    e.preventDefault();
+                    const url = editingLocationUnitId 
+                      ? `/api/v1/security/sites/${selectedSiteId}/location-units/${editingLocationUnitId}`
+                      : `/api/v1/security/sites/${selectedSiteId}/location-units`;
+                    const method = editingLocationUnitId ? "PATCH" : "POST";
+
+                    try {
+                      const res = await fetch(url, {
+                        method,
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(locationUnitForm)
+                      });
+                      if (res.ok) {
+                        setEditingLocationUnitId(null);
+                        setLocationUnitForm({
+                          name: "",
+                          type: "POST",
+                          remarks: "",
+                          guardTourRequired: false,
+                          checkpointRequired: false,
+                          checkpointCount: 0
+                        });
+                        loadSiteDetails(selectedSiteId!);
+                      } else {
+                        const err = await res.json();
+                        alert(err.error || "Failed to save location unit");
+                      }
+                    } catch (e) {
+                      alert("Server connection failed");
+                    }
+                  }}
+                  className="space-y-4"
+                >
+                  <div className="flex flex-col gap-1">
+                    <label className="font-bold text-on-surface-variant text-[10px] uppercase">Name</label>
+                    <input
+                      type="text"
+                      required
+                      value={locationUnitForm.name}
+                      onChange={(e) => setLocationUnitForm({ ...locationUnitForm, name: e.target.value })}
+                      placeholder="e.g. Lobby Post, CCTV Zone A"
+                      className="px-3 py-2 border border-outline-variant rounded-lg bg-surface text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1">
+                    <label className="font-bold text-on-surface-variant text-[10px] uppercase">Type</label>
+                    <select
+                      value={locationUnitForm.type}
+                      onChange={(e) => setLocationUnitForm({ ...locationUnitForm, type: e.target.value })}
+                      className="px-3 py-2 border border-outline-variant rounded-lg bg-surface text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    >
+                      <option value="POST">POST (Guard Position)</option>
+                      <option value="GATE">GATE</option>
+                      <option value="ZONE">ZONE</option>
+                      <option value="AREA">AREA</option>
+                      <option value="FLOOR">FLOOR</option>
+                      <option value="BLOCK">BLOCK</option>
+                    </select>
+                  </div>
+
+                  {locationUnitForm.type === "POST" && (
+                    <div className="bg-surface-container-low p-3 rounded-lg border border-outline-variant/60 space-y-3">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          id="guardTourRequired"
+                          checked={locationUnitForm.guardTourRequired}
+                          onChange={(e) => setLocationUnitForm({ ...locationUnitForm, guardTourRequired: e.target.checked })}
+                          className="w-4 h-4 rounded text-primary focus:ring-primary/20"
+                        />
+                        <label htmlFor="guardTourRequired" className="font-bold text-on-surface text-[10px] uppercase cursor-pointer select-none">
+                          Guard Tour Required
+                        </label>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          id="checkpointRequired"
+                          checked={locationUnitForm.checkpointRequired}
+                          onChange={(e) => setLocationUnitForm({ ...locationUnitForm, checkpointRequired: e.target.checked })}
+                          className="w-4 h-4 rounded text-primary focus:ring-primary/20"
+                        />
+                        <label htmlFor="checkpointRequired" className="font-bold text-on-surface text-[10px] uppercase cursor-pointer select-none">
+                          Checkpoint Required
+                        </label>
+                      </div>
+
+                      {locationUnitForm.checkpointRequired && (
+                        <div className="flex flex-col gap-1 pt-1">
+                          <label className="font-bold text-on-surface-variant text-[9px] uppercase">Checkpoint Count</label>
+                          <input
+                            type="number"
+                            min="0"
+                            value={locationUnitForm.checkpointCount}
+                            onChange={(e) => setLocationUnitForm({ ...locationUnitForm, checkpointCount: parseInt(e.target.value, 10) || 0 })}
+                            className="px-3 py-1.5 border border-outline-variant rounded-lg bg-surface text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 w-24"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="flex flex-col gap-1">
+                    <label className="font-bold text-on-surface-variant text-[10px] uppercase">Remarks</label>
+                    <textarea
+                      value={locationUnitForm.remarks}
+                      onChange={(e) => setLocationUnitForm({ ...locationUnitForm, remarks: e.target.value })}
+                      placeholder="Optional notes..."
+                      className="px-3 py-2 border border-outline-variant rounded-lg bg-surface text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 h-16 resize-none"
+                    />
+                  </div>
+
+                  <div className="flex gap-2 justify-end pt-2">
+                    {editingLocationUnitId && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditingLocationUnitId(null);
+                          setLocationUnitForm({
+                            name: "",
+                            type: "POST",
+                            remarks: "",
+                            guardTourRequired: false,
+                            checkpointRequired: false,
+                            checkpointCount: 0
+                          });
+                        }}
+                        className="px-3 py-1.5 border border-outline-variant rounded-lg font-bold hover:bg-surface-container-low transition-all text-xs"
+                      >
+                        Cancel
+                      </button>
+                    )}
+                    <button
+                      type="submit"
+                      className="px-4 py-1.5 bg-primary text-white hover:bg-primary/95 rounded-lg font-bold transition-all text-xs"
+                    >
+                      {editingLocationUnitId ? "Save Changes" : "Create"}
+                    </button>
+                  </div>
+                </form>
+              </div>
             </div>
           </div>
         )}

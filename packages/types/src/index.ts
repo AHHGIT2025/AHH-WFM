@@ -1205,6 +1205,9 @@ export interface ManpowerLocationUnit {
   type: "GATE" | "POST" | "ZONE" | "AREA" | "FLOOR" | "BLOCK" | "CLEANING_ZONE" | string;
   operationType: OperationType;
   isActive: boolean;
+  guardTourRequired?: boolean;
+  checkpointRequired?: boolean;
+  checkpointCount?: number;
   createdAt?: string;
   updatedAt?: string;
 }

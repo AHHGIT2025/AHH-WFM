@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "../../../../lib/auth";
 import { prisma } from "@ahh-wfm/database";
+import { readDb } from "@ahh-wfm/mock-data";
 
 export async function GET() {
   try {
@@ -312,7 +313,54 @@ export async function GET() {
       }
     }
 
-    console.log("[DASHBOARD] currentDutyStr:", currentDutyStr);
+    // ─────────────────────────────────────────────────────
+    // FEATURE ENTITLEMENTS LOGIC
+    // ─────────────────────────────────────────────────────
+    const isDbConnected = () => {
+      return process.env.DATABASE_URL !== undefined;
+    };
+
+    let canViewGuardTour = false;
+    if (isSecurityGuard && activeAssignmentObj && siteObj) {
+      const siteId = siteObj.id;
+      if (isDbConnected()) {
+        const units = await prisma.manpowerLocationUnit.findMany({
+          where: {
+            siteId,
+            type: "POST",
+            OR: [
+              { guardTourRequired: true },
+              { checkpointRequired: true }
+            ]
+          }
+        });
+        if (units.length > 0) {
+          canViewGuardTour = true;
+        }
+      } else {
+        const db = readDb() as any;
+        const units = (db.manpowerLocationUnits || []).filter((u: any) => 
+          u.siteId === siteId && 
+          u.type === "POST" && 
+          (u.guardTourRequired === true || u.checkpointRequired === true)
+        );
+        if (units.length > 0) {
+          canViewGuardTour = true;
+        }
+      }
+    }
+
+    const featureEntitlements = {
+      canPunch: (dutySource as string) !== "NONE",
+      canViewGuardTour,
+      canScanCheckpoint: false,
+      canReportIncident: false,
+      canSubmitHandover: false,
+      canViewFMWorkOrder: false,
+      canViewLeave: true
+    };
+
+    console.log("[DASHBOARD] currentDutyStr:", currentDutyStr, "| canViewGuardTour:", canViewGuardTour);
 
     return NextResponse.json({
       employeeId: employee.id,
@@ -338,6 +386,8 @@ export async function GET() {
       } : null,
       activeAssignment: activeAssignmentObj,
       site: siteObj,
+
+      featureEntitlements,
 
       // Legacy currentDuty object for backward compatibility
       currentDutyObject: currentDutyObj,

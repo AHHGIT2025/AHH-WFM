@@ -18,8 +18,8 @@
     "diagnose:users": "ts-node -T -P scripts/tsconfig.json scripts/diagnose-orphan-users.ts",
     "cleanup:users": "ts-node -T -P scripts/tsconfig.json scripts/cleanup-orphan-users.ts",
     "test:e2e": "npx playwright test --config=tests/playwright.config.ts",
-    "test:e2e:web": "npx playwright test --config=tests/playwright.config.ts tests/e2e/web",
-    "test:e2e:mobile": "npx playwright test --config=tests/playwright.config.ts tests/e2e/mobile",
+    "test:e2e:web": "npx playwright test --config=tests/playwright.config.ts --project=chromium tests/e2e/web",
+    "test:e2e:mobile": "npx playwright test --config=tests/playwright.config.ts --project=mobile-chrome tests/e2e/mobile",
     "test:api": "npx jest --config=tests/jest.api.config.js tests/api",
     "test:db": "npx ts-node --project tests/tsconfig.test.json tests/db/db-integrity.spec.ts",
     "test:perf": "k6 run tests/performance/api-smoke.js"

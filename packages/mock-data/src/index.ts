@@ -698,10 +698,10 @@ let memoryDb: {
     { id: "MSITE-002", projectId: "MPROJ-002", name: "HMC General Hospital", lat: 25.2905, lng: 51.5201, radiusMeters: 100.0, operationType: "FACILITY_MANAGEMENT", isActive: true, gatePassRequired: false }
   ],
   manpowerLocationUnits: [
-    { id: "MLOC-001", siteId: "MSITE-001", name: "Main Gate", type: "GATE", operationType: "SECURITY_GUARDING", isActive: true },
-    { id: "MLOC-002", siteId: "MSITE-001", name: "Reception Post", type: "POST", operationType: "SECURITY_GUARDING", isActive: true },
-    { id: "MLOC-003", siteId: "MSITE-002", name: "Zone A - Lobby", type: "AREA", operationType: "FACILITY_MANAGEMENT", isActive: true },
-    { id: "MLOC-004", siteId: "MSITE-002", name: "Floor 2 - Wards", type: "FLOOR", operationType: "FACILITY_MANAGEMENT", isActive: true }
+    { id: "MLOC-001", siteId: "MSITE-001", name: "Main Gate", type: "GATE", operationType: "SECURITY_GUARDING", isActive: true, guardTourRequired: false, checkpointRequired: false, checkpointCount: 0 },
+    { id: "MLOC-002", siteId: "MSITE-001", name: "Reception Post", type: "POST", operationType: "SECURITY_GUARDING", isActive: true, guardTourRequired: true, checkpointRequired: true, checkpointCount: 5 },
+    { id: "MLOC-003", siteId: "MSITE-002", name: "Zone A - Lobby", type: "AREA", operationType: "FACILITY_MANAGEMENT", isActive: true, guardTourRequired: false, checkpointRequired: false, checkpointCount: 0 },
+    { id: "MLOC-004", siteId: "MSITE-002", name: "Floor 2 - Wards", type: "FLOOR", operationType: "FACILITY_MANAGEMENT", isActive: true, guardTourRequired: false, checkpointRequired: false, checkpointCount: 0 }
   ],
   manpowerCategories: [
     { id: "PM-CAT-SEC-01", name: "CCTV Operator", code: "CCTV", operationType: "SECURITY_GUARDING", isActive: true, isBlueCollar: true, isDeployableInRoster: true, canWorkOvertime: true, requiresMoiLicense: true, requiresGatePassCheck: false },
@@ -10453,6 +10453,9 @@ export const mockDb = {
       remarks: dataWithCode.remarks || "",
       operationType: dataWithCode.operationType || "SECURITY_GUARDING",
       isActive: dataWithCode.isActive !== false,
+      guardTourRequired: !!dataWithCode.guardTourRequired,
+      checkpointRequired: !!dataWithCode.checkpointRequired,
+      checkpointCount: Number(dataWithCode.checkpointCount || 0),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
@@ -10460,6 +10463,44 @@ export const mockDb = {
     db.manpowerLocationUnits.push(newRecord);
     writeDb(db);
     return newRecord;
+  },
+  updateManpowerLocationUnit: async (id: string, data: any): Promise<any> => {
+    if (isDbConnected()) {
+      const res = await prismaClient.manpowerLocationUnit.update({
+        where: { id },
+        data
+      });
+      return { ...res, createdAt: res.createdAt?.toISOString(), updatedAt: res.updatedAt?.toISOString() };
+    }
+    const db = readDb();
+    db.manpowerLocationUnits = db.manpowerLocationUnits || [];
+    const idx = db.manpowerLocationUnits.findIndex((x: any) => x.id === id);
+    if (idx === -1) return null;
+    const updated = {
+      ...db.manpowerLocationUnits[idx],
+      ...data,
+      guardTourRequired: data.guardTourRequired !== undefined ? !!data.guardTourRequired : db.manpowerLocationUnits[idx].guardTourRequired,
+      checkpointRequired: data.checkpointRequired !== undefined ? !!data.checkpointRequired : db.manpowerLocationUnits[idx].checkpointRequired,
+      checkpointCount: data.checkpointCount !== undefined ? Number(data.checkpointCount) : db.manpowerLocationUnits[idx].checkpointCount,
+      updatedAt: new Date().toISOString()
+    };
+    db.manpowerLocationUnits[idx] = updated;
+    writeDb(db);
+    return updated;
+  },
+  deleteManpowerLocationUnit: async (id: string): Promise<boolean> => {
+    if (isDbConnected()) {
+      await prismaClient.manpowerLocationUnit.delete({
+        where: { id }
+      });
+      return true;
+    }
+    const db = readDb();
+    db.manpowerLocationUnits = db.manpowerLocationUnits || [];
+    const countBefore = db.manpowerLocationUnits.length;
+    db.manpowerLocationUnits = db.manpowerLocationUnits.filter((x: any) => x.id !== id);
+    writeDb(db);
+    return db.manpowerLocationUnits.length < countBefore;
   },
 
   // --- Manpower Categories CRUD ---
