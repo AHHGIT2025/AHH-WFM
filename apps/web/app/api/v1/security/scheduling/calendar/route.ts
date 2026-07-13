@@ -248,8 +248,8 @@ export async function GET(request: Request) {
         });
       });
 
-      const activePermanent = mappedAssignments.filter((a: any) => !a.isReliever && a.status === "ASSIGNED");
-      const activeReliever = mappedAssignments.filter((a: any) => a.isReliever && a.status === "ASSIGNED");
+      const activePermanent = mappedAssignments.filter((a: any) => !a.isReliever && isActiveRosterAssignment(a));
+      const activeReliever = mappedAssignments.filter((a: any) => a.isReliever && isActiveRosterAssignment(a));
 
       const assignedCount = activePermanent.length;
       const assignedRelieverCount = activeReliever.length;
@@ -311,7 +311,10 @@ export async function GET(request: Request) {
         }
 
         if (asg.validationStatus === "WARNING") {
-          warningDeployments++;
+          const isOverridden = asgStatus === "WARNING_OVERRIDDEN";
+          if (!isOverridden) {
+            warningDeployments++;
+          }
           (asg.validationIssues || []).forEach((issue: string) => {
             let type = "ELIGIBILITY";
             if (issue.toUpperCase().includes("LEAVE")) type = "LEAVE";
@@ -320,15 +323,15 @@ export async function GET(request: Request) {
             else if (issue.toUpperCase().includes("ALLOCATION")) type = "ALLOCATION";
 
             warningDetails.push({
-              type,
-              severity: "WARNING",
+              type: isOverridden ? "OVERRIDDEN" : type,
+              severity: isOverridden ? "INFO" : "WARNING",
               employeeId: asg.employeeId,
               employeeName: asg.employeeName,
               date: startDateStr,
               shiftId: slot.id,
               siteId: slot.siteId,
-              reason: issue,
-              suggestedAction: "Review warning details or enter an override justification to proceed."
+              reason: isOverridden ? `${issue} (Overridden: ${asg.overrideReason})` : issue,
+              suggestedAction: isOverridden ? "No action required (Overridden)" : "Review warning details or enter an override justification to proceed."
             });
           });
         }

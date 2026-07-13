@@ -911,8 +911,8 @@ export default function DeploymentCalendarPage() {
               <h3 className="text-base font-extrabold text-status-error mt-1">{summary.vacantPosts}</h3>
             </Card>
             <Card className="p-3 flex flex-col justify-between border-l-2 border-l-status-warning bg-surface-container-lowest shadow-sm">
-              <span className="text-[9px] font-bold text-on-surface-variant uppercase tracking-wider">Warnings</span>
-              <h3 className="text-base font-extrabold text-status-warning mt-1">{summary.warningDeployments}</h3>
+              <span className="text-[9px] font-bold text-on-surface-variant uppercase tracking-wider">Compliance Alerts</span>
+              <h3 className="text-base font-extrabold text-status-warning mt-1">{warningDetails.length}</h3>
             </Card>
             <Card className="p-3 flex flex-col justify-between border-l-2 border-l-secondary bg-surface-container-lowest shadow-sm">
               <span className="text-[9px] font-bold text-on-surface-variant uppercase tracking-wider">Relievers</span>
@@ -973,8 +973,8 @@ export default function DeploymentCalendarPage() {
                     <div key={idx} className="py-3 first:pt-0 last:pb-0 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
                       <div className="flex flex-col gap-1">
                         <div className="flex flex-wrap items-center gap-2">
-                          <Badge variant={w.severity === "BLOCKING" ? "error" : "warning"} className="text-[8px] py-0.5 px-1 uppercase tracking-wider font-extrabold">
-                            {w.type} · {w.severity}
+                          <Badge variant={w.severity === "BLOCKING" ? "error" : w.severity === "INFO" ? "neutral" : "warning"} className="text-[8px] py-0.5 px-1 uppercase tracking-wider font-extrabold">
+                            {w.type} · {w.severity === "INFO" ? "NON-BLOCKING" : w.severity}
                           </Badge>
                           <span className="font-bold text-on-surface">{w.employeeName} ({w.employeeId})</span>
                           <span className="text-[10px] text-on-surface-variant font-mono bg-surface-container-low px-1 py-0.5 rounded">

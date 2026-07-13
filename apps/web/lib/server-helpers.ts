@@ -38,22 +38,44 @@ export async function getActiveSiteShiftConfigs(siteId: string, db?: any) {
 
 export function getAssignmentOperationalStatus(asg: any): string {
   if (!asg) return "ASSIGNED";
+  
   const warnings = asg.validationWarnings;
+  let derivedStatus: string | undefined = undefined;
+  
   if (warnings && typeof warnings === "object") {
-    const status = (warnings as any).status || (warnings as any).assignmentStatus;
-    if (status) return status;
+    const warnStatus = (warnings as any).status || (warnings as any).assignmentStatus;
+    if (warnStatus && ["CANCELLED", "LEAVE", "ABSENT", "NO_SHOW", "REPLACED", "REMOVED", "INACTIVE"].includes(warnStatus.toUpperCase())) {
+      return warnStatus.toUpperCase();
+    }
+    if ((warnings as any).status === "WARNING_APPROVED" || (warnings as any).status === "WARNING_OVERRIDDEN" || (warnings as any).overriddenBy) {
+      derivedStatus = "WARNING_OVERRIDDEN";
+    }
   }
-  return asg.status || "ASSIGNED";
+
+  const rawStatus = asg.status;
+  if (rawStatus && ["CANCELLED", "LEAVE", "ABSENT", "NO_SHOW", "REPLACED", "REMOVED", "INACTIVE"].includes(rawStatus.toUpperCase())) {
+    return rawStatus.toUpperCase();
+  }
+
+  if (rawStatus === "WARNING_APPROVED" || rawStatus === "WARNING_OVERRIDDEN" || rawStatus === "OVERRIDDEN" || rawStatus === "APPROVED_WITH_WARNING") {
+    return "WARNING_OVERRIDDEN";
+  }
+
+  if (derivedStatus) {
+    return derivedStatus;
+  }
+
+  return "ASSIGNED";
 }
 
 export function isActiveRosterAssignment(asg: any): boolean {
   const status = getAssignmentOperationalStatus(asg);
-  return status === "ASSIGNED";
+  return !["CANCELLED", "LEAVE", "ABSENT", "NO_SHOW", "REPLACED", "REMOVED", "INACTIVE"].includes(status);
 }
 
 export function isInactiveRosterAssignment(asg: any): boolean {
   const status = getAssignmentOperationalStatus(asg);
-  return ["CANCELLED", "LEAVE", "ABSENT", "NO_SHOW", "REPLACED"].includes(status);
+  return ["CANCELLED", "LEAVE", "ABSENT", "NO_SHOW", "REPLACED", "REMOVED", "INACTIVE"].includes(status);
 }
 
 export function isRelieverAssignment(asg: any): boolean {
