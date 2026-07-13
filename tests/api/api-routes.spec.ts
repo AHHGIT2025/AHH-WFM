@@ -14,6 +14,7 @@ describe('AHH WFM API Routes Verification', () => {
       // Authenticate against Web portal
       const csrfRes = await axios.get(`${WEB_URL}/api/auth/csrf`);
       const csrfToken = csrfRes.data.csrfToken;
+      const webCsrfCookie = csrfRes.headers['set-cookie']?.map(c => c.split(';')[0]).join('; ');
       
       const loginRes = await axios.post(
         `${WEB_URL}/api/auth/callback/credentials`,
@@ -25,7 +26,8 @@ describe('AHH WFM API Routes Verification', () => {
         }).toString(),
         {
           headers: {
-            'Content-Type': 'application/x-www-form-urlencoded'
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Cookie': webCsrfCookie
           },
           validateStatus: () => true
         }
@@ -40,6 +42,7 @@ describe('AHH WFM API Routes Verification', () => {
       // Authenticate against Mobile portal
       const mobileCsrf = await axios.get(`${MOBILE_URL}/api/auth/csrf`);
       const mobileToken = mobileCsrf.data.csrfToken;
+      const mobileCsrfCookie = mobileCsrf.headers['set-cookie']?.map(c => c.split(';')[0]).join('; ');
       
       const mobileLogin = await axios.post(
         `${MOBILE_URL}/api/auth/callback/credentials`,
@@ -51,7 +54,8 @@ describe('AHH WFM API Routes Verification', () => {
         }).toString(),
         {
           headers: {
-            'Content-Type': 'application/x-www-form-urlencoded'
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Cookie': mobileCsrfCookie
           },
           validateStatus: () => true
         }
@@ -138,7 +142,7 @@ describe('AHH WFM API Routes Verification', () => {
     const res = await axios.get(`${WEB_URL}/api/v1/security/sites/${site.id}/dependencies`, { headers, validateStatus: () => true });
     
     if (res.status === 200) {
-      expect(res.data).toHaveProperty('hasDependencies');
+      expect(res.data).toHaveProperty('canDeactivate');
     } else {
       expect([302, 307, 401]).toContain(res.status);
     }
@@ -165,9 +169,38 @@ describe('AHH WFM API Routes Verification', () => {
     const res = await axios.get(`${MOBILE_URL}/api/v1/allowed-punch-locations`, { headers, validateStatus: () => true });
     
     if (res.status === 200) {
-      expect(res.data).toHaveProperty('allowedLocations');
+      expect(res.data).toHaveProperty('geofenceConfigured');
     } else {
       expect([302, 307, 401]).toContain(res.status);
     }
+  });
+
+  test('POST /api/v1/auth/change-password (mobile) unauthenticated should return 401', async () => {
+    const res = await axios.post(`${MOBILE_URL}/api/v1/auth/change-password`, {
+      currentPassword: 'WrongPassword',
+      newPassword: 'NewPassword123!',
+      confirmPassword: 'NewPassword123!'
+    }, { validateStatus: () => true });
+    
+    expect(res.status).toBe(401);
+    expect(res.data).toHaveProperty('success', false);
+    expect(res.data).toHaveProperty('error', 'Authentication required');
+  });
+
+  test('POST /api/v1/auth/change-password (mobile) authenticated with wrong current password should return 400', async () => {
+    if (!mobileCookie) {
+      console.log('Skipping authenticated mobile password change test: no mobile cookie');
+      return;
+    }
+    const headers = { Cookie: mobileCookie };
+    const res = await axios.post(`${MOBILE_URL}/api/v1/auth/change-password`, {
+      currentPassword: 'WrongCurrentPassword',
+      newPassword: 'NewPassword123!',
+      confirmPassword: 'NewPassword123!'
+    }, { headers, validateStatus: () => true });
+
+    expect(res.status).toBe(400);
+    expect(res.data).toHaveProperty('success', false);
+    expect(res.data).toHaveProperty('error', 'Current password is incorrect');
   });
 });

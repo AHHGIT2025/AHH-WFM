@@ -37,8 +37,16 @@ export default function MobileChangePasswordPage() {
         body: JSON.stringify({ currentPassword, newPassword, confirmPassword })
       });
 
+      if (res.status === 404) {
+        setError("Password change service is not available.");
+        return;
+      }
+
       if (res.ok) {
         setSuccess(true);
+        setCurrentPassword("");
+        setNewPassword("");
+        setConfirmPassword("");
         // Force session update so mustChangePassword becomes false
         await update({ mustChangePassword: false });
         setTimeout(() => {
@@ -46,8 +54,19 @@ export default function MobileChangePasswordPage() {
           router.refresh();
         }, 1500);
       } else {
-        const err = await res.json();
-        setError(err.error || "Failed to change password.");
+        let errorMessage = "Failed to change password.";
+        try {
+          const contentType = res.headers.get("content-type");
+          if (contentType && contentType.includes("application/json")) {
+            const err = await res.json();
+            errorMessage = err.message || err.error || errorMessage;
+          } else {
+            errorMessage = `Server error (${res.status}). Please try again later.`;
+          }
+        } catch (parseErr) {
+          errorMessage = `Server error (${res.status}). Please try again later.`;
+        }
+        setError(errorMessage);
       }
     } catch (err) {
       setError("Network error. Please try again.");

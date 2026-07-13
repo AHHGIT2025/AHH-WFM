@@ -1946,7 +1946,7 @@ export default function ManpowerMasterPage() {
                     <tbody className="divide-y divide-outline-variant/60">
                       {siteLocationUnits.length === 0 ? (
                         <tr>
-                          <td colSpan={5} className="p-4 text-center text-on-surface-variant italic">No zones, gates, or posts configured for this site yet.</td>
+                          <td colSpan={5} className="p-4 text-center text-on-surface-variant italic">No zones/posts configured yet. Add the first Zone, Gate, or Post.</td>
                         </tr>
                       ) : (
                         siteLocationUnits.map((unit: any) => (
@@ -6707,6 +6707,9 @@ export default function ManpowerMasterPage() {
                         <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Worksite Name</th>
                         <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Project</th>
                         <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Radius (Meters)</th>
+                        <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Zones/Posts</th>
+                        <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Guard Tour</th>
+                        <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Checkpoints</th>
                         <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Gate Pass Req.</th>
                         <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Status</th>
                         {canManage && <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Actions</th>}
@@ -7056,6 +7059,7 @@ export default function ManpowerMasterPage() {
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
+                                setSiteActiveTab("location_units");
                                 loadSiteDetails(item.id);
                               }}
                               className="text-primary hover:underline font-mono uppercase text-xs"
@@ -7066,6 +7070,21 @@ export default function ManpowerMasterPage() {
                           <td className="px-4 py-3 text-xs font-bold text-on-surface">{item.name}</td>
                           <td className="px-4 py-3 text-xs text-on-surface">{item.project?.name || item.projectId}</td>
                           <td className="px-4 py-3 text-xs text-on-surface-variant">{item.radiusMeters}m</td>
+                          <td className="px-4 py-3 text-xs font-semibold text-on-surface">
+                            {(item.locationUnits || []).length} units
+                          </td>
+                          <td className="px-4 py-3 text-xs">
+                            {(item.locationUnits || []).some((u: any) => u.type === "POST" && u.guardTourRequired) ? (
+                              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-status-success/15 text-status-success">
+                                ENABLED
+                              </span>
+                            ) : (
+                              <span className="text-on-surface-variant/40">—</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-xs font-semibold text-on-surface">
+                            {(item.locationUnits || []).filter((u: any) => u.type === "POST" && u.checkpointRequired).reduce((sum: number, u: any) => sum + (u.checkpointCount || 0), 0)} checkpoints
+                          </td>
                           <td className="px-4 py-3 text-xs">
                             <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${item.gatePassRequired ? "bg-primary-container/10 text-primary" : "bg-surface-container-high/40 text-on-surface-variant"}`}>
                               {item.gatePassRequired ? "Yes" : "No"}
@@ -7077,10 +7096,23 @@ export default function ManpowerMasterPage() {
                             </span>
                           </td>
                           {canManage && (
-                            <td className="px-4 py-3 text-xs">
+                            <td className="px-4 py-3 text-xs whitespace-nowrap">
                               <button
-                                onClick={() => startEdit(item)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSiteActiveTab("location_units");
+                                  loadSiteDetails(item.id);
+                                }}
                                 className="text-primary hover:underline text-[11px] font-bold mr-3"
+                              >
+                                Manage Zones & Posts
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  startEdit(item);
+                                }}
+                                className="text-secondary hover:underline text-[11px] font-bold"
                               >
                                 Edit
                               </button>

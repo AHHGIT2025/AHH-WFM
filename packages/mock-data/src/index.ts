@@ -10347,7 +10347,7 @@ export const mockDb = {
       if (operationType) where.operationType = operationType;
       const res = await prismaClient.manpowerSite.findMany({
         where,
-        include: { project: true },
+        include: { project: true, locationUnits: true },
         orderBy: { name: "asc" }
       });
       return res.map((x: any) => ({ ...x, createdAt: x.createdAt?.toISOString(), updatedAt: x.updatedAt?.toISOString() }));
@@ -10357,7 +10357,8 @@ export const mockDb = {
     if (operationType) res = res.filter((x: any) => x.operationType === operationType);
     return res.map((x: any) => ({
       ...x,
-      project: (db.manpowerProjects || []).find((p: any) => p.id === x.projectId)
+      project: (db.manpowerProjects || []).find((p: any) => p.id === x.projectId),
+      locationUnits: (db.manpowerLocationUnits || []).filter((u: any) => u.siteId === x.id)
     }));
   },
   createManpowerSite: async (data: any): Promise<any> => {
