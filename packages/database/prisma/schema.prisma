@@ -124,6 +124,8 @@ model Employee {
   coordinatorAssignments SecurityProjectCoordinatorAssignment[]
   siteInspections       SecuritySiteInspection[]
   securityOperationalEmployee SecurityOperationalEmployee?
+  secfacEmployeeAssignments   SecfacAssignment[]         @relation("SecfacEmployeeAssignments")
+  secfacSupervisorAssignments SecfacAssignment[]         @relation("SecfacSupervisorAssignments")
 }
 
 model Department {
@@ -1250,6 +1252,7 @@ model ManpowerClient {
   tradeLicenseAuthority         String?
   secfacCheckpoints             SecfacCheckpoint[]
   secfacChecklistTemplates      SecfacChecklistTemplate[]
+  secfacAssignments             SecfacAssignment[]
 }
 
 model ManpowerContract {
@@ -1339,6 +1342,7 @@ model ManpowerProject {
   manpowerAllocations   SecurityProjectManpowerAllocation[]
   secfacCheckpoints      SecfacCheckpoint[]
   secfacChecklistTemplates SecfacChecklistTemplate[]
+  secfacAssignments      SecfacAssignment[]
 }
 
 model ManpowerSite {
@@ -1368,6 +1372,7 @@ model ManpowerSite {
   siteAllowances        SecuritySiteAllowance[]
   secfacCheckpoints      SecfacCheckpoint[]
   secfacChecklistTemplates SecfacChecklistTemplate[]
+  secfacAssignments      SecfacAssignment[]
 }
 
 model SecuritySiteManpowerAllocation {
@@ -1431,6 +1436,7 @@ model ManpowerLocationUnit {
   shiftRequirements  ManpowerShiftRequirement[]
   secfacCheckpoints  SecfacCheckpoint[]
   secfacChecklistTemplates SecfacChecklistTemplate[]
+  secfacAssignments  SecfacAssignment[]
 }
 
 model ManpowerCategory {
@@ -1961,6 +1967,7 @@ model SecfacCheckpoint {
   updatedAt       DateTime @updatedAt
 
   secfacChecklistTemplates SecfacChecklistTemplate[]
+  secfacAssignments        SecfacAssignment[]
 
   @@index([operationType])
   @@index([siteId])
@@ -2005,6 +2012,7 @@ model SecfacChecklistTemplate {
   updatedAt       DateTime @updatedAt
 
   items           SecfacChecklistItem[]
+  secfacAssignments SecfacAssignment[]
 
   @@index([operationType])
   @@index([clientId])
@@ -2039,6 +2047,59 @@ model SecfacChecklistItem {
 
   @@index([templateId])
   @@index([itemType])
+  @@index([isActive])
+}
+
+model SecfacAssignment {
+  id              String   @id @default(uuid())
+
+  operationType   String   // SECURITY_GUARDING | FACILITY_MANAGEMENT
+
+  clientId        String?
+  client          ManpowerClient? @relation(fields: [clientId], references: [id], onDelete: SetNull)
+
+  projectId       String?
+  project         ManpowerProject? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  siteId          String
+  site            ManpowerSite @relation(fields: [siteId], references: [id], onDelete: Restrict)
+
+  locationUnitId  String?
+  locationUnit    ManpowerLocationUnit? @relation(fields: [locationUnitId], references: [id], onDelete: SetNull)
+
+  checkpointId    String?
+  checkpoint      SecfacCheckpoint? @relation(fields: [checkpointId], references: [id], onDelete: SetNull)
+
+  templateId      String?
+  template        SecfacChecklistTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+
+  employeeId      String
+  employee        Employee @relation("SecfacEmployeeAssignments", fields: [employeeId], references: [id], onDelete: Cascade)
+
+  supervisorId    String?
+  supervisor      Employee? @relation("SecfacSupervisorAssignments", fields: [supervisorId], references: [id], onDelete: SetNull)
+
+  assignmentName  String
+  assignmentCode  String?
+  description     String?  @db.Text
+
+  scheduledStart  DateTime
+  scheduledEnd    DateTime
+
+  status          String   @default("PENDING") // PENDING | IN_PROGRESS | COMPLETED | SKIPPED | OVERDUE
+
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([operationType])
+  @@index([employeeId])
+  @@index([supervisorId])
+  @@index([siteId])
+  @@index([locationUnitId])
+  @@index([checkpointId])
+  @@index([templateId])
+  @@index([status])
   @@index([isActive])
 }
 

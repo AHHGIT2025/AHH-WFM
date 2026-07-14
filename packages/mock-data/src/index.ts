@@ -1,4 +1,4 @@
-import { Employee, AttendanceRecord, Shift, LeaveRequest, SapMapping, SyncLog, Announcement, Department, Worksite, AttendanceCorrection, LeaveType, LeaveBalance, LeaveBalanceLedger, Holiday, LeaveApprovalWorkflow, LeaveApprovalStep, LeaveApprovalHistory, LeaveApprovalDelegation, ShiftTemplate, RotationTemplate, ShiftAssignment, ShiftSwapRequest, OvertimeRate, SapConnection, SapSyncJob, SapSyncLog, SapFieldMapping, SapRetryQueue, SapExportQueue, SapPayrollStage, SapReconciliationLog, SapPayrollPeriodLock, SecurityOperationsPeriodLock, SavedReport, ReportExportLog, UserActivityLog, ProductionCheckLog, BackupJob, BackupAuditLog, EmployeeBulkUploadJob, SystemRole, SystemPermission, RolePermission, UserRoleAssignment, BlueCollarPositionCategory, Project, ProjectSite, EmployeeDeployment, Designation, TradeClassification, LocationMaster, CostCenter, ShiftRelieverAssignment, RelieverStandbyRule, Company, AllowedPunchLocation, EmployeeAllowedPunchLocation, ManpowerClient, ManpowerContract, ManpowerProject, ManpowerSite, ManpowerLocationUnit, ManpowerCategory, ManpowerShiftRequirement, ManpowerDeployment, ManpowerDeploymentAssignment, ManpowerRelieverAssignment, UserOperationAccess, SecfacCheckpoint, SecfacChecklistTemplate, SecfacChecklistItem } from "@ahh-wfm/types";
+import { Employee, AttendanceRecord, Shift, LeaveRequest, SapMapping, SyncLog, Announcement, Department, Worksite, AttendanceCorrection, LeaveType, LeaveBalance, LeaveBalanceLedger, Holiday, LeaveApprovalWorkflow, LeaveApprovalStep, LeaveApprovalHistory, LeaveApprovalDelegation, ShiftTemplate, RotationTemplate, ShiftAssignment, ShiftSwapRequest, OvertimeRate, SapConnection, SapSyncJob, SapSyncLog, SapFieldMapping, SapRetryQueue, SapExportQueue, SapPayrollStage, SapReconciliationLog, SapPayrollPeriodLock, SecurityOperationsPeriodLock, SavedReport, ReportExportLog, UserActivityLog, ProductionCheckLog, BackupJob, BackupAuditLog, EmployeeBulkUploadJob, SystemRole, SystemPermission, RolePermission, UserRoleAssignment, BlueCollarPositionCategory, Project, ProjectSite, EmployeeDeployment, Designation, TradeClassification, LocationMaster, CostCenter, ShiftRelieverAssignment, RelieverStandbyRule, Company, AllowedPunchLocation, EmployeeAllowedPunchLocation, ManpowerClient, ManpowerContract, ManpowerProject, ManpowerSite, ManpowerLocationUnit, ManpowerCategory, ManpowerShiftRequirement, ManpowerDeployment, ManpowerDeploymentAssignment, ManpowerRelieverAssignment, UserOperationAccess, SecfacCheckpoint, SecfacChecklistTemplate, SecfacChecklistItem, SecfacAssignment } from "@ahh-wfm/types";
 const uuid = () => Math.random().toString(36).substring(2) + Date.now().toString(36);
 import * as fs from "fs";
 import * as path from "path";
@@ -473,6 +473,7 @@ let memoryDb: {
   secfacCheckpoints: SecfacCheckpoint[];
   secfacChecklistTemplates: SecfacChecklistTemplate[];
   secfacChecklistItems: SecfacChecklistItem[];
+  secfacAssignments: SecfacAssignment[];
 } = {
   companies: [
     { id: "COMP-001", companyCode: "AHH", companyName: "Al Hattab Holding", isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
@@ -755,7 +756,8 @@ let memoryDb: {
   securityOperationalEmployees: [],
   secfacCheckpoints: [],
   secfacChecklistTemplates: [],
-  secfacChecklistItems: []
+  secfacChecklistItems: [],
+  secfacAssignments: []
 };
 
 // Seeding helper to pre-fill MySQL with mock data if it is empty
@@ -11147,6 +11149,360 @@ export const mockDb = {
     if (idx === -1) return false;
     db.secfacChecklistTemplates[idx].isActive = false;
     db.secfacChecklistTemplates[idx].updatedAt = new Date().toISOString();
+    writeDb(db);
+    return true;
+  },
+
+  getSecfacAssignments: async (filters: any = {}): Promise<any[]> => {
+    if (isDbConnected()) {
+      const where: any = {};
+      if (filters.operationType) where.operationType = filters.operationType;
+      if (filters.clientId) where.clientId = filters.clientId;
+      if (filters.projectId) where.projectId = filters.projectId;
+      if (filters.siteId) where.siteId = filters.siteId;
+      if (filters.locationUnitId) where.locationUnitId = filters.locationUnitId;
+      if (filters.checkpointId) where.checkpointId = filters.checkpointId;
+      if (filters.templateId) where.templateId = filters.templateId;
+      if (filters.employeeId) where.employeeId = filters.employeeId;
+      if (filters.supervisorId) where.supervisorId = filters.supervisorId;
+      if (filters.status) where.status = filters.status;
+      if (filters.isActive !== undefined) {
+        where.isActive = filters.isActive === 'true' || filters.isActive === true;
+      }
+      if (filters.scheduledStart) {
+        where.scheduledStart = { gte: new Date(filters.scheduledStart) };
+      }
+      if (filters.scheduledEnd) {
+        where.scheduledEnd = { lte: new Date(filters.scheduledEnd) };
+      }
+
+      const res = await prismaClient.secfacAssignment.findMany({
+        where,
+        include: {
+          client: true,
+          project: true,
+          site: true,
+          locationUnit: true,
+          checkpoint: true,
+          template: {
+            include: {
+              items: {
+                where: { isActive: true },
+                orderBy: { sortOrder: "asc" }
+              }
+            }
+          },
+          employee: true,
+          supervisor: true
+        },
+        orderBy: { scheduledStart: "asc" }
+      });
+      return res.map((x: any) => ({
+        ...x,
+        scheduledStart: x.scheduledStart?.toISOString(),
+        scheduledEnd: x.scheduledEnd?.toISOString(),
+        createdAt: x.createdAt?.toISOString(),
+        updatedAt: x.updatedAt?.toISOString()
+      }));
+    }
+
+    const db = readDb();
+    let res = db.secfacAssignments || [];
+
+    if (filters.operationType) res = res.filter((x: any) => x.operationType === filters.operationType);
+    if (filters.clientId) res = res.filter((x: any) => x.clientId === filters.clientId);
+    if (filters.projectId) res = res.filter((x: any) => x.projectId === filters.projectId);
+    if (filters.siteId) res = res.filter((x: any) => x.siteId === filters.siteId);
+    if (filters.locationUnitId) res = res.filter((x: any) => x.locationUnitId === filters.locationUnitId);
+    if (filters.checkpointId) res = res.filter((x: any) => x.checkpointId === filters.checkpointId);
+    if (filters.templateId) res = res.filter((x: any) => x.templateId === filters.templateId);
+    if (filters.employeeId) res = res.filter((x: any) => x.employeeId === filters.employeeId);
+    if (filters.supervisorId) res = res.filter((x: any) => x.supervisorId === filters.supervisorId);
+    if (filters.status) res = res.filter((x: any) => x.status === filters.status);
+    if (filters.isActive !== undefined) {
+      const activeBool = filters.isActive === 'true' || filters.isActive === true;
+      res = res.filter((x: any) => x.isActive === activeBool);
+    }
+    if (filters.scheduledStart) {
+      const gteTime = new Date(filters.scheduledStart).getTime();
+      res = res.filter((x: any) => new Date(x.scheduledStart).getTime() >= gteTime);
+    }
+    if (filters.scheduledEnd) {
+      const lteTime = new Date(filters.scheduledEnd).getTime();
+      res = res.filter((x: any) => new Date(x.scheduledEnd).getTime() <= lteTime);
+    }
+
+    return res.map((x: any) => {
+      const template = (db.secfacChecklistTemplates || []).find((t: any) => t.id === x.templateId) || null;
+      let finalTemplate = null;
+      if (template) {
+        const items = (db.secfacChecklistItems || [])
+          .filter((item: any) => item.templateId === template.id && item.isActive !== false)
+          .sort((a: any, b: any) => a.sortOrder - b.sortOrder);
+        finalTemplate = { ...template, items };
+      }
+
+      return {
+        ...x,
+        client: (db.manpowerClients || []).find((c: any) => c.id === x.clientId) || null,
+        project: (db.manpowerProjects || []).find((p: any) => p.id === x.projectId) || null,
+        site: (db.manpowerSites || []).find((s: any) => s.id === x.siteId) || null,
+        locationUnit: (db.manpowerLocationUnits || []).find((l: any) => l.id === x.locationUnitId) || null,
+        checkpoint: (db.secfacCheckpoints || []).find((cp: any) => cp.id === x.checkpointId) || null,
+        template: finalTemplate,
+        employee: (db.employees || []).find((e: any) => e.id === x.employeeId) || null,
+        supervisor: (db.employees || []).find((e: any) => e.id === x.supervisorId) || null
+      };
+    });
+  },
+
+  getSecfacAssignmentById: async (id: string): Promise<any> => {
+    if (isDbConnected()) {
+      const res = await prismaClient.secfacAssignment.findUnique({
+        where: { id },
+        include: {
+          client: true,
+          project: true,
+          site: true,
+          locationUnit: true,
+          checkpoint: true,
+          template: {
+            include: {
+              items: {
+                where: { isActive: true },
+                orderBy: { sortOrder: "asc" }
+              }
+            }
+          },
+          employee: true,
+          supervisor: true
+        }
+      });
+      if (!res) return null;
+      return {
+        ...res,
+        scheduledStart: res.scheduledStart?.toISOString(),
+        scheduledEnd: res.scheduledEnd?.toISOString(),
+        createdAt: res.createdAt?.toISOString(),
+        updatedAt: res.updatedAt?.toISOString()
+      };
+    }
+
+    const db = readDb();
+    const x = (db.secfacAssignments || []).find((item: any) => item.id === id);
+    if (!x) return null;
+
+    const template = (db.secfacChecklistTemplates || []).find((t: any) => t.id === x.templateId) || null;
+    let finalTemplate = null;
+    if (template) {
+      const items = (db.secfacChecklistItems || [])
+        .filter((item: any) => item.templateId === template.id && item.isActive !== false)
+        .sort((a: any, b: any) => a.sortOrder - b.sortOrder);
+      finalTemplate = { ...template, items };
+    }
+
+    return {
+      ...x,
+      client: (db.manpowerClients || []).find((c: any) => c.id === x.clientId) || null,
+      project: (db.manpowerProjects || []).find((p: any) => p.id === x.projectId) || null,
+      site: (db.manpowerSites || []).find((s: any) => s.id === x.siteId) || null,
+      locationUnit: (db.manpowerLocationUnits || []).find((l: any) => l.id === x.locationUnitId) || null,
+      checkpoint: (db.secfacCheckpoints || []).find((cp: any) => cp.id === x.checkpointId) || null,
+      template: finalTemplate,
+      employee: (db.employees || []).find((e: any) => e.id === x.employeeId) || null,
+      supervisor: (db.employees || []).find((e: any) => e.id === x.supervisorId) || null
+    };
+  },
+
+  createSecfacAssignment: async (data: any): Promise<any> => {
+    const id = data.id || `sasn-${Date.now()}`;
+    const scheduledStart = new Date(data.scheduledStart);
+    const scheduledEnd = new Date(data.scheduledEnd);
+
+    if (isDbConnected()) {
+      const res = await prismaClient.secfacAssignment.create({
+        data: {
+          id,
+          operationType: data.operationType,
+          clientId: data.clientId || null,
+          projectId: data.projectId || null,
+          siteId: data.siteId,
+          locationUnitId: data.locationUnitId || null,
+          checkpointId: data.checkpointId || null,
+          templateId: data.templateId || null,
+          employeeId: data.employeeId,
+          supervisorId: data.supervisorId || null,
+          assignmentName: data.assignmentName,
+          assignmentCode: data.assignmentCode || null,
+          description: data.description || null,
+          scheduledStart,
+          scheduledEnd,
+          status: data.status || "PENDING",
+          isActive: data.isActive !== false
+        },
+        include: {
+          client: true,
+          project: true,
+          site: true,
+          locationUnit: true,
+          checkpoint: true,
+          template: true,
+          employee: true,
+          supervisor: true
+        }
+      });
+      return {
+        ...res,
+        scheduledStart: res.scheduledStart?.toISOString(),
+        scheduledEnd: res.scheduledEnd?.toISOString(),
+        createdAt: res.createdAt?.toISOString(),
+        updatedAt: res.updatedAt?.toISOString()
+      };
+    }
+
+    const db = readDb();
+    db.secfacAssignments = db.secfacAssignments || [];
+
+    const newAssignment = {
+      id,
+      operationType: data.operationType,
+      clientId: data.clientId || null,
+      projectId: data.projectId || null,
+      siteId: data.siteId,
+      locationUnitId: data.locationUnitId || null,
+      checkpointId: data.checkpointId || null,
+      templateId: data.templateId || null,
+      employeeId: data.employeeId,
+      supervisorId: data.supervisorId || null,
+      assignmentName: data.assignmentName,
+      assignmentCode: data.assignmentCode || null,
+      description: data.description || null,
+      scheduledStart: scheduledStart.toISOString(),
+      scheduledEnd: scheduledEnd.toISOString(),
+      status: data.status || "PENDING",
+      isActive: data.isActive !== false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    db.secfacAssignments.push(newAssignment);
+    writeDb(db);
+
+    return {
+      ...newAssignment,
+      client: (db.manpowerClients || []).find((c: any) => c.id === data.clientId) || null,
+      project: (db.manpowerProjects || []).find((p: any) => p.id === data.projectId) || null,
+      site: (db.manpowerSites || []).find((s: any) => s.id === data.siteId) || null,
+      locationUnit: (db.manpowerLocationUnits || []).find((l: any) => l.id === data.locationUnitId) || null,
+      checkpoint: (db.secfacCheckpoints || []).find((cp: any) => cp.id === data.checkpointId) || null,
+      template: (db.secfacChecklistTemplates || []).find((t: any) => t.id === data.templateId) || null,
+      employee: (db.employees || []).find((e: any) => e.id === data.employeeId) || null,
+      supervisor: (db.employees || []).find((e: any) => e.id === data.supervisorId) || null
+    };
+  },
+
+  updateSecfacAssignment: async (id: string, data: any): Promise<any> => {
+    if (isDbConnected()) {
+      const updateData: any = {
+        operationType: data.operationType,
+        clientId: data.clientId !== undefined ? data.clientId : undefined,
+        projectId: data.projectId !== undefined ? data.projectId : undefined,
+        siteId: data.siteId !== undefined ? data.siteId : undefined,
+        locationUnitId: data.locationUnitId !== undefined ? data.locationUnitId : undefined,
+        checkpointId: data.checkpointId !== undefined ? data.checkpointId : undefined,
+        templateId: data.templateId !== undefined ? data.templateId : undefined,
+        employeeId: data.employeeId !== undefined ? data.employeeId : undefined,
+        supervisorId: data.supervisorId !== undefined ? data.supervisorId : undefined,
+        assignmentName: data.assignmentName !== undefined ? data.assignmentName : undefined,
+        assignmentCode: data.assignmentCode !== undefined ? data.assignmentCode : undefined,
+        description: data.description !== undefined ? data.description : undefined,
+        scheduledStart: data.scheduledStart ? new Date(data.scheduledStart) : undefined,
+        scheduledEnd: data.scheduledEnd ? new Date(data.scheduledEnd) : undefined,
+        status: data.status !== undefined ? data.status : undefined,
+        isActive: data.isActive !== undefined ? !!data.isActive : undefined
+      };
+
+      const res = await prismaClient.secfacAssignment.update({
+        where: { id },
+        data: updateData,
+        include: {
+          client: true,
+          project: true,
+          site: true,
+          locationUnit: true,
+          checkpoint: true,
+          template: true,
+          employee: true,
+          supervisor: true
+        }
+      });
+
+      return {
+        ...res,
+        scheduledStart: res.scheduledStart?.toISOString(),
+        scheduledEnd: res.scheduledEnd?.toISOString(),
+        createdAt: res.createdAt?.toISOString(),
+        updatedAt: res.updatedAt?.toISOString()
+      };
+    }
+
+    const db = readDb();
+    db.secfacAssignments = db.secfacAssignments || [];
+
+    const aIdx = db.secfacAssignments.findIndex((x: any) => x.id === id);
+    if (aIdx === -1) throw new Error("Assignment not found");
+
+    const updatedAssignment = {
+      ...db.secfacAssignments[aIdx],
+      operationType: data.operationType !== undefined ? data.operationType : db.secfacAssignments[aIdx].operationType,
+      clientId: data.clientId !== undefined ? data.clientId : db.secfacAssignments[aIdx].clientId,
+      projectId: data.projectId !== undefined ? data.projectId : db.secfacAssignments[aIdx].projectId,
+      siteId: data.siteId !== undefined ? data.siteId : db.secfacAssignments[aIdx].siteId,
+      locationUnitId: data.locationUnitId !== undefined ? data.locationUnitId : db.secfacAssignments[aIdx].locationUnitId,
+      checkpointId: data.checkpointId !== undefined ? data.checkpointId : db.secfacAssignments[aIdx].checkpointId,
+      templateId: data.templateId !== undefined ? data.templateId : db.secfacAssignments[aIdx].templateId,
+      employeeId: data.employeeId !== undefined ? data.employeeId : db.secfacAssignments[aIdx].employeeId,
+      supervisorId: data.supervisorId !== undefined ? data.supervisorId : db.secfacAssignments[aIdx].supervisorId,
+      assignmentName: data.assignmentName !== undefined ? data.assignmentName : db.secfacAssignments[aIdx].assignmentName,
+      assignmentCode: data.assignmentCode !== undefined ? data.assignmentCode : db.secfacAssignments[aIdx].assignmentCode,
+      description: data.description !== undefined ? data.description : db.secfacAssignments[aIdx].description,
+      scheduledStart: data.scheduledStart ? new Date(data.scheduledStart).toISOString() : db.secfacAssignments[aIdx].scheduledStart,
+      scheduledEnd: data.scheduledEnd ? new Date(data.scheduledEnd).toISOString() : db.secfacAssignments[aIdx].scheduledEnd,
+      status: data.status !== undefined ? data.status : db.secfacAssignments[aIdx].status,
+      isActive: data.isActive !== undefined ? !!data.isActive : db.secfacAssignments[aIdx].isActive,
+      updatedAt: new Date().toISOString()
+    };
+
+    db.secfacAssignments[aIdx] = updatedAssignment;
+    writeDb(db);
+
+    return {
+      ...updatedAssignment,
+      client: (db.manpowerClients || []).find((c: any) => c.id === updatedAssignment.clientId) || null,
+      project: (db.manpowerProjects || []).find((p: any) => p.id === updatedAssignment.projectId) || null,
+      site: (db.manpowerSites || []).find((s: any) => s.id === updatedAssignment.siteId) || null,
+      locationUnit: (db.manpowerLocationUnits || []).find((l: any) => l.id === updatedAssignment.locationUnitId) || null,
+      checkpoint: (db.secfacCheckpoints || []).find((cp: any) => cp.id === updatedAssignment.checkpointId) || null,
+      template: (db.secfacChecklistTemplates || []).find((t: any) => t.id === updatedAssignment.templateId) || null,
+      employee: (db.employees || []).find((e: any) => e.id === updatedAssignment.employeeId) || null,
+      supervisor: (db.employees || []).find((e: any) => e.id === updatedAssignment.supervisorId) || null
+    };
+  },
+
+  deleteSecfacAssignment: async (id: string): Promise<boolean> => {
+    if (isDbConnected()) {
+      await prismaClient.secfacAssignment.update({
+        where: { id },
+        data: { isActive: false }
+      });
+      return true;
+    }
+    const db = readDb();
+    db.secfacAssignments = db.secfacAssignments || [];
+    const idx = db.secfacAssignments.findIndex((x: any) => x.id === id);
+    if (idx === -1) return false;
+    db.secfacAssignments[idx].isActive = false;
+    db.secfacAssignments[idx].updatedAt = new Date().toISOString();
     writeDb(db);
     return true;
   },

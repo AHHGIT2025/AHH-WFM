@@ -1552,5 +1552,35 @@ export interface SecfacChecklistItem {
   updatedAt?: string;
 }
 
+export interface SecfacAssignment {
+  id: string;
+  operationType: string;
+  clientId?: string | null;
+  client?: ManpowerClient | null;
+  projectId?: string | null;
+  project?: ManpowerProject | null;
+  siteId: string;
+  site?: ManpowerSite | null;
+  locationUnitId?: string | null;
+  locationUnit?: ManpowerLocationUnit | null;
+  checkpointId?: string | null;
+  checkpoint?: SecfacCheckpoint | null;
+  templateId?: string | null;
+  template?: SecfacChecklistTemplate | null;
+  employeeId: string;
+  employee?: Employee | null;
+  supervisorId?: string | null;
+  supervisor?: Employee | null;
+  assignmentName: string;
+  assignmentCode?: string | null;
+  description?: string | null;
+  scheduledStart: string;
+  scheduledEnd: string;
+  status: string;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 
 

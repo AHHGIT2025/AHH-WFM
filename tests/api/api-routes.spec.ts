@@ -547,4 +547,152 @@ describe('AHH WFM API Routes Verification', () => {
       // ignore mock db deletes
     }
   });
+
+  test('GET /api/v1/secfac/assignments unauthenticated should return 401', async () => {
+    const res = await axios.get(`${WEB_URL}/api/v1/secfac/assignments`, { validateStatus: () => true });
+    expect([401, 302, 307]).toContain(res.status);
+  });
+
+  test('POST /api/v1/secfac/assignments unauthenticated should return 401', async () => {
+    const res = await axios.post(`${WEB_URL}/api/v1/secfac/assignments`, {}, { validateStatus: () => true });
+    expect([401, 302, 307]).toContain(res.status);
+  });
+
+  test('POST /api/v1/secfac/assignments missing assignmentName should return 400', async () => {
+    const headers = webCookie ? { Cookie: webCookie } : {};
+    const res = await axios.post(`${WEB_URL}/api/v1/secfac/assignments`, {
+      operationType: 'SECURITY_GUARDING',
+      employeeId: 'EMP-001',
+      siteId: 'test-site-id',
+      scheduledStart: new Date().toISOString(),
+      scheduledEnd: new Date(Date.now() + 3600000).toISOString()
+    }, { headers, validateStatus: () => true });
+    expect(res.status).toBe(400);
+  });
+
+  test('POST /api/v1/secfac/assignments missing operationType should return 400', async () => {
+    const headers = webCookie ? { Cookie: webCookie } : {};
+    const res = await axios.post(`${WEB_URL}/api/v1/secfac/assignments`, {
+      assignmentName: 'Test Assignment Name',
+      employeeId: 'EMP-001',
+      siteId: 'test-site-id',
+      scheduledStart: new Date().toISOString(),
+      scheduledEnd: new Date(Date.now() + 3600000).toISOString()
+    }, { headers, validateStatus: () => true });
+    expect(res.status).toBe(400);
+  });
+
+  test('POST /api/v1/secfac/assignments missing employeeId should return 400', async () => {
+    const headers = webCookie ? { Cookie: webCookie } : {};
+    const res = await axios.post(`${WEB_URL}/api/v1/secfac/assignments`, {
+      assignmentName: 'Test Assignment Name',
+      operationType: 'SECURITY_GUARDING',
+      siteId: 'test-site-id',
+      scheduledStart: new Date().toISOString(),
+      scheduledEnd: new Date(Date.now() + 3600000).toISOString()
+    }, { headers, validateStatus: () => true });
+    expect(res.status).toBe(400);
+  });
+
+  test('POST /api/v1/secfac/assignments missing siteId should return 400', async () => {
+    const headers = webCookie ? { Cookie: webCookie } : {};
+    const res = await axios.post(`${WEB_URL}/api/v1/secfac/assignments`, {
+      assignmentName: 'Test Assignment Name',
+      operationType: 'SECURITY_GUARDING',
+      employeeId: 'EMP-001',
+      scheduledStart: new Date().toISOString(),
+      scheduledEnd: new Date(Date.now() + 3600000).toISOString()
+    }, { headers, validateStatus: () => true });
+    expect(res.status).toBe(400);
+  });
+
+  test('POST /api/v1/secfac/assignments invalid operationType should return 400', async () => {
+    const headers = webCookie ? { Cookie: webCookie } : {};
+    const res = await axios.post(`${WEB_URL}/api/v1/secfac/assignments`, {
+      assignmentName: 'Test Assignment Name',
+      operationType: 'INVALID_OP',
+      employeeId: 'EMP-001',
+      siteId: 'test-site-id',
+      scheduledStart: new Date().toISOString(),
+      scheduledEnd: new Date(Date.now() + 3600000).toISOString()
+    }, { headers, validateStatus: () => true });
+    expect(res.status).toBe(400);
+  });
+
+  test('POST /api/v1/secfac/assignments invalid date order should return 400', async () => {
+    const headers = webCookie ? { Cookie: webCookie } : {};
+    const res = await axios.post(`${WEB_URL}/api/v1/secfac/assignments`, {
+      assignmentName: 'Test Assignment Name',
+      operationType: 'SECURITY_GUARDING',
+      employeeId: 'EMP-001',
+      siteId: 'test-site-id',
+      scheduledStart: new Date(Date.now() + 3600000).toISOString(),
+      scheduledEnd: new Date().toISOString()
+    }, { headers, validateStatus: () => true });
+    expect(res.status).toBe(400);
+  });
+
+  test('GET /api/v1/secfac/assignments authenticated should return 200', async () => {
+    const headers = webCookie ? { Cookie: webCookie } : {};
+    const res = await axios.get(`${WEB_URL}/api/v1/secfac/assignments`, { headers, validateStatus: () => true });
+    expect(res.status).toBe(200);
+    expect(res.data).toHaveProperty('success', true);
+    expect(Array.isArray(res.data.data)).toBe(true);
+  });
+
+  test('POST / PATCH / DELETE /api/v1/secfac/assignments CRUD cycle', async () => {
+    const headers = webCookie ? { Cookie: webCookie } : {};
+    
+    // Create
+    const createRes = await axios.post(`${WEB_URL}/api/v1/secfac/assignments`, {
+      assignmentName: 'Temp Assignment For Test',
+      operationType: 'SECURITY_GUARDING',
+      employeeId: testEmployeeId,
+      siteId: testSiteId,
+      scheduledStart: new Date().toISOString(),
+      scheduledEnd: new Date(Date.now() + 7200000).toISOString(),
+      status: 'PENDING'
+    }, { headers, validateStatus: () => true });
+
+    if (createRes.status !== 201) {
+      console.error('Failed to create assignment in test:', createRes.data);
+    }
+
+    expect(createRes.status).toBe(201);
+    expect(createRes.data.success).toBe(true);
+    const createdId = createRes.data.data.id;
+    expect(createdId).toBeDefined();
+
+    // Verify GET detail
+    const getRes = await axios.get(`${WEB_URL}/api/v1/secfac/assignments/${createdId}`, { headers, validateStatus: () => true });
+    expect(getRes.status).toBe(200);
+    expect(getRes.data.data.assignmentName).toBe('Temp Assignment For Test');
+
+    // Update (PATCH)
+    const updateRes = await axios.patch(`${WEB_URL}/api/v1/secfac/assignments/${createdId}`, {
+      assignmentName: 'Temp Assignment Updated',
+      status: 'IN_PROGRESS'
+    }, { headers, validateStatus: () => true });
+    expect(updateRes.status).toBe(200);
+    expect(updateRes.data.data.assignmentName).toBe('Temp Assignment Updated');
+    expect(updateRes.data.data.status).toBe('IN_PROGRESS');
+
+    // Delete (Soft-delete / set isActive=false)
+    const delRes = await axios.delete(`${WEB_URL}/api/v1/secfac/assignments/${createdId}`, { headers, validateStatus: () => true });
+    expect(delRes.status).toBe(200);
+
+    // Verify detail is inactive
+    const afterDelRes = await axios.get(`${WEB_URL}/api/v1/secfac/assignments/${createdId}`, { headers, validateStatus: () => true });
+    expect(afterDelRes.status).toBe(200);
+    expect(afterDelRes.data.data.isActive).toBe(false);
+
+    // Hard cleanup in database if DB is connected
+    try {
+      if (prisma) {
+        await prisma.secfacAssignment.delete({ where: { id: createdId } });
+      }
+    } catch (e) {
+      // ignore mock db deletes
+    }
+  });
 });
