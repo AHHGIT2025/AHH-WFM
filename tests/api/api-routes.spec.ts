@@ -401,4 +401,150 @@ describe('AHH WFM API Routes Verification', () => {
       // ignore mock db deletes
     }
   });
+
+  test('GET /api/v1/secfac/checklists unauthenticated should return 401', async () => {
+    const res = await axios.get(`${WEB_URL}/api/v1/secfac/checklists`, { validateStatus: () => true });
+    expect([401, 302, 307]).toContain(res.status);
+  });
+
+  test('POST /api/v1/secfac/checklists unauthenticated should return 401', async () => {
+    const res = await axios.post(`${WEB_URL}/api/v1/secfac/checklists`, {}, { validateStatus: () => true });
+    expect([401, 302, 307]).toContain(res.status);
+  });
+
+  test('POST /api/v1/secfac/checklists missing templateName should return 400', async () => {
+    const headers = webCookie ? { Cookie: webCookie } : {};
+    const res = await axios.post(`${WEB_URL}/api/v1/secfac/checklists`, {
+      operationType: 'SECURITY_GUARDING',
+      items: [{ itemText: 'Test item', itemType: 'YES_NO' }]
+    }, { headers, validateStatus: () => true });
+    expect(res.status).toBe(400);
+  });
+
+  test('POST /api/v1/secfac/checklists missing operationType should return 400', async () => {
+    const headers = webCookie ? { Cookie: webCookie } : {};
+    const res = await axios.post(`${WEB_URL}/api/v1/secfac/checklists`, {
+      templateName: 'Test Template',
+      items: [{ itemText: 'Test item', itemType: 'YES_NO' }]
+    }, { headers, validateStatus: () => true });
+    expect(res.status).toBe(400);
+  });
+
+  test('POST /api/v1/secfac/checklists invalid operationType should return 400', async () => {
+    const headers = webCookie ? { Cookie: webCookie } : {};
+    const res = await axios.post(`${WEB_URL}/api/v1/secfac/checklists`, {
+      templateName: 'Test Template',
+      operationType: 'INVALID_OP',
+      items: [{ itemText: 'Test item', itemType: 'YES_NO' }]
+    }, { headers, validateStatus: () => true });
+    expect(res.status).toBe(400);
+  });
+
+  test('POST /api/v1/secfac/checklists invalid category should return 400', async () => {
+    const headers = webCookie ? { Cookie: webCookie } : {};
+    const res = await axios.post(`${WEB_URL}/api/v1/secfac/checklists`, {
+      templateName: 'Test Template',
+      operationType: 'SECURITY_GUARDING',
+      category: 'INVALID_CAT',
+      items: [{ itemText: 'Test item', itemType: 'YES_NO' }]
+    }, { headers, validateStatus: () => true });
+    expect(res.status).toBe(400);
+  });
+
+  test('POST /api/v1/secfac/checklists invalid checklistType should return 400', async () => {
+    const headers = webCookie ? { Cookie: webCookie } : {};
+    const res = await axios.post(`${WEB_URL}/api/v1/secfac/checklists`, {
+      templateName: 'Test Template',
+      operationType: 'SECURITY_GUARDING',
+      checklistType: 'INVALID_TYPE',
+      items: [{ itemText: 'Test item', itemType: 'YES_NO' }]
+    }, { headers, validateStatus: () => true });
+    expect(res.status).toBe(400);
+  });
+
+  test('POST /api/v1/secfac/checklists missing itemText should return 400', async () => {
+    const headers = webCookie ? { Cookie: webCookie } : {};
+    const res = await axios.post(`${WEB_URL}/api/v1/secfac/checklists`, {
+      templateName: 'Test Template',
+      operationType: 'SECURITY_GUARDING',
+      items: [{ itemType: 'YES_NO' }]
+    }, { headers, validateStatus: () => true });
+    expect(res.status).toBe(400);
+  });
+
+  test('POST /api/v1/secfac/checklists invalid itemType should return 400', async () => {
+    const headers = webCookie ? { Cookie: webCookie } : {};
+    const res = await axios.post(`${WEB_URL}/api/v1/secfac/checklists`, {
+      templateName: 'Test Template',
+      operationType: 'SECURITY_GUARDING',
+      items: [{ itemText: 'Test item', itemType: 'INVALID_ITEM_TYPE' }]
+    }, { headers, validateStatus: () => true });
+    expect(res.status).toBe(400);
+  });
+
+  test('GET /api/v1/secfac/checklists authenticated should return 200', async () => {
+    const headers = webCookie ? { Cookie: webCookie } : {};
+    const res = await axios.get(`${WEB_URL}/api/v1/secfac/checklists`, { headers, validateStatus: () => true });
+    expect(res.status).toBe(200);
+    expect(res.data).toHaveProperty('success', true);
+    expect(Array.isArray(res.data.data)).toBe(true);
+  });
+
+  test('POST / PATCH / DELETE /api/v1/secfac/checklists CRUD cycle', async () => {
+    const headers = webCookie ? { Cookie: webCookie } : {};
+    
+    // Create
+    const createRes = await axios.post(`${WEB_URL}/api/v1/secfac/checklists`, {
+      templateName: 'Temp Checklist For Test',
+      operationType: 'SECURITY_GUARDING',
+      category: 'SECURITY_PATROL',
+      checklistType: 'PATROL',
+      items: [
+        { itemText: 'Check Gate 1 Lock', itemType: 'YES_NO', sortOrder: 0 },
+        { itemText: 'Record Server Temp', itemType: 'NUMBER', sortOrder: 1 }
+      ]
+    }, { headers, validateStatus: () => true });
+
+    expect(createRes.status).toBe(201);
+    expect(createRes.data.success).toBe(true);
+    const createdId = createRes.data.data.id;
+    expect(createdId).toBeDefined();
+    expect(createRes.data.data.items).toHaveLength(2);
+
+    // Verify GET detail
+    const getRes = await axios.get(`${WEB_URL}/api/v1/secfac/checklists/${createdId}`, { headers, validateStatus: () => true });
+    expect(getRes.status).toBe(200);
+    expect(getRes.data.data.templateName).toBe('Temp Checklist For Test');
+    expect(getRes.data.data.items[0].itemText).toBe('Check Gate 1 Lock');
+
+    // Update (PATCH)
+    const updateRes = await axios.patch(`${WEB_URL}/api/v1/secfac/checklists/${createdId}`, {
+      templateName: 'Temp Checklist Updated',
+      items: [
+        { itemText: 'Check Gate 1 Lock Updated', itemType: 'YES_NO', sortOrder: 0 }
+      ]
+    }, { headers, validateStatus: () => true });
+    expect(updateRes.status).toBe(200);
+    expect(updateRes.data.data.templateName).toBe('Temp Checklist Updated');
+    expect(updateRes.data.data.items).toHaveLength(1);
+
+    // Delete (Soft-delete / set isActive=false)
+    const delRes = await axios.delete(`${WEB_URL}/api/v1/secfac/checklists/${createdId}`, { headers, validateStatus: () => true });
+    expect(delRes.status).toBe(200);
+
+    // Verify detail is inactive
+    const afterDelRes = await axios.get(`${WEB_URL}/api/v1/secfac/checklists/${createdId}`, { headers, validateStatus: () => true });
+    expect(afterDelRes.status).toBe(200);
+    expect(afterDelRes.data.data.isActive).toBe(false);
+
+    // Hard cleanup in database if DB is connected
+    try {
+      if (prisma) {
+        await prisma.secfacChecklistItem.deleteMany({ where: { templateId: createdId } });
+        await prisma.secfacChecklistTemplate.delete({ where: { id: createdId } });
+      }
+    } catch (e) {
+      // ignore mock db deletes
+    }
+  });
 });

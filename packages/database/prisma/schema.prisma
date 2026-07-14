@@ -1249,6 +1249,7 @@ model ManpowerClient {
   tradeLicenseExpiryDate        DateTime?
   tradeLicenseAuthority         String?
   secfacCheckpoints             SecfacCheckpoint[]
+  secfacChecklistTemplates      SecfacChecklistTemplate[]
 }
 
 model ManpowerContract {
@@ -1337,6 +1338,7 @@ model ManpowerProject {
   materials              ManpowerProjectMaterialAllocation[]
   manpowerAllocations   SecurityProjectManpowerAllocation[]
   secfacCheckpoints      SecfacCheckpoint[]
+  secfacChecklistTemplates SecfacChecklistTemplate[]
 }
 
 model ManpowerSite {
@@ -1365,6 +1367,7 @@ model ManpowerSite {
   manpowerAllocations   SecuritySiteManpowerAllocation[]
   siteAllowances        SecuritySiteAllowance[]
   secfacCheckpoints      SecfacCheckpoint[]
+  secfacChecklistTemplates SecfacChecklistTemplate[]
 }
 
 model SecuritySiteManpowerAllocation {
@@ -1427,6 +1430,7 @@ model ManpowerLocationUnit {
   updatedAt          DateTime                   @updatedAt
   shiftRequirements  ManpowerShiftRequirement[]
   secfacCheckpoints  SecfacCheckpoint[]
+  secfacChecklistTemplates SecfacChecklistTemplate[]
 }
 
 model ManpowerCategory {
@@ -1956,9 +1960,85 @@ model SecfacCheckpoint {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
+  secfacChecklistTemplates SecfacChecklistTemplate[]
+
   @@index([operationType])
   @@index([siteId])
   @@index([locationUnitId])
+  @@index([isActive])
+}
+
+model SecfacChecklistTemplate {
+  id              String   @id @default(uuid())
+
+  operationType   String   // SECURITY_GUARDING | FACILITY_MANAGEMENT
+
+  clientId        String?
+  client          ManpowerClient? @relation(fields: [clientId], references: [id], onDelete: SetNull)
+
+  projectId       String?
+  project         ManpowerProject? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  siteId          String?
+  site            ManpowerSite? @relation(fields: [siteId], references: [id], onDelete: SetNull)
+
+  locationUnitId  String?
+  locationUnit    ManpowerLocationUnit? @relation(fields: [locationUnitId], references: [id], onDelete: SetNull)
+
+  checkpointId    String?
+  checkpoint      SecfacCheckpoint? @relation(fields: [checkpointId], references: [id], onDelete: SetNull)
+
+  templateName    String
+  templateCode    String?
+  category        String   @default("GENERAL")
+  description     String?  @db.Text
+
+  checklistType   String   @default("STANDARD")
+  version         Int      @default(1)
+
+  requiresNfcScan Boolean  @default(false)
+  requiresPhoto   Boolean  @default(false)
+  requiresGeoFence Boolean @default(false)
+
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  items           SecfacChecklistItem[]
+
+  @@index([operationType])
+  @@index([clientId])
+  @@index([projectId])
+  @@index([siteId])
+  @@index([locationUnitId])
+  @@index([checkpointId])
+  @@index([isActive])
+}
+
+model SecfacChecklistItem {
+  id              String   @id @default(uuid())
+
+  templateId      String
+  template        SecfacChecklistTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  itemText        String
+  itemCode        String?
+  itemType        String   @default("YES_NO")
+  sortOrder       Int      @default(0)
+
+  isRequired      Boolean  @default(true)
+  requiresPhoto   Boolean  @default(false)
+  requiresComment Boolean  @default(false)
+
+  expectedValue   String?
+  helpText        String?  @db.Text
+
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([templateId])
+  @@index([itemType])
   @@index([isActive])
 }
 

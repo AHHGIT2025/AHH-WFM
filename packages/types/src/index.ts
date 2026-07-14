@@ -1507,5 +1507,50 @@ export interface SecfacCheckpoint {
   updatedAt?: string;
 }
 
+export interface SecfacChecklistTemplate {
+  id: string;
+  operationType: string;
+  clientId?: string | null;
+  client?: ManpowerClient | null;
+  projectId?: string | null;
+  project?: ManpowerProject | null;
+  siteId?: string | null;
+  site?: ManpowerSite | null;
+  locationUnitId?: string | null;
+  locationUnit?: ManpowerLocationUnit | null;
+  checkpointId?: string | null;
+  checkpoint?: SecfacCheckpoint | null;
+  templateName: string;
+  templateCode?: string | null;
+  category: string;
+  description?: string | null;
+  checklistType: string;
+  version: number;
+  requiresNfcScan: boolean;
+  requiresPhoto: boolean;
+  requiresGeoFence: boolean;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+  items?: SecfacChecklistItem[];
+}
+
+export interface SecfacChecklistItem {
+  id: string;
+  templateId: string;
+  itemText: string;
+  itemCode?: string | null;
+  itemType: string;
+  sortOrder: number;
+  isRequired: boolean;
+  requiresPhoto: boolean;
+  requiresComment: boolean;
+  expectedValue?: string | null;
+  helpText?: string | null;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 
 

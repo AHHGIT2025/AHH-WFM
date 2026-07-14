@@ -96,9 +96,9 @@ export default function AssignedTasksPage() {
       <div className="bg-primary/5 border border-primary/20 rounded-2xl p-4 flex gap-3 text-xs">
         <span className="material-symbols-outlined text-primary text-[20px] shrink-0">info</span>
         <div>
-          <p className="font-bold text-primary">Coming in next phase</p>
+          <p className="font-bold text-primary">Checklist templates foundation is ready</p>
           <p className="text-on-surface-variant text-[11px] mt-0.5">
-            Shift checklists and dynamic inspection question builders will activate in Phase 1B.
+            Mobile checklist execution will be enabled in a later phase.
           </p>
         </div>
       </div>

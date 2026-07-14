@@ -198,6 +198,25 @@ export default function DeploymentCalendarPage() {
     overrideReason: string;
   } | null>(null);
 
+  // Date range modal states
+  const [isRangeModalOpen, setIsRangeModalOpen] = useState(false);
+  const [rangeForm, setRangeForm] = useState({
+    employeeId: "",
+    assignmentType: "PERMANENT",
+    shiftRequirementId: "",
+    startDate: "",
+    endDate: "",
+    notes: "",
+    overrideReason: "",
+    actingPosition: ""
+  });
+  const [rangeResults, setRangeResults] = useState<{
+    summary: { requestedDates: number; created: number; skipped: number; failed: number };
+    results: { date: string; status: "CREATED" | "SKIPPED" | "FAILED"; reason?: string }[];
+  } | null>(null);
+  const [rangeLoading, setRangeLoading] = useState(false);
+  const [rangeError, setRangeError] = useState("");
+
   const [apiError, setApiError] = useState("");
   const [apiSuccess, setApiSuccess] = useState("");
 
@@ -515,6 +534,62 @@ export default function DeploymentCalendarPage() {
       }
     } catch (err) {
       setApiError("Connection failed");
+    }
+  };
+
+  const handleRangeAssignmentSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setRangeError("");
+    setRangeResults(null);
+    setRangeLoading(true);
+
+    if (!rangeForm.employeeId || !rangeForm.shiftRequirementId || !rangeForm.startDate || !rangeForm.endDate) {
+      setRangeError("Please select employee, shift requirement, start date, and end date.");
+      setRangeLoading(false);
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/v1/security/scheduling/assign", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          employeeId: rangeForm.employeeId,
+          shiftRequirementId: rangeForm.shiftRequirementId,
+          startDate: rangeForm.startDate,
+          endDate: rangeForm.endDate,
+          assignmentType: rangeForm.assignmentType,
+          deploymentMode: rangeForm.assignmentType === "RELIEVER" ? "RELIEVER" : "REGULAR",
+          isReliever: rangeForm.assignmentType === "RELIEVER",
+          notes: rangeForm.notes,
+          overrideReason: rangeForm.overrideReason,
+          actingPosition: rangeForm.assignmentType === "ACTING" ? rangeForm.actingPosition : null
+        })
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        setRangeResults({
+          summary: data.summary,
+          results: data.results
+        });
+        fetchCalendar(false);
+        fetchEmployeePool();
+      } else {
+        if (data.results) {
+          setRangeResults({
+            summary: data.summary,
+            results: data.results
+          });
+          setRangeError(data.message || "Range assignment failed.");
+        } else {
+          setRangeError(data.error || "Failed to process range assignment.");
+        }
+      }
+    } catch (err) {
+      setRangeError("Connection failed.");
+    } finally {
+      setRangeLoading(false);
     }
   };
 
@@ -844,6 +919,30 @@ export default function DeploymentCalendarPage() {
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
             />
+
+            {selectedProject !== "all" && isSecurity && (
+              <button
+                onClick={() => {
+                  setRangeError("");
+                  setRangeResults(null);
+                  setRangeForm({
+                    employeeId: employeePool.length > 0 ? employeePool[0].id : "",
+                    assignmentType: "PERMANENT",
+                    shiftRequirementId: slots.length > 0 ? slots[0].id : "",
+                    startDate: selectedDate,
+                    endDate: selectedDate,
+                    notes: "",
+                    overrideReason: "",
+                    actingPosition: ""
+                  });
+                  setIsRangeModalOpen(true);
+                }}
+                className="bg-secondary hover:bg-[#0047a3] active:scale-[0.98] focus:ring-2 focus:ring-[rgba(0,88,190,0.35)] focus:outline-none disabled:opacity-50 disabled:pointer-events-none text-white font-bold px-3 py-1.5 rounded-lg text-[11px] flex items-center gap-1 transition-all"
+              >
+                <span className="material-symbols-outlined text-[14px] text-white">date_range</span>
+                Range Assignment
+              </button>
+            )}
           </div>
         </div>
 
@@ -1596,6 +1695,214 @@ export default function DeploymentCalendarPage() {
         </div>
       )}
       
+      {/* 5. DATE RANGE ASSIGNMENT MODAL */}
+      {isRangeModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <Card className="max-w-lg w-full bg-surface p-6 rounded-xl flex flex-col gap-4 shadow-2xl border border-outline-variant max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-start">
+              <div>
+                <h3 className="text-sm font-extrabold text-primary uppercase">Range Roster Assignment</h3>
+                <p className="text-[10px] text-on-surface-variant">Deploy an employee across a calendar date range.</p>
+              </div>
+              <button
+                onClick={() => setIsRangeModalOpen(false)}
+                className="text-on-surface-variant hover:text-primary"
+              >
+                <span className="material-symbols-outlined text-[20px]">close</span>
+              </button>
+            </div>
+
+            {rangeError && (
+              <div className="p-3 bg-status-error/10 text-status-error text-[11px] rounded-lg font-bold">
+                {rangeError}
+              </div>
+            )}
+
+            {!rangeResults ? (
+              <form onSubmit={handleRangeAssignmentSubmit} className="space-y-4">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-extrabold text-primary uppercase">Employee *</label>
+                  <select
+                    className="w-full bg-surface border border-outline-variant rounded-lg p-2 text-xs font-bold text-on-surface focus:outline-none focus:border-primary"
+                    value={rangeForm.employeeId}
+                    onChange={(e) => setRangeForm({ ...rangeForm, employeeId: e.target.value })}
+                  >
+                    <option value="">Select Guard</option>
+                    {employeePool.map((emp) => (
+                      <option key={emp.id} value={emp.id}>
+                        {emp.name} ({emp.employeeCode}) - {emp.designation}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] font-extrabold text-primary uppercase">Assignment Type *</label>
+                    <select
+                      className="w-full bg-surface border border-outline-variant rounded-lg p-2 text-xs font-bold text-on-surface focus:outline-none focus:border-primary"
+                      value={rangeForm.assignmentType}
+                      onChange={(e) => setRangeForm({ ...rangeForm, assignmentType: e.target.value })}
+                    >
+                      <option value="PERMANENT">PERMANENT</option>
+                      <option value="RELIEVER">RELIEVER</option>
+                      <option value="TEMPORARY">TEMPORARY</option>
+                      <option value="ACTING">ACTING</option>
+                    </select>
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] font-extrabold text-primary uppercase">Shift Requirement *</label>
+                    <select
+                      className="w-full bg-surface border border-outline-variant rounded-lg p-2 text-xs font-bold text-on-surface focus:outline-none focus:border-primary"
+                      value={rangeForm.shiftRequirementId}
+                      onChange={(e) => setRangeForm({ ...rangeForm, shiftRequirementId: e.target.value })}
+                    >
+                      <option value="">Select Shift</option>
+                      {slots.map((slot) => (
+                        <option key={slot.id} value={slot.id}>
+                          {slot.shiftCode} ({slot.shiftStartTime} - {slot.shiftEndTime}) - {slot.postName}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] font-extrabold text-primary uppercase">Start Date *</label>
+                    <input
+                      type="date"
+                      className="w-full bg-surface border border-outline-variant rounded-lg p-2 text-xs font-bold text-on-surface focus:outline-none focus:border-primary"
+                      value={rangeForm.startDate}
+                      onChange={(e) => setRangeForm({ ...rangeForm, startDate: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] font-extrabold text-primary uppercase">End Date *</label>
+                    <input
+                      type="date"
+                      className="w-full bg-surface border border-outline-variant rounded-lg p-2 text-xs font-bold text-on-surface focus:outline-none focus:border-primary"
+                      value={rangeForm.endDate}
+                      onChange={(e) => setRangeForm({ ...rangeForm, endDate: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                {rangeForm.assignmentType === "ACTING" && (
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] font-extrabold text-primary uppercase">Acting Position / Role Name *</label>
+                    <input
+                      type="text"
+                      className="w-full bg-surface border border-outline-variant rounded-lg p-2 text-xs font-semibold text-on-surface focus:outline-none focus:border-primary"
+                      placeholder="e.g. Acting Shift Supervisor, Commander"
+                      value={rangeForm.actingPosition}
+                      onChange={(e) => setRangeForm({ ...rangeForm, actingPosition: e.target.value })}
+                    />
+                  </div>
+                )}
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-extrabold text-primary uppercase">Notes (Optional)</label>
+                  <textarea
+                    className="w-full bg-surface-container border border-outline-variant rounded-lg p-2 text-xs focus:outline-none focus:border-primary min-h-[60px]"
+                    placeholder="Provide optional details about this range assignment..."
+                    value={rangeForm.notes}
+                    onChange={(e) => setRangeForm({ ...rangeForm, notes: e.target.value })}
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[10px] font-extrabold text-primary uppercase">Override Justification (Required if compliance warnings are expected)</label>
+                  <textarea
+                    className="w-full bg-surface-container border border-outline-variant rounded-lg p-2 text-xs focus:outline-none focus:border-primary min-h-[60px]"
+                    placeholder="If the guard has warnings, provide justification here to proceed with overrides..."
+                    value={rangeForm.overrideReason}
+                    onChange={(e) => setRangeForm({ ...rangeForm, overrideReason: e.target.value })}
+                  />
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => setIsRangeModalOpen(false)}
+                    className="font-bold text-xs"
+                    type="button"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    disabled={rangeLoading}
+                    className="font-bold text-xs bg-primary text-white border-none"
+                    type="submit"
+                  >
+                    {rangeLoading ? "Assigning..." : "Assign Range"}
+                  </Button>
+                </div>
+              </form>
+            ) : (
+              <div className="space-y-4">
+                <div className="grid grid-cols-4 gap-2">
+                  <div className="p-3 bg-surface-container-low rounded-lg text-center border border-outline-variant/40">
+                    <span className="text-[9px] font-bold text-on-surface-variant uppercase">Total</span>
+                    <h4 className="text-sm font-extrabold mt-1 text-on-surface">{rangeResults.summary.requestedDates}</h4>
+                  </div>
+                  <div className="p-3 bg-status-success/10 rounded-lg text-center border border-status-success/20">
+                    <span className="text-[9px] font-bold text-status-success uppercase">Created</span>
+                    <h4 className="text-sm font-extrabold mt-1 text-status-success">{rangeResults.summary.created}</h4>
+                  </div>
+                  <div className="p-3 bg-status-warning/10 rounded-lg text-center border border-status-warning/20">
+                    <span className="text-[9px] font-bold text-status-warning uppercase">Skipped</span>
+                    <h4 className="text-sm font-extrabold mt-1 text-status-warning">{rangeResults.summary.skipped}</h4>
+                  </div>
+                  <div className="p-3 bg-status-error/10 rounded-lg text-center border border-status-error/20">
+                    <span className="text-[9px] font-bold text-status-error uppercase">Failed</span>
+                    <h4 className="text-sm font-extrabold mt-1 text-status-error">{rangeResults.summary.failed}</h4>
+                  </div>
+                </div>
+
+                <div>
+                  <h4 className="text-[10px] font-extrabold text-primary uppercase tracking-wider mb-2">Detailed Results</h4>
+                  <div className="max-h-[200px] overflow-y-auto border border-outline-variant rounded-lg divide-y divide-outline-variant/30">
+                    {rangeResults.results.map((r, idx) => (
+                      <div key={idx} className="flex justify-between items-center p-2 text-[11px] font-semibold">
+                        <span className="font-mono text-on-surface">{r.date}</span>
+                        <div className="flex items-center gap-1.5">
+                          <Badge
+                            variant={r.status === "CREATED" ? "success" : r.status === "SKIPPED" ? "warning" : "error"}
+                            className="text-[8px] py-0.5 px-1 uppercase font-extrabold"
+                          >
+                            {r.status}
+                          </Badge>
+                          {r.reason && (
+                            <span className="text-[10px] text-on-surface-variant font-medium max-w-[150px] truncate" title={r.reason}>
+                              ({r.reason})
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2">
+                  <Button
+                    onClick={() => {
+                      setIsRangeModalOpen(false);
+                      setRangeResults(null);
+                    }}
+                    className="font-bold text-xs bg-primary text-white border-none"
+                  >
+                    Close & Refresh
+                  </Button>
+                </div>
+              </div>
+            )}
+          </Card>
+        </div>
+      )}
     </div>
   );
 }
