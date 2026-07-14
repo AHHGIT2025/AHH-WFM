@@ -35,6 +35,7 @@ export const LayoutShell: React.FC<{ children: React.ReactNode }> = ({ children 
   const { data: session, status } = useSession();
   const isSecurityGuarding = pathname.startsWith("/manpower/security-guarding");
   const isFacilityManagement = pathname.startsWith("/manpower/facility-management");
+  const isSecfac = pathname.startsWith("/secfac");
 
   let currentNavItems = navItems;
   let sidebarTitle = "WFM Control Suite";
@@ -72,6 +73,21 @@ export const LayoutShell: React.FC<{ children: React.ReactNode }> = ({ children 
     ];
     sidebarTitle = "Facility Management";
     sidebarSubtitle = "Operations & Services";
+  } else if (isSecfac) {
+    currentNavItems = [
+      { label: "← Back to Main Menu", path: "/", icon: "arrow_back" },
+      { label: "Control Room", path: "/secfac/control-room", icon: "dashboard" },
+      { label: "Checkpoints", path: "/secfac/checkpoints", icon: "location_on" },
+      { label: "Checklist Builder", path: "/secfac/checklist-builder", icon: "rule" },
+      { label: "Assignments", path: "/secfac/assignments", icon: "assignment" },
+      { label: "Live Monitoring", path: "/secfac/live-monitoring", icon: "visibility" },
+      { label: "SOS Alerts", path: "/secfac/sos-alerts", icon: "emergency" },
+      { label: "Incidents", path: "/secfac/incidents", icon: "warning" },
+      { label: "Reports", path: "/secfac/reports", icon: "description" },
+      { label: "Audit Trail", path: "/secfac/audit-trail", icon: "history" }
+    ];
+    sidebarTitle = "SECFAC Control Suite";
+    sidebarSubtitle = "Guard Tour & Inspections";
   }
 
   const activeNavItems = filterNavigationByPermissions(session?.user as any, currentNavItems);

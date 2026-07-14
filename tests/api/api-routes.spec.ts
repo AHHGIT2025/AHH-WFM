@@ -7,6 +7,8 @@ const MOBILE_URL = process.env.MOBILE_BASE_URL || 'http://localhost:3101';
 describe('AHH WFM API Routes Verification', () => {
   let webCookie: string | null = null;
   let mobileCookie: string | null = null;
+  let testEmployeeId = 'AD-0001';
+  let testShiftRequirementId = '22687da6-a08a-41cd-b56d-9a87ddc967bd';
 
   beforeAll(async () => {
     console.log('Authenticating for API tests...');
@@ -65,6 +67,22 @@ describe('AHH WFM API Routes Verification', () => {
       if (mCookies) {
         mobileCookie = mCookies.map(c => c.split(';')[0]).join('; ');
         console.log('Mobile Auth successful!');
+      }
+
+      // Dynamic lookup of test IDs for scheduling
+      try {
+        const dbEmp = await prisma.employee.findFirst({
+          where: { operationType: 'SECURITY_GUARDING', employeeCategory: 'BLUE_COLLAR' }
+        });
+        if (dbEmp) {
+          testEmployeeId = dbEmp.id;
+        }
+        const dbReq = await prisma.manpowerShiftRequirement.findFirst();
+        if (dbReq) {
+          testShiftRequirementId = dbReq.id;
+        }
+      } catch (dbErr) {
+        console.log('Database lookup failed, using default mock IDs for scheduling');
       }
     } catch (e: any) {
       console.warn('Authentication failed. Testing APIs in public/guest mode:', e.message);
@@ -224,5 +242,54 @@ describe('AHH WFM API Routes Verification', () => {
       expect(slot).toHaveProperty('requiredCount');
       expect(slot).toHaveProperty('requiredRelieverCount');
     }
+  });
+
+  test('POST /api/v1/security/scheduling/assign unauthenticated range assignment should return 401', async () => {
+    const res = await axios.post(`${WEB_URL}/api/v1/security/scheduling/assign`, {
+      employeeId: testEmployeeId,
+      shiftRequirementId: testShiftRequirementId,
+      startDate: '2026-07-13',
+      endDate: '2026-07-15',
+      assignmentType: 'PERMANENT'
+    }, { validateStatus: () => true });
+
+    expect([401, 302, 307]).toContain(res.status);
+  });
+
+  test('POST /api/v1/security/scheduling/assign range assignment missing required fields should return 400', async () => {
+    const headers = webCookie ? { Cookie: webCookie } : {};
+    const res = await axios.post(`${WEB_URL}/api/v1/security/scheduling/assign`, {
+      employeeId: testEmployeeId,
+      startDate: '2026-07-13',
+      endDate: '2026-07-15'
+    }, { headers, validateStatus: () => true });
+
+    expect(res.status).toBe(400);
+  });
+
+  test('POST /api/v1/security/scheduling/assign range assignment greater than 62 days should return 400', async () => {
+    const headers = webCookie ? { Cookie: webCookie } : {};
+    const res = await axios.post(`${WEB_URL}/api/v1/security/scheduling/assign`, {
+      employeeId: testEmployeeId,
+      shiftRequirementId: testShiftRequirementId,
+      startDate: '2026-07-13',
+      endDate: '2026-09-30', // > 62 days
+      assignmentType: 'PERMANENT'
+    }, { headers, validateStatus: () => true });
+
+    expect(res.status).toBe(400);
+  });
+
+  test('POST /api/v1/security/scheduling/assign range assignment invalid date order should return 400', async () => {
+    const headers = webCookie ? { Cookie: webCookie } : {};
+    const res = await axios.post(`${WEB_URL}/api/v1/security/scheduling/assign`, {
+      employeeId: testEmployeeId,
+      shiftRequirementId: testShiftRequirementId,
+      startDate: '2026-07-15',
+      endDate: '2026-07-13', // start > end
+      assignmentType: 'PERMANENT'
+    }, { headers, validateStatus: () => true });
+
+    expect(res.status).toBe(400);
   });
 });

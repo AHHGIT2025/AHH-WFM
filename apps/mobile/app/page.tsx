@@ -4,11 +4,13 @@ import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
+import { SOSOverlay } from "../components/SOSOverlay";
 
 export default function MobileDashboard() {
   const { data: session } = useSession();
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [showSOS, setShowSOS] = useState(false);
 
   useEffect(() => {
     fetch("/api/v1/dashboard")
@@ -90,6 +92,36 @@ export default function MobileDashboard() {
         </Link>
       ) : null}
 
+      {/* SECFAC Operations Section */}
+      <div className="bg-surface border border-outline-variant/30 rounded-2xl p-4 shadow-sm space-y-3">
+        <h3 className="text-xs font-bold text-on-surface flex items-center gap-1.5">
+          <span className="material-symbols-outlined text-[16px] text-primary">security</span>
+          SECFAC Operations
+        </h3>
+        <div className="grid grid-cols-2 gap-3">
+          <Link href="/assigned-tasks" className="bg-surface-container-low border border-outline-variant/20 p-3 rounded-xl flex items-center gap-2 active:scale-95 transition-transform">
+            <span className="material-symbols-outlined text-primary text-[20px]">assignment</span>
+            <span className="text-[10px] font-bold text-on-surface">Assigned Tasks</span>
+          </Link>
+          <Link href="/nfc-scan" className="bg-surface-container-low border border-outline-variant/20 p-3 rounded-xl flex items-center gap-2 active:scale-95 transition-transform">
+            <span className="material-symbols-outlined text-[#00A3FF] text-[20px]">nfc</span>
+            <span className="text-[10px] font-bold text-on-surface">NFC Scan</span>
+          </Link>
+          <Link href="/facility-inspection" className="bg-surface-container-low border border-outline-variant/20 p-3 rounded-xl flex items-center gap-2 active:scale-95 transition-transform">
+            <span className="material-symbols-outlined text-secondary text-[20px]">assignment_turned_in</span>
+            <span className="text-[10px] font-bold text-on-surface">Inspection</span>
+          </Link>
+          <Link href="/incident-report" className="bg-surface-container-low border border-outline-variant/20 p-3 rounded-xl flex items-center gap-2 active:scale-95 transition-transform">
+            <span className="material-symbols-outlined text-status-warning text-[20px]">warning</span>
+            <span className="text-[10px] font-bold text-on-surface">Incident</span>
+          </Link>
+          <Link href="/sync-status" className="bg-surface-container-low border border-outline-variant/20 p-3 rounded-xl flex items-center gap-2 col-span-2 active:scale-95 transition-transform">
+            <span className="material-symbols-outlined text-on-surface-variant text-[20px]">cloud_sync</span>
+            <span className="text-[10px] font-bold text-on-surface">Sync Queue (Online)</span>
+          </Link>
+        </div>
+      </div>
+
       {/* Quick Stats */}
       <div className="bg-surface border border-outline-variant/30 rounded-2xl p-4 shadow-sm">
         <h3 className="text-xs font-bold text-on-surface mb-3 flex items-center gap-1.5">
@@ -133,6 +165,16 @@ export default function MobileDashboard() {
         </Link>
       ) : null}
 
+      {/* Floating SOS Trigger Button */}
+      <button 
+        onClick={() => setShowSOS(true)} 
+        className="fixed bottom-6 right-6 w-14 h-14 rounded-full bg-[#BA1A1A] text-white flex items-center justify-center shadow-lg active:scale-90 transition-transform z-40 hover:brightness-110"
+      >
+        <span className="material-symbols-outlined text-[28px] animate-pulse">emergency</span>
+      </button>
+
+      {/* SOS Overlay */}
+      {showSOS && <SOSOverlay onClose={() => setShowSOS(false)} />}
     </div>
   );
 }

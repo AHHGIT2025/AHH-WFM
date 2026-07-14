@@ -289,6 +289,11 @@ export function filterNavigationByPermissions(user: { role?: string; permissions
   return navItems.filter(item => {
     // Map paths to permissions
     if (item.path === "/" || item.path === "/dashboard") return hasPermission(user, "dashboard.view");
+    if (item.path.startsWith("/secfac")) {
+      return hasPermission(user, "manpower.admin.full_access") || 
+             hasPermission(user, "manpower.security.view") || 
+             hasPermission(user, "manpower.fm.view");
+    }
     if (item.path.startsWith("/workforce")) return hasPermission(user, "employees.view");
     if (item.path.startsWith("/attendance")) return hasPermission(user, "attendance.view");
     if (item.path.startsWith("/leave")) return hasPermission(user, "leaves.view");

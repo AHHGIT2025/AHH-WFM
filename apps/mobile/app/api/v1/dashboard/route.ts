@@ -354,10 +354,14 @@ export async function GET() {
       canPunch: (dutySource as string) !== "NONE",
       canViewGuardTour,
       canScanCheckpoint: false,
+      canSubmitInspection: false,
       canReportIncident: false,
       canSubmitHandover: false,
       canViewFMWorkOrder: false,
-      canViewLeave: true
+      canViewLeave: true,
+      canViewAssignedTasks: true,
+      canUseSOS: true,
+      canViewOfflineQueue: true
     };
 
     console.log("[DASHBOARD] currentDutyStr:", currentDutyStr, "| canViewGuardTour:", canViewGuardTour);
