@@ -1,4 +1,4 @@
-import { Employee, AttendanceRecord, Shift, LeaveRequest, SapMapping, SyncLog, Announcement, Department, Worksite, AttendanceCorrection, LeaveType, LeaveBalance, LeaveBalanceLedger, Holiday, LeaveApprovalWorkflow, LeaveApprovalStep, LeaveApprovalHistory, LeaveApprovalDelegation, ShiftTemplate, RotationTemplate, ShiftAssignment, ShiftSwapRequest, OvertimeRate, SapConnection, SapSyncJob, SapSyncLog, SapFieldMapping, SapRetryQueue, SapExportQueue, SapPayrollStage, SapReconciliationLog, SapPayrollPeriodLock, SecurityOperationsPeriodLock, SavedReport, ReportExportLog, UserActivityLog, ProductionCheckLog, BackupJob, BackupAuditLog, EmployeeBulkUploadJob, SystemRole, SystemPermission, RolePermission, UserRoleAssignment, BlueCollarPositionCategory, Project, ProjectSite, EmployeeDeployment, Designation, TradeClassification, LocationMaster, CostCenter, ShiftRelieverAssignment, RelieverStandbyRule, Company, AllowedPunchLocation, EmployeeAllowedPunchLocation, ManpowerClient, ManpowerContract, ManpowerProject, ManpowerSite, ManpowerLocationUnit, ManpowerCategory, ManpowerShiftRequirement, ManpowerDeployment, ManpowerDeploymentAssignment, ManpowerRelieverAssignment, UserOperationAccess } from "@ahh-wfm/types";
+import { Employee, AttendanceRecord, Shift, LeaveRequest, SapMapping, SyncLog, Announcement, Department, Worksite, AttendanceCorrection, LeaveType, LeaveBalance, LeaveBalanceLedger, Holiday, LeaveApprovalWorkflow, LeaveApprovalStep, LeaveApprovalHistory, LeaveApprovalDelegation, ShiftTemplate, RotationTemplate, ShiftAssignment, ShiftSwapRequest, OvertimeRate, SapConnection, SapSyncJob, SapSyncLog, SapFieldMapping, SapRetryQueue, SapExportQueue, SapPayrollStage, SapReconciliationLog, SapPayrollPeriodLock, SecurityOperationsPeriodLock, SavedReport, ReportExportLog, UserActivityLog, ProductionCheckLog, BackupJob, BackupAuditLog, EmployeeBulkUploadJob, SystemRole, SystemPermission, RolePermission, UserRoleAssignment, BlueCollarPositionCategory, Project, ProjectSite, EmployeeDeployment, Designation, TradeClassification, LocationMaster, CostCenter, ShiftRelieverAssignment, RelieverStandbyRule, Company, AllowedPunchLocation, EmployeeAllowedPunchLocation, ManpowerClient, ManpowerContract, ManpowerProject, ManpowerSite, ManpowerLocationUnit, ManpowerCategory, ManpowerShiftRequirement, ManpowerDeployment, ManpowerDeploymentAssignment, ManpowerRelieverAssignment, UserOperationAccess, SecfacCheckpoint } from "@ahh-wfm/types";
 const uuid = () => Math.random().toString(36).substring(2) + Date.now().toString(36);
 import * as fs from "fs";
 import * as path from "path";
@@ -470,6 +470,7 @@ let memoryDb: {
   workflowTemplateApprovers: any[];
   workflowDelegations: any[];
   securityOperationalEmployees: any[];
+  secfacCheckpoints: SecfacCheckpoint[];
 } = {
   companies: [
     { id: "COMP-001", companyCode: "AHH", companyName: "Al Hattab Holding", isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
@@ -749,7 +750,8 @@ let memoryDb: {
   workflowTemplateLevels: [],
   workflowTemplateApprovers: [],
   workflowDelegations: [],
-  securityOperationalEmployees: []
+  securityOperationalEmployees: [],
+  secfacCheckpoints: []
 };
 
 // Seeding helper to pre-fill MySQL with mock data if it is empty
@@ -10502,6 +10504,256 @@ export const mockDb = {
     db.manpowerLocationUnits = db.manpowerLocationUnits.filter((x: any) => x.id !== id);
     writeDb(db);
     return db.manpowerLocationUnits.length < countBefore;
+  },
+
+  // --- SECFAC Checkpoints CRUD ---
+  getSecfacCheckpoints: async (filters: any = {}): Promise<any[]> => {
+    if (isDbConnected()) {
+      const where: any = {};
+      if (filters.operationType) where.operationType = filters.operationType;
+      if (filters.clientId) where.clientId = filters.clientId;
+      if (filters.projectId) where.projectId = filters.projectId;
+      if (filters.siteId) where.siteId = filters.siteId;
+      if (filters.locationUnitId) where.locationUnitId = filters.locationUnitId;
+      if (filters.isActive !== undefined) {
+        where.isActive = filters.isActive === 'true' || filters.isActive === true;
+      }
+      if (filters.checkpointType) where.checkpointType = filters.checkpointType;
+
+      if (filters.search) {
+        where.OR = [
+          { checkpointName: { contains: filters.search } },
+          { checkpointCode: { contains: filters.search } },
+          { nfcTagId: { contains: filters.search } },
+          { qrCode: { contains: filters.search } }
+        ];
+      }
+
+      const res = await prismaClient.secfacCheckpoint.findMany({
+        where,
+        include: {
+          client: true,
+          project: true,
+          site: true,
+          locationUnit: true
+        },
+        orderBy: { checkpointName: "asc" }
+      });
+      return res.map((x: any) => ({
+        ...x,
+        createdAt: x.createdAt?.toISOString(),
+        updatedAt: x.updatedAt?.toISOString()
+      }));
+    }
+
+    const db = readDb();
+    let res = db.secfacCheckpoints || [];
+    
+    if (filters.operationType) res = res.filter((x: any) => x.operationType === filters.operationType);
+    if (filters.clientId) res = res.filter((x: any) => x.clientId === filters.clientId);
+    if (filters.projectId) res = res.filter((x: any) => x.projectId === filters.projectId);
+    if (filters.siteId) res = res.filter((x: any) => x.siteId === filters.siteId);
+    if (filters.locationUnitId) res = res.filter((x: any) => x.locationUnitId === filters.locationUnitId);
+    if (filters.isActive !== undefined) {
+      const activeBool = filters.isActive === 'true' || filters.isActive === true;
+      res = res.filter((x: any) => x.isActive === activeBool);
+    }
+    if (filters.checkpointType) res = res.filter((x: any) => x.checkpointType === filters.checkpointType);
+    if (filters.search) {
+      const s = String(filters.search).toLowerCase();
+      res = res.filter((x: any) => 
+        (x.checkpointName && x.checkpointName.toLowerCase().includes(s)) ||
+        (x.checkpointCode && x.checkpointCode.toLowerCase().includes(s)) ||
+        (x.nfcTagId && x.nfcTagId.toLowerCase().includes(s)) ||
+        (x.qrCode && x.qrCode.toLowerCase().includes(s))
+      );
+    }
+
+    return res.map((x: any) => ({
+      ...x,
+      client: (db.manpowerClients || []).find((c: any) => c.id === x.clientId) || null,
+      project: (db.manpowerProjects || []).find((p: any) => p.id === x.projectId) || null,
+      site: (db.manpowerSites || []).find((s: any) => s.id === x.siteId) || null,
+      locationUnit: (db.manpowerLocationUnits || []).find((l: any) => l.id === x.locationUnitId) || null
+    }));
+  },
+
+  getSecfacCheckpointById: async (id: string): Promise<any> => {
+    if (isDbConnected()) {
+      const res = await prismaClient.secfacCheckpoint.findUnique({
+        where: { id },
+        include: {
+          client: true,
+          project: true,
+          site: true,
+          locationUnit: true
+        }
+      });
+      if (!res) return null;
+      return {
+        ...res,
+        createdAt: res.createdAt?.toISOString(),
+        updatedAt: res.updatedAt?.toISOString()
+      };
+    }
+    const db = readDb();
+    const x = (db.secfacCheckpoints || []).find((item: any) => item.id === id);
+    if (!x) return null;
+    return {
+      ...x,
+      client: (db.manpowerClients || []).find((c: any) => c.id === x.clientId) || null,
+      project: (db.manpowerProjects || []).find((p: any) => p.id === x.projectId) || null,
+      site: (db.manpowerSites || []).find((s: any) => s.id === x.siteId) || null,
+      locationUnit: (db.manpowerLocationUnits || []).find((l: any) => l.id === x.locationUnitId) || null
+    };
+  },
+
+  createSecfacCheckpoint: async (data: any): Promise<any> => {
+    if (isDbConnected()) {
+      const res = await prismaClient.secfacCheckpoint.create({
+        data: {
+          operationType: data.operationType,
+          clientId: data.clientId || null,
+          projectId: data.projectId || null,
+          siteId: data.siteId,
+          locationUnitId: data.locationUnitId || null,
+          checkpointName: data.checkpointName,
+          checkpointCode: data.checkpointCode || null,
+          nfcTagId: data.nfcTagId || null,
+          qrCode: data.qrCode || null,
+          checkpointType: data.checkpointType || "SECURITY_PATROL",
+          description: data.description || null,
+          latitude: data.latitude !== undefined && data.latitude !== null ? Number(data.latitude) : null,
+          longitude: data.longitude !== undefined && data.longitude !== null ? Number(data.longitude) : null,
+          radiusMeters: data.radiusMeters !== undefined && data.radiusMeters !== null ? Number(data.radiusMeters) : null,
+          scanRequired: data.scanRequired !== false,
+          photoRequired: !!data.photoRequired,
+          checklistRequired: !!data.checklistRequired,
+          isActive: data.isActive !== false
+        }
+      });
+      return {
+        ...res,
+        createdAt: res.createdAt?.toISOString(),
+        updatedAt: res.updatedAt?.toISOString()
+      };
+    }
+    const db = readDb();
+    const newRecord = {
+      id: data.id || `cp-${Date.now()}`,
+      operationType: data.operationType || "SECURITY_GUARDING",
+      clientId: data.clientId || null,
+      projectId: data.projectId || null,
+      siteId: data.siteId || "",
+      locationUnitId: data.locationUnitId || null,
+      checkpointName: data.checkpointName || "",
+      checkpointCode: data.checkpointCode || null,
+      nfcTagId: data.nfcTagId || null,
+      qrCode: data.qrCode || null,
+      checkpointType: data.checkpointType || "SECURITY_PATROL",
+      description: data.description || null,
+      latitude: data.latitude !== undefined && data.latitude !== null ? Number(data.latitude) : null,
+      longitude: data.longitude !== undefined && data.longitude !== null ? Number(data.longitude) : null,
+      radiusMeters: data.radiusMeters !== undefined && data.radiusMeters !== null ? Number(data.radiusMeters) : null,
+      scanRequired: data.scanRequired !== false,
+      photoRequired: !!data.photoRequired,
+      checklistRequired: !!data.checklistRequired,
+      isActive: data.isActive !== false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    db.secfacCheckpoints = db.secfacCheckpoints || [];
+    
+    // Check validation rules: duplicate nfcTagId / qrCode
+    if (newRecord.nfcTagId && db.secfacCheckpoints.some((x: any) => x.nfcTagId === newRecord.nfcTagId)) {
+      throw new Error("Duplicate NFC Tag ID");
+    }
+    if (newRecord.qrCode && db.secfacCheckpoints.some((x: any) => x.qrCode === newRecord.qrCode)) {
+      throw new Error("Duplicate QR Code");
+    }
+
+    db.secfacCheckpoints.push(newRecord);
+    writeDb(db);
+    return newRecord;
+  },
+
+  updateSecfacCheckpoint: async (id: string, data: any): Promise<any> => {
+    if (isDbConnected()) {
+      const res = await prismaClient.secfacCheckpoint.update({
+        where: { id },
+        data: {
+          operationType: data.operationType,
+          clientId: data.clientId !== undefined ? data.clientId : undefined,
+          projectId: data.projectId !== undefined ? data.projectId : undefined,
+          siteId: data.siteId,
+          locationUnitId: data.locationUnitId !== undefined ? data.locationUnitId : undefined,
+          checkpointName: data.checkpointName,
+          checkpointCode: data.checkpointCode !== undefined ? data.checkpointCode : undefined,
+          nfcTagId: data.nfcTagId !== undefined ? data.nfcTagId : undefined,
+          qrCode: data.qrCode !== undefined ? data.qrCode : undefined,
+          checkpointType: data.checkpointType,
+          description: data.description !== undefined ? data.description : undefined,
+          latitude: data.latitude !== undefined ? (data.latitude !== null ? Number(data.latitude) : null) : undefined,
+          longitude: data.longitude !== undefined ? (data.longitude !== null ? Number(data.longitude) : null) : undefined,
+          radiusMeters: data.radiusMeters !== undefined ? (data.radiusMeters !== null ? Number(data.radiusMeters) : null) : undefined,
+          scanRequired: data.scanRequired !== undefined ? !!data.scanRequired : undefined,
+          photoRequired: data.photoRequired !== undefined ? !!data.photoRequired : undefined,
+          checklistRequired: data.checklistRequired !== undefined ? !!data.checklistRequired : undefined,
+          isActive: data.isActive !== undefined ? !!data.isActive : undefined
+        }
+      });
+      return {
+        ...res,
+        createdAt: res.createdAt?.toISOString(),
+        updatedAt: res.updatedAt?.toISOString()
+      };
+    }
+    const db = readDb();
+    db.secfacCheckpoints = db.secfacCheckpoints || [];
+    const idx = db.secfacCheckpoints.findIndex((x: any) => x.id === id);
+    if (idx === -1) return null;
+
+    // Check unique rules
+    if (data.nfcTagId && db.secfacCheckpoints.some((x: any) => x.nfcTagId === data.nfcTagId && x.id !== id)) {
+      throw new Error("Duplicate NFC Tag ID");
+    }
+    if (data.qrCode && db.secfacCheckpoints.some((x: any) => x.qrCode === data.qrCode && x.id !== id)) {
+      throw new Error("Duplicate QR Code");
+    }
+
+    const updated = {
+      ...db.secfacCheckpoints[idx],
+      ...data,
+      latitude: data.latitude !== undefined ? (data.latitude !== null ? Number(data.latitude) : null) : db.secfacCheckpoints[idx].latitude,
+      longitude: data.longitude !== undefined ? (data.longitude !== null ? Number(data.longitude) : null) : db.secfacCheckpoints[idx].longitude,
+      radiusMeters: data.radiusMeters !== undefined ? (data.radiusMeters !== null ? Number(data.radiusMeters) : null) : db.secfacCheckpoints[idx].radiusMeters,
+      scanRequired: data.scanRequired !== undefined ? !!data.scanRequired : db.secfacCheckpoints[idx].scanRequired,
+      photoRequired: data.photoRequired !== undefined ? !!data.photoRequired : db.secfacCheckpoints[idx].photoRequired,
+      checklistRequired: data.checklistRequired !== undefined ? !!data.checklistRequired : db.secfacCheckpoints[idx].checklistRequired,
+      isActive: data.isActive !== undefined ? !!data.isActive : db.secfacCheckpoints[idx].isActive,
+      updatedAt: new Date().toISOString()
+    };
+    db.secfacCheckpoints[idx] = updated;
+    writeDb(db);
+    return updated;
+  },
+
+  deleteSecfacCheckpoint: async (id: string): Promise<boolean> => {
+    if (isDbConnected()) {
+      await prismaClient.secfacCheckpoint.update({
+        where: { id },
+        data: { isActive: false }
+      });
+      return true;
+    }
+    const db = readDb();
+    db.secfacCheckpoints = db.secfacCheckpoints || [];
+    const idx = db.secfacCheckpoints.findIndex((x: any) => x.id === id);
+    if (idx === -1) return false;
+    db.secfacCheckpoints[idx].isActive = false;
+    db.secfacCheckpoints[idx].updatedAt = new Date().toISOString();
+    writeDb(db);
+    return true;
   },
 
   // --- Manpower Categories CRUD ---

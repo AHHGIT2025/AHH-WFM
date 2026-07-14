@@ -9,6 +9,7 @@ describe('AHH WFM API Routes Verification', () => {
   let mobileCookie: string | null = null;
   let testEmployeeId = 'AD-0001';
   let testShiftRequirementId = '22687da6-a08a-41cd-b56d-9a87ddc967bd';
+  let testSiteId = '1fa0a418-e601-4ba4-9195-e91e7dfb54e7';
 
   beforeAll(async () => {
     console.log('Authenticating for API tests...');
@@ -80,6 +81,10 @@ describe('AHH WFM API Routes Verification', () => {
         const dbReq = await prisma.manpowerShiftRequirement.findFirst();
         if (dbReq) {
           testShiftRequirementId = dbReq.id;
+        }
+        const dbSite = await prisma.manpowerSite.findFirst();
+        if (dbSite) {
+          testSiteId = dbSite.id;
         }
       } catch (dbErr) {
         console.log('Database lookup failed, using default mock IDs for scheduling');
@@ -291,5 +296,109 @@ describe('AHH WFM API Routes Verification', () => {
     }, { headers, validateStatus: () => true });
 
     expect(res.status).toBe(400);
+  });
+
+  test('GET /api/v1/secfac/checkpoints unauthenticated should return 401', async () => {
+    const res = await axios.get(`${WEB_URL}/api/v1/secfac/checkpoints`, { validateStatus: () => true });
+    expect([401, 302, 307]).toContain(res.status);
+  });
+
+  test('POST /api/v1/secfac/checkpoints unauthenticated should return 401', async () => {
+    const res = await axios.post(`${WEB_URL}/api/v1/secfac/checkpoints`, {}, { validateStatus: () => true });
+    expect([401, 302, 307]).toContain(res.status);
+  });
+
+  test('POST /api/v1/secfac/checkpoints missing checkpointName should return 400', async () => {
+    const headers = webCookie ? { Cookie: webCookie } : {};
+    const res = await axios.post(`${WEB_URL}/api/v1/secfac/checkpoints`, {
+      siteId: testSiteId,
+      operationType: 'SECURITY_GUARDING'
+    }, { headers, validateStatus: () => true });
+    expect(res.status).toBe(400);
+  });
+
+  test('POST /api/v1/secfac/checkpoints missing siteId should return 400', async () => {
+    const headers = webCookie ? { Cookie: webCookie } : {};
+    const res = await axios.post(`${WEB_URL}/api/v1/secfac/checkpoints`, {
+      checkpointName: 'Test Checkpoint',
+      operationType: 'SECURITY_GUARDING'
+    }, { headers, validateStatus: () => true });
+    expect(res.status).toBe(400);
+  });
+
+  test('POST /api/v1/secfac/checkpoints invalid operationType should return 400', async () => {
+    const headers = webCookie ? { Cookie: webCookie } : {};
+    const res = await axios.post(`${WEB_URL}/api/v1/secfac/checkpoints`, {
+      checkpointName: 'Test Checkpoint',
+      siteId: testSiteId,
+      operationType: 'INVALID_OP'
+    }, { headers, validateStatus: () => true });
+    expect(res.status).toBe(400);
+  });
+
+  test('GET /api/v1/secfac/checkpoints authenticated should return 200', async () => {
+    const headers = webCookie ? { Cookie: webCookie } : {};
+    const res = await axios.get(`${WEB_URL}/api/v1/secfac/checkpoints`, { headers, validateStatus: () => true });
+    expect(res.status).toBe(200);
+    expect(res.data).toHaveProperty('success', true);
+    expect(Array.isArray(res.data.data)).toBe(true);
+  });
+
+  test('POST / PATCH / DELETE /api/v1/secfac/checkpoints CRUD cycle', async () => {
+    const headers = webCookie ? { Cookie: webCookie } : {};
+    
+    // Create
+    const randTag = `nfc-${Date.now()}`;
+    const createRes = await axios.post(`${WEB_URL}/api/v1/secfac/checkpoints`, {
+      checkpointName: 'Temp Checkpoint For Test',
+      siteId: testSiteId,
+      operationType: 'SECURITY_GUARDING',
+      nfcTagId: randTag,
+      checkpointType: 'SECURITY_PATROL'
+    }, { headers, validateStatus: () => true });
+
+    expect(createRes.status).toBe(201);
+    expect(createRes.data.success).toBe(true);
+    const createdId = createRes.data.data.id;
+    expect(createdId).toBeDefined();
+
+    // Verify GET detail
+    const getRes = await axios.get(`${WEB_URL}/api/v1/secfac/checkpoints/${createdId}`, { headers, validateStatus: () => true });
+    expect(getRes.status).toBe(200);
+    expect(getRes.data.data.checkpointName).toBe('Temp Checkpoint For Test');
+
+    // Duplicate NFC check
+    const dupRes = await axios.post(`${WEB_URL}/api/v1/secfac/checkpoints`, {
+      checkpointName: 'Another Checkpoint',
+      siteId: testSiteId,
+      operationType: 'SECURITY_GUARDING',
+      nfcTagId: randTag
+    }, { headers, validateStatus: () => true });
+    expect(dupRes.status).toBe(400);
+
+    // Update (PATCH)
+    const updateRes = await axios.patch(`${WEB_URL}/api/v1/secfac/checkpoints/${createdId}`, {
+      checkpointName: 'Temp Checkpoint Updated'
+    }, { headers, validateStatus: () => true });
+    expect(updateRes.status).toBe(200);
+    expect(updateRes.data.data.checkpointName).toBe('Temp Checkpoint Updated');
+
+    // Delete (Soft-delete / set isActive=false)
+    const delRes = await axios.delete(`${WEB_URL}/api/v1/secfac/checkpoints/${createdId}`, { headers, validateStatus: () => true });
+    expect(delRes.status).toBe(200);
+
+    // Verify detail is inactive
+    const afterDelRes = await axios.get(`${WEB_URL}/api/v1/secfac/checkpoints/${createdId}`, { headers, validateStatus: () => true });
+    expect(afterDelRes.status).toBe(200);
+    expect(afterDelRes.data.data.isActive).toBe(false);
+
+    // Hard cleanup in database if DB is connected
+    try {
+      if (prisma) {
+        await prisma.secfacCheckpoint.delete({ where: { id: createdId } });
+      }
+    } catch (e) {
+      // ignore mock db deletes
+    }
   });
 });

@@ -1479,5 +1479,33 @@ export interface SecurityOperationalEmployee {
   updatedAt?: Date | string;
 }
 
+export interface SecfacCheckpoint {
+  id: string;
+  operationType: string;
+  clientId?: string | null;
+  client?: ManpowerClient | null;
+  projectId?: string | null;
+  project?: ManpowerProject | null;
+  siteId: string;
+  site?: ManpowerSite | null;
+  locationUnitId?: string | null;
+  locationUnit?: ManpowerLocationUnit | null;
+  checkpointName: string;
+  checkpointCode?: string | null;
+  nfcTagId?: string | null;
+  qrCode?: string | null;
+  checkpointType: string;
+  description?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  radiusMeters?: number | null;
+  scanRequired: boolean;
+  photoRequired: boolean;
+  checklistRequired: boolean;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 
 

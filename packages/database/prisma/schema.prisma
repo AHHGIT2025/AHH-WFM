@@ -1248,6 +1248,7 @@ model ManpowerClient {
   tradeLicenseIssueDate         DateTime?
   tradeLicenseExpiryDate        DateTime?
   tradeLicenseAuthority         String?
+  secfacCheckpoints             SecfacCheckpoint[]
 }
 
 model ManpowerContract {
@@ -1335,6 +1336,7 @@ model ManpowerProject {
   siteInspections        SecuritySiteInspection[]
   materials              ManpowerProjectMaterialAllocation[]
   manpowerAllocations   SecurityProjectManpowerAllocation[]
+  secfacCheckpoints      SecfacCheckpoint[]
 }
 
 model ManpowerSite {
@@ -1362,6 +1364,7 @@ model ManpowerSite {
   siteInspections        SecuritySiteInspection[]
   manpowerAllocations   SecuritySiteManpowerAllocation[]
   siteAllowances        SecuritySiteAllowance[]
+  secfacCheckpoints      SecfacCheckpoint[]
 }
 
 model SecuritySiteManpowerAllocation {
@@ -1423,6 +1426,7 @@ model ManpowerLocationUnit {
   createdAt          DateTime                   @default(now())
   updatedAt          DateTime                   @updatedAt
   shiftRequirements  ManpowerShiftRequirement[]
+  secfacCheckpoints  SecfacCheckpoint[]
 }
 
 model ManpowerCategory {
@@ -1910,6 +1914,51 @@ model SecurityOperationalEmployee {
   @@index([companyCode])
   @@index([operationType])
   @@index([employeeCategory])
+  @@index([isActive])
+}
+
+model SecfacCheckpoint {
+  id              String   @id @default(uuid())
+
+  operationType   String   // SECURITY_GUARDING | FACILITY_MANAGEMENT
+
+  clientId        String?
+  client          ManpowerClient? @relation(fields: [clientId], references: [id], onDelete: SetNull)
+
+  projectId       String?
+  project         ManpowerProject? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  siteId          String
+  site            ManpowerSite @relation(fields: [siteId], references: [id], onDelete: Restrict)
+
+  locationUnitId  String?
+  locationUnit    ManpowerLocationUnit? @relation(fields: [locationUnitId], references: [id], onDelete: SetNull)
+
+  checkpointName  String
+  checkpointCode  String?
+
+  nfcTagId        String?  @unique
+  qrCode          String?  @unique
+
+  checkpointType  String   @default("SECURITY_PATROL")
+  description     String?  @db.Text
+
+  latitude        Float?
+  longitude       Float?
+  radiusMeters    Int?
+
+  scanRequired      Boolean @default(true)
+  photoRequired     Boolean @default(false)
+  checklistRequired Boolean @default(false)
+
+  isActive          Boolean @default(true)
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([operationType])
+  @@index([siteId])
+  @@index([locationUnitId])
   @@index([isActive])
 }
 
