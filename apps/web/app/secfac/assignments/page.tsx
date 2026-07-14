@@ -905,8 +905,10 @@ export default function AssignmentsPlannerPage() {
                         <span className="font-bold text-[#001A48]">Status:</span>
                       </div>
                       <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
-                        selectedExecution.status === "SUBMITTED" ? "bg-green-100 text-green-700" :
-                        selectedExecution.status === "DRAFT" ? "bg-amber-100 text-amber-700" :
+                        selectedExecution.status === "APPROVED" ? "bg-green-100 text-green-700 border border-green-200" :
+                        selectedExecution.status === "REJECTED" ? "bg-red-100 text-red-700 border border-red-200" :
+                        selectedExecution.status === "REOPENED" ? "bg-amber-100 text-amber-800 border border-amber-250" :
+                        selectedExecution.status === "SUBMITTED" || selectedExecution.status === "PENDING_REVIEW" ? "bg-blue-100 text-blue-700 border border-blue-200" :
                         "bg-slate-100 text-slate-700"
                       }`}>
                         {selectedExecution.status}
@@ -918,6 +920,9 @@ export default function AssignmentsPlannerPage() {
                       {selectedExecution.submittedAt && (
                         <p>Submitted: {formatDate(selectedExecution.submittedAt)}</p>
                       )}
+                      {selectedExecution.reviewedAt && (
+                        <p>Reviewed: {formatDate(selectedExecution.reviewedAt)}</p>
+                      )}
                       {selectedExecution.deviceInfo && (
                         <p>Device: {selectedExecution.deviceInfo}</p>
                       )}
@@ -925,6 +930,15 @@ export default function AssignmentsPlannerPage() {
                         <p>GPS: {selectedExecution.latitude.toFixed(6)}, {selectedExecution.longitude.toFixed(6)} (Acc: {selectedExecution.gpsAccuracyMeters}m)</p>
                       )}
                     </div>
+
+                    {selectedExecution.reviewRemarks && (
+                      <div className="bg-amber-50 p-2.5 rounded-lg border border-amber-250 text-amber-900">
+                        <span className="text-[9px] font-bold text-amber-800 uppercase block mb-1">
+                          Supervisor Review Comments ({selectedExecution.reviewedBy?.name || "Reviewer"})
+                        </span>
+                        <p className="text-[11px] italic font-medium">"{selectedExecution.reviewRemarks}"</p>
+                      </div>
+                    )}
 
                     {selectedExecution.remarks && (
                       <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200">

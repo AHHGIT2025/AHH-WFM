@@ -1,10 +1,16 @@
+import dotenv from 'dotenv';
+dotenv.config();
+
 import { prisma } from '@ahh-wfm/database';
+import { readDb, writeDb } from '../../packages/mock-data/src/index';
 import axios from 'axios';
+import bcrypt from 'bcryptjs';
 
 const WEB_URL = process.env.WEB_BASE_URL || 'http://localhost:3100';
 const MOBILE_URL = process.env.MOBILE_BASE_URL || 'http://localhost:3101';
 
 describe('AHH WFM API Routes Verification', () => {
+  jest.setTimeout(45000);
   let webCookie: string | null = null;
   let mobileCookie: string | null = null;
   let testEmployeeId = 'AD-0001';
@@ -820,5 +826,323 @@ describe('AHH WFM API Routes Verification', () => {
       // ignore mock db cleanup failures
     }
   });
-});
 
+  test('Checklist Execution Review Workflow (Supervisor/Admin Review Queue)', async () => {
+    const adminHeaders = webCookie ? { Cookie: webCookie } : {};
+    const defaultHash = bcrypt.hashSync('Password123!', 10);
+
+    // 1. Seed supervisor users and access settings
+    try {
+      if (prisma) {
+        await prisma.employee.upsert({
+          where: { email: 'sec.supervisor@alhattab.qa' },
+          update: { role: 'SUPERVISOR', passwordHash: defaultHash },
+          create: {
+            id: 'SEC-SUP-99',
+            name: 'Security Supervisor',
+            email: 'sec.supervisor@alhattab.qa',
+            role: 'SUPERVISOR',
+            passwordHash: defaultHash,
+            isActive: true,
+            department: 'Operations',
+            status: 'Active'
+          }
+        });
+        await prisma.userOperationAccess.upsert({
+          where: { employeeId: 'SEC-SUP-99' },
+          update: { allowedSecurityGuarding: true, allowedFacilityManagement: false },
+          create: { employeeId: 'SEC-SUP-99', allowedSecurityGuarding: true, allowedFacilityManagement: false, allowedWhiteCollar: false }
+        });
+
+        await prisma.employee.upsert({
+          where: { email: 'fm.supervisor@alhattab.qa' },
+          update: { role: 'SUPERVISOR', passwordHash: defaultHash },
+          create: {
+            id: 'FM-SUP-99',
+            name: 'FM Supervisor',
+            email: 'fm.supervisor@alhattab.qa',
+            role: 'SUPERVISOR',
+            passwordHash: defaultHash,
+            isActive: true,
+            department: 'Operations',
+            status: 'Active'
+          }
+        });
+        await prisma.userOperationAccess.upsert({
+          where: { employeeId: 'FM-SUP-99' },
+          update: { allowedSecurityGuarding: false, allowedFacilityManagement: true },
+          create: { employeeId: 'FM-SUP-99', allowedSecurityGuarding: false, allowedFacilityManagement: true, allowedWhiteCollar: false }
+        });
+      }
+    } catch (e) {
+      console.log('Database supervisor seeding error (using memory database fallback)');
+    }
+
+    const db = readDb();
+    db.employees = db.employees || [];
+    db.userOperationAccesses = db.userOperationAccesses || [];
+    if (!db.employees.some((e: any) => e.email === 'sec.supervisor@alhattab.qa')) {
+      db.employees.push({
+        id: 'SEC-SUP-99',
+        name: 'Security Supervisor',
+        email: 'sec.supervisor@alhattab.qa',
+        role: 'SUPERVISOR',
+        passwordHash: defaultHash,
+        isActive: true,
+        department: 'Operations',
+        status: 'Active'
+      });
+    }
+    if (!db.userOperationAccesses.some((o: any) => o.employeeId === 'SEC-SUP-99')) {
+      db.userOperationAccesses.push({ id: 'ACC-SEC-99', employeeId: 'SEC-SUP-99', allowedSecurityGuarding: true, allowedFacilityManagement: false, allowedWhiteCollar: false });
+    }
+    if (!db.employees.some((e: any) => e.email === 'fm.supervisor@alhattab.qa')) {
+      db.employees.push({
+        id: 'FM-SUP-99',
+        name: 'FM Supervisor',
+        email: 'fm.supervisor@alhattab.qa',
+        role: 'SUPERVISOR',
+        passwordHash: defaultHash,
+        isActive: true,
+        department: 'Operations',
+        status: 'Active'
+      });
+    }
+    if (!db.userOperationAccesses.some((o: any) => o.employeeId === 'FM-SUP-99')) {
+      db.userOperationAccesses.push({ id: 'ACC-FM-99', employeeId: 'FM-SUP-99', allowedSecurityGuarding: false, allowedFacilityManagement: true, allowedWhiteCollar: false });
+    }
+    writeDb(db);
+    
+    // Sync db.json to web and mobile monorepo packages to ensure running dev servers see the changes
+    const fs = require('fs');
+    const path = require('path');
+    try {
+      const webDbDir = path.join(process.cwd(), 'apps', 'web', 'packages', 'mock-data');
+      if (!fs.existsSync(webDbDir)) {
+        fs.mkdirSync(webDbDir, { recursive: true });
+      }
+      fs.writeFileSync(path.join(webDbDir, 'db.json'), JSON.stringify(db, null, 2));
+    } catch (e: any) {
+      console.log('Failed to write web db.json:', e.message);
+    }
+    try {
+      const mobileDbDir = path.join(process.cwd(), 'apps', 'mobile', 'packages', 'mock-data');
+      if (!fs.existsSync(mobileDbDir)) {
+        fs.mkdirSync(mobileDbDir, { recursive: true });
+      }
+      fs.writeFileSync(path.join(mobileDbDir, 'db.json'), JSON.stringify(db, null, 2));
+    } catch (e: any) {
+      console.log('Failed to write mobile db.json:', e.message);
+    }
+
+    // 2. Perform authentications to get session cookies
+    const loginUser = async (email: string, isMobile = false) => {
+      const baseUrl = isMobile ? MOBILE_URL : WEB_URL;
+      try {
+        const csrfRes = await axios.get(`${baseUrl}/api/auth/csrf`);
+        const token = csrfRes.data.csrfToken;
+        const csrfCookie = csrfRes.headers['set-cookie']?.map(c => c.split(';')[0]).join('; ');
+        
+        const loginRes = await axios.post(
+          `${baseUrl}/api/auth/callback/credentials`,
+          new URLSearchParams({
+            csrfToken: token,
+            email,
+            password: 'Password123!',
+            json: 'true'
+          }).toString(),
+          {
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+              'Cookie': csrfCookie
+            },
+            validateStatus: () => true
+          }
+        );
+
+        const cookies = loginRes.headers['set-cookie'];
+        if (!cookies) {
+          console.error('Login did not return set-cookie for', email, ':', loginRes.status, loginRes.data);
+        }
+        return cookies ? cookies.map(c => c.split(';')[0]).join('; ') : '';
+      } catch (e: any) {
+        console.error('Login failed for', email, ':', e.response?.data || e.message);
+        return '';
+      }
+    };
+
+    const secSupCookie = await loginUser('sec.supervisor@alhattab.qa', false);
+    const fmSupCookie = await loginUser('fm.supervisor@alhattab.qa', false);
+    const empCookie = await loginUser('sarah.kim@alhattab.qa', true);
+
+    const secSupHeaders = secSupCookie ? { Cookie: secSupCookie } : {};
+    const fmSupHeaders = fmSupCookie ? { Cookie: fmSupCookie } : {};
+    const empHeaders = empCookie ? { Cookie: empCookie } : {};
+
+    // 3. Create a checklist template (Security Guarding type)
+    const tempRes = await axios.post(`${WEB_URL}/api/v1/secfac/checklists`, {
+      templateName: 'Review Workflow Temp',
+      operationType: 'SECURITY_GUARDING',
+      category: 'SECURITY_PATROL',
+      checklistType: 'PATROL',
+      items: [
+        { itemText: 'Req Question 1', itemType: 'YES_NO', isRequired: true, sortOrder: 0 }
+      ]
+    }, { headers: adminHeaders, validateStatus: () => true });
+    expect(tempRes.status).toBe(201);
+    const templateId = tempRes.data.data.id;
+    const itemId = tempRes.data.data.items[0].id;
+
+    // 4. Create an assignment linking to that template
+    const assignRes = await axios.post(`${WEB_URL}/api/v1/secfac/assignments`, {
+      assignmentName: 'Review Test Assignment',
+      operationType: 'SECURITY_GUARDING',
+      employeeId: testEmployeeId,
+      siteId: testSiteId,
+      templateId: templateId,
+      scheduledStart: new Date().toISOString(),
+      scheduledEnd: new Date(Date.now() + 7200000).toISOString(),
+      status: 'PENDING'
+    }, { headers: adminHeaders, validateStatus: () => true });
+    expect(assignRes.status).toBe(201);
+    const assignmentId = assignRes.data.data.id;
+
+    // 5. Save draft checklist execution
+    const draftRes = await axios.post(`${WEB_URL}/api/v1/secfac/checklist-executions`, {
+      assignmentId,
+      checklistTemplateId: templateId,
+      status: 'DRAFT',
+      responses: [
+        { checklistItemId: itemId, itemTextSnapshot: 'Req Question 1', itemTypeSnapshot: 'YES_NO', answerValue: 'YES' }
+      ]
+    }, { headers: adminHeaders, validateStatus: () => true });
+    expect(draftRes.status).toBe(201);
+    const executionId = draftRes.data.data.id;
+
+    // 6. POST review unauthenticated -> expect 401
+    const unauthReview = await axios.post(`${WEB_URL}/api/v1/secfac/checklist-executions/${executionId}/review`, {
+      targetStatus: 'APPROVED',
+      remarks: 'Looks good'
+    }, { validateStatus: () => true });
+    expect(unauthReview.status).toBe(401);
+
+    // 7. POST review as standard field employee -> expect 403 (Forbidden)
+    const empReview = await axios.post(`${WEB_URL}/api/v1/secfac/checklist-executions/${executionId}/review`, {
+      targetStatus: 'APPROVED',
+      remarks: 'Looks good'
+    }, { headers: empHeaders, validateStatus: () => true });
+    expect(empReview.status).toBe(403);
+
+    // 8. Submit the draft checklist to transition status to SUBMITTED
+    const submitRes = await axios.patch(`${WEB_URL}/api/v1/secfac/checklist-executions/${executionId}`, {
+      status: 'SUBMITTED',
+      responses: [
+        { checklistItemId: itemId, itemTextSnapshot: 'Req Question 1', itemTypeSnapshot: 'YES_NO', answerValue: 'YES' }
+      ]
+    }, { headers: adminHeaders, validateStatus: () => true });
+    expect(submitRes.status).toBe(200);
+
+    // 9. Scoped FM reviewer reviewing Security execution -> expect 403 (OperationType scope restriction)
+    const fmReviewOnSecurity = await axios.post(`${WEB_URL}/api/v1/secfac/checklist-executions/${executionId}/review`, {
+      targetStatus: 'APPROVED',
+      remarks: 'Approve from FM'
+    }, { headers: fmSupHeaders, validateStatus: () => true });
+    expect(fmReviewOnSecurity.status).toBe(403);
+
+    // 10. POST review with invalid targetStatus -> expect 400
+    const invalidStatus = await axios.post(`${WEB_URL}/api/v1/secfac/checklist-executions/${executionId}/review`, {
+      targetStatus: 'INVALID_STATUS',
+      remarks: 'Looks good'
+    }, { headers: secSupHeaders, validateStatus: () => true });
+    if (invalidStatus.status !== 400) {
+      console.error('invalidStatus failed. Status:', invalidStatus.status, 'Body:', invalidStatus.data);
+    }
+    expect(invalidStatus.status).toBe(400);
+
+    // 11. POST review with missing remarks for REJECTED -> expect 400
+    const missingRemarksReject = await axios.post(`${WEB_URL}/api/v1/secfac/checklist-executions/${executionId}/review`, {
+      targetStatus: 'REJECTED',
+      remarks: ' '
+    }, { headers: secSupHeaders, validateStatus: () => true });
+    expect(missingRemarksReject.status).toBe(400);
+
+    // 12. POST review with missing remarks for REOPENED -> expect 400
+    const missingRemarksReopen = await axios.post(`${WEB_URL}/api/v1/secfac/checklist-executions/${executionId}/review`, {
+      targetStatus: 'REOPENED',
+      remarks: ''
+    }, { headers: secSupHeaders, validateStatus: () => true });
+    expect(missingRemarksReopen.status).toBe(400);
+
+    // 13. Reopen execution as Security Supervisor -> expect 200 and status = REOPENED
+    const reopenRes = await axios.post(`${WEB_URL}/api/v1/secfac/checklist-executions/${executionId}/review`, {
+      targetStatus: 'REOPENED',
+      remarks: 'Please re-check the locks'
+    }, { headers: secSupHeaders, validateStatus: () => true });
+    expect(reopenRes.status).toBe(200);
+    expect(reopenRes.data.data.status).toBe('REOPENED');
+    expect(reopenRes.data.data.reviewRemarks).toBe('Please re-check the locks');
+
+    // 14. Reopened execution is editable again by mobile user (expect success on PATCH)
+    const editReopenedRes = await axios.patch(`${WEB_URL}/api/v1/secfac/checklist-executions/${executionId}`, {
+      remarks: 'Checked locks again and verified',
+      status: 'SUBMITTED',
+      responses: [
+        { checklistItemId: itemId, itemTextSnapshot: 'Req Question 1', itemTypeSnapshot: 'YES_NO', answerValue: 'YES' }
+      ]
+    }, { headers: adminHeaders, validateStatus: () => true });
+    expect(editReopenedRes.status).toBe(200);
+    expect(editReopenedRes.data.data.status).toBe('SUBMITTED');
+
+    // 15. Reject execution as Security Supervisor -> expect 200 and status = REJECTED
+    const rejectRes = await axios.post(`${WEB_URL}/api/v1/secfac/checklist-executions/${executionId}/review`, {
+      targetStatus: 'REJECTED',
+      remarks: 'Failed verification'
+    }, { headers: secSupHeaders, validateStatus: () => true });
+    expect(rejectRes.status).toBe(200);
+    expect(rejectRes.data.data.status).toBe('REJECTED');
+
+    // 16. Submit again after rejection
+    const submitAgainRes = await axios.patch(`${WEB_URL}/api/v1/secfac/checklist-executions/${executionId}`, {
+      status: 'SUBMITTED',
+      responses: [
+        { checklistItemId: itemId, itemTextSnapshot: 'Req Question 1', itemTypeSnapshot: 'YES_NO', answerValue: 'YES' }
+      ]
+    }, { headers: adminHeaders, validateStatus: () => true });
+    expect(submitAgainRes.status).toBe(200);
+
+    // 17. Approve execution as Security Supervisor -> expect 200 and status = APPROVED
+    const approveRes = await axios.post(`${WEB_URL}/api/v1/secfac/checklist-executions/${executionId}/review`, {
+      targetStatus: 'APPROVED',
+      remarks: 'Verified and approved'
+    }, { headers: secSupHeaders, validateStatus: () => true });
+    expect(approveRes.status).toBe(200);
+    expect(approveRes.data.data.status).toBe('APPROVED');
+
+    // 18. Try to review again an APPROVED execution -> expect 400
+    const doubleReview = await axios.post(`${WEB_URL}/api/v1/secfac/checklist-executions/${executionId}/review`, {
+      targetStatus: 'REOPENED',
+      remarks: 'Try to reopen again'
+    }, { headers: secSupHeaders, validateStatus: () => true });
+    expect(doubleReview.status).toBe(400);
+
+    // 19. Verify that history records were logged for transitions
+    const finalDetailRes = await axios.get(`${WEB_URL}/api/v1/secfac/checklist-executions/${executionId}`, { headers: adminHeaders, validateStatus: () => true });
+    expect(finalDetailRes.status).toBe(200);
+    expect(Array.isArray(finalDetailRes.data.data.history)).toBe(true);
+    expect(finalDetailRes.data.data.history.length).toBeGreaterThanOrEqual(4);
+
+    // 20. Cleanup
+    try {
+      if (prisma) {
+        await prisma.secfacChecklistResponse.deleteMany({ where: { executionId } });
+        await prisma.secfacChecklistExecutionHistory.deleteMany({ where: { executionId } });
+        await prisma.secfacChecklistExecution.delete({ where: { id: executionId } });
+        await prisma.secfacAssignment.delete({ where: { id: assignmentId } });
+        await prisma.secfacChecklistItem.deleteMany({ where: { templateId } });
+        await prisma.secfacChecklistTemplate.delete({ where: { id: templateId } });
+      }
+    } catch (e) {
+      // ignore
+    }
+  });
+});

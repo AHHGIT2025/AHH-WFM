@@ -4,7 +4,7 @@ import { checkApiAuth } from "@/lib/api-guards";
 import { isAdminUser } from "@/lib/permissions";
 import { prisma } from "@ahh-wfm/database";
 
-const APPROVED_STATUSES = ["DRAFT", "SUBMITTED", "PENDING_REVIEW", "APPROVED", "REJECTED", "CANCELLED"];
+const APPROVED_STATUSES = ["DRAFT", "SUBMITTED", "PENDING_REVIEW", "APPROVED", "REJECTED", "REOPENED", "CANCELLED"];
 
 export async function GET(
   request: Request,
@@ -64,9 +64,10 @@ export async function PATCH(
       return NextResponse.json({ success: false, error: "Forbidden: Cannot update another employee's execution draft" }, { status: 403 });
     }
 
-    // 2. Already submitted read-only block
-    if (execution.status === "SUBMITTED" && !isAdmin) {
-      return NextResponse.json({ success: false, error: "Cannot update a checklist that has already been submitted" }, { status: 400 });
+    // 2. Already submitted/approved read-only block
+    const READ_ONLY_STATUSES = ["SUBMITTED", "PENDING_REVIEW", "APPROVED", "CANCELLED"];
+    if (READ_ONLY_STATUSES.includes(execution.status) && !isAdmin) {
+      return NextResponse.json({ success: false, error: `Cannot update a checklist with status ${execution.status}` }, { status: 400 });
     }
 
     const payload = await request.json();

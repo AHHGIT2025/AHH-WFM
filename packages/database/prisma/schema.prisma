@@ -127,6 +127,8 @@ model Employee {
   secfacEmployeeAssignments   SecfacAssignment[]         @relation("SecfacEmployeeAssignments")
   secfacSupervisorAssignments SecfacAssignment[]         @relation("SecfacSupervisorAssignments")
   secfacChecklistExecutions   SecfacChecklistExecution[] @relation("SecfacEmployeeExecutions")
+  secfacExecutionReviews      SecfacChecklistExecution[] @relation("SecfacExecutionReviewer")
+  secfacExecutionHistories    SecfacChecklistExecutionHistory[] @relation("SecfacExecutionHistoryPerformer")
 }
 
 model Department {
@@ -2139,10 +2141,16 @@ model SecfacChecklistExecution {
   deviceInfo          String?
   remarks             String? @db.Text
 
+  reviewedById        String?
+  reviewedBy          Employee? @relation("SecfacExecutionReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviewedAt          DateTime?
+  reviewRemarks       String? @db.Text
+
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 
   responses           SecfacChecklistResponse[]
+  history             SecfacChecklistExecutionHistory[]
 
   @@index([operationType])
   @@index([assignmentId])
@@ -2151,6 +2159,7 @@ model SecfacChecklistExecution {
   @@index([siteId])
   @@index([checkpointId])
   @@index([status])
+  @@index([reviewedById])
 }
 
 model SecfacChecklistResponse {
@@ -2178,5 +2187,28 @@ model SecfacChecklistResponse {
   @@index([executionId])
   @@index([checklistItemId])
   @@index([isFlagged])
+}
+
+model SecfacChecklistExecutionHistory {
+  id            String   @id @default(uuid())
+
+  executionId   String
+  execution     SecfacChecklistExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+
+  fromStatus    String?
+  toStatus      String
+
+  action        String
+  remarks       String?  @db.Text
+
+  changedById   String?
+  changedBy     Employee? @relation("SecfacExecutionHistoryPerformer", fields: [changedById], references: [id], onDelete: SetNull)
+
+  createdAt     DateTime @default(now())
+
+  @@index([executionId])
+  @@index([toStatus])
+  @@index([changedById])
+  @@index([createdAt])
 }
 

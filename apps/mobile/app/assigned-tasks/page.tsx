@@ -161,7 +161,8 @@ export default function AssignedTasksPage() {
   };
 
   const handleAnswerChange = (itemId: string, field: string, value: any) => {
-    if (execution?.status === "SUBMITTED") return; // read-only
+    const isReadOnly = ["SUBMITTED", "PENDING_REVIEW", "APPROVED", "CANCELLED"].includes(execution?.status || "");
+    if (isReadOnly) return; // read-only
     setAnswers((prev) => {
       const existing = prev[itemId] || { answerValue: "", comment: "", isFlagged: false };
       return {
@@ -331,8 +332,11 @@ export default function AssignedTasksPage() {
                     )}
                   </div>
                   <span className={`px-2 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider ${
-                    execStatus === "SUBMITTED" ? "bg-status-success/15 text-status-success" :
-                    execStatus === "DRAFT" ? "bg-amber-100 text-amber-700" :
+                    execStatus === "APPROVED" ? "bg-green-100 text-green-700" :
+                    execStatus === "REJECTED" ? "bg-red-100 text-red-700" :
+                    execStatus === "REOPENED" ? "bg-amber-100 text-amber-700 font-semibold" :
+                    execStatus === "SUBMITTED" || execStatus === "PENDING_REVIEW" ? "bg-blue-100 text-blue-700" :
+                    execStatus === "DRAFT" ? "bg-slate-100 text-slate-700" :
                     "bg-on-surface/10 text-on-surface-variant"
                   }`}>
                     {execStatus}
@@ -368,7 +372,7 @@ export default function AssignedTasksPage() {
 
                 {task.template && (
                   <div className="bg-primary/5 rounded-xl p-2 flex justify-between items-center text-[10px] text-primary font-bold">
-                    <span>{execStatus === "SUBMITTED" ? "Review Completed Checklist" : "Execute Checklist Tour"}</span>
+                    <span>{["SUBMITTED", "PENDING_REVIEW", "APPROVED", "CANCELLED"].includes(execStatus) ? "Review Completed Checklist" : "Execute Checklist"}</span>
                     <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
                   </div>
                 )}
@@ -387,7 +391,7 @@ export default function AssignedTasksPage() {
               <div>
                 <h3 className="text-sm font-bold truncate max-w-[280px]">{activeTaskForModal.template.templateName}</h3>
                 <span className="text-[9px] font-mono opacity-85 block uppercase tracking-wider">
-                  {execution?.status === "SUBMITTED" ? "SUBMITTED (READ-ONLY)" : `Execution Draft (${execution?.status || "DRAFT"})`}
+                  {["SUBMITTED", "PENDING_REVIEW", "APPROVED", "CANCELLED"].includes(execution?.status || "") ? `${execution?.status || "SUBMITTED"} (READ-ONLY)` : `Execution Draft (${execution?.status || "DRAFT"})`}
                 </span>
               </div>
               <button
@@ -425,6 +429,49 @@ export default function AssignedTasksPage() {
                 </p>
               )}
 
+              {execution?.status === "REJECTED" && (
+                <div className="p-3 bg-red-50 border border-red-200 text-red-800 rounded-xl text-[10px] space-y-1">
+                  <div className="flex items-center gap-1 font-bold">
+                    <span className="material-symbols-outlined text-red-700 text-xs">cancel</span>
+                    <span>Checklist Rejected</span>
+                  </div>
+                  {execution.reviewRemarks && (
+                    <p className="italic font-medium">"{execution.reviewRemarks}"</p>
+                  )}
+                </div>
+              )}
+
+              {execution?.status === "REOPENED" && (
+                <div className="p-3 bg-amber-50 border border-amber-250 text-amber-800 rounded-xl text-[10px] space-y-1">
+                  <div className="flex items-center gap-1 font-bold">
+                    <span className="material-symbols-outlined text-amber-700 text-xs">replay</span>
+                    <span>Checklist Reopened</span>
+                  </div>
+                  {execution.reviewRemarks && (
+                    <p className="italic font-medium">"{execution.reviewRemarks}"</p>
+                  )}
+                </div>
+              )}
+
+              {execution?.status === "APPROVED" && (
+                <div className="p-3 bg-green-50 border border-green-200 text-green-800 rounded-xl text-[10px] space-y-1">
+                  <div className="flex items-center gap-1 font-bold">
+                    <span className="material-symbols-outlined text-green-700 text-xs font-bold">check_circle</span>
+                    <span>Checklist Approved & Locked</span>
+                  </div>
+                  {execution.reviewRemarks && (
+                    <p className="italic font-medium">"{execution.reviewRemarks}"</p>
+                  )}
+                </div>
+              )}
+
+              {(execution?.status === "SUBMITTED" || execution?.status === "PENDING_REVIEW") && (
+                <div className="p-3 bg-blue-50 border border-blue-200 text-blue-800 rounded-xl text-[10px] flex items-center gap-1.5 font-bold">
+                  <span className="material-symbols-outlined text-blue-700 text-xs">info</span>
+                  <span>Checklist submitted and awaiting supervisor review.</span>
+                </div>
+              )}
+
               {loadingExecution ? (
                 <div className="text-center py-12 text-xs font-mono animate-pulse text-[#002D72]">
                   Fetching execution data...
@@ -436,7 +483,7 @@ export default function AssignedTasksPage() {
               ) : (
                 activeTaskForModal.template.items.map((item, idx) => {
                   const ansObj = answers[item.id] || { answerValue: "", comment: "" };
-                  const isSubmitted = execution?.status === "SUBMITTED";
+                  const isSubmitted = ["SUBMITTED", "PENDING_REVIEW", "APPROVED", "CANCELLED"].includes(execution?.status || "");
 
                   return (
                     <div key={item.id} className="p-3 bg-surface-container-low border border-outline-variant/30 rounded-xl space-y-2.5 text-[10px]">
@@ -571,7 +618,7 @@ export default function AssignedTasksPage() {
                 <div className="p-3 bg-surface-container border border-outline-variant/30 rounded-xl space-y-1.5 text-[10px]">
                   <label className="font-bold text-[#002D72] uppercase block tracking-wider text-[8px]">Execution Remarks (Overall Notes)</label>
                   <textarea
-                    disabled={execution?.status === "SUBMITTED"}
+                    disabled={["SUBMITTED", "PENDING_REVIEW", "APPROVED", "CANCELLED"].includes(execution?.status || "")}
                     rows={2}
                     placeholder="Enter tour summary remarks..."
                     value={remarks}
@@ -583,7 +630,7 @@ export default function AssignedTasksPage() {
             </div>
 
             {/* Modal Actions Footer */}
-            {execution?.status !== "SUBMITTED" && !loadingExecution && (
+            {!["SUBMITTED", "PENDING_REVIEW", "APPROVED", "CANCELLED"].includes(execution?.status || "") && !loadingExecution && (
               <div className="p-4 border-t border-outline-variant/30 bg-surface-container-low grid grid-cols-2 gap-3">
                 <button
                   type="button"
@@ -605,9 +652,15 @@ export default function AssignedTasksPage() {
               </div>
             )}
 
-            {execution?.status === "SUBMITTED" && (
-              <div className="p-4 border-t border-outline-variant/30 bg-green-50 text-green-800 font-bold text-xs text-center">
-                Completed Checklist Submitted & Locked
+            {["SUBMITTED", "PENDING_REVIEW", "APPROVED", "CANCELLED"].includes(execution?.status || "") && (
+              <div className={`p-4 border-t border-outline-variant/30 text-xs font-bold text-center ${
+                execution?.status === "APPROVED" ? "bg-green-50 text-green-800" :
+                execution?.status === "CANCELLED" ? "bg-slate-100 text-slate-500" :
+                "bg-blue-50 text-blue-800"
+              }`}>
+                {execution?.status === "APPROVED" ? "Completed Checklist Approved & Locked" :
+                 execution?.status === "CANCELLED" ? "Completed Checklist Cancelled" :
+                 "Completed Checklist Submitted & Locked"}
               </div>
             )}
           </div>

@@ -1603,9 +1603,14 @@ export interface SecfacChecklistExecution {
   gpsAccuracyMeters?: number | null;
   deviceInfo?: string | null;
   remarks?: string | null;
+  reviewedById?: string | null;
+  reviewedBy?: Employee | null;
+  reviewedAt?: string | null;
+  reviewRemarks?: string | null;
   createdAt?: string;
   updatedAt?: string;
   responses?: SecfacChecklistResponse[];
+  history?: SecfacChecklistExecutionHistory[];
 }
 
 export interface SecfacChecklistResponse {
@@ -1623,6 +1628,19 @@ export interface SecfacChecklistResponse {
   flagReason?: string | null;
   createdAt?: string;
   updatedAt?: string;
+}
+
+export interface SecfacChecklistExecutionHistory {
+  id: string;
+  executionId: string;
+  execution?: SecfacChecklistExecution | null;
+  fromStatus?: string | null;
+  toStatus: string;
+  action: string;
+  remarks?: string | null;
+  changedById?: string | null;
+  changedBy?: Employee | null;
+  createdAt?: string;
 }
 
 

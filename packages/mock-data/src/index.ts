@@ -1,4 +1,4 @@
-import { Employee, AttendanceRecord, Shift, LeaveRequest, SapMapping, SyncLog, Announcement, Department, Worksite, AttendanceCorrection, LeaveType, LeaveBalance, LeaveBalanceLedger, Holiday, LeaveApprovalWorkflow, LeaveApprovalStep, LeaveApprovalHistory, LeaveApprovalDelegation, ShiftTemplate, RotationTemplate, ShiftAssignment, ShiftSwapRequest, OvertimeRate, SapConnection, SapSyncJob, SapSyncLog, SapFieldMapping, SapRetryQueue, SapExportQueue, SapPayrollStage, SapReconciliationLog, SapPayrollPeriodLock, SecurityOperationsPeriodLock, SavedReport, ReportExportLog, UserActivityLog, ProductionCheckLog, BackupJob, BackupAuditLog, EmployeeBulkUploadJob, SystemRole, SystemPermission, RolePermission, UserRoleAssignment, BlueCollarPositionCategory, Project, ProjectSite, EmployeeDeployment, Designation, TradeClassification, LocationMaster, CostCenter, ShiftRelieverAssignment, RelieverStandbyRule, Company, AllowedPunchLocation, EmployeeAllowedPunchLocation, ManpowerClient, ManpowerContract, ManpowerProject, ManpowerSite, ManpowerLocationUnit, ManpowerCategory, ManpowerShiftRequirement, ManpowerDeployment, ManpowerDeploymentAssignment, ManpowerRelieverAssignment, UserOperationAccess, SecfacCheckpoint, SecfacChecklistTemplate, SecfacChecklistItem, SecfacAssignment, SecfacChecklistExecution, SecfacChecklistResponse } from "@ahh-wfm/types";
+import { Employee, AttendanceRecord, Shift, LeaveRequest, SapMapping, SyncLog, Announcement, Department, Worksite, AttendanceCorrection, LeaveType, LeaveBalance, LeaveBalanceLedger, Holiday, LeaveApprovalWorkflow, LeaveApprovalStep, LeaveApprovalHistory, LeaveApprovalDelegation, ShiftTemplate, RotationTemplate, ShiftAssignment, ShiftSwapRequest, OvertimeRate, SapConnection, SapSyncJob, SapSyncLog, SapFieldMapping, SapRetryQueue, SapExportQueue, SapPayrollStage, SapReconciliationLog, SapPayrollPeriodLock, SecurityOperationsPeriodLock, SavedReport, ReportExportLog, UserActivityLog, ProductionCheckLog, BackupJob, BackupAuditLog, EmployeeBulkUploadJob, SystemRole, SystemPermission, RolePermission, UserRoleAssignment, BlueCollarPositionCategory, Project, ProjectSite, EmployeeDeployment, Designation, TradeClassification, LocationMaster, CostCenter, ShiftRelieverAssignment, RelieverStandbyRule, Company, AllowedPunchLocation, EmployeeAllowedPunchLocation, ManpowerClient, ManpowerContract, ManpowerProject, ManpowerSite, ManpowerLocationUnit, ManpowerCategory, ManpowerShiftRequirement, ManpowerDeployment, ManpowerDeploymentAssignment, ManpowerRelieverAssignment, UserOperationAccess, SecfacCheckpoint, SecfacChecklistTemplate, SecfacChecklistItem, SecfacAssignment, SecfacChecklistExecution, SecfacChecklistResponse, SecfacChecklistExecutionHistory } from "@ahh-wfm/types";
 const uuid = () => Math.random().toString(36).substring(2) + Date.now().toString(36);
 import * as fs from "fs";
 import * as path from "path";
@@ -476,6 +476,7 @@ let memoryDb: {
   secfacAssignments: SecfacAssignment[];
   secfacChecklistExecutions: SecfacChecklistExecution[];
   secfacChecklistResponses: SecfacChecklistResponse[];
+  secfacChecklistExecutionHistories: SecfacChecklistExecutionHistory[];
 } = {
   companies: [
     { id: "COMP-001", companyCode: "AHH", companyName: "Al Hattab Holding", isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
@@ -761,7 +762,8 @@ let memoryDb: {
   secfacChecklistItems: [],
   secfacAssignments: [],
   secfacChecklistExecutions: [],
-  secfacChecklistResponses: []
+  secfacChecklistResponses: [],
+  secfacChecklistExecutionHistories: []
 };
 
 // Seeding helper to pre-fill MySQL with mock data if it is empty
@@ -11535,6 +11537,13 @@ export const mockDb = {
           employee: true,
           site: true,
           checkpoint: true,
+          reviewedBy: true,
+          history: {
+            include: {
+              changedBy: true
+            },
+            orderBy: { createdAt: "desc" }
+          },
           responses: {
             include: {
               checklistItem: true
@@ -11547,8 +11556,13 @@ export const mockDb = {
         ...x,
         startedAt: x.startedAt?.toISOString(),
         submittedAt: x.submittedAt?.toISOString(),
+        reviewedAt: x.reviewedAt?.toISOString(),
         createdAt: x.createdAt?.toISOString(),
-        updatedAt: x.updatedAt?.toISOString()
+        updatedAt: x.updatedAt?.toISOString(),
+        history: x.history?.map((h: any) => ({
+          ...h,
+          createdAt: h.createdAt?.toISOString()
+        }))
       }));
     }
 
@@ -11579,6 +11593,14 @@ export const mockDb = {
           checklistItem: (db.secfacChecklistItems || []).find((item: any) => item.id === r.checklistItemId) || null
         }));
 
+      const history = (db.secfacChecklistExecutionHistories || [])
+        .filter((h: any) => h.executionId === x.id)
+        .map((h: any) => ({
+          ...h,
+          changedBy: (db.employees || []).find((e: any) => e.id === h.changedById) || null
+        }))
+        .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
       return {
         ...x,
         assignment: (db.secfacAssignments || []).find((a: any) => a.id === x.assignmentId) || null,
@@ -11586,6 +11608,8 @@ export const mockDb = {
         employee: (db.employees || []).find((e: any) => e.id === x.employeeId) || null,
         site: (db.manpowerSites || []).find((s: any) => s.id === x.siteId) || null,
         checkpoint: (db.secfacCheckpoints || []).find((cp: any) => cp.id === x.checkpointId) || null,
+        reviewedBy: x.reviewedById ? ((db.employees || []).find((e: any) => e.id === x.reviewedById) || null) : null,
+        history,
         responses
       };
     });
@@ -11601,6 +11625,13 @@ export const mockDb = {
           employee: true,
           site: true,
           checkpoint: true,
+          reviewedBy: true,
+          history: {
+            include: {
+              changedBy: true
+            },
+            orderBy: { createdAt: "desc" }
+          },
           responses: {
             include: {
               checklistItem: true
@@ -11613,8 +11644,13 @@ export const mockDb = {
         ...res,
         startedAt: res.startedAt?.toISOString(),
         submittedAt: res.submittedAt?.toISOString(),
+        reviewedAt: res.reviewedAt?.toISOString(),
         createdAt: res.createdAt?.toISOString(),
-        updatedAt: res.updatedAt?.toISOString()
+        updatedAt: res.updatedAt?.toISOString(),
+        history: res.history?.map((h: any) => ({
+          ...h,
+          createdAt: h.createdAt?.toISOString()
+        }))
       };
     }
 
@@ -11629,6 +11665,14 @@ export const mockDb = {
         checklistItem: (db.secfacChecklistItems || []).find((item: any) => item.id === r.checklistItemId) || null
       }));
 
+    const history = (db.secfacChecklistExecutionHistories || [])
+      .filter((h: any) => h.executionId === x.id)
+      .map((h: any) => ({
+        ...h,
+        changedBy: (db.employees || []).find((e: any) => e.id === h.changedById) || null
+      }))
+      .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
     return {
       ...x,
       assignment: (db.secfacAssignments || []).find((a: any) => a.id === x.assignmentId) || null,
@@ -11636,6 +11680,8 @@ export const mockDb = {
       employee: (db.employees || []).find((e: any) => e.id === x.employeeId) || null,
       site: (db.manpowerSites || []).find((s: any) => s.id === x.siteId) || null,
       checkpoint: (db.secfacCheckpoints || []).find((cp: any) => cp.id === x.checkpointId) || null,
+      reviewedBy: x.reviewedById ? ((db.employees || []).find((e: any) => e.id === x.reviewedById) || null) : null,
+      history,
       responses
     };
   },
@@ -11664,8 +11710,16 @@ export const mockDb = {
     };
 
     if (isDbConnected()) {
-      // 1. Transaction to delete old responses if updating, then write execution & responses
       const result = await prismaClient.$transaction(async (tx: any) => {
+        let fromStatus: string | null = null;
+        if (isEdit) {
+          const existing = await tx.secfacChecklistExecution.findUnique({
+            where: { id: executionId },
+            select: { status: true }
+          });
+          fromStatus = existing?.status || null;
+        }
+
         if (isEdit) {
           await tx.secfacChecklistResponse.deleteMany({ where: { executionId } });
         }
@@ -11681,6 +11735,20 @@ export const mockDb = {
             updatedAt: new Date()
           }
         });
+
+        // Write status history record
+        if (!isEdit || (fromStatus && fromStatus !== executionData.status)) {
+          await tx.secfacChecklistExecutionHistory.create({
+            data: {
+              executionId,
+              fromStatus,
+              toStatus: executionData.status,
+              action: executionData.status === "SUBMITTED" ? "SUBMIT" : "SAVE_DRAFT",
+              remarks: executionData.status === "SUBMITTED" ? "Checklist submitted by employee" : "Checklist saved as draft",
+              changedById: executionData.employeeId
+            }
+          });
+        }
 
         if (Array.isArray(data.responses)) {
           for (const resp of data.responses) {
@@ -11709,6 +11777,13 @@ export const mockDb = {
             employee: true,
             site: true,
             checkpoint: true,
+            reviewedBy: true,
+            history: {
+              include: {
+                changedBy: true
+              },
+              orderBy: { createdAt: "desc" }
+            },
             responses: {
               include: {
                 checklistItem: true
@@ -11722,8 +11797,13 @@ export const mockDb = {
         ...result,
         startedAt: result.startedAt?.toISOString(),
         submittedAt: result.submittedAt?.toISOString(),
+        reviewedAt: result.reviewedAt?.toISOString(),
         createdAt: result.createdAt?.toISOString(),
-        updatedAt: result.updatedAt?.toISOString()
+        updatedAt: result.updatedAt?.toISOString(),
+        history: result.history?.map((h: any) => ({
+          ...h,
+          createdAt: h.createdAt?.toISOString()
+        }))
       };
     }
 
@@ -11732,6 +11812,11 @@ export const mockDb = {
 
     // Find or create execution
     const execIdx = db.secfacChecklistExecutions.findIndex((e: any) => e.id === executionId);
+    let fromStatus: string | null = null;
+    if (execIdx !== -1) {
+      fromStatus = db.secfacChecklistExecutions[execIdx].status;
+    }
+
     const savedExecution = {
       id: executionId,
       ...executionData,
@@ -11745,6 +11830,22 @@ export const mockDb = {
       db.secfacChecklistResponses = db.secfacChecklistResponses.filter((r: any) => r.executionId !== executionId);
     } else {
       db.secfacChecklistExecutions.push(savedExecution);
+    }
+
+    // Write status history record
+    if (execIdx === -1 || fromStatus !== executionData.status) {
+      const historyItem: SecfacChecklistExecutionHistory = {
+        id: `sexh-${Date.now()}-${Math.random().toString(36).substring(2)}`,
+        executionId,
+        fromStatus,
+        toStatus: executionData.status,
+        action: executionData.status === "SUBMITTED" ? "SUBMIT" : "SAVE_DRAFT",
+        remarks: executionData.status === "SUBMITTED" ? "Checklist submitted by employee" : "Checklist saved as draft",
+        changedById: executionData.employeeId,
+        createdAt: nowStr
+      };
+      db.secfacChecklistExecutionHistories = db.secfacChecklistExecutionHistories || [];
+      db.secfacChecklistExecutionHistories.push(historyItem);
     }
 
     // Add responses
@@ -11775,6 +11876,14 @@ export const mockDb = {
 
     writeDb(db);
 
+    const history = (db.secfacChecklistExecutionHistories || [])
+      .filter((h: any) => h.executionId === executionId)
+      .map((h: any) => ({
+        ...h,
+        changedBy: (db.employees || []).find((e: any) => e.id === h.changedById) || null
+      }))
+      .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
     return {
       ...savedExecution,
       assignment: (db.secfacAssignments || []).find((a: any) => a.id === data.assignmentId) || null,
@@ -11782,8 +11891,113 @@ export const mockDb = {
       employee: (db.employees || []).find((e: any) => e.id === data.employeeId) || null,
       site: (db.manpowerSites || []).find((s: any) => s.id === data.siteId) || null,
       checkpoint: (db.secfacCheckpoints || []).find((cp: any) => cp.id === data.checkpointId) || null,
+      reviewedBy: null,
+      history,
       responses: savedResponses
     };
+  },
+
+  reviewSecfacChecklistExecution: async (executionId: string, targetStatus: string, remarks: string | null, reviewerId: string): Promise<any> => {
+    const now = new Date();
+    const nowStr = now.toISOString();
+
+    if (isDbConnected()) {
+      const existing = await prismaClient.secfacChecklistExecution.findUnique({
+        where: { id: executionId },
+        select: { status: true }
+      });
+      if (!existing) throw new Error("Execution not found");
+
+      const fromStatus = existing.status;
+
+      const updated = await prismaClient.$transaction(async (tx: any) => {
+        // Create history log
+        await tx.secfacChecklistExecutionHistory.create({
+          data: {
+            executionId,
+            fromStatus,
+            toStatus: targetStatus,
+            action: targetStatus, // APPROVED, REJECTED, REOPENED
+            remarks,
+            changedById: reviewerId
+          }
+        });
+
+        // Update execution
+        return tx.secfacChecklistExecution.update({
+          where: { id: executionId },
+          data: {
+            status: targetStatus,
+            reviewedById: reviewerId,
+            reviewedAt: now,
+            reviewRemarks: remarks,
+            updatedAt: now
+          },
+          include: {
+            assignment: true,
+            checklistTemplate: true,
+            employee: true,
+            site: true,
+            checkpoint: true,
+            reviewedBy: true,
+            history: {
+              include: {
+                changedBy: true
+              },
+              orderBy: { createdAt: "desc" }
+            },
+            responses: {
+              include: {
+                checklistItem: true
+              }
+            }
+          }
+        });
+      });
+
+      return {
+        ...updated,
+        startedAt: updated.startedAt?.toISOString(),
+        submittedAt: updated.submittedAt?.toISOString(),
+        reviewedAt: updated.reviewedAt?.toISOString(),
+        createdAt: updated.createdAt?.toISOString(),
+        updatedAt: updated.updatedAt?.toISOString(),
+        history: updated.history?.map((h: any) => ({
+          ...h,
+          createdAt: h.createdAt?.toISOString()
+        }))
+      };
+    }
+
+    const db = readDb();
+    const idx = (db.secfacChecklistExecutions || []).findIndex((x: any) => x.id === executionId);
+    if (idx === -1) throw new Error("Execution not found");
+
+    const fromStatus = db.secfacChecklistExecutions[idx].status;
+
+    // Create history
+    const historyItem: SecfacChecklistExecutionHistory = {
+      id: `sexh-${Date.now()}-${Math.random().toString(36).substring(2)}`,
+      executionId,
+      fromStatus,
+      toStatus: targetStatus,
+      action: targetStatus,
+      remarks,
+      changedById: reviewerId,
+      createdAt: nowStr
+    };
+    db.secfacChecklistExecutionHistories = db.secfacChecklistExecutionHistories || [];
+    db.secfacChecklistExecutionHistories.push(historyItem);
+
+    // Update execution
+    db.secfacChecklistExecutions[idx].status = targetStatus;
+    db.secfacChecklistExecutions[idx].reviewedById = reviewerId;
+    db.secfacChecklistExecutions[idx].reviewedAt = nowStr;
+    db.secfacChecklistExecutions[idx].reviewRemarks = remarks;
+    db.secfacChecklistExecutions[idx].updatedAt = nowStr;
+
+    writeDb(db);
+    return mockDb.getSecfacChecklistExecutionById(executionId);
   },
 
   getSecfacAssignedTasks: async (employeeId: string): Promise<any[]> => {
