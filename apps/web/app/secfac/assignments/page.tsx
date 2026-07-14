@@ -49,6 +49,27 @@ export default function AssignmentsPlannerPage() {
 
   // Selected Assignment details
   const [selectedAssignment, setSelectedAssignment] = useState<SecfacAssignment | null>(null);
+  const [selectedExecution, setSelectedExecution] = useState<any>(null);
+  const [loadingExecution, setLoadingExecution] = useState(false);
+
+  useEffect(() => {
+    if (!selectedAssignment) {
+      setSelectedExecution(null);
+      return;
+    }
+    setLoadingExecution(true);
+    fetch(`/api/v1/secfac/checklist-executions?assignmentId=${selectedAssignment.id}`)
+      .then(res => res.json())
+      .then(res => {
+        if (res.success && res.data && res.data.length > 0) {
+          setSelectedExecution(res.data[0]);
+        } else {
+          setSelectedExecution(null);
+        }
+      })
+      .catch(() => setSelectedExecution(null))
+      .finally(() => setLoadingExecution(false));
+  }, [selectedAssignment]);
 
   // Filters State
   const [search, setSearch] = useState("");
@@ -809,6 +830,153 @@ export default function AssignmentsPlannerPage() {
             </div>
           </div>
         </div>
+
+        {/* Right Side: Assignment Details & Checklist Submission Preview */}
+        {selectedAssignment && (
+          <div className="w-full xl:w-[400px] bg-white border border-[#C4C6D2] rounded-xl p-5 shadow-sm space-y-5 flex flex-col self-start shrink-0">
+            <div className="flex justify-between items-start border-b border-[#E7EEFF] pb-3">
+              <div>
+                <h3 className="text-sm font-bold text-[#001A48]">{selectedAssignment.assignmentName}</h3>
+                <span className="text-[10px] font-mono text-[#747782]">{selectedAssignment.assignmentCode || "NO CODE"}</span>
+              </div>
+              <button
+                onClick={() => setSelectedAssignment(null)}
+                className="text-[#747782] hover:bg-[#DAE2FF] p-1 rounded-full flex items-center"
+              >
+                <span className="material-symbols-outlined text-base">close</span>
+              </button>
+            </div>
+
+            <div className="space-y-3.5 text-xs">
+              <div>
+                <span className="text-[9px] font-bold text-[#747782] uppercase block tracking-wider">Operation Scope</span>
+                <span className={`px-2 py-0.5 rounded text-[9px] font-bold inline-block mt-1 ${selectedAssignment.operationType === "SECURITY_GUARDING" ? "bg-[#DAE2FF] text-[#002D72]" : "bg-teal-50 text-teal-700"}`}>
+                  {selectedAssignment.operationType === "SECURITY_GUARDING" ? "Security Guarding" : "Facility Management"}
+                </span>
+              </div>
+
+              <div>
+                <span className="text-[9px] font-bold text-[#747782] uppercase block tracking-wider">Site Wing</span>
+                <p className="font-semibold text-[#444651] mt-0.5">{selectedAssignment.site?.name || "—"}</p>
+                {selectedAssignment.locationUnit?.name && (
+                  <p className="text-[10px] text-[#747782]">{selectedAssignment.locationUnit.name}</p>
+                )}
+              </div>
+
+              {selectedAssignment.checkpoint && (
+                <div>
+                  <span className="text-[9px] font-bold text-[#747782] uppercase block tracking-wider">Checkpoint / NFC Tag</span>
+                  <p className="font-semibold text-orange-700 mt-0.5">{selectedAssignment.checkpoint.checkpointName}</p>
+                </div>
+              )}
+
+              <div>
+                <span className="text-[9px] font-bold text-[#747782] uppercase block tracking-wider">Checklist Template</span>
+                <p className="font-semibold text-[#002D72] mt-0.5">{selectedAssignment.template?.templateName || "—"}</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <span className="text-[9px] font-bold text-[#747782] uppercase block tracking-wider">Assigned Agent</span>
+                  <p className="font-semibold text-[#444651] mt-0.5">{selectedAssignment.employee?.name || "—"}</p>
+                </div>
+                <div>
+                  <span className="text-[9px] font-bold text-[#747782] uppercase block tracking-wider">Supervisor</span>
+                  <p className="font-semibold text-[#444651] mt-0.5">{selectedAssignment.supervisor?.name || "—"}</p>
+                </div>
+              </div>
+
+              <div>
+                <span className="text-[9px] font-bold text-[#747782] uppercase block tracking-wider">Schedule Time Window</span>
+                <p className="text-[#444651] font-semibold mt-0.5">Start: {formatDate(selectedAssignment.scheduledStart)}</p>
+                <p className="text-[#747782] mt-0.5">End: {formatDate(selectedAssignment.scheduledEnd)}</p>
+              </div>
+
+              <div className="border-t border-[#E7EEFF] pt-4 space-y-3">
+                <span className="text-[10px] font-bold text-[#002D72] uppercase block tracking-wider">Checklist Execution Status</span>
+
+                {loadingExecution ? (
+                  <div className="text-[10px] font-mono text-[#002D72] animate-pulse">Loading execution details...</div>
+                ) : selectedExecution ? (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between bg-[#F0F3FF] p-2.5 rounded-lg border border-[#B1C5FF]">
+                      <div className="flex items-center gap-1.5">
+                        <span className="material-symbols-outlined text-[#002D72] text-sm">assignment_turned_in</span>
+                        <span className="font-bold text-[#001A48]">Status:</span>
+                      </div>
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+                        selectedExecution.status === "SUBMITTED" ? "bg-green-100 text-green-700" :
+                        selectedExecution.status === "DRAFT" ? "bg-amber-100 text-amber-700" :
+                        "bg-slate-100 text-slate-700"
+                      }`}>
+                        {selectedExecution.status}
+                      </span>
+                    </div>
+
+                    <div className="text-[10px] text-[#747782] space-y-1">
+                      <p>Started: {formatDate(selectedExecution.startedAt)}</p>
+                      {selectedExecution.submittedAt && (
+                        <p>Submitted: {formatDate(selectedExecution.submittedAt)}</p>
+                      )}
+                      {selectedExecution.deviceInfo && (
+                        <p>Device: {selectedExecution.deviceInfo}</p>
+                      )}
+                      {selectedExecution.latitude && (
+                        <p>GPS: {selectedExecution.latitude.toFixed(6)}, {selectedExecution.longitude.toFixed(6)} (Acc: {selectedExecution.gpsAccuracyMeters}m)</p>
+                      )}
+                    </div>
+
+                    {selectedExecution.remarks && (
+                      <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+                        <span className="text-[9px] font-bold text-[#747782] uppercase block mb-1">Remarks</span>
+                        <p className="text-[11px] text-[#444651] whitespace-pre-line">{selectedExecution.remarks}</p>
+                      </div>
+                    )}
+
+                    {/* Responses List */}
+                    <div className="space-y-2">
+                      <span className="text-[9px] font-bold text-[#747782] uppercase block tracking-wider border-b border-[#E7EEFF] pb-1">Checklist Responses Snapshot</span>
+                      {selectedExecution.responses && selectedExecution.responses.length > 0 ? (
+                        <div className="space-y-2 max-h-[250px] overflow-y-auto pr-1">
+                          {selectedExecution.responses.map((resp: any) => (
+                            <div key={resp.id} className="p-2 bg-slate-50 rounded border border-slate-200 space-y-1">
+                              <div className="flex justify-between items-start gap-2">
+                                <span className="font-semibold text-[#444651] text-[10px]">{resp.itemTextSnapshot}</span>
+                                <span className="text-[8px] font-mono font-bold text-[#747782] uppercase">{resp.itemTypeSnapshot}</span>
+                              </div>
+                              <div className="flex items-center justify-between">
+                                <div className="text-[11px] font-bold text-[#002D72]">
+                                  Answer: <span className="underline">{resp.answerValue || "—"}</span>
+                                </div>
+                                {resp.isFlagged && (
+                                  <span className="bg-red-100 text-red-700 text-[8px] font-bold px-1.5 py-0.5 rounded flex items-center gap-0.5">
+                                    <span className="material-symbols-outlined text-[10px]">warning</span> FLAGGED
+                                  </span>
+                                )}
+                              </div>
+                              {resp.comment && (
+                                <p className="text-[9px] text-slate-500 italic mt-1 font-medium bg-white p-1 rounded border border-slate-100">Comment: {resp.comment}</p>
+                              )}
+                              {resp.flagReason && (
+                                <p className="text-[9px] text-red-600 font-bold bg-red-50 p-1 rounded border border-red-100 mt-1">Reason: {resp.flagReason}</p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-[10px] text-slate-500 italic">No responses recorded in execution.</p>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-3 bg-slate-50 rounded-lg text-[#747782] italic text-[11px] text-center border border-slate-200">
+                    Checklist execution has not started yet.
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Drawer Overlay (Add/Edit Form Sliding Panel) */}

@@ -160,6 +160,16 @@ export default function FacilityManagementDashboard() {
               </div>
             </Link>
 
+            <Link href="/secfac?operationType=FACILITY_MANAGEMENT" className="bg-surface border border-outline-variant hover:border-secondary/20 hover:shadow-sm p-4 rounded-xl flex items-center gap-4 transition-all">
+              <div className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-700 shrink-0">
+                <span className="material-symbols-outlined text-[22px]">terminal</span>
+              </div>
+              <div>
+                <p className="text-xs font-bold text-primary">SECFAC Center</p>
+                <p className="text-[10px] text-on-surface-variant">FM Inspections Hub</p>
+              </div>
+            </Link>
+
             <Link href="/manpower/facility-management/shifts" className="bg-surface border border-outline-variant hover:border-secondary/20 hover:shadow-sm p-4 rounded-xl flex items-center gap-4 transition-all">
               <div className="w-10 h-10 rounded-lg bg-secondary-container/10 flex items-center justify-center text-secondary shrink-0">
                 <span className="material-symbols-outlined text-[22px]">schedule</span>

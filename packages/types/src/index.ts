@@ -1582,5 +1582,48 @@ export interface SecfacAssignment {
   updatedAt?: string;
 }
 
+export interface SecfacChecklistExecution {
+  id: string;
+  operationType: string;
+  assignmentId: string;
+  assignment?: SecfacAssignment | null;
+  checklistTemplateId: string;
+  checklistTemplate?: SecfacChecklistTemplate | null;
+  employeeId: string;
+  employee?: Employee | null;
+  siteId: string;
+  site?: ManpowerSite | null;
+  checkpointId?: string | null;
+  checkpoint?: SecfacCheckpoint | null;
+  status: string;
+  startedAt?: string | null;
+  submittedAt?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  gpsAccuracyMeters?: number | null;
+  deviceInfo?: string | null;
+  remarks?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+  responses?: SecfacChecklistResponse[];
+}
+
+export interface SecfacChecklistResponse {
+  id: string;
+  executionId: string;
+  execution?: SecfacChecklistExecution | null;
+  checklistItemId: string;
+  checklistItem?: SecfacChecklistItem | null;
+  itemTextSnapshot: string;
+  itemTypeSnapshot: string;
+  answerValue?: string | null;
+  answerText?: string | null;
+  comment?: string | null;
+  isFlagged: boolean;
+  flagReason?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 
 

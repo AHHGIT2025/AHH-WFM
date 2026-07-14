@@ -1,4 +1,4 @@
-import { Employee, AttendanceRecord, Shift, LeaveRequest, SapMapping, SyncLog, Announcement, Department, Worksite, AttendanceCorrection, LeaveType, LeaveBalance, LeaveBalanceLedger, Holiday, LeaveApprovalWorkflow, LeaveApprovalStep, LeaveApprovalHistory, LeaveApprovalDelegation, ShiftTemplate, RotationTemplate, ShiftAssignment, ShiftSwapRequest, OvertimeRate, SapConnection, SapSyncJob, SapSyncLog, SapFieldMapping, SapRetryQueue, SapExportQueue, SapPayrollStage, SapReconciliationLog, SapPayrollPeriodLock, SecurityOperationsPeriodLock, SavedReport, ReportExportLog, UserActivityLog, ProductionCheckLog, BackupJob, BackupAuditLog, EmployeeBulkUploadJob, SystemRole, SystemPermission, RolePermission, UserRoleAssignment, BlueCollarPositionCategory, Project, ProjectSite, EmployeeDeployment, Designation, TradeClassification, LocationMaster, CostCenter, ShiftRelieverAssignment, RelieverStandbyRule, Company, AllowedPunchLocation, EmployeeAllowedPunchLocation, ManpowerClient, ManpowerContract, ManpowerProject, ManpowerSite, ManpowerLocationUnit, ManpowerCategory, ManpowerShiftRequirement, ManpowerDeployment, ManpowerDeploymentAssignment, ManpowerRelieverAssignment, UserOperationAccess, SecfacCheckpoint, SecfacChecklistTemplate, SecfacChecklistItem, SecfacAssignment } from "@ahh-wfm/types";
+import { Employee, AttendanceRecord, Shift, LeaveRequest, SapMapping, SyncLog, Announcement, Department, Worksite, AttendanceCorrection, LeaveType, LeaveBalance, LeaveBalanceLedger, Holiday, LeaveApprovalWorkflow, LeaveApprovalStep, LeaveApprovalHistory, LeaveApprovalDelegation, ShiftTemplate, RotationTemplate, ShiftAssignment, ShiftSwapRequest, OvertimeRate, SapConnection, SapSyncJob, SapSyncLog, SapFieldMapping, SapRetryQueue, SapExportQueue, SapPayrollStage, SapReconciliationLog, SapPayrollPeriodLock, SecurityOperationsPeriodLock, SavedReport, ReportExportLog, UserActivityLog, ProductionCheckLog, BackupJob, BackupAuditLog, EmployeeBulkUploadJob, SystemRole, SystemPermission, RolePermission, UserRoleAssignment, BlueCollarPositionCategory, Project, ProjectSite, EmployeeDeployment, Designation, TradeClassification, LocationMaster, CostCenter, ShiftRelieverAssignment, RelieverStandbyRule, Company, AllowedPunchLocation, EmployeeAllowedPunchLocation, ManpowerClient, ManpowerContract, ManpowerProject, ManpowerSite, ManpowerLocationUnit, ManpowerCategory, ManpowerShiftRequirement, ManpowerDeployment, ManpowerDeploymentAssignment, ManpowerRelieverAssignment, UserOperationAccess, SecfacCheckpoint, SecfacChecklistTemplate, SecfacChecklistItem, SecfacAssignment, SecfacChecklistExecution, SecfacChecklistResponse } from "@ahh-wfm/types";
 const uuid = () => Math.random().toString(36).substring(2) + Date.now().toString(36);
 import * as fs from "fs";
 import * as path from "path";
@@ -474,6 +474,8 @@ let memoryDb: {
   secfacChecklistTemplates: SecfacChecklistTemplate[];
   secfacChecklistItems: SecfacChecklistItem[];
   secfacAssignments: SecfacAssignment[];
+  secfacChecklistExecutions: SecfacChecklistExecution[];
+  secfacChecklistResponses: SecfacChecklistResponse[];
 } = {
   companies: [
     { id: "COMP-001", companyCode: "AHH", companyName: "Al Hattab Holding", isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
@@ -757,7 +759,9 @@ let memoryDb: {
   secfacCheckpoints: [],
   secfacChecklistTemplates: [],
   secfacChecklistItems: [],
-  secfacAssignments: []
+  secfacAssignments: [],
+  secfacChecklistExecutions: [],
+  secfacChecklistResponses: []
 };
 
 // Seeding helper to pre-fill MySQL with mock data if it is empty
@@ -11505,6 +11509,370 @@ export const mockDb = {
     db.secfacAssignments[idx].updatedAt = new Date().toISOString();
     writeDb(db);
     return true;
+  },
+
+  getSecfacChecklistExecutions: async (filters: any = {}): Promise<any[]> => {
+    if (isDbConnected()) {
+      const where: any = {};
+      if (filters.operationType) where.operationType = filters.operationType;
+      if (filters.assignmentId) where.assignmentId = filters.assignmentId;
+      if (filters.employeeId) where.employeeId = filters.employeeId;
+      if (filters.siteId) where.siteId = filters.siteId;
+      if (filters.checkpointId) where.checkpointId = filters.checkpointId;
+      if (filters.status) where.status = filters.status;
+
+      if (filters.startDate || filters.endDate) {
+        where.createdAt = {};
+        if (filters.startDate) where.createdAt.gte = new Date(filters.startDate);
+        if (filters.endDate) where.createdAt.lte = new Date(filters.endDate);
+      }
+
+      const res = await prismaClient.secfacChecklistExecution.findMany({
+        where,
+        include: {
+          assignment: true,
+          checklistTemplate: true,
+          employee: true,
+          site: true,
+          checkpoint: true,
+          responses: {
+            include: {
+              checklistItem: true
+            }
+          }
+        },
+        orderBy: { createdAt: "desc" }
+      });
+      return res.map((x: any) => ({
+        ...x,
+        startedAt: x.startedAt?.toISOString(),
+        submittedAt: x.submittedAt?.toISOString(),
+        createdAt: x.createdAt?.toISOString(),
+        updatedAt: x.updatedAt?.toISOString()
+      }));
+    }
+
+    const db = readDb();
+    let res = db.secfacChecklistExecutions || [];
+
+    if (filters.operationType) res = res.filter((x: any) => x.operationType === filters.operationType);
+    if (filters.assignmentId) res = res.filter((x: any) => x.assignmentId === filters.assignmentId);
+    if (filters.employeeId) res = res.filter((x: any) => x.employeeId === filters.employeeId);
+    if (filters.siteId) res = res.filter((x: any) => x.siteId === filters.siteId);
+    if (filters.checkpointId) res = res.filter((x: any) => x.checkpointId === filters.checkpointId);
+    if (filters.status) res = res.filter((x: any) => x.status === filters.status);
+
+    if (filters.startDate) {
+      const gteTime = new Date(filters.startDate).getTime();
+      res = res.filter((x: any) => new Date(x.createdAt).getTime() >= gteTime);
+    }
+    if (filters.endDate) {
+      const lteTime = new Date(filters.endDate).getTime();
+      res = res.filter((x: any) => new Date(x.createdAt).getTime() <= lteTime);
+    }
+
+    return res.map((x: any) => {
+      const responses = (db.secfacChecklistResponses || [])
+        .filter((r: any) => r.executionId === x.id)
+        .map((r: any) => ({
+          ...r,
+          checklistItem: (db.secfacChecklistItems || []).find((item: any) => item.id === r.checklistItemId) || null
+        }));
+
+      return {
+        ...x,
+        assignment: (db.secfacAssignments || []).find((a: any) => a.id === x.assignmentId) || null,
+        checklistTemplate: (db.secfacChecklistTemplates || []).find((t: any) => t.id === x.checklistTemplateId) || null,
+        employee: (db.employees || []).find((e: any) => e.id === x.employeeId) || null,
+        site: (db.manpowerSites || []).find((s: any) => s.id === x.siteId) || null,
+        checkpoint: (db.secfacCheckpoints || []).find((cp: any) => cp.id === x.checkpointId) || null,
+        responses
+      };
+    });
+  },
+
+  getSecfacChecklistExecutionById: async (id: string): Promise<any> => {
+    if (isDbConnected()) {
+      const res = await prismaClient.secfacChecklistExecution.findUnique({
+        where: { id },
+        include: {
+          assignment: true,
+          checklistTemplate: true,
+          employee: true,
+          site: true,
+          checkpoint: true,
+          responses: {
+            include: {
+              checklistItem: true
+            }
+          }
+        }
+      });
+      if (!res) return null;
+      return {
+        ...res,
+        startedAt: res.startedAt?.toISOString(),
+        submittedAt: res.submittedAt?.toISOString(),
+        createdAt: res.createdAt?.toISOString(),
+        updatedAt: res.updatedAt?.toISOString()
+      };
+    }
+
+    const db = readDb();
+    const x = (db.secfacChecklistExecutions || []).find((item: any) => item.id === id);
+    if (!x) return null;
+
+    const responses = (db.secfacChecklistResponses || [])
+      .filter((r: any) => r.executionId === x.id)
+      .map((r: any) => ({
+        ...r,
+        checklistItem: (db.secfacChecklistItems || []).find((item: any) => item.id === r.checklistItemId) || null
+      }));
+
+    return {
+      ...x,
+      assignment: (db.secfacAssignments || []).find((a: any) => a.id === x.assignmentId) || null,
+      checklistTemplate: (db.secfacChecklistTemplates || []).find((t: any) => t.id === x.checklistTemplateId) || null,
+      employee: (db.employees || []).find((e: any) => e.id === x.employeeId) || null,
+      site: (db.manpowerSites || []).find((s: any) => s.id === x.siteId) || null,
+      checkpoint: (db.secfacCheckpoints || []).find((cp: any) => cp.id === x.checkpointId) || null,
+      responses
+    };
+  },
+
+  createOrUpdateSecfacChecklistExecution: async (data: any): Promise<any> => {
+    const db = readDb();
+    const isEdit = !!data.id;
+    const executionId = data.id || `sexe-${Date.now()}`;
+    const nowStr = new Date().toISOString();
+
+    const executionData = {
+      operationType: data.operationType,
+      assignmentId: data.assignmentId,
+      checklistTemplateId: data.checklistTemplateId,
+      employeeId: data.employeeId,
+      siteId: data.siteId,
+      checkpointId: data.checkpointId || null,
+      status: data.status || "DRAFT",
+      startedAt: data.startedAt || nowStr,
+      submittedAt: data.status === "SUBMITTED" ? nowStr : null,
+      latitude: data.latitude !== undefined ? Number(data.latitude) : null,
+      longitude: data.longitude !== undefined ? Number(data.longitude) : null,
+      gpsAccuracyMeters: data.gpsAccuracyMeters !== undefined ? Number(data.gpsAccuracyMeters) : null,
+      deviceInfo: data.deviceInfo || null,
+      remarks: data.remarks || null
+    };
+
+    if (isDbConnected()) {
+      // 1. Transaction to delete old responses if updating, then write execution & responses
+      const result = await prismaClient.$transaction(async (tx: any) => {
+        if (isEdit) {
+          await tx.secfacChecklistResponse.deleteMany({ where: { executionId } });
+        }
+
+        const execution = await tx.secfacChecklistExecution.upsert({
+          where: { id: executionId },
+          create: {
+            id: executionId,
+            ...executionData
+          },
+          update: {
+            ...executionData,
+            updatedAt: new Date()
+          }
+        });
+
+        if (Array.isArray(data.responses)) {
+          for (const resp of data.responses) {
+            await tx.secfacChecklistResponse.create({
+              data: {
+                id: resp.id || `sres-${Math.random().toString(36).substring(2) + Date.now().toString(36)}`,
+                executionId,
+                checklistItemId: resp.checklistItemId,
+                itemTextSnapshot: resp.itemTextSnapshot || "",
+                itemTypeSnapshot: resp.itemTypeSnapshot || "YES_NO",
+                answerValue: resp.answerValue !== undefined ? resp.answerValue : null,
+                answerText: resp.answerText || null,
+                comment: resp.comment || null,
+                isFlagged: !!resp.isFlagged,
+                flagReason: resp.flagReason || null
+              }
+            });
+          }
+        }
+
+        return tx.secfacChecklistExecution.findUnique({
+          where: { id: executionId },
+          include: {
+            assignment: true,
+            checklistTemplate: true,
+            employee: true,
+            site: true,
+            checkpoint: true,
+            responses: {
+              include: {
+                checklistItem: true
+              }
+            }
+          }
+        });
+      });
+
+      return {
+        ...result,
+        startedAt: result.startedAt?.toISOString(),
+        submittedAt: result.submittedAt?.toISOString(),
+        createdAt: result.createdAt?.toISOString(),
+        updatedAt: result.updatedAt?.toISOString()
+      };
+    }
+
+    db.secfacChecklistExecutions = db.secfacChecklistExecutions || [];
+    db.secfacChecklistResponses = db.secfacChecklistResponses || [];
+
+    // Find or create execution
+    const execIdx = db.secfacChecklistExecutions.findIndex((e: any) => e.id === executionId);
+    const savedExecution = {
+      id: executionId,
+      ...executionData,
+      createdAt: execIdx !== -1 ? db.secfacChecklistExecutions[execIdx].createdAt : nowStr,
+      updatedAt: nowStr
+    };
+
+    if (execIdx !== -1) {
+      db.secfacChecklistExecutions[execIdx] = savedExecution;
+      // Clear old responses
+      db.secfacChecklistResponses = db.secfacChecklistResponses.filter((r: any) => r.executionId !== executionId);
+    } else {
+      db.secfacChecklistExecutions.push(savedExecution);
+    }
+
+    // Add responses
+    const savedResponses: any[] = [];
+    if (Array.isArray(data.responses)) {
+      for (const resp of data.responses) {
+        const newResp = {
+          id: resp.id || `sres-${Math.random().toString(36).substring(2) + Date.now().toString(36)}`,
+          executionId,
+          checklistItemId: resp.checklistItemId,
+          itemTextSnapshot: resp.itemTextSnapshot || "",
+          itemTypeSnapshot: resp.itemTypeSnapshot || "YES_NO",
+          answerValue: resp.answerValue !== undefined ? resp.answerValue : null,
+          answerText: resp.answerText || null,
+          comment: resp.comment || null,
+          isFlagged: !!resp.isFlagged,
+          flagReason: resp.flagReason || null,
+          createdAt: nowStr,
+          updatedAt: nowStr
+        };
+        db.secfacChecklistResponses.push(newResp);
+        savedResponses.push({
+          ...newResp,
+          checklistItem: (db.secfacChecklistItems || []).find((item: any) => item.id === resp.checklistItemId) || null
+        });
+      }
+    }
+
+    writeDb(db);
+
+    return {
+      ...savedExecution,
+      assignment: (db.secfacAssignments || []).find((a: any) => a.id === data.assignmentId) || null,
+      checklistTemplate: (db.secfacChecklistTemplates || []).find((t: any) => t.id === data.checklistTemplateId) || null,
+      employee: (db.employees || []).find((e: any) => e.id === data.employeeId) || null,
+      site: (db.manpowerSites || []).find((s: any) => s.id === data.siteId) || null,
+      checkpoint: (db.secfacCheckpoints || []).find((cp: any) => cp.id === data.checkpointId) || null,
+      responses: savedResponses
+    };
+  },
+
+  getSecfacAssignedTasks: async (employeeId: string): Promise<any[]> => {
+    // 1. Get assignments
+    let assignmentsList: any[] = [];
+    if (isDbConnected()) {
+      const res = await prismaClient.secfacAssignment.findMany({
+        where: { employeeId, isActive: true },
+        include: {
+          client: true,
+          project: true,
+          site: true,
+          locationUnit: true,
+          checkpoint: true,
+          template: {
+            include: {
+              items: {
+                where: { isActive: true },
+                orderBy: { sortOrder: "asc" }
+              }
+            }
+          },
+          employee: true,
+          supervisor: true
+        },
+        orderBy: { scheduledStart: "asc" }
+      });
+      assignmentsList = res.map((x: any) => ({
+        ...x,
+        scheduledStart: x.scheduledStart?.toISOString(),
+        scheduledEnd: x.scheduledEnd?.toISOString(),
+        createdAt: x.createdAt?.toISOString(),
+        updatedAt: x.updatedAt?.toISOString()
+      }));
+    } else {
+      const db = readDb();
+      const res = (db.secfacAssignments || []).filter((a: any) => a.employeeId === employeeId && a.isActive);
+      assignmentsList = res.map((x: any) => {
+        const template = (db.secfacChecklistTemplates || []).find((t: any) => t.id === x.templateId) || null;
+        let finalTemplate = null;
+        if (template) {
+          const items = (db.secfacChecklistItems || [])
+            .filter((item: any) => item.templateId === template.id && item.isActive !== false)
+            .sort((a: any, b: any) => a.sortOrder - b.sortOrder);
+          finalTemplate = { ...template, items };
+        }
+
+        return {
+          ...x,
+          client: (db.manpowerClients || []).find((c: any) => c.id === x.clientId) || null,
+          project: (db.manpowerProjects || []).find((p: any) => p.id === x.projectId) || null,
+          site: (db.manpowerSites || []).find((s: any) => s.id === x.siteId) || null,
+          locationUnit: (db.manpowerLocationUnits || []).find((l: any) => l.id === x.locationUnitId) || null,
+          checkpoint: (db.secfacCheckpoints || []).find((cp: any) => cp.id === x.checkpointId) || null,
+          template: finalTemplate,
+          employee: (db.employees || []).find((e: any) => e.id === x.employeeId) || null,
+          supervisor: (db.employees || []).find((e: any) => e.id === x.supervisorId) || null
+        };
+      });
+    }
+
+    // 2. Fetch current execution status for each assignment
+    const result: any[] = [];
+    for (const assignment of assignmentsList) {
+      let execution: any = null;
+      if (isDbConnected()) {
+        execution = await prismaClient.secfacChecklistExecution.findFirst({
+          where: { assignmentId: assignment.id },
+          orderBy: { createdAt: "desc" }
+        });
+      } else {
+        const db = readDb();
+        execution = (db.secfacChecklistExecutions || [])
+          .filter((e: any) => e.assignmentId === assignment.id)
+          .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0] || null;
+      }
+
+      result.push({
+        ...assignment,
+        currentExecution: execution ? {
+          id: execution.id,
+          status: execution.status,
+          startedAt: execution.startedAt instanceof Date ? execution.startedAt.toISOString() : execution.startedAt,
+          submittedAt: execution.submittedAt instanceof Date ? execution.submittedAt.toISOString() : execution.submittedAt
+        } : null
+      });
+    }
+
+    return result;
   },
 
   // --- Manpower Categories CRUD ---

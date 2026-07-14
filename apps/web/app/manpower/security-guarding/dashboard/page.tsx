@@ -247,6 +247,13 @@ export default function SecurityGuardingDashboard() {
             <span className="material-symbols-outlined text-[16px]">calendar_month</span>
             Open Deployment Calendar
           </Link>
+          <Link
+            href="/secfac?operationType=SECURITY_GUARDING"
+            className="px-3 py-2 bg-indigo-600 text-white text-xs font-bold rounded-lg hover:bg-indigo-750 transition-colors inline-flex items-center gap-2"
+          >
+            <span className="material-symbols-outlined text-[16px]">terminal</span>
+            SECFAC Center
+          </Link>
         </div>
       </div>
 

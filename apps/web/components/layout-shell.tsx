@@ -54,7 +54,8 @@ export const LayoutShell: React.FC<{ children: React.ReactNode }> = ({ children 
       { label: "Shift Planner", path: "/manpower/security-guarding/deployment-calendar", icon: "calendar_month" },
       { label: "Reliever Pools", path: "/manpower/security-guarding/reliever-pools", icon: "groups" },
       { label: "Project Coordinators", path: "/manpower/security-guarding/coordinators", icon: "assignment_turned_in" },
-      { label: "Material Master", path: "/manpower/security-guarding/materials", icon: "inventory_2" }
+      { label: "Material Master", path: "/manpower/security-guarding/materials", icon: "inventory_2" },
+      { label: "SECFAC Center", path: "/secfac?operationType=SECURITY_GUARDING", icon: "terminal" }
     ];
     sidebarTitle = "Security Guarding";
     sidebarSubtitle = "Operations & Compliance";
@@ -69,13 +70,15 @@ export const LayoutShell: React.FC<{ children: React.ReactNode }> = ({ children 
       { label: "Facility Areas", path: "/manpower/facility-management/areas", icon: "location_city" },
       { label: "Manpower Directory", path: "/manpower/facility-management/manpower", icon: "badge" },
       { label: "Shift Planner", path: "/manpower/facility-management/deployment-calendar", icon: "calendar_month" },
-      { label: "Material Master", path: "/manpower/facility-management/materials", icon: "inventory_2" }
+      { label: "Material Master", path: "/manpower/facility-management/materials", icon: "inventory_2" },
+      { label: "SECFAC Center", path: "/secfac?operationType=FACILITY_MANAGEMENT", icon: "terminal" }
     ];
     sidebarTitle = "Facility Management";
     sidebarSubtitle = "Operations & Services";
   } else if (isSecfac) {
     currentNavItems = [
       { label: "← Back to Main Menu", path: "/", icon: "arrow_back" },
+      { label: "Control Center Home", path: "/secfac", icon: "terminal" },
       { label: "Control Room", path: "/secfac/control-room", icon: "dashboard" },
       { label: "Checkpoints", path: "/secfac/checkpoints", icon: "location_on" },
       { label: "Checklist Builder", path: "/secfac/checklist-builder", icon: "rule" },

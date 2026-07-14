@@ -126,6 +126,7 @@ model Employee {
   securityOperationalEmployee SecurityOperationalEmployee?
   secfacEmployeeAssignments   SecfacAssignment[]         @relation("SecfacEmployeeAssignments")
   secfacSupervisorAssignments SecfacAssignment[]         @relation("SecfacSupervisorAssignments")
+  secfacChecklistExecutions   SecfacChecklistExecution[] @relation("SecfacEmployeeExecutions")
 }
 
 model Department {
@@ -1373,6 +1374,7 @@ model ManpowerSite {
   secfacCheckpoints      SecfacCheckpoint[]
   secfacChecklistTemplates SecfacChecklistTemplate[]
   secfacAssignments      SecfacAssignment[]
+  secfacChecklistExecutions SecfacChecklistExecution[]
 }
 
 model SecuritySiteManpowerAllocation {
@@ -1968,6 +1970,7 @@ model SecfacCheckpoint {
 
   secfacChecklistTemplates SecfacChecklistTemplate[]
   secfacAssignments        SecfacAssignment[]
+  secfacChecklistExecutions SecfacChecklistExecution[]
 
   @@index([operationType])
   @@index([siteId])
@@ -2013,6 +2016,7 @@ model SecfacChecklistTemplate {
 
   items           SecfacChecklistItem[]
   secfacAssignments SecfacAssignment[]
+  secfacChecklistExecutions SecfacChecklistExecution[]
 
   @@index([operationType])
   @@index([clientId])
@@ -2044,6 +2048,7 @@ model SecfacChecklistItem {
   isActive        Boolean  @default(true)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+  secfacChecklistResponses SecfacChecklistResponse[]
 
   @@index([templateId])
   @@index([itemType])
@@ -2091,6 +2096,7 @@ model SecfacAssignment {
   isActive        Boolean  @default(true)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+  secfacChecklistExecutions SecfacChecklistExecution[]
 
   @@index([operationType])
   @@index([employeeId])
@@ -2101,5 +2107,76 @@ model SecfacAssignment {
   @@index([templateId])
   @@index([status])
   @@index([isActive])
+}
+
+model SecfacChecklistExecution {
+  id                  String   @id @default(uuid())
+
+  operationType       String
+  assignmentId        String
+  assignment          SecfacAssignment @relation(fields: [assignmentId], references: [id], onDelete: Restrict)
+
+  checklistTemplateId String
+  checklistTemplate   SecfacChecklistTemplate @relation(fields: [checklistTemplateId], references: [id], onDelete: Restrict)
+
+  employeeId          String
+  employee            Employee @relation("SecfacEmployeeExecutions", fields: [employeeId], references: [id], onDelete: Restrict)
+
+  siteId              String
+  site                ManpowerSite @relation(fields: [siteId], references: [id], onDelete: Restrict)
+
+  checkpointId        String?
+  checkpoint          SecfacCheckpoint? @relation(fields: [checkpointId], references: [id], onDelete: SetNull)
+
+  status              String   @default("DRAFT") // DRAFT | SUBMITTED | PENDING_REVIEW | APPROVED | REJECTED | CANCELLED
+  startedAt           DateTime?
+  submittedAt         DateTime?
+
+  latitude            Float?
+  longitude           Float?
+  gpsAccuracyMeters   Float?
+
+  deviceInfo          String?
+  remarks             String? @db.Text
+
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  responses           SecfacChecklistResponse[]
+
+  @@index([operationType])
+  @@index([assignmentId])
+  @@index([checklistTemplateId])
+  @@index([employeeId])
+  @@index([siteId])
+  @@index([checkpointId])
+  @@index([status])
+}
+
+model SecfacChecklistResponse {
+  id              String   @id @default(uuid())
+
+  executionId     String
+  execution       SecfacChecklistExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+
+  checklistItemId String
+  checklistItem   SecfacChecklistItem @relation(fields: [checklistItemId], references: [id], onDelete: Restrict)
+
+  itemTextSnapshot String
+  itemTypeSnapshot String
+
+  answerValue      String?
+  answerText       String? @db.Text
+  comment          String? @db.Text
+
+  isFlagged        Boolean @default(false)
+  flagReason       String?
+
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([executionId])
+  @@index([checklistItemId])
+  @@index([isFlagged])
 }
 
