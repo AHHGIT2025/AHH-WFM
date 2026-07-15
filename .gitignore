@@ -39,3 +39,11 @@ db.json
 scratch/
 docs/screenshots/
 apps/web/storage/backups/
+
+# Local/generated files
+db.json
+*.tsbuildinfo
+uploads/
+test-results/
+playwright-report/
+*.log
