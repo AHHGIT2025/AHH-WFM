@@ -14,7 +14,6 @@ yarn-error.log*
 .pnpm-debug.log*
 /packages/database/src/generated/
 
-
 # Runtime uploaded files - do not commit
 apps/web/public/uploads/
 apps/mobile/public/uploads/
@@ -27,8 +26,15 @@ vibe.config.json
 .vscode/
 .mcp.json
 .vibe/
+
 # Test artifacts
 test-results/
 playwright-report/
 .env.test
 .k6/
+
+# Generated / transient files — do not commit
+db.json
+*.tsbuildinfo
+scratch/
+docs/screenshots/
