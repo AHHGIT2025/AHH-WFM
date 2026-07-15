@@ -47,3 +47,6 @@ uploads/
 test-results/
 playwright-report/
 *.log
+docs/AHH-WFM-Web-Application-User-Guide-v1.docx
+docs/AHH-WFM-Web-Application-User-Guide-v1.md
+docs/screenshots/
