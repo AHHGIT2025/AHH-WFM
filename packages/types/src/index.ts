@@ -1580,6 +1580,7 @@ export interface SecfacAssignment {
   isActive: boolean;
   createdAt?: string;
   updatedAt?: string;
+  evidenceAttachments?: SecfacEvidenceAttachment[];
 }
 
 export interface SecfacChecklistExecution {
@@ -1611,6 +1612,7 @@ export interface SecfacChecklistExecution {
   updatedAt?: string;
   responses?: SecfacChecklistResponse[];
   history?: SecfacChecklistExecutionHistory[];
+  evidenceAttachments?: SecfacEvidenceAttachment[];
 }
 
 export interface SecfacChecklistResponse {
@@ -1628,6 +1630,7 @@ export interface SecfacChecklistResponse {
   flagReason?: string | null;
   createdAt?: string;
   updatedAt?: string;
+  evidenceAttachments?: SecfacEvidenceAttachment[];
 }
 
 export interface SecfacChecklistExecutionHistory {
@@ -1641,6 +1644,39 @@ export interface SecfacChecklistExecutionHistory {
   changedById?: string | null;
   changedBy?: Employee | null;
   createdAt?: string;
+}
+
+export interface SecfacEvidenceAttachment {
+  id: string;
+  operationType: string;
+  executionId: string;
+  execution?: SecfacChecklistExecution | null;
+  responseId?: string | null;
+  response?: SecfacChecklistResponse | null;
+  assignmentId?: string | null;
+  assignment?: SecfacAssignment | null;
+  employeeId: string;
+  employee?: Employee | null;
+  siteId?: string | null;
+  site?: ManpowerSite | null;
+  checkpointId?: string | null;
+  checkpoint?: SecfacCheckpoint | null;
+  fileName: string;
+  originalName?: string | null;
+  mimeType: string;
+  fileSizeBytes: number;
+  storagePath: string;
+  evidenceType: string; // PHOTO | DOCUMENT | SIGNATURE_PLACEHOLDER | OTHER
+  caption?: string | null;
+  capturedAt?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  gpsAccuracyMeters?: number | null;
+  uploadedById?: string | null;
+  uploadedBy?: Employee | null;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 

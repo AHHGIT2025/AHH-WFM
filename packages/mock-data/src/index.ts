@@ -1,4 +1,4 @@
-import { Employee, AttendanceRecord, Shift, LeaveRequest, SapMapping, SyncLog, Announcement, Department, Worksite, AttendanceCorrection, LeaveType, LeaveBalance, LeaveBalanceLedger, Holiday, LeaveApprovalWorkflow, LeaveApprovalStep, LeaveApprovalHistory, LeaveApprovalDelegation, ShiftTemplate, RotationTemplate, ShiftAssignment, ShiftSwapRequest, OvertimeRate, SapConnection, SapSyncJob, SapSyncLog, SapFieldMapping, SapRetryQueue, SapExportQueue, SapPayrollStage, SapReconciliationLog, SapPayrollPeriodLock, SecurityOperationsPeriodLock, SavedReport, ReportExportLog, UserActivityLog, ProductionCheckLog, BackupJob, BackupAuditLog, EmployeeBulkUploadJob, SystemRole, SystemPermission, RolePermission, UserRoleAssignment, BlueCollarPositionCategory, Project, ProjectSite, EmployeeDeployment, Designation, TradeClassification, LocationMaster, CostCenter, ShiftRelieverAssignment, RelieverStandbyRule, Company, AllowedPunchLocation, EmployeeAllowedPunchLocation, ManpowerClient, ManpowerContract, ManpowerProject, ManpowerSite, ManpowerLocationUnit, ManpowerCategory, ManpowerShiftRequirement, ManpowerDeployment, ManpowerDeploymentAssignment, ManpowerRelieverAssignment, UserOperationAccess, SecfacCheckpoint, SecfacChecklistTemplate, SecfacChecklistItem, SecfacAssignment, SecfacChecklistExecution, SecfacChecklistResponse, SecfacChecklistExecutionHistory } from "@ahh-wfm/types";
+import { Employee, AttendanceRecord, Shift, LeaveRequest, SapMapping, SyncLog, Announcement, Department, Worksite, AttendanceCorrection, LeaveType, LeaveBalance, LeaveBalanceLedger, Holiday, LeaveApprovalWorkflow, LeaveApprovalStep, LeaveApprovalHistory, LeaveApprovalDelegation, ShiftTemplate, RotationTemplate, ShiftAssignment, ShiftSwapRequest, OvertimeRate, SapConnection, SapSyncJob, SapSyncLog, SapFieldMapping, SapRetryQueue, SapExportQueue, SapPayrollStage, SapReconciliationLog, SapPayrollPeriodLock, SecurityOperationsPeriodLock, SavedReport, ReportExportLog, UserActivityLog, ProductionCheckLog, BackupJob, BackupAuditLog, EmployeeBulkUploadJob, SystemRole, SystemPermission, RolePermission, UserRoleAssignment, BlueCollarPositionCategory, Project, ProjectSite, EmployeeDeployment, Designation, TradeClassification, LocationMaster, CostCenter, ShiftRelieverAssignment, RelieverStandbyRule, Company, AllowedPunchLocation, EmployeeAllowedPunchLocation, ManpowerClient, ManpowerContract, ManpowerProject, ManpowerSite, ManpowerLocationUnit, ManpowerCategory, ManpowerShiftRequirement, ManpowerDeployment, ManpowerDeploymentAssignment, ManpowerRelieverAssignment, UserOperationAccess, SecfacCheckpoint, SecfacChecklistTemplate, SecfacChecklistItem, SecfacAssignment, SecfacChecklistExecution, SecfacChecklistResponse, SecfacChecklistExecutionHistory, SecfacEvidenceAttachment } from "@ahh-wfm/types";
 const uuid = () => Math.random().toString(36).substring(2) + Date.now().toString(36);
 import * as fs from "fs";
 import * as path from "path";
@@ -477,6 +477,7 @@ let memoryDb: {
   secfacChecklistExecutions: SecfacChecklistExecution[];
   secfacChecklistResponses: SecfacChecklistResponse[];
   secfacChecklistExecutionHistories: SecfacChecklistExecutionHistory[];
+  secfacEvidenceAttachments: SecfacEvidenceAttachment[];
 } = {
   companies: [
     { id: "COMP-001", companyCode: "AHH", companyName: "Al Hattab Holding", isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
@@ -763,7 +764,8 @@ let memoryDb: {
   secfacAssignments: [],
   secfacChecklistExecutions: [],
   secfacChecklistResponses: [],
-  secfacChecklistExecutionHistories: []
+  secfacChecklistExecutionHistories: [],
+  secfacEvidenceAttachments: []
 };
 
 // Seeding helper to pre-fill MySQL with mock data if it is empty
@@ -11538,6 +11540,10 @@ export const mockDb = {
           site: true,
           checkpoint: true,
           reviewedBy: true,
+          evidenceAttachments: {
+            where: { isActive: true },
+            include: { uploadedBy: true }
+          },
           history: {
             include: {
               changedBy: true
@@ -11546,7 +11552,11 @@ export const mockDb = {
           },
           responses: {
             include: {
-              checklistItem: true
+              checklistItem: true,
+              evidenceAttachments: {
+                where: { isActive: true },
+                include: { uploadedBy: true }
+              }
             }
           }
         },
@@ -11562,6 +11572,21 @@ export const mockDb = {
         history: x.history?.map((h: any) => ({
           ...h,
           createdAt: h.createdAt?.toISOString()
+        })),
+        evidenceAttachments: x.evidenceAttachments?.map((e: any) => ({
+          ...e,
+          capturedAt: e.capturedAt?.toISOString(),
+          createdAt: e.createdAt?.toISOString(),
+          updatedAt: e.updatedAt?.toISOString()
+        })),
+        responses: x.responses?.map((r: any) => ({
+          ...r,
+          evidenceAttachments: r.evidenceAttachments?.map((e: any) => ({
+            ...e,
+            capturedAt: e.capturedAt?.toISOString(),
+            createdAt: e.createdAt?.toISOString(),
+            updatedAt: e.updatedAt?.toISOString()
+          }))
         }))
       }));
     }
@@ -11586,11 +11611,24 @@ export const mockDb = {
     }
 
     return res.map((x: any) => {
+      const evidenceAttachments = (db.secfacEvidenceAttachments || [])
+        .filter((e: any) => e.executionId === x.id && e.isActive !== false)
+        .map((e: any) => ({
+          ...e,
+          uploadedBy: (db.employees || []).find((emp: any) => emp.id === e.uploadedById) || null
+        }));
+
       const responses = (db.secfacChecklistResponses || [])
         .filter((r: any) => r.executionId === x.id)
         .map((r: any) => ({
           ...r,
-          checklistItem: (db.secfacChecklistItems || []).find((item: any) => item.id === r.checklistItemId) || null
+          checklistItem: (db.secfacChecklistItems || []).find((item: any) => item.id === r.checklistItemId) || null,
+          evidenceAttachments: (db.secfacEvidenceAttachments || [])
+            .filter((e: any) => e.responseId === r.id && e.isActive !== false)
+            .map((e: any) => ({
+              ...e,
+              uploadedBy: (db.employees || []).find((emp: any) => emp.id === e.uploadedById) || null
+            }))
         }));
 
       const history = (db.secfacChecklistExecutionHistories || [])
@@ -11610,7 +11648,8 @@ export const mockDb = {
         checkpoint: (db.secfacCheckpoints || []).find((cp: any) => cp.id === x.checkpointId) || null,
         reviewedBy: x.reviewedById ? ((db.employees || []).find((e: any) => e.id === x.reviewedById) || null) : null,
         history,
-        responses
+        responses,
+        evidenceAttachments
       };
     });
   },
@@ -11626,6 +11665,10 @@ export const mockDb = {
           site: true,
           checkpoint: true,
           reviewedBy: true,
+          evidenceAttachments: {
+            where: { isActive: true },
+            include: { uploadedBy: true }
+          },
           history: {
             include: {
               changedBy: true
@@ -11634,7 +11677,11 @@ export const mockDb = {
           },
           responses: {
             include: {
-              checklistItem: true
+              checklistItem: true,
+              evidenceAttachments: {
+                where: { isActive: true },
+                include: { uploadedBy: true }
+              }
             }
           }
         }
@@ -11650,6 +11697,21 @@ export const mockDb = {
         history: res.history?.map((h: any) => ({
           ...h,
           createdAt: h.createdAt?.toISOString()
+        })),
+        evidenceAttachments: res.evidenceAttachments?.map((e: any) => ({
+          ...e,
+          capturedAt: e.capturedAt?.toISOString(),
+          createdAt: e.createdAt?.toISOString(),
+          updatedAt: e.updatedAt?.toISOString()
+        })),
+        responses: res.responses?.map((r: any) => ({
+          ...r,
+          evidenceAttachments: r.evidenceAttachments?.map((e: any) => ({
+            ...e,
+            capturedAt: e.capturedAt?.toISOString(),
+            createdAt: e.createdAt?.toISOString(),
+            updatedAt: e.updatedAt?.toISOString()
+          }))
         }))
       };
     }
@@ -11658,11 +11720,24 @@ export const mockDb = {
     const x = (db.secfacChecklistExecutions || []).find((item: any) => item.id === id);
     if (!x) return null;
 
+    const evidenceAttachments = (db.secfacEvidenceAttachments || [])
+      .filter((e: any) => e.executionId === x.id && e.isActive !== false)
+      .map((e: any) => ({
+        ...e,
+        uploadedBy: (db.employees || []).find((emp: any) => emp.id === e.uploadedById) || null
+      }));
+
     const responses = (db.secfacChecklistResponses || [])
       .filter((r: any) => r.executionId === x.id)
       .map((r: any) => ({
         ...r,
-        checklistItem: (db.secfacChecklistItems || []).find((item: any) => item.id === r.checklistItemId) || null
+        checklistItem: (db.secfacChecklistItems || []).find((item: any) => item.id === r.checklistItemId) || null,
+        evidenceAttachments: (db.secfacEvidenceAttachments || [])
+          .filter((e: any) => e.responseId === r.id && e.isActive !== false)
+          .map((e: any) => ({
+            ...e,
+            uploadedBy: (db.employees || []).find((emp: any) => emp.id === e.uploadedById) || null
+          }))
       }));
 
     const history = (db.secfacChecklistExecutionHistories || [])
@@ -11682,7 +11757,8 @@ export const mockDb = {
       checkpoint: (db.secfacCheckpoints || []).find((cp: any) => cp.id === x.checkpointId) || null,
       reviewedBy: x.reviewedById ? ((db.employees || []).find((e: any) => e.id === x.reviewedById) || null) : null,
       history,
-      responses
+      responses,
+      evidenceAttachments
     };
   },
 
@@ -11720,24 +11796,15 @@ export const mockDb = {
           fromStatus = existing?.status || null;
         }
 
-        if (isEdit) {
-          await tx.secfacChecklistResponse.deleteMany({ where: { executionId } });
-        }
-
-        const execution = await tx.secfacChecklistExecution.upsert({
+        // Upsert the execution record
+        await tx.secfacChecklistExecution.upsert({
           where: { id: executionId },
-          create: {
-            id: executionId,
-            ...executionData
-          },
-          update: {
-            ...executionData,
-            updatedAt: new Date()
-          }
+          create: { id: executionId, ...executionData },
+          update: executionData
         });
 
-        // Write status history record
-        if (!isEdit || (fromStatus && fromStatus !== executionData.status)) {
+        // Write status history record in database
+        if (!isEdit || fromStatus !== executionData.status) {
           await tx.secfacChecklistExecutionHistory.create({
             data: {
               executionId,
@@ -11750,22 +11817,51 @@ export const mockDb = {
           });
         }
 
+        // Upsert responses instead of deleteMany & create to preserve IDs and relations
         if (Array.isArray(data.responses)) {
+          const itemIds = data.responses.map((r: any) => r.checklistItemId);
+          await tx.secfacChecklistResponse.deleteMany({
+            where: {
+              executionId,
+              checklistItemId: { notIn: itemIds }
+            }
+          });
+
           for (const resp of data.responses) {
-            await tx.secfacChecklistResponse.create({
-              data: {
-                id: resp.id || `sres-${Math.random().toString(36).substring(2) + Date.now().toString(36)}`,
-                executionId,
-                checklistItemId: resp.checklistItemId,
-                itemTextSnapshot: resp.itemTextSnapshot || "",
-                itemTypeSnapshot: resp.itemTypeSnapshot || "YES_NO",
-                answerValue: resp.answerValue !== undefined ? resp.answerValue : null,
-                answerText: resp.answerText || null,
-                comment: resp.comment || null,
-                isFlagged: !!resp.isFlagged,
-                flagReason: resp.flagReason || null
-              }
+            const existingResp = await tx.secfacChecklistResponse.findFirst({
+              where: { executionId, checklistItemId: resp.checklistItemId }
             });
+
+            if (existingResp) {
+              await tx.secfacChecklistResponse.update({
+                where: { id: existingResp.id },
+                data: {
+                  answerValue: resp.answerValue !== undefined ? resp.answerValue : null,
+                  answerText: resp.answerText || null,
+                  comment: resp.comment || null,
+                  isFlagged: !!resp.isFlagged,
+                  flagReason: resp.flagReason || null,
+                  itemTextSnapshot: resp.itemTextSnapshot || "",
+                  itemTypeSnapshot: resp.itemTypeSnapshot || "YES_NO",
+                  updatedAt: new Date()
+                }
+              });
+            } else {
+              await tx.secfacChecklistResponse.create({
+                data: {
+                  id: resp.id || `sres-${Math.random().toString(36).substring(2) + Date.now().toString(36)}`,
+                  executionId,
+                  checklistItemId: resp.checklistItemId,
+                  itemTextSnapshot: resp.itemTextSnapshot || "",
+                  itemTypeSnapshot: resp.itemTypeSnapshot || "YES_NO",
+                  answerValue: resp.answerValue !== undefined ? resp.answerValue : null,
+                  answerText: resp.answerText || null,
+                  comment: resp.comment || null,
+                  isFlagged: !!resp.isFlagged,
+                  flagReason: resp.flagReason || null
+                }
+              });
+            }
           }
         }
 
@@ -11826,8 +11922,6 @@ export const mockDb = {
 
     if (execIdx !== -1) {
       db.secfacChecklistExecutions[execIdx] = savedExecution;
-      // Clear old responses
-      db.secfacChecklistResponses = db.secfacChecklistResponses.filter((r: any) => r.executionId !== executionId);
     } else {
       db.secfacChecklistExecutions.push(savedExecution);
     }
@@ -11848,12 +11942,21 @@ export const mockDb = {
       db.secfacChecklistExecutionHistories.push(historyItem);
     }
 
-    // Add responses
+    // Add/Update responses in E2E Mock database
     const savedResponses: any[] = [];
     if (Array.isArray(data.responses)) {
+      const itemIds = data.responses.map((r: any) => r.checklistItemId);
+      db.secfacChecklistResponses = db.secfacChecklistResponses.filter(
+        (r: any) => r.executionId !== executionId || itemIds.includes(r.checklistItemId)
+      );
+
       for (const resp of data.responses) {
+        const existingIdx = db.secfacChecklistResponses.findIndex(
+          (r: any) => r.executionId === executionId && r.checklistItemId === resp.checklistItemId
+        );
+
         const newResp = {
-          id: resp.id || `sres-${Math.random().toString(36).substring(2) + Date.now().toString(36)}`,
+          id: resp.id || (existingIdx !== -1 ? db.secfacChecklistResponses[existingIdx].id : `sres-${Math.random().toString(36).substring(2) + Date.now().toString(36)}`),
           executionId,
           checklistItemId: resp.checklistItemId,
           itemTextSnapshot: resp.itemTextSnapshot || "",
@@ -11863,10 +11966,16 @@ export const mockDb = {
           comment: resp.comment || null,
           isFlagged: !!resp.isFlagged,
           flagReason: resp.flagReason || null,
-          createdAt: nowStr,
+          createdAt: existingIdx !== -1 ? db.secfacChecklistResponses[existingIdx].createdAt : nowStr,
           updatedAt: nowStr
         };
-        db.secfacChecklistResponses.push(newResp);
+
+        if (existingIdx !== -1) {
+          db.secfacChecklistResponses[existingIdx] = newResp;
+        } else {
+          db.secfacChecklistResponses.push(newResp);
+        }
+
         savedResponses.push({
           ...newResp,
           checklistItem: (db.secfacChecklistItems || []).find((item: any) => item.id === resp.checklistItemId) || null
@@ -12153,6 +12262,194 @@ export const mockDb = {
     db.manpowerCategories[idx] = updated;
     writeDb(db);
     return updated;
+  },
+
+  // --- SECFAC Evidence Attachment CRUD ---
+  getSecfacEvidenceAttachments: async (filters: any = {}): Promise<any[]> => {
+    if (isDbConnected()) {
+      const where: any = {};
+      if (filters.operationType) where.operationType = filters.operationType;
+      if (filters.executionId) where.executionId = filters.executionId;
+      if (filters.responseId) where.responseId = filters.responseId;
+      if (filters.assignmentId) where.assignmentId = filters.assignmentId;
+      if (filters.employeeId) where.employeeId = filters.employeeId;
+      if (filters.siteId) where.siteId = filters.siteId;
+      if (filters.checkpointId) where.checkpointId = filters.checkpointId;
+      if (filters.evidenceType) where.evidenceType = filters.evidenceType;
+      if (filters.isActive !== undefined) {
+        where.isActive = filters.isActive === 'true' || filters.isActive === true;
+      }
+      const res = await prismaClient.secfacEvidenceAttachment.findMany({
+        where,
+        include: {
+          execution: true,
+          response: true,
+          assignment: true,
+          employee: true,
+          site: true,
+          checkpoint: true,
+          uploadedBy: true
+        },
+        orderBy: { createdAt: "desc" }
+      });
+      return res.map((x: any) => ({
+        ...x,
+        capturedAt: x.capturedAt?.toISOString(),
+        createdAt: x.createdAt?.toISOString(),
+        updatedAt: x.updatedAt?.toISOString()
+      }));
+    }
+    const db = readDb();
+    let list = db.secfacEvidenceAttachments || [];
+    if (filters.operationType) list = list.filter((x: any) => x.operationType === filters.operationType);
+    if (filters.executionId) list = list.filter((x: any) => x.executionId === filters.executionId);
+    if (filters.responseId) list = list.filter((x: any) => x.responseId === filters.responseId);
+    if (filters.assignmentId) list = list.filter((x: any) => x.assignmentId === filters.assignmentId);
+    if (filters.employeeId) list = list.filter((x: any) => x.employeeId === filters.employeeId);
+    if (filters.siteId) list = list.filter((x: any) => x.siteId === filters.siteId);
+    if (filters.checkpointId) list = list.filter((x: any) => x.checkpointId === filters.checkpointId);
+    if (filters.evidenceType) list = list.filter((x: any) => x.evidenceType === filters.evidenceType);
+    if (filters.isActive !== undefined) {
+      const activeBool = filters.isActive === 'true' || filters.isActive === true;
+      list = list.filter((x: any) => x.isActive === activeBool);
+    }
+    return list.map((x: any) => {
+      const execution = (db.secfacChecklistExecutions || []).find((e: any) => e.id === x.executionId) || null;
+      const response = (db.secfacChecklistResponses || []).find((r: any) => r.id === x.responseId) || null;
+      const assignment = (db.secfacAssignments || []).find((a: any) => a.id === x.assignmentId) || null;
+      const employee = (db.employees || []).find((emp: any) => emp.id === x.employeeId) || null;
+      const site = (db.manpowerSites || []).find((s: any) => s.id === x.siteId) || null;
+      const checkpoint = (db.secfacCheckpoints || []).find((c: any) => c.id === x.checkpointId) || null;
+      const uploadedBy = (db.employees || []).find((emp: any) => emp.id === x.uploadedById) || null;
+      return { ...x, execution, response, assignment, employee, site, checkpoint, uploadedBy };
+    });
+  },
+
+  getSecfacEvidenceAttachmentById: async (id: string): Promise<any | null> => {
+    if (isDbConnected()) {
+      const res = await prismaClient.secfacEvidenceAttachment.findUnique({
+        where: { id },
+        include: {
+          execution: true,
+          response: true,
+          assignment: true,
+          employee: true,
+          site: true,
+          checkpoint: true,
+          uploadedBy: true
+        }
+      });
+      if (!res) return null;
+      return {
+        ...res,
+        capturedAt: res.capturedAt?.toISOString(),
+        createdAt: res.createdAt?.toISOString(),
+        updatedAt: res.updatedAt?.toISOString()
+      };
+    }
+    const db = readDb();
+    const x = (db.secfacEvidenceAttachments || []).find((item: any) => item.id === id);
+    if (!x) return null;
+    const execution = (db.secfacChecklistExecutions || []).find((e: any) => e.id === x.executionId) || null;
+    const response = (db.secfacChecklistResponses || []).find((r: any) => r.id === x.responseId) || null;
+    const assignment = (db.secfacAssignments || []).find((a: any) => a.id === x.assignmentId) || null;
+    const employee = (db.employees || []).find((emp: any) => emp.id === x.employeeId) || null;
+    const site = (db.manpowerSites || []).find((s: any) => s.id === x.siteId) || null;
+    const checkpoint = (db.secfacCheckpoints || []).find((c: any) => c.id === x.checkpointId) || null;
+    const uploadedBy = (db.employees || []).find((emp: any) => emp.id === x.uploadedById) || null;
+    return { ...x, execution, response, assignment, employee, site, checkpoint, uploadedBy };
+  },
+
+  createSecfacEvidenceAttachment: async (data: any): Promise<any> => {
+    if (isDbConnected()) {
+      const res = await prismaClient.secfacEvidenceAttachment.create({
+        data: {
+          id: data.id || undefined,
+          operationType: data.operationType,
+          executionId: data.executionId,
+          responseId: data.responseId || null,
+          assignmentId: data.assignmentId || null,
+          employeeId: data.employeeId,
+          siteId: data.siteId || null,
+          checkpointId: data.checkpointId || null,
+          fileName: data.fileName,
+          originalName: data.originalName || null,
+          mimeType: data.mimeType,
+          fileSizeBytes: Number(data.fileSizeBytes),
+          storagePath: data.storagePath,
+          evidenceType: data.evidenceType || "PHOTO",
+          caption: data.caption || null,
+          capturedAt: data.capturedAt ? new Date(data.capturedAt) : null,
+          latitude: data.latitude ? Number(data.latitude) : null,
+          longitude: data.longitude ? Number(data.longitude) : null,
+          gpsAccuracyMeters: data.gpsAccuracyMeters ? Number(data.gpsAccuracyMeters) : null,
+          uploadedById: data.uploadedById || null,
+          isActive: data.isActive !== false
+        }
+      });
+      return {
+        ...res,
+        capturedAt: res.capturedAt?.toISOString(),
+        createdAt: res.createdAt?.toISOString(),
+        updatedAt: res.updatedAt?.toISOString()
+      };
+    }
+    const db = readDb();
+    const newRecord = {
+      id: data.id || require("crypto").randomUUID(),
+      operationType: data.operationType,
+      executionId: data.executionId,
+      responseId: data.responseId || null,
+      assignmentId: data.assignmentId || null,
+      employeeId: data.employeeId,
+      siteId: data.siteId || null,
+      checkpointId: data.checkpointId || null,
+      fileName: data.fileName,
+      originalName: data.originalName || null,
+      mimeType: data.mimeType,
+      fileSizeBytes: Number(data.fileSizeBytes),
+      storagePath: data.storagePath,
+      evidenceType: data.evidenceType || "PHOTO",
+      caption: data.caption || null,
+      capturedAt: data.capturedAt || null,
+      latitude: data.latitude ? Number(data.latitude) : null,
+      longitude: data.longitude ? Number(data.longitude) : null,
+      gpsAccuracyMeters: data.gpsAccuracyMeters ? Number(data.gpsAccuracyMeters) : null,
+      uploadedById: data.uploadedById || null,
+      isActive: data.isActive !== false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    db.secfacEvidenceAttachments = db.secfacEvidenceAttachments || [];
+    db.secfacEvidenceAttachments.push(newRecord);
+    writeDb(db);
+    return newRecord;
+  },
+
+  deleteSecfacEvidenceAttachment: async (id: string): Promise<boolean> => {
+    if (isDbConnected()) {
+      await prismaClient.secfacEvidenceAttachment.update({
+        where: { id },
+        data: { isActive: false }
+      });
+      return true;
+    }
+    const db = readDb();
+    db.secfacEvidenceAttachments = db.secfacEvidenceAttachments || [];
+    const idx = db.secfacEvidenceAttachments.findIndex((x: any) => x.id === id);
+    if (idx === -1) return false;
+    db.secfacEvidenceAttachments[idx].isActive = false;
+    db.secfacEvidenceAttachments[idx].updatedAt = new Date().toISOString();
+    writeDb(db);
+    return true;
+  },
+
+  getEvidenceForExecution: async (executionId: string): Promise<any[]> => {
+    return mockDb.getSecfacEvidenceAttachments({ executionId, isActive: true });
+  },
+
+  getEvidenceForResponse: async (responseId: string): Promise<any[]> => {
+    return mockDb.getSecfacEvidenceAttachments({ responseId, isActive: true });
   },
 
   // --- User Operation Access CRUD ---

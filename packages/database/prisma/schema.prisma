@@ -129,6 +129,8 @@ model Employee {
   secfacChecklistExecutions   SecfacChecklistExecution[] @relation("SecfacEmployeeExecutions")
   secfacExecutionReviews      SecfacChecklistExecution[] @relation("SecfacExecutionReviewer")
   secfacExecutionHistories    SecfacChecklistExecutionHistory[] @relation("SecfacExecutionHistoryPerformer")
+  secfacEvidenceAttachments   SecfacEvidenceAttachment[] @relation("SecfacEmployeeEvidence")
+  secfacEvidenceUploadedBy    SecfacEvidenceAttachment[] @relation("SecfacEvidenceUploadedBy")
 }
 
 model Department {
@@ -1377,6 +1379,7 @@ model ManpowerSite {
   secfacChecklistTemplates SecfacChecklistTemplate[]
   secfacAssignments      SecfacAssignment[]
   secfacChecklistExecutions SecfacChecklistExecution[]
+  secfacEvidenceAttachments SecfacEvidenceAttachment[]
 }
 
 model SecuritySiteManpowerAllocation {
@@ -1973,6 +1976,7 @@ model SecfacCheckpoint {
   secfacChecklistTemplates SecfacChecklistTemplate[]
   secfacAssignments        SecfacAssignment[]
   secfacChecklistExecutions SecfacChecklistExecution[]
+  secfacEvidenceAttachments SecfacEvidenceAttachment[]
 
   @@index([operationType])
   @@index([siteId])
@@ -2099,6 +2103,7 @@ model SecfacAssignment {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
   secfacChecklistExecutions SecfacChecklistExecution[]
+  evidenceAttachments SecfacEvidenceAttachment[]
 
   @@index([operationType])
   @@index([employeeId])
@@ -2151,6 +2156,7 @@ model SecfacChecklistExecution {
 
   responses           SecfacChecklistResponse[]
   history             SecfacChecklistExecutionHistory[]
+  evidenceAttachments SecfacEvidenceAttachment[]
 
   @@index([operationType])
   @@index([assignmentId])
@@ -2183,6 +2189,7 @@ model SecfacChecklistResponse {
 
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
+  evidenceAttachments SecfacEvidenceAttachment[]
 
   @@index([executionId])
   @@index([checklistItemId])
@@ -2210,5 +2217,48 @@ model SecfacChecklistExecutionHistory {
   @@index([toStatus])
   @@index([changedById])
   @@index([createdAt])
+}
+
+model SecfacEvidenceAttachment {
+  id                 String   @id @default(uuid())
+  operationType      String
+  executionId        String
+  execution          SecfacChecklistExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+  responseId         String?
+  response           SecfacChecklistResponse? @relation(fields: [responseId], references: [id], onDelete: SetNull)
+  assignmentId       String?
+  assignment         SecfacAssignment? @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
+  employeeId         String
+  employee           Employee @relation("SecfacEmployeeEvidence", fields: [employeeId], references: [id], onDelete: Restrict)
+  siteId             String?
+  site               ManpowerSite? @relation(fields: [siteId], references: [id], onDelete: SetNull)
+  checkpointId       String?
+  checkpoint         SecfacCheckpoint? @relation(fields: [checkpointId], references: [id], onDelete: SetNull)
+  fileName           String
+  originalName       String?
+  mimeType           String
+  fileSizeBytes      Int
+  storagePath        String
+  evidenceType       String   @default("PHOTO")
+  caption            String?
+  capturedAt         DateTime?
+  latitude           Float?
+  longitude          Float?
+  gpsAccuracyMeters  Float?
+  uploadedById       String?
+  uploadedBy         Employee? @relation("SecfacEvidenceUploadedBy", fields: [uploadedById], references: [id], onDelete: SetNull)
+  isActive           Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([operationType])
+  @@index([executionId])
+  @@index([responseId])
+  @@index([assignmentId])
+  @@index([employeeId])
+  @@index([siteId])
+  @@index([checkpointId])
+  @@index([evidenceType])
+  @@index([isActive])
 }
 

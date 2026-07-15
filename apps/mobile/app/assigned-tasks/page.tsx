@@ -64,7 +64,7 @@ export default function AssignedTasksPage() {
   // Modal / Execution form states
   const [activeTaskForModal, setActiveTaskForModal] = useState<SecfacAssignment | null>(null);
   const [execution, setExecution] = useState<any>(null);
-  const [answers, setAnswers] = useState<Record<string, { id?: string; answerValue: string; comment: string; isFlagged: boolean; flagReason?: string }>>({});
+  const [answers, setAnswers] = useState<Record<string, { id?: string; answerValue: string; comment: string; isFlagged: boolean; flagReason?: string; evidenceAttachments?: any[] }>>({});
   const [remarks, setRemarks] = useState("");
   const [loadingExecution, setLoadingExecution] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -122,8 +122,24 @@ export default function AssignedTasksPage() {
                   answerValue: r.answerValue || "",
                   comment: r.comment || "",
                   isFlagged: !!r.isFlagged,
-                  flagReason: r.flagReason || ""
+                  flagReason: r.flagReason || "",
+                  evidenceAttachments: r.evidenceAttachments || []
                 };
+              }
+            }
+            // Ensure every template item has a response mapped
+            if (activeTaskForModal.template?.items) {
+              for (const item of activeTaskForModal.template.items) {
+                if (!ansMap[item.id]) {
+                  ansMap[item.id] = {
+                    id: crypto.randomUUID(),
+                    answerValue: "",
+                    comment: "",
+                    isFlagged: false,
+                    flagReason: "",
+                    evidenceAttachments: []
+                  };
+                }
               }
             }
             setAnswers(ansMap);
@@ -134,12 +150,27 @@ export default function AssignedTasksPage() {
         })
         .finally(() => setLoadingExecution(false));
     } else {
-      // Initialize new execution draft
+      // Initialize new execution draft with local client-side IDs
+      const generatedExecId = crypto.randomUUID();
+      const ansMap: Record<string, any> = {};
+      if (activeTaskForModal.template?.items) {
+        for (const item of activeTaskForModal.template.items) {
+          ansMap[item.id] = {
+            id: crypto.randomUUID(), // unique responseId
+            answerValue: "",
+            comment: "",
+            isFlagged: false,
+            flagReason: "",
+            evidenceAttachments: []
+          };
+        }
+      }
       setExecution({
+        id: generatedExecId,
         status: "DRAFT",
         responses: []
       });
-      setAnswers({});
+      setAnswers(ansMap);
       setRemarks("");
     }
   }, [activeTaskForModal]);
@@ -175,10 +206,120 @@ export default function AssignedTasksPage() {
     });
   };
 
+  const handlePhotoUpload = async (itemId: string, e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    const file = files[0];
+
+    const ansObj = answers[itemId] || { id: crypto.randomUUID(), evidenceAttachments: [] };
+    const currentAttachments = ansObj.evidenceAttachments || [];
+    const activeCount = currentAttachments.filter((x: any) => x.isActive !== false).length;
+
+    if (activeCount >= 3) {
+      alert("Maximum of 3 attachments per checklist item allowed.");
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("executionId", execution?.id || "");
+    formData.append("responseId", ansObj.id || "");
+
+    try {
+      const pos: any = await new Promise((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 2000 });
+      });
+      formData.append("latitude", pos.coords.latitude.toString());
+      formData.append("longitude", pos.coords.longitude.toString());
+      formData.append("gpsAccuracyMeters", pos.coords.accuracy.toString());
+    } catch (err) {
+      console.log("GPS fetch skipped for upload", err);
+    }
+
+    try {
+      const res = await fetch("/api/v1/secfac/evidence", {
+        method: "POST",
+        body: formData
+      });
+      const json = await res.json();
+      if (json.success && json.data) {
+        setAnswers((prev) => {
+          const current = prev[itemId] || { id: ansObj.id, evidenceAttachments: [] };
+          const attachments = [...(current.evidenceAttachments || []), json.data];
+          return {
+            ...prev,
+            [itemId]: {
+              ...current,
+              answerValue: "ATTACHED",
+              evidenceAttachments: attachments
+            }
+          };
+        });
+      } else {
+        alert(json.error || "Failed to upload photo");
+      }
+    } catch (err: any) {
+      alert("Upload error: " + err.message);
+    }
+  };
+
+  const handlePhotoRemove = async (itemId: string, evidenceId: string) => {
+    const isReadOnly = ["SUBMITTED", "PENDING_REVIEW", "APPROVED", "CANCELLED"].includes(execution?.status || "");
+    if (isReadOnly) return;
+
+    try {
+      const res = await fetch(`/api/v1/secfac/evidence/${evidenceId}`, {
+        method: "DELETE"
+      });
+      const json = await res.json();
+      if (json.success) {
+        setAnswers((prev) => {
+          const current = prev[itemId] || { evidenceAttachments: [] };
+          const attachments = (current.evidenceAttachments || []).map((e: any) =>
+            e.id === evidenceId ? { ...e, isActive: false } : e
+          );
+          const remainingCount = attachments.filter((x: any) => x.isActive !== false).length;
+          return {
+            ...prev,
+            [itemId]: {
+              ...current,
+              answerValue: remainingCount > 0 ? "ATTACHED" : "",
+              evidenceAttachments: attachments
+            }
+          };
+        });
+      } else {
+        alert(json.error || "Failed to delete photo");
+      }
+    } catch (err: any) {
+      alert("Delete error: " + err.message);
+    }
+  };
+
   const handleSave = async (submitStatus: "DRAFT" | "SUBMITTED") => {
     if (!activeTaskForModal) return;
     setErrorMsg("");
     setSuccessMsg("");
+
+    // Photo evidence verification for final submission
+    if (submitStatus === "SUBMITTED" && activeTaskForModal.template?.items) {
+      for (const item of activeTaskForModal.template.items) {
+        const isPhotoReq = item.requiresPhoto || item.itemType === "PHOTO";
+        const isItemReq = item.isRequired;
+
+        if (isPhotoReq && isItemReq) {
+          const ansObj = answers[item.id] || { evidenceAttachments: [] };
+          const attachments = ansObj.evidenceAttachments || [];
+          const activeCount = attachments.filter((e: any) => e.isActive !== false).length;
+
+          if (activeCount === 0) {
+            setErrorMsg(`Validation Error: Required photo evidence for '${item.itemText}' is missing`);
+            return;
+          }
+        }
+      }
+    }
+
     setSaving(true);
 
     // Get current GPS coordinates if possible (non-blocking)
@@ -404,9 +545,9 @@ export default function AssignedTasksPage() {
 
             {/* Warning Banner */}
             <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 flex items-start gap-2 text-amber-800 text-[10px]">
-              <span className="material-symbols-outlined text-sm text-amber-600 shrink-0">warning</span>
+              <span className="material-symbols-outlined text-sm text-amber-600 shrink-0">info</span>
               <p className="font-semibold leading-normal">
-                NFC proof and evidence upload will be enabled in a later phase. Draft save and answers submit are functional.
+                Photo evidence is enabled. NFC proof will be enabled in a later phase.
               </p>
             </div>
 
@@ -482,14 +623,23 @@ export default function AssignedTasksPage() {
                 </div>
               ) : (
                 activeTaskForModal.template.items.map((item, idx) => {
-                  const ansObj = answers[item.id] || { answerValue: "", comment: "" };
+                  const ansObj = answers[item.id] || { answerValue: "", comment: "", evidenceAttachments: [] };
+                  const activeAttachments = (ansObj.evidenceAttachments || []).filter((e: any) => e.isActive !== false);
                   const isSubmitted = ["SUBMITTED", "PENDING_REVIEW", "APPROVED", "CANCELLED"].includes(execution?.status || "");
 
                   return (
                     <div key={item.id} className="p-3 bg-surface-container-low border border-outline-variant/30 rounded-xl space-y-2.5 text-[10px]">
                       <div className="flex justify-between items-center text-[8px] font-bold text-on-surface-variant">
-                        <span className={item.isRequired ? "text-status-error font-extrabold" : "text-[#747782]"}>
-                          {item.isRequired ? "* REQUIRED" : "OPTIONAL"}
+                        <span className="flex items-center gap-1.5">
+                          <span className={item.isRequired ? "text-status-error font-extrabold" : "text-[#747782]"}>
+                            {item.isRequired ? "* REQUIRED" : "OPTIONAL"}
+                          </span>
+                          {(item.requiresPhoto || item.itemType === "PHOTO") && (
+                            <span className="bg-amber-100 text-amber-700 px-1 py-0.5 rounded text-[7px] font-bold uppercase tracking-wider flex items-center gap-0.5">
+                              <span className="material-symbols-outlined text-[9px]">photo_camera</span>
+                              Photo Required
+                            </span>
+                          )}
                         </span>
                         <span className="font-mono">Q{idx + 1}/{activeTaskForModal.template?.items.length}</span>
                       </div>
@@ -578,19 +728,69 @@ export default function AssignedTasksPage() {
                       )}
 
                       {item.itemType === "PHOTO" && (
-                        <div className="flex flex-col gap-1.5">
-                          <div className="flex justify-center border border-dashed border-primary/40 p-2.5 rounded-lg bg-primary/5 text-primary/70 font-bold text-[9px] cursor-not-allowed opacity-75">
-                            <span className="material-symbols-outlined text-[13px] mr-1">photo_camera</span>
-                            Photo Attachment (Phase 2B Capture)
+                        <div className="text-center py-2 text-on-surface-variant/60 text-[9px] italic">
+                          (Use the Photo Evidence section below to attach photos)
+                        </div>
+                      )}
+
+                      {/* Photo Evidence Attachment Section */}
+                      {(item.requiresPhoto || item.itemType === "PHOTO") && (
+                        <div className="mt-2 p-2 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
+                          <div className="flex justify-between items-center">
+                            <span className="text-[9px] font-bold text-[#002D72] flex items-center gap-1">
+                              <span className="material-symbols-outlined text-[12px]">photo_camera</span>
+                              Photo Evidence {item.isRequired && <span className="text-red-500 font-bold">*</span>}
+                            </span>
+                            <span className="text-[8px] bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded font-mono">
+                              {activeAttachments.length}/3 photos
+                            </span>
                           </div>
-                          <input
-                            type="text"
-                            disabled={isSubmitted}
-                            placeholder="Optional reference note / photo placeholder..."
-                            value={ansObj.answerValue || ""}
-                            onChange={(e) => handleAnswerChange(item.id, "answerValue", e.target.value)}
-                            className="w-full bg-white border border-[#C4C6D2] rounded p-1 text-[9px] disabled:bg-slate-50"
-                          />
+
+                          {/* Thumbnails list */}
+                          {activeAttachments.length > 0 && (
+                            <div className="flex flex-wrap gap-2 pt-1">
+                              {activeAttachments.map((att: any) => (
+                                <div key={att.id} className="relative w-14 h-14 bg-slate-100 rounded-lg overflow-hidden border border-slate-200 group">
+                                  <img
+                                    src={`/api/v1/secfac/evidence/${att.id}/file`}
+                                    alt="Evidence"
+                                    className="w-full h-full object-cover"
+                                  />
+                                  {!isSubmitted && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handlePhotoRemove(item.id, att.id)}
+                                      className="absolute inset-0 bg-black/40 flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                                      title="Remove Photo"
+                                    >
+                                      <span className="material-symbols-outlined text-[16px]">delete</span>
+                                    </button>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Upload trigger */}
+                          {!isSubmitted && activeAttachments.length < 3 && (
+                            <div>
+                              <input
+                                type="file"
+                                accept="image/*"
+                                capture="environment"
+                                id={`file-${item.id}`}
+                                onChange={(e) => handlePhotoUpload(item.id, e)}
+                                className="hidden"
+                              />
+                              <label
+                                htmlFor={`file-${item.id}`}
+                                className="flex justify-center items-center gap-1.5 border border-dashed border-[#002D72]/40 p-2 rounded-lg bg-[#002D72]/5 text-[#002D72] font-bold text-[9px] cursor-pointer hover:bg-[#002D72]/10 transition-colors"
+                              >
+                                <span className="material-symbols-outlined text-[13px]">add_a_photo</span>
+                                Attach Photo
+                              </label>
+                            </div>
+                          )}
                         </div>
                       )}
 

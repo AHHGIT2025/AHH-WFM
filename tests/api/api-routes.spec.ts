@@ -1362,4 +1362,302 @@ describe('AHH WFM API Routes Verification', () => {
       // ignore
     }
   });
+
+  test('SECFAC Phase 2C Evidence Attachment API Tests', async () => {
+    // 1. Log in users to get cookies
+    const loginUser = async (email: string, isMobile = false) => {
+      const baseUrl = isMobile ? MOBILE_URL : WEB_URL;
+      try {
+        const csrfRes = await axios.get(`${baseUrl}/api/auth/csrf`);
+        const token = csrfRes.data.csrfToken;
+        const csrfCookie = csrfRes.headers['set-cookie']?.map(c => c.split(';')[0]).join('; ');
+        
+        const loginRes = await axios.post(
+          `${baseUrl}/api/auth/callback/credentials`,
+          new URLSearchParams({
+            csrfToken: token,
+            email,
+            password: 'Password123!',
+            json: 'true'
+          }).toString(),
+          {
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+              'Cookie': csrfCookie
+            },
+            validateStatus: () => true
+          }
+        );
+
+        const cookies = loginRes.headers['set-cookie'];
+        return cookies ? cookies.map(c => c.split(';')[0]).join('; ') : '';
+      } catch (e: any) {
+        return '';
+      }
+    };
+
+    const adminWebCookie = await loginUser('admin@alhattab.qa', false);
+    const empWebCookie = await loginUser('sarah.kim@alhattab.qa', false);
+    const secSupCookie = await loginUser('sec.supervisor@alhattab.qa', false);
+    const fmSupCookie = await loginUser('fm.supervisor@alhattab.qa', false);
+
+    const adminHeaders = adminWebCookie ? { Cookie: adminWebCookie } : {};
+    const empHeaders = empWebCookie ? { Cookie: empWebCookie } : {};
+    const secSupHeaders = secSupCookie ? { Cookie: secSupCookie } : {};
+    const fmSupHeaders = fmSupCookie ? { Cookie: fmSupCookie } : {};
+
+    // 2. Resolve database resources dynamically to ensure foreign key safety
+    let testSiteId = 'SITE-001';
+    let otherEmployeeId = 'SEC-1002';
+    
+    if (prisma) {
+      try {
+        const site = await prisma.manpowerSite.findFirst();
+        if (site) testSiteId = site.id;
+        
+        const otherEmp = await prisma.employee.findFirst({
+          where: { id: { not: 'SK-90210' }, operationType: 'SECURITY_GUARDING' }
+        });
+        if (otherEmp) otherEmployeeId = otherEmp.id;
+      } catch (err) {
+        console.error('Failed dynamic DB lookup for evidence tests:', err);
+      }
+    } else {
+      const db = readDb();
+      if (db.manpowerSites && db.manpowerSites[0]) {
+        testSiteId = db.manpowerSites[0].id;
+      }
+      const otherEmp = (db.employees || []).find((e: any) => e.id !== 'SK-90210' && e.isActive);
+      if (otherEmp) {
+        otherEmployeeId = otherEmp.id;
+      }
+    }
+
+    let tempId = '';
+    let assignId = '';
+    let execId = '';
+    let respId = 'sres-test-resp-1';
+    let itemId = '';
+    let otherAssignId = '';
+    let otherExecId = '';
+
+    // Create Checklist Template via API
+    const tempRes = await axios.post(`${WEB_URL}/api/v1/secfac/checklists`, {
+      templateName: 'Evidence Test Template',
+      operationType: 'SECURITY_GUARDING',
+      category: 'SECURITY_PATROL',
+      checklistType: 'PATROL',
+      items: [
+        {
+          itemText: 'Q1 Photo Required',
+          itemType: 'YES_NO',
+          requiresPhoto: true,
+          isRequired: true,
+          sortOrder: 0
+        }
+      ]
+    }, { headers: adminHeaders, validateStatus: () => true });
+    expect(tempRes.status).toBe(201);
+    tempId = tempRes.data.data.id;
+    itemId = tempRes.data.data.items[0].id;
+
+    // Create Assignment via API
+    const assignRes = await axios.post(`${WEB_URL}/api/v1/secfac/assignments`, {
+      assignmentName: 'Evidence Test Assignment',
+      operationType: 'SECURITY_GUARDING',
+      employeeId: 'SK-90210',
+      siteId: testSiteId,
+      templateId: tempId,
+      scheduledStart: new Date().toISOString(),
+      scheduledEnd: new Date(Date.now() + 3600000).toISOString()
+    }, { headers: adminHeaders, validateStatus: () => true });
+    expect(assignRes.status).toBe(201);
+    assignId = assignRes.data.data.id;
+
+    // Create Draft Execution via API
+    const execRes = await axios.post(`${WEB_URL}/api/v1/secfac/checklist-executions`, {
+      assignmentId: assignId,
+      checklistTemplateId: tempId,
+      status: 'DRAFT',
+      responses: [
+        {
+          checklistItemId: itemId,
+          itemTextSnapshot: 'Q1 Photo Required',
+          itemTypeSnapshot: 'YES_NO',
+          answerValue: ''
+        }
+      ]
+    }, { headers: empHeaders, validateStatus: () => true });
+    expect(execRes.status).toBe(201);
+    execId = execRes.data.data.id;
+    respId = execRes.data.data.responses[0].id;
+
+    // Create Assignment for other employee via API
+    const otherAssignRes = await axios.post(`${WEB_URL}/api/v1/secfac/assignments`, {
+      assignmentName: 'Evidence Other Assignment',
+      operationType: 'SECURITY_GUARDING',
+      employeeId: otherEmployeeId,
+      siteId: testSiteId,
+      templateId: tempId,
+      scheduledStart: new Date().toISOString(),
+      scheduledEnd: new Date(Date.now() + 3600000).toISOString()
+    }, { headers: adminHeaders, validateStatus: () => true });
+    expect(otherAssignRes.status).toBe(201);
+    otherAssignId = otherAssignRes.data.data.id;
+
+    // Create Execution for other employee via API
+    const otherExecRes = await axios.post(`${WEB_URL}/api/v1/secfac/checklist-executions`, {
+      assignmentId: otherAssignId,
+      checklistTemplateId: tempId,
+      status: 'DRAFT',
+      responses: []
+    }, { headers: adminHeaders, validateStatus: () => true });
+    expect(otherExecRes.status).toBe(201);
+    otherExecId = otherExecRes.data.data.id;
+
+    const uploadFile = async (headers: any, execIdVal: string, respIdVal: string, content = 'dummy content', mime = 'image/png', filename = 'test.png') => {
+      const formData = new FormData();
+      formData.append('executionId', execIdVal);
+      formData.append('responseId', respIdVal);
+      const blob = new Blob([content], { type: mime });
+      formData.append('file', blob, filename);
+
+      const res = await fetch(`${WEB_URL}/api/v1/secfac/evidence`, {
+        method: 'POST',
+        headers: {
+          'Cookie': (headers as any).Cookie || (headers as any).cookie || '',
+        },
+        body: formData
+      });
+      const status = res.status;
+      let data = {};
+      try {
+        data = await res.json();
+      } catch (e) {}
+      return { status, data: data as any };
+    };
+
+    // 1. Unauthenticated upload returns 401
+    const unauthUp = await uploadFile({}, execId, respId);
+    expect(unauthUp.status).toBe(401);
+
+    // 2. Upload missing executionId returns 400
+    const missingExecUp = await uploadFile(adminHeaders, '', respId);
+    expect(missingExecUp.status).toBe(400);
+
+    // 3. Upload missing file returns 400
+    const missingFileRes = await fetch(`${WEB_URL}/api/v1/secfac/evidence`, {
+      method: 'POST',
+      headers: {
+        'Cookie': (adminHeaders as any).Cookie || '',
+      },
+      body: new FormData()
+    });
+    expect(missingFileRes.status).toBe(400);
+
+    // 4. Upload invalid mime type returns 400
+    const invalidMimeUp = await uploadFile(adminHeaders, execId, respId, 'dummy content', 'application/javascript', 'test.js');
+    expect(invalidMimeUp.status).toBe(400);
+
+    // 5. Upload oversized file returns 400 (5MB limit)
+    const oversizedUp = await uploadFile(adminHeaders, execId, respId, 'a'.repeat(6 * 1024 * 1024), 'image/png', 'large.png');
+    expect(oversizedUp.status).toBe(400);
+
+    // 6. Field employee cannot upload to another employee's execution
+    const wrongUserUp = await uploadFile(empHeaders, otherExecId, respId);
+    expect(wrongUserUp.status).toBe(403);
+
+    // 7. Upload to own DRAFT execution succeeds
+    const goodUp = await uploadFile(empHeaders, execId, respId);
+    expect(goodUp.status).toBe(201);
+    const evidenceId = goodUp.data.data.id;
+    expect(evidenceId).toBeDefined();
+
+    // 8. Field employee cannot upload to submitted/approved execution
+    if (prisma) {
+      try {
+        await prisma.secfacChecklistExecution.update({
+          where: { id: execId },
+          data: { status: 'SUBMITTED' }
+        });
+      } catch (e) {}
+    } else {
+      const db = readDb();
+      const idx = db.secfacChecklistExecutions.findIndex((x: any) => x.id === execId);
+      if (idx !== -1) db.secfacChecklistExecutions[idx].status = 'SUBMITTED';
+      writeDb(db);
+    }
+    const submittedUp = await uploadFile(empHeaders, execId, respId);
+    expect(submittedUp.status).toBe(400);
+
+    // Revert status back to DRAFT for other tests
+    if (prisma) {
+      try {
+        await prisma.secfacChecklistExecution.update({
+          where: { id: execId },
+          data: { status: 'DRAFT' }
+        });
+      } catch (e) {}
+    } else {
+      const db = readDb();
+      const idx = db.secfacChecklistExecutions.findIndex((x: any) => x.id === execId);
+      if (idx !== -1) db.secfacChecklistExecutions[idx].status = 'DRAFT';
+      writeDb(db);
+    }
+
+    // 9. Evidence list respects employee ownership
+    const empList = await axios.get(`${WEB_URL}/api/v1/secfac/evidence?executionId=${execId}`, { headers: empHeaders, validateStatus: () => true });
+    expect(empList.status).toBe(200);
+    expect(empList.data.data.length).toBeGreaterThan(0);
+
+    // 10. Evidence list respects operationType scope
+    const fmSupList = await axios.get(`${WEB_URL}/api/v1/secfac/evidence?operationType=SECURITY_GUARDING`, { headers: fmSupHeaders, validateStatus: () => true });
+    expect(fmSupList.status).toBe(403);
+
+    // 11. Admin can list all evidence
+    const adminList = await axios.get(`${WEB_URL}/api/v1/secfac/evidence?executionId=${execId}`, { headers: adminHeaders, validateStatus: () => true });
+    expect(adminList.status).toBe(200);
+    expect(adminList.data.data.length).toBeGreaterThan(0);
+
+    // 12. Evidence file endpoint requires authorization
+    const unauthFile = await axios.get(`${WEB_URL}/api/v1/secfac/evidence/${evidenceId}/file`, { validateStatus: () => true });
+    expect(unauthFile.status).toBe(401);
+
+    const goodFile = await axios.get(`${WEB_URL}/api/v1/secfac/evidence/${evidenceId}/file`, { headers: empHeaders, validateStatus: () => true });
+    expect(goodFile.status).toBe(200);
+
+    // 13. Required photo item blocks final submit if no evidence attached
+    await axios.delete(`${WEB_URL}/api/v1/secfac/evidence/${evidenceId}`, { headers: empHeaders, validateStatus: () => true });
+
+    const badSubmit = await axios.patch(`${WEB_URL}/api/v1/secfac/checklist-executions/${execId}`, {
+      status: 'SUBMITTED',
+      responses: [
+        { id: respId, checklistItemId: itemId, itemTextSnapshot: 'Q1 Photo Required', itemTypeSnapshot: 'YES_NO', answerValue: 'YES' }
+      ]
+    }, { headers: empHeaders, validateStatus: () => true });
+    expect(badSubmit.status).toBe(400);
+    expect(badSubmit.data.error).toContain('Required photo evidence');
+
+    // 14. Draft save succeeds even if required photo missing
+    const goodDraft = await axios.patch(`${WEB_URL}/api/v1/secfac/checklist-executions/${execId}`, {
+      status: 'DRAFT',
+      responses: [
+        { id: respId, checklistItemId: itemId, itemTextSnapshot: 'Q1 Photo Required', itemTypeSnapshot: 'YES_NO', answerValue: '' }
+      ]
+    }, { headers: empHeaders, validateStatus: () => true });
+    expect(goodDraft.status).toBe(200);
+
+    // Cleanup
+    try {
+      if (prisma) {
+        await prisma.secfacEvidenceAttachment.deleteMany({ where: { executionId: { in: [execId, otherExecId] } } });
+        await prisma.secfacChecklistResponse.deleteMany({ where: { executionId: { in: [execId, otherExecId] } } });
+        await prisma.secfacChecklistExecutionHistory.deleteMany({ where: { executionId: { in: [execId, otherExecId] } } });
+        await prisma.secfacChecklistExecution.deleteMany({ where: { id: { in: [execId, otherExecId] } } });
+        await prisma.secfacAssignment.deleteMany({ where: { id: { in: [assignId, otherAssignId] } } });
+        await prisma.secfacChecklistItem.deleteMany({ where: { templateId: tempId } });
+        await prisma.secfacChecklistTemplate.delete({ where: { id: tempId } });
+      }
+    } catch (err) {}
+  });
 });

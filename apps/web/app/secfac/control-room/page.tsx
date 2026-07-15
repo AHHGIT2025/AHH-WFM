@@ -21,6 +21,7 @@ interface ChecklistResponse {
   isFlagged: boolean;
   flagReason: string | null;
   checklistItem?: ChecklistItemSnapshot | null;
+  evidenceAttachments?: any[];
 }
 
 interface ExecutionHistory {
@@ -81,6 +82,7 @@ interface ChecklistExecution {
   } | null;
   responses?: ChecklistResponse[];
   history?: ExecutionHistory[];
+  evidenceAttachments?: any[];
 }
 
 export default function ControlRoomPage() {
@@ -104,6 +106,7 @@ export default function ControlRoomPage() {
   const [reviewLoading, setReviewLoading] = useState(false);
   const [reviewError, setReviewError] = useState<string | null>(null);
   const [reviewSuccess, setReviewSuccess] = useState(false);
+  const [previewPhoto, setPreviewPhoto] = useState<any | null>(null);
 
   // Filters State
   const [filterOpType, setFilterOpType] = useState("ALL");
@@ -690,6 +693,24 @@ export default function ControlRoomPage() {
                               <span>Flagged Issue: {r.flagReason || "Failed answer limit"}</span>
                             </div>
                           )}
+                          {r.evidenceAttachments && r.evidenceAttachments.length > 0 && (
+                            <div className="flex flex-wrap gap-2 pt-1">
+                              {r.evidenceAttachments.map((att: any) => (
+                                <div
+                                  key={att.id}
+                                  onClick={() => setPreviewPhoto(att)}
+                                  className="w-16 h-16 bg-slate-100 rounded-lg overflow-hidden border border-slate-200 cursor-pointer hover:border-[#002D72]/70 transition-all hover:scale-105"
+                                  title="View Photo Details"
+                                >
+                                  <img
+                                    src={`/api/v1/secfac/evidence/${att.id}/file`}
+                                    alt="Evidence"
+                                    className="w-full h-full object-cover"
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -826,6 +847,80 @@ export default function ControlRoomPage() {
                   )}
                 </>
               ) : null}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Premium Lightbox Overlay for Evidence Attachment */}
+      {previewPhoto && (
+        <div className="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center p-4">
+          <div className="bg-white max-w-lg w-full rounded-2xl overflow-hidden shadow-2xl border border-slate-200 flex flex-col relative max-h-[90vh]">
+            <button
+              onClick={() => setPreviewPhoto(null)}
+              className="absolute top-4 right-4 w-8 h-8 rounded-full bg-black/60 hover:bg-black/80 flex items-center justify-center text-white z-10"
+              title="Close Preview"
+            >
+              <span className="material-symbols-outlined text-[18px]">close</span>
+            </button>
+
+            {/* Image Preview Container */}
+            <div className="bg-slate-900 flex justify-center items-center h-[50vh] overflow-hidden">
+              <img
+                src={`/api/v1/secfac/evidence/${previewPhoto.id}/file`}
+                alt="Large Evidence"
+                className="max-w-full max-h-full object-contain"
+              />
+            </div>
+
+            {/* Metadata Info Box */}
+            <div className="p-4 space-y-3 overflow-y-auto text-xs bg-slate-50 border-t border-slate-200">
+              <div className="flex justify-between items-center border-b border-slate-250 pb-2">
+                <h4 className="font-bold text-[#001A48] uppercase tracking-wider text-[10px]">Evidence Details</h4>
+                <span className="bg-[#002D72] text-white px-2 py-0.5 rounded text-[8px] font-bold tracking-widest font-mono">
+                  {previewPhoto.evidenceType}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-slate-700">
+                <div>
+                  <span className="text-[8px] font-mono uppercase text-slate-500 block">Uploaded By</span>
+                  <span className="font-semibold">{previewPhoto.uploadedBy?.name || "Field Employee"}</span>
+                </div>
+                <div>
+                  <span className="text-[8px] font-mono uppercase text-slate-500 block">Captured At</span>
+                  <span className="font-semibold">{new Date(previewPhoto.capturedAt || previewPhoto.createdAt).toLocaleString()}</span>
+                </div>
+                <div>
+                  <span className="text-[8px] font-mono uppercase text-slate-500 block">File Size</span>
+                  <span className="font-semibold font-mono">{(previewPhoto.fileSizeBytes / 1024).toFixed(1)} KB</span>
+                </div>
+                <div>
+                  <span className="text-[8px] font-mono uppercase text-slate-500 block">GPS Coordinates</span>
+                  <span className="font-semibold font-mono">
+                    {previewPhoto.latitude && previewPhoto.longitude ? (
+                      <a
+                        href={`https://maps.google.com/?q=${previewPhoto.latitude},${previewPhoto.longitude}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[#002D72] hover:underline"
+                      >
+                        {previewPhoto.latitude.toFixed(6)}, {previewPhoto.longitude.toFixed(6)}
+                        {previewPhoto.gpsAccuracyMeters ? ` (±${previewPhoto.gpsAccuracyMeters.toFixed(1)}m)` : ""}
+                      </a>
+                    ) : (
+                      "No GPS Logged"
+                    )}
+                  </span>
+                </div>
+              </div>
+
+              {previewPhoto.caption && (
+                <div className="bg-white border border-slate-200 p-2.5 rounded-lg">
+                  <span className="text-[8px] font-mono uppercase text-slate-500 block mb-1">Caption / Notes</span>
+                  <p className="font-medium italic">"{previewPhoto.caption}"</p>
+                </div>
+              )}
             </div>
           </div>
         </div>

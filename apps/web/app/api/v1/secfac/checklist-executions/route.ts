@@ -190,6 +190,11 @@ export async function POST(request: Request) {
       const requiredItems = assignment.template.items.filter((x: any) => x.isRequired && x.isActive);
       const responsesList = Array.isArray(responses) ? responses : [];
 
+      const evidence = await mockDb.getSecfacEvidenceAttachments({
+        executionId: id || undefined,
+        isActive: true
+      });
+
       for (const reqItem of requiredItems) {
         const matchingResp = responsesList.find((r: any) => r.checklistItemId === reqItem.id);
         if (!matchingResp || matchingResp.answerValue === undefined || matchingResp.answerValue === null || matchingResp.answerValue.toString().trim() === "") {
@@ -197,6 +202,19 @@ export async function POST(request: Request) {
             success: false,
             error: `Validation Error: Required checklist item '${reqItem.itemText}' is not answered`
           }, { status: 400 });
+        }
+
+        const isPhotoReq = reqItem.requiresPhoto || reqItem.itemType === "PHOTO";
+        if (isPhotoReq) {
+          const hasPhoto = evidence.some(
+            (e: any) => e.responseId === matchingResp?.id || (matchingResp?.id && e.responseId === matchingResp.id)
+          );
+          if (!hasPhoto) {
+            return NextResponse.json({
+              success: false,
+              error: `Validation Error: Required photo evidence for '${reqItem.itemText}' is missing`
+            }, { status: 400 });
+          }
         }
       }
     }

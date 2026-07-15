@@ -18,6 +18,7 @@ yarn-error.log*
 # Runtime uploaded files - do not commit
 apps/web/public/uploads/
 apps/mobile/public/uploads/
+uploads/
 
 # Local configuration & overrides
 *.local.md
