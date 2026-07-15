@@ -38,3 +38,4 @@ db.json
 *.tsbuildinfo
 scratch/
 docs/screenshots/
+apps/web/storage/backups/
