@@ -53,6 +53,16 @@ export async function GET(request: Request) {
     }
   }
 
+  const isSupervisorOrAdmin = isAdmin || 
+    ["SUPERVISOR", "SECURITY_SUPERVISOR", "FM_SUPERVISOR", "SECURITY_ADMIN", "FM_ADMIN", "SECURITY_OPERATIONS_MANAGER", "FM_OPERATIONS_MANAGER", "OPERATIONS_MANAGER", "HR_MANAGER"].includes(user.role?.toUpperCase().replace(/\s+/g, "_")) ||
+    (user.permissions || []).some((p: string) => 
+      p === "manpower.security.manage" || 
+      p === "manpower.fm.manage" || 
+      p.startsWith("manpower.admin.")
+    );
+
+  const queryEmployeeId = isSupervisorOrAdmin ? (employeeId || undefined) : user.id;
+
   try {
     const assignments = await mockDb.getSecfacAssignments({
       operationType: targetOp || undefined,
@@ -62,7 +72,7 @@ export async function GET(request: Request) {
       locationUnitId: locationUnitId || undefined,
       checkpointId: checkpointId || undefined,
       templateId: templateId || undefined,
-      employeeId: employeeId || undefined,
+      employeeId: queryEmployeeId,
       supervisorId: supervisorId || undefined,
       status: status || undefined,
       isActive: isActive !== null ? isActive : undefined,

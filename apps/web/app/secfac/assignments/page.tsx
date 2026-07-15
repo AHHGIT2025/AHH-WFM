@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
+import { SecfacPageGuard } from "@/components/secfac-guard";
 
 interface SecfacAssignment {
   id: string;
@@ -457,7 +458,8 @@ export default function AssignmentsPlannerPage() {
   }
 
   return (
-    <div className="flex-1 bg-[#F9F9FF] p-6 font-['IBM_Plex_Sans',_sans-serif] min-h-[85vh] relative overflow-x-hidden">
+    <SecfacPageGuard>
+      <div className="flex-1 bg-[#F9F9FF] p-6 font-['IBM_Plex_Sans',_sans-serif] min-h-[85vh] relative overflow-x-hidden">
       {/* Title Header */}
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-6">
         <div>
@@ -1313,7 +1315,8 @@ export default function AssignmentsPlannerPage() {
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </SecfacPageGuard>
   );
 
   // Fallback lists if data not ready

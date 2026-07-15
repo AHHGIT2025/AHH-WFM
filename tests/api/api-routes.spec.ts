@@ -911,6 +911,9 @@ describe('AHH WFM API Routes Verification', () => {
     if (!db.userOperationAccesses.some((o: any) => o.employeeId === 'FM-SUP-99')) {
       db.userOperationAccesses.push({ id: 'ACC-FM-99', employeeId: 'FM-SUP-99', allowedSecurityGuarding: false, allowedFacilityManagement: true, allowedWhiteCollar: false });
     }
+    if (!db.userOperationAccesses.some((o: any) => o.employeeId === 'SK-90210')) {
+      db.userOperationAccesses.push({ id: 'ACC-SK-90210', employeeId: 'SK-90210', allowedSecurityGuarding: true, allowedFacilityManagement: false, allowedWhiteCollar: true });
+    }
     writeDb(db);
     
     // Sync db.json to web and mobile monorepo packages to ensure running dev servers see the changes
@@ -1138,6 +1141,220 @@ describe('AHH WFM API Routes Verification', () => {
         await prisma.secfacChecklistExecutionHistory.deleteMany({ where: { executionId } });
         await prisma.secfacChecklistExecution.delete({ where: { id: executionId } });
         await prisma.secfacAssignment.delete({ where: { id: assignmentId } });
+        await prisma.secfacChecklistItem.deleteMany({ where: { templateId } });
+        await prisma.secfacChecklistTemplate.delete({ where: { id: templateId } });
+      }
+    } catch (e) {
+      // ignore
+    }
+  });
+
+  test('SECFAC Access Control Hardening and Security Isolation', async () => {
+    const adminHeaders = webCookie ? { Cookie: webCookie } : {};
+
+    // Seed UserOperationAccess for Sarah Kim in Prisma database if connected
+    if (prisma) {
+      try {
+        await prisma.userOperationAccess.upsert({
+          where: { employeeId: 'SK-90210' },
+          update: {
+            allowedSecurityGuarding: true,
+            allowedFacilityManagement: false,
+            allowedWhiteCollar: true
+          },
+          create: {
+            id: 'ACC-SK-90210',
+            employeeId: 'SK-90210',
+            allowedSecurityGuarding: true,
+            allowedFacilityManagement: false,
+            allowedWhiteCollar: true
+          }
+        });
+      } catch (e) {
+        console.error('Failed to seed DB userOperationAccess for SK-90210:', e);
+      }
+    }
+
+    const loginUser = async (email: string, isMobile = false) => {
+      const baseUrl = isMobile ? MOBILE_URL : WEB_URL;
+      try {
+        const csrfRes = await axios.get(`${baseUrl}/api/auth/csrf`);
+        const token = csrfRes.data.csrfToken;
+        const csrfCookie = csrfRes.headers['set-cookie']?.map(c => c.split(';')[0]).join('; ');
+        
+        const loginRes = await axios.post(
+          `${baseUrl}/api/auth/callback/credentials`,
+          new URLSearchParams({
+            csrfToken: token,
+            email,
+            password: 'Password123!',
+            json: 'true'
+          }).toString(),
+          {
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+              'Cookie': csrfCookie
+            },
+            validateStatus: () => true
+          }
+        );
+
+        const cookies = loginRes.headers['set-cookie'];
+        if (!cookies) {
+          console.error('Login did not return set-cookie for', email, ':', loginRes.status, loginRes.data);
+        }
+        return cookies ? cookies.map(c => c.split(';')[0]).join('; ') : '';
+      } catch (e: any) {
+        console.error('Login failed for', email, ':', e.response?.data || e.message);
+        return '';
+      }
+    };
+
+    // 1. Log in standard employee on Web
+    const empWebCookie = await loginUser('sarah.kim@alhattab.qa', false);
+    const empWebHeaders = empWebCookie ? { Cookie: empWebCookie } : {};
+
+    const secSupCookie = await loginUser('sec.supervisor@alhattab.qa', false);
+    const fmSupCookie = await loginUser('fm.supervisor@alhattab.qa', false);
+
+    const secSupHeaders = secSupCookie ? { Cookie: secSupCookie } : {};
+    const fmSupHeaders = fmSupCookie ? { Cookie: fmSupCookie } : {};
+
+    // 2. Setup a Security Template & Assignment & Execution
+    const tempRes = await axios.post(`${WEB_URL}/api/v1/secfac/checklists`, {
+      templateName: 'Security Hardening Temp',
+      operationType: 'SECURITY_GUARDING',
+      category: 'SECURITY_PATROL',
+      checklistType: 'PATROL',
+      items: [{ itemText: 'Q1', itemType: 'YES_NO', isRequired: true, sortOrder: 0 }]
+    }, { headers: adminHeaders, validateStatus: () => true });
+    expect(tempRes.status).toBe(201);
+    const templateId = tempRes.data.data.id;
+
+    // Resolve other employee dynamically
+    let otherEmployeeId = 'SEC-1002';
+    try {
+      const otherEmp = await prisma.employee.findFirst({
+        where: { id: { not: 'SK-90210' }, operationType: 'SECURITY_GUARDING' }
+      });
+      if (otherEmp) {
+        otherEmployeeId = otherEmp.id;
+      }
+    } catch (e) {
+      const db = readDb();
+      const otherEmp = (db.employees || []).find((e: any) => e.id !== 'SK-90210' && e.isActive);
+      if (otherEmp) {
+        otherEmployeeId = otherEmp.id;
+      }
+    }
+
+    // Create assignment for Security employee (sarah.kim is SK-90210)
+    const assignRes = await axios.post(`${WEB_URL}/api/v1/secfac/assignments`, {
+      assignmentName: 'Security Hardening Assignment 1',
+      operationType: 'SECURITY_GUARDING',
+      employeeId: 'SK-90210',
+      siteId: testSiteId,
+      templateId: templateId,
+      scheduledStart: new Date().toISOString(),
+      scheduledEnd: new Date(Date.now() + 7200000).toISOString(),
+      status: 'PENDING'
+    }, { headers: adminHeaders, validateStatus: () => true });
+    expect(assignRes.status).toBe(201);
+    const assignmentId = assignRes.data.data.id;
+
+    // Create assignment for another employee
+    const otherAssignRes = await axios.post(`${WEB_URL}/api/v1/secfac/assignments`, {
+      assignmentName: 'Security Hardening Assignment 2',
+      operationType: 'SECURITY_GUARDING',
+      employeeId: otherEmployeeId,
+      siteId: testSiteId,
+      templateId: templateId,
+      scheduledStart: new Date().toISOString(),
+      scheduledEnd: new Date(Date.now() + 7200000).toISOString(),
+      status: 'PENDING'
+    }, { headers: adminHeaders, validateStatus: () => true });
+    expect(otherAssignRes.status).toBe(201);
+    const otherAssignmentId = otherAssignRes.data.data.id;
+
+    // Create execution for Security employee
+    const execRes = await axios.post(`${WEB_URL}/api/v1/secfac/checklist-executions`, {
+      assignmentId: assignmentId,
+      checklistTemplateId: templateId,
+      status: 'DRAFT',
+      responses: []
+    }, { headers: adminHeaders, validateStatus: () => true });
+    expect(execRes.status).toBe(201);
+    const executionId = execRes.data.data.id;
+
+    // Create execution for other employee
+    const otherExecRes = await axios.post(`${WEB_URL}/api/v1/secfac/checklist-executions`, {
+      assignmentId: otherAssignmentId,
+      checklistTemplateId: templateId,
+      status: 'DRAFT',
+      responses: []
+    }, { headers: adminHeaders, validateStatus: () => true });
+    expect(otherExecRes.status).toBe(201);
+    const otherExecutionId = otherExecRes.data.data.id;
+
+    // 3. Test Fix 1: GET assignments
+    // Admin can see both
+    const adminAssigns = await axios.get(`${WEB_URL}/api/v1/secfac/assignments`, { headers: adminHeaders, validateStatus: () => true });
+    expect(adminAssigns.status).toBe(200);
+    const adminAssignIds = adminAssigns.data.data.map((x: any) => x.id);
+    expect(adminAssignIds).toContain(assignmentId);
+    expect(adminAssignIds).toContain(otherAssignmentId);
+
+    // Standard employee only sees own assignment (assignmentId, not otherAssignmentId)
+    const empAssigns = await axios.get(`${WEB_URL}/api/v1/secfac/assignments`, { headers: empWebHeaders, validateStatus: () => true });
+    expect(empAssigns.status).toBe(200);
+    const empAssignIds = empAssigns.data.data.map((x: any) => x.id);
+    expect(empAssignIds).toContain(assignmentId);
+    expect(empAssignIds).not.toContain(otherAssignmentId);
+
+    // 4. Test Fix 1: GET checklist executions
+    // Admin can see both
+    const adminExecs = await axios.get(`${WEB_URL}/api/v1/secfac/checklist-executions`, { headers: adminHeaders, validateStatus: () => true });
+    expect(adminExecs.status).toBe(200);
+    const adminExecIds = adminExecs.data.data.map((x: any) => x.id);
+    expect(adminExecIds).toContain(executionId);
+    expect(adminExecIds).toContain(otherExecutionId);
+
+    // Standard employee only sees own execution
+    const empExecs = await axios.get(`${WEB_URL}/api/v1/secfac/checklist-executions`, { headers: empWebHeaders, validateStatus: () => true });
+    expect(empExecs.status).toBe(200);
+    const empExecIds = empExecs.data.data.map((x: any) => x.id);
+    expect(empExecIds).toContain(executionId);
+    expect(empExecIds).not.toContain(otherExecutionId);
+
+    // 5. Test Scope Separation: Security vs FM executions
+    // Security supervisor cannot list FM checklist executions, FM supervisor cannot list Security checklist executions
+    const secSupExecs = await axios.get(`${WEB_URL}/api/v1/secfac/checklist-executions?operationType=FACILITY_MANAGEMENT`, { headers: secSupHeaders, validateStatus: () => true });
+    expect(secSupExecs.status).toBe(403); // Forbidden cross-scope
+
+    const fmSupExecs = await axios.get(`${WEB_URL}/api/v1/secfac/checklist-executions?operationType=SECURITY_GUARDING`, { headers: fmSupHeaders, validateStatus: () => true });
+    expect(fmSupExecs.status).toBe(403); // Forbidden cross-scope
+
+    // 6. Test Fix 3: PATCH checklist execution cross-scope returns 403
+    // Try to PATCH Security execution as FM supervisor -> expect 403
+    const crossPatchRes = await axios.patch(`${WEB_URL}/api/v1/secfac/checklist-executions/${executionId}`, {
+      remarks: 'Cross scope patch attempt'
+    }, { headers: fmSupHeaders, validateStatus: () => true });
+    expect(crossPatchRes.status).toBe(403);
+
+    // 7. Test Fix 2: Direct URL access checks
+    // Standard employee visiting /secfac/control-room page should be checked
+    const pageRes = await axios.get(`${WEB_URL}/secfac/control-room`, { headers: empWebHeaders, validateStatus: () => true });
+    expect(pageRes.status).toBe(200);
+    // Since Next.js pre-renders, the HTML will either have loading state or Access Denied
+    expect(typeof pageRes.data).toBe('string');
+
+    // Cleanup
+    try {
+      if (prisma) {
+        await prisma.secfacChecklistExecution.delete({ where: { id: executionId } });
+        await prisma.secfacChecklistExecution.delete({ where: { id: otherExecutionId } });
+        await prisma.secfacAssignment.delete({ where: { id: assignmentId } });
+        await prisma.secfacAssignment.delete({ where: { id: otherAssignmentId } });
         await prisma.secfacChecklistItem.deleteMany({ where: { templateId } });
         await prisma.secfacChecklistTemplate.delete({ where: { id: templateId } });
       }

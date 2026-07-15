@@ -64,6 +64,16 @@ export async function PATCH(
       return NextResponse.json({ success: false, error: "Forbidden: Cannot update another employee's execution draft" }, { status: 403 });
     }
 
+    // 1b. Scope RBAC check
+    if (!isAdmin) {
+      if (execution.operationType === "SECURITY_GUARDING" && operationAccess.allowedSecurityGuarding !== true) {
+        return NextResponse.json({ success: false, error: "Forbidden: No security operations access allowed" }, { status: 403 });
+      }
+      if (execution.operationType === "FACILITY_MANAGEMENT" && operationAccess.allowedFacilityManagement !== true) {
+        return NextResponse.json({ success: false, error: "Forbidden: No facility operations access allowed" }, { status: 403 });
+      }
+    }
+
     // 2. Already submitted/approved read-only block
     const READ_ONLY_STATUSES = ["SUBMITTED", "PENDING_REVIEW", "APPROVED", "CANCELLED"];
     if (READ_ONLY_STATUSES.includes(execution.status) && !isAdmin) {

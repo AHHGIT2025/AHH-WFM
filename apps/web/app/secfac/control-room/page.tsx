@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
+import { SecfacPageGuard } from "@/components/secfac-guard";
 
 interface ChecklistItemSnapshot {
   id: string;
@@ -299,7 +300,8 @@ export default function ControlRoomPage() {
   };
 
   return (
-    <div className="flex-1 bg-[#F9F9FF] p-6 font-['IBM_Plex_Sans',_sans-serif] min-h-[85vh] relative overflow-x-hidden">
+    <SecfacPageGuard>
+      <div className="flex-1 bg-[#F9F9FF] p-6 font-['IBM_Plex_Sans',_sans-serif] min-h-[85vh] relative overflow-x-hidden">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 border-b border-[#E7EEFF] pb-4">
         <div>
@@ -828,6 +830,7 @@ export default function ControlRoomPage() {
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </SecfacPageGuard>
   );
 }
