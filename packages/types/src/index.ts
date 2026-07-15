@@ -1581,6 +1581,7 @@ export interface SecfacAssignment {
   createdAt?: string;
   updatedAt?: string;
   evidenceAttachments?: SecfacEvidenceAttachment[];
+  secfacScanProofs?: SecfacScanProof[];
 }
 
 export interface SecfacChecklistExecution {
@@ -1613,6 +1614,7 @@ export interface SecfacChecklistExecution {
   responses?: SecfacChecklistResponse[];
   history?: SecfacChecklistExecutionHistory[];
   evidenceAttachments?: SecfacEvidenceAttachment[];
+  secfacScanProofs?: SecfacScanProof[];
 }
 
 export interface SecfacChecklistResponse {
@@ -1674,6 +1676,39 @@ export interface SecfacEvidenceAttachment {
   gpsAccuracyMeters?: number | null;
   uploadedById?: string | null;
   uploadedBy?: Employee | null;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface SecfacScanProof {
+  id: string;
+  operationType: string;
+  assignmentId: string;
+  assignment?: SecfacAssignment | null;
+  executionId?: string | null;
+  execution?: SecfacChecklistExecution | null;
+  checkpointId: string;
+  checkpoint?: SecfacCheckpoint | null;
+  employeeId: string;
+  employee?: Employee | null;
+  siteId: string;
+  site?: ManpowerSite | null;
+  scanMode: string;
+  scannedValue?: string | null;
+  expectedValue?: string | null;
+  validationStatus: string;
+  failureReason?: string | null;
+  exceptionReason?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  gpsAccuracyMeters?: number | null;
+  deviceInfo?: string | null;
+  scannedAt: string;
+  reviewedById?: string | null;
+  reviewedBy?: Employee | null;
+  reviewedAt?: string | null;
+  reviewRemarks?: string | null;
   isActive: boolean;
   createdAt?: string;
   updatedAt?: string;

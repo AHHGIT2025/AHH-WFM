@@ -5,24 +5,24 @@
       "companyCode": "AHH",
       "companyName": "Al Hattab Holding",
       "isActive": true,
-      "createdAt": "2026-07-06T09:58:25.852Z",
-      "updatedAt": "2026-07-06T09:58:25.852Z"
+      "createdAt": "2026-06-16T06:07:32.167Z",
+      "updatedAt": "2026-06-16T06:07:32.168Z"
     },
     {
       "id": "COMP-002",
       "companyCode": "HS01",
       "companyName": "AHH Security Services",
       "isActive": true,
-      "createdAt": "2026-07-06T09:58:25.852Z",
-      "updatedAt": "2026-07-06T09:58:25.852Z"
+      "createdAt": "2026-06-29T13:10:35.101Z",
+      "updatedAt": "2026-06-29T13:10:35.101Z"
     },
     {
       "id": "COMP-003",
       "companyCode": "TC01",
       "companyName": "Touch Cleaning & Hospitality",
       "isActive": true,
-      "createdAt": "2026-07-06T09:58:25.852Z",
-      "updatedAt": "2026-07-06T09:58:25.852Z"
+      "createdAt": "2026-06-29T13:10:35.101Z",
+      "updatedAt": "2026-06-29T13:10:35.101Z"
     }
   ],
   "departments": [
@@ -30,36 +30,36 @@
       "id": "DEPT-001",
       "name": "Operations",
       "companyId": "COMP-001",
-      "createdAt": "2026-07-06T09:58:25.852Z",
-      "updatedAt": "2026-07-06T09:58:25.852Z"
+      "createdAt": "2026-06-16T06:07:32.168Z",
+      "updatedAt": "2026-06-16T06:07:32.168Z"
     },
     {
       "id": "DEPT-002",
       "name": "Engineering",
       "companyId": "COMP-001",
-      "createdAt": "2026-07-06T09:58:25.852Z",
-      "updatedAt": "2026-07-06T09:58:25.852Z"
+      "createdAt": "2026-06-16T06:07:32.168Z",
+      "updatedAt": "2026-06-16T06:07:32.168Z"
     },
     {
       "id": "DEPT-003",
       "name": "Logistics",
       "companyId": "COMP-001",
-      "createdAt": "2026-07-06T09:58:25.852Z",
-      "updatedAt": "2026-07-06T09:58:25.852Z"
+      "createdAt": "2026-06-16T06:07:32.168Z",
+      "updatedAt": "2026-06-16T06:07:32.168Z"
     },
     {
       "id": "DEPT-004",
       "name": "Sales",
       "companyId": "COMP-001",
-      "createdAt": "2026-07-06T09:58:25.852Z",
-      "updatedAt": "2026-07-06T09:58:25.852Z"
+      "createdAt": "2026-06-16T06:07:32.168Z",
+      "updatedAt": "2026-06-16T06:07:32.168Z"
     },
     {
       "id": "DEPT-005",
       "name": "IT",
       "companyId": "COMP-001",
-      "createdAt": "2026-07-06T09:58:25.852Z",
-      "updatedAt": "2026-07-06T09:58:25.852Z"
+      "createdAt": "2026-06-16T06:07:32.168Z",
+      "updatedAt": "2026-06-16T06:07:32.168Z"
     }
   ],
   "employees": [
@@ -75,7 +75,7 @@
       "email": "sarah.kim@alhattab.qa",
       "phone": "+974 5555 1234",
       "shiftId": "MOR-102",
-      "passwordHash": "$2b$10$Hxx/s6cI0edYnhJTEoMwU.OAc1T47F4lQCGUtPOfDadJoh2HUAOjm",
+      "passwordHash": "$2b$10$MXGzuZY4UWcfONNiNUlgOeG1wc3Nob41g78P2ZCV9pKAKFyfuc6Zy",
       "isActive": true,
       "dateOfJoining": "2022-01-15T00:00:00Z",
       "qidNumber": "28532400123",
@@ -87,17 +87,18 @@
       "sponsor": "AHH Security Services",
       "hasAccommodation": false,
       "hasItAssets": true,
-      "employeeCategory": "BLUE_COLLAR",
       "employmentStatus": "ACTIVE",
-      "operationType": "WHITE_COLLAR",
+      "dutyStatus": "OFF_DUTY",
       "webAccessEnabled": true,
       "mobileAccessEnabled": true,
       "authMode": "LOCAL",
-      "ssoRequired": false,
-      "mustChangePassword": false,
       "isLoginEnabled": true,
-      "usernameStrategy": "EMPLOYEE_CODE",
-      "username": "SK-90210"
+      "usernameStrategy": "MANUAL",
+      "employeeCategory": "BLUE_COLLAR",
+      "username": "SK-90210",
+      "mustChangePassword": false,
+      "operationType": "WHITE_COLLAR",
+      "ssoRequired": false
     },
     {
       "id": "AM-8821",
@@ -112,7 +113,7 @@
       "email": "alex.m@alhattab.qa",
       "phone": "+974 5555 5678",
       "shiftId": "GEN-001",
-      "passwordHash": "$2b$10$Hxx/s6cI0edYnhJTEoMwU.OAc1T47F4lQCGUtPOfDadJoh2HUAOjm",
+      "passwordHash": "$2b$10$3MyCvtpxN/clLy6768L3y.2DBEW37QUcCUuvwdRSmEYUfp.FD97PS",
       "isActive": true,
       "dateOfJoining": "2023-04-10T00:00:00Z",
       "qidNumber": "28932400456",
@@ -124,14 +125,17 @@
       "sponsor": "Al Hattab Holding",
       "hasAccommodation": false,
       "hasItAssets": true,
+      "employmentStatus": "ACTIVE",
+      "dutyStatus": "OFF_DUTY",
       "webAccessEnabled": true,
       "mobileAccessEnabled": true,
       "authMode": "LOCAL",
-      "ssoRequired": false,
-      "mustChangePassword": false,
       "isLoginEnabled": true,
-      "usernameStrategy": "EMAIL",
-      "username": "alex.m@alhattab.qa"
+      "usernameStrategy": "MANUAL",
+      "username": "alex.m@alhattab.qa",
+      "operationType": "WHITE_COLLAR",
+      "ssoRequired": false,
+      "mustChangePassword": false
     },
     {
       "id": "BR-8823",
@@ -146,7 +150,7 @@
       "email": "brandon.r@alhattab.qa",
       "phone": "+974 5555 9012",
       "shiftId": "AFT-103",
-      "passwordHash": "$2b$10$Hxx/s6cI0edYnhJTEoMwU.OAc1T47F4lQCGUtPOfDadJoh2HUAOjm",
+      "passwordHash": "$2b$10$3MyCvtpxN/clLy6768L3y.2DBEW37QUcCUuvwdRSmEYUfp.FD97PS",
       "isActive": true,
       "dateOfJoining": "2024-02-01T00:00:00Z",
       "qidNumber": "29532400789",
@@ -158,14 +162,17 @@
       "sponsor": "Al Hattab Logistics",
       "hasAccommodation": true,
       "hasItAssets": false,
+      "employmentStatus": "ACTIVE",
+      "dutyStatus": "OFF_DUTY",
       "webAccessEnabled": true,
       "mobileAccessEnabled": true,
       "authMode": "LOCAL",
-      "ssoRequired": false,
-      "mustChangePassword": false,
       "isLoginEnabled": true,
-      "usernameStrategy": "EMPLOYEE_CODE",
-      "username": "BR-8823"
+      "usernameStrategy": "MANUAL",
+      "username": "BR-8823",
+      "operationType": "WHITE_COLLAR",
+      "ssoRequired": false,
+      "mustChangePassword": false
     },
     {
       "id": "JL-8824",
@@ -178,7 +185,7 @@
       "email": "jordan.lee@alhattab.qa",
       "phone": "+974 5555 3456",
       "shiftId": "ROT-A",
-      "passwordHash": "$2b$10$Hxx/s6cI0edYnhJTEoMwU.OAc1T47F4lQCGUtPOfDadJoh2HUAOjm",
+      "passwordHash": "$2b$10$3MyCvtpxN/clLy6768L3y.2DBEW37QUcCUuvwdRSmEYUfp.FD97PS",
       "isActive": true,
       "dateOfJoining": "2023-09-01T00:00:00Z",
       "qidNumber": "29132400111",
@@ -190,15 +197,18 @@
       "sponsor": "Al Hattab Holding",
       "hasAccommodation": false,
       "hasItAssets": true,
+      "employmentStatus": "ACTIVE",
+      "dutyStatus": "OFF_DUTY",
       "webAccessEnabled": true,
       "mobileAccessEnabled": true,
       "authMode": "LOCAL",
-      "ssoRequired": false,
-      "mustChangePassword": false,
       "isLoginEnabled": true,
+      "usernameStrategy": "MANUAL",
       "employeeCategory": "WHITE_COLLAR",
-      "usernameStrategy": "EMAIL",
-      "username": "jordan.lee@alhattab.qa"
+      "username": "jordan.lee@alhattab.qa",
+      "operationType": "WHITE_COLLAR",
+      "ssoRequired": false,
+      "mustChangePassword": false
     },
     {
       "id": "AA-1001",
@@ -213,7 +223,7 @@
       "email": "ahmed.ali@alhattab.qa",
       "phone": "+974 6666 1111",
       "shiftId": "GEN-001",
-      "passwordHash": "$2b$10$Hxx/s6cI0edYnhJTEoMwU.OAc1T47F4lQCGUtPOfDadJoh2HUAOjm",
+      "passwordHash": "$2b$10$3MyCvtpxN/clLy6768L3y.2DBEW37QUcCUuvwdRSmEYUfp.FD97PS",
       "isActive": true,
       "dateOfJoining": "2024-05-15T00:00:00Z",
       "qidNumber": "29632400222",
@@ -225,14 +235,17 @@
       "sponsor": "Al Hattab Contracting",
       "hasAccommodation": true,
       "hasItAssets": false,
+      "employmentStatus": "ACTIVE",
+      "dutyStatus": "OFF_DUTY",
       "webAccessEnabled": true,
       "mobileAccessEnabled": true,
       "authMode": "LOCAL",
-      "ssoRequired": false,
-      "mustChangePassword": false,
       "isLoginEnabled": true,
-      "usernameStrategy": "EMPLOYEE_CODE",
-      "username": "AA-1001"
+      "usernameStrategy": "MANUAL",
+      "username": "AA-1001",
+      "operationType": "WHITE_COLLAR",
+      "ssoRequired": false,
+      "mustChangePassword": false
     },
     {
       "id": "AD-0001",
@@ -245,7 +258,7 @@
       "email": "admin@alhattab.qa",
       "phone": "+974 0000 0000",
       "shiftId": "GEN-001",
-      "passwordHash": "$2b$10$Hxx/s6cI0edYnhJTEoMwU.OAc1T47F4lQCGUtPOfDadJoh2HUAOjm",
+      "passwordHash": "$2b$10$3MyCvtpxN/clLy6768L3y.2DBEW37QUcCUuvwdRSmEYUfp.FD97PS",
       "isActive": true,
       "dateOfJoining": "2020-01-01T00:00:00Z",
       "qidNumber": "28032400000",
@@ -257,15 +270,18 @@
       "sponsor": "Al Hattab Holding",
       "hasAccommodation": false,
       "hasItAssets": true,
+      "employmentStatus": "ACTIVE",
+      "dutyStatus": "OFF_DUTY",
       "webAccessEnabled": true,
       "mobileAccessEnabled": true,
       "authMode": "LOCAL",
-      "ssoRequired": false,
-      "mustChangePassword": false,
       "isLoginEnabled": true,
+      "usernameStrategy": "MANUAL",
       "employeeCategory": "WHITE_COLLAR",
-      "usernameStrategy": "EMAIL",
-      "username": "admin@alhattab.qa"
+      "username": "admin@alhattab.qa",
+      "operationType": "WHITE_COLLAR",
+      "ssoRequired": false,
+      "mustChangePassword": false
     },
     {
       "id": "SEC-1001",
@@ -292,6 +308,7 @@
       "sponsor": "Al Hattab Security",
       "hasAccommodation": true,
       "hasItAssets": false,
+      "employmentStatus": "ACTIVE",
       "webAccessEnabled": true,
       "mobileAccessEnabled": true,
       "authMode": "LOCAL",
@@ -326,6 +343,7 @@
       "sponsor": "Al Hattab Security",
       "hasAccommodation": true,
       "hasItAssets": false,
+      "employmentStatus": "ACTIVE",
       "webAccessEnabled": true,
       "mobileAccessEnabled": true,
       "authMode": "LOCAL",
@@ -341,7 +359,7 @@
       "department": "Operations",
       "departmentId": "DEPT-001",
       "companyId": "COMP-002",
-      "manpowerCategoryId": "PM-CAT-SEC-02",
+      "manpowerCategoryId": "PM-CAT-SEC-01",
       "operationType": "SECURITY_GUARDING",
       "isActive": true,
       "status": "Offline",
@@ -360,6 +378,7 @@
       "sponsor": "Al Hattab Security",
       "hasAccommodation": true,
       "hasItAssets": false,
+      "employmentStatus": "ACTIVE",
       "webAccessEnabled": true,
       "mobileAccessEnabled": true,
       "authMode": "LOCAL",
@@ -368,6 +387,80 @@
       "isLoginEnabled": true,
       "usernameStrategy": "EMPLOYEE_CODE",
       "username": "SEC-1003"
+    },
+    {
+      "id": "FM-1001",
+      "name": "Cleaner One",
+      "department": "Operations",
+      "departmentId": "DEPT-001",
+      "companyId": "COMP-003",
+      "designationId": "DES-001",
+      "role": "EMPLOYEE",
+      "status": "Active",
+      "email": "cleaner1@touchcleaning.qa",
+      "phone": "+974 6666 0001",
+      "shiftId": "GEN-001",
+      "passwordHash": "$2b$10$3MyCvtpxN/clLy6768L3y.2DBEW37QUcCUuvwdRSmEYUfp.FD97PS",
+      "isActive": true,
+      "dateOfJoining": "2024-01-01T00:00:00Z",
+      "qidNumber": "29032400011",
+      "qidExpiryDate": "2028-01-01T00:00:00Z",
+      "passportNumber": "P-FM1001",
+      "passportIssueDate": "2024-01-01T00:00:00Z",
+      "passportExpiryDate": "2034-01-01T00:00:00Z",
+      "passportIssuingCountry": "Nepal",
+      "sponsor": "Touch Cleaning & Hospitality",
+      "hasAccommodation": true,
+      "hasItAssets": false,
+      "employmentStatus": "ACTIVE",
+      "dutyStatus": "OFF_DUTY",
+      "webAccessEnabled": true,
+      "mobileAccessEnabled": true,
+      "authMode": "LOCAL",
+      "isLoginEnabled": true,
+      "usernameStrategy": "MANUAL",
+      "employeeCategory": "BLUE_COLLAR",
+      "username": "FM-1001",
+      "operationType": "FACILITY_MANAGEMENT",
+      "ssoRequired": false,
+      "mustChangePassword": false
+    },
+    {
+      "id": "FM-1002",
+      "name": "Cleaner Two",
+      "department": "Operations",
+      "departmentId": "DEPT-001",
+      "companyId": "COMP-003",
+      "designationId": "DES-001",
+      "role": "EMPLOYEE",
+      "status": "Active",
+      "email": "cleaner2@touchcleaning.qa",
+      "phone": "+974 6666 0002",
+      "shiftId": "GEN-001",
+      "passwordHash": "$2b$10$3MyCvtpxN/clLy6768L3y.2DBEW37QUcCUuvwdRSmEYUfp.FD97PS",
+      "isActive": true,
+      "dateOfJoining": "2024-01-01T00:00:00Z",
+      "qidNumber": "29032400012",
+      "qidExpiryDate": "2028-01-01T00:00:00Z",
+      "passportNumber": "P-FM1002",
+      "passportIssueDate": "2024-01-01T00:00:00Z",
+      "passportExpiryDate": "2034-01-01T00:00:00Z",
+      "passportIssuingCountry": "Nepal",
+      "sponsor": "Touch Cleaning & Hospitality",
+      "hasAccommodation": true,
+      "hasItAssets": false,
+      "employmentStatus": "ACTIVE",
+      "dutyStatus": "OFF_DUTY",
+      "webAccessEnabled": true,
+      "mobileAccessEnabled": true,
+      "authMode": "LOCAL",
+      "isLoginEnabled": true,
+      "usernameStrategy": "MANUAL",
+      "employeeCategory": "BLUE_COLLAR",
+      "username": "FM-1002",
+      "operationType": "WHITE_COLLAR",
+      "ssoRequired": false,
+      "mustChangePassword": false
     },
     {
       "id": "SEC-WC-001",
@@ -432,76 +525,42 @@
       "username": "fatima@alhattabsecurity.qa"
     },
     {
-      "id": "FM-1001",
-      "name": "Cleaner One",
-      "department": "Operations",
-      "departmentId": "DEPT-001",
-      "companyId": "COMP-003",
-      "designationId": "DES-001",
-      "role": "EMPLOYEE",
-      "status": "Active",
-      "email": "cleaner1@touchcleaning.qa",
-      "phone": "+974 6666 0001",
-      "shiftId": "GEN-001",
-      "passwordHash": "$2b$10$Hxx/s6cI0edYnhJTEoMwU.OAc1T47F4lQCGUtPOfDadJoh2HUAOjm",
+      "id": "SEC-SUP-99",
+      "name": "Security Supervisor",
+      "email": "sec.supervisor@alhattab.qa",
+      "role": "SUPERVISOR",
+      "passwordHash": "$2b$10$iB77nBD1ekM1LZPh6G0qKOByNCgaQWvQpxW8g2/F.aBelcBRQT6te",
       "isActive": true,
-      "dateOfJoining": "2024-01-01T00:00:00Z",
-      "qidNumber": "29032400011",
-      "qidExpiryDate": "2028-01-01T00:00:00Z",
-      "passportNumber": "P-FM1001",
-      "passportIssueDate": "2024-01-01T00:00:00Z",
-      "passportExpiryDate": "2034-01-01T00:00:00Z",
-      "passportIssuingCountry": "Nepal",
-      "sponsor": "Touch Cleaning & Hospitality",
-      "hasAccommodation": true,
-      "hasItAssets": false,
-      "employeeCategory": "BLUE_COLLAR",
-      "employmentStatus": "ACTIVE",
-      "operationType": "FACILITY_MANAGEMENT",
+      "department": "Operations",
+      "status": "Active",
       "webAccessEnabled": true,
       "mobileAccessEnabled": true,
       "authMode": "LOCAL",
       "ssoRequired": false,
       "mustChangePassword": false,
       "isLoginEnabled": true,
-      "usernameStrategy": "EMPLOYEE_CODE",
-      "username": "FM-1001"
+      "employeeCategory": "WHITE_COLLAR",
+      "usernameStrategy": "EMAIL",
+      "username": "sec.supervisor@alhattab.qa"
     },
     {
-      "id": "FM-1002",
-      "name": "Cleaner Two",
-      "department": "Operations",
-      "departmentId": "DEPT-001",
-      "companyId": "COMP-003",
-      "designationId": "DES-001",
-      "role": "EMPLOYEE",
-      "status": "Active",
-      "email": "cleaner2@touchcleaning.qa",
-      "phone": "+974 6666 0002",
-      "shiftId": "GEN-001",
-      "passwordHash": "$2b$10$Hxx/s6cI0edYnhJTEoMwU.OAc1T47F4lQCGUtPOfDadJoh2HUAOjm",
+      "id": "FM-SUP-99",
+      "name": "FM Supervisor",
+      "email": "fm.supervisor@alhattab.qa",
+      "role": "SUPERVISOR",
+      "passwordHash": "$2b$10$iB77nBD1ekM1LZPh6G0qKOByNCgaQWvQpxW8g2/F.aBelcBRQT6te",
       "isActive": true,
-      "dateOfJoining": "2024-01-01T00:00:00Z",
-      "qidNumber": "29032400012",
-      "qidExpiryDate": "2028-01-01T00:00:00Z",
-      "passportNumber": "P-FM1002",
-      "passportIssueDate": "2024-01-01T00:00:00Z",
-      "passportExpiryDate": "2034-01-01T00:00:00Z",
-      "passportIssuingCountry": "Nepal",
-      "sponsor": "Touch Cleaning & Hospitality",
-      "hasAccommodation": true,
-      "hasItAssets": false,
-      "employeeCategory": "BLUE_COLLAR",
-      "employmentStatus": "ACTIVE",
-      "operationType": "WHITE_COLLAR",
+      "department": "Operations",
+      "status": "Active",
       "webAccessEnabled": true,
       "mobileAccessEnabled": true,
       "authMode": "LOCAL",
       "ssoRequired": false,
       "mustChangePassword": false,
       "isLoginEnabled": true,
-      "usernameStrategy": "EMPLOYEE_CODE",
-      "username": "FM-1002"
+      "employeeCategory": "WHITE_COLLAR",
+      "usernameStrategy": "EMAIL",
+      "username": "fm.supervisor@alhattab.qa"
     }
   ],
   "attendance": [
@@ -698,8 +757,8 @@
       "lng": 51.5284,
       "radiusMeters": 150,
       "isActive": true,
-      "createdAt": "2026-07-06T09:58:25.852Z",
-      "updatedAt": "2026-07-06T09:58:25.852Z"
+      "createdAt": "2026-06-16T06:07:32.168Z",
+      "updatedAt": "2026-06-16T06:07:32.168Z"
     }
   ],
   "attendanceCorrections": [],
@@ -956,177 +1015,24 @@
       "adjustmentDays": 0
     },
     {
-      "id": "BAL-ANNUAL-SEC-1001",
-      "employeeId": "SEC-1001",
+      "id": "BAL-1781590052281",
+      "employeeId": "SK-90210",
       "leaveTypeId": "LTYPE-ANNUAL",
-      "allocatedDays": 22,
-      "usedDays": 0,
-      "pendingDays": 0,
-      "carriedOver": 0,
       "year": 2026,
-      "carriedForwardDays": 0,
-      "adjustmentDays": 0
-    },
-    {
-      "id": "BAL-SICK-SEC-1001",
-      "employeeId": "SEC-1001",
-      "leaveTypeId": "LTYPE-SICK",
       "allocatedDays": 15,
       "usedDays": 0,
       "pendingDays": 0,
-      "carriedOver": 0,
-      "year": 2026,
       "carriedForwardDays": 0,
-      "adjustmentDays": 0
-    },
-    {
-      "id": "BAL-ANNUAL-SEC-1002",
-      "employeeId": "SEC-1002",
-      "leaveTypeId": "LTYPE-ANNUAL",
-      "allocatedDays": 22,
-      "usedDays": 0,
-      "pendingDays": 0,
       "carriedOver": 0,
-      "year": 2026,
-      "carriedForwardDays": 0,
-      "adjustmentDays": 0
-    },
-    {
-      "id": "BAL-SICK-SEC-1002",
-      "employeeId": "SEC-1002",
-      "leaveTypeId": "LTYPE-SICK",
-      "allocatedDays": 15,
-      "usedDays": 0,
-      "pendingDays": 0,
-      "carriedOver": 0,
-      "year": 2026,
-      "carriedForwardDays": 0,
-      "adjustmentDays": 0
-    },
-    {
-      "id": "BAL-ANNUAL-SEC-1003",
-      "employeeId": "SEC-1003",
-      "leaveTypeId": "LTYPE-ANNUAL",
-      "allocatedDays": 22,
-      "usedDays": 0,
-      "pendingDays": 0,
-      "carriedOver": 0,
-      "year": 2026,
-      "carriedForwardDays": 0,
-      "adjustmentDays": 0
-    },
-    {
-      "id": "BAL-SICK-SEC-1003",
-      "employeeId": "SEC-1003",
-      "leaveTypeId": "LTYPE-SICK",
-      "allocatedDays": 15,
-      "usedDays": 0,
-      "pendingDays": 0,
-      "carriedOver": 0,
-      "year": 2026,
-      "carriedForwardDays": 0,
-      "adjustmentDays": 0
-    },
-    {
-      "id": "BAL-ANNUAL-SEC-WC-001",
-      "employeeId": "SEC-WC-001",
-      "leaveTypeId": "LTYPE-ANNUAL",
-      "allocatedDays": 22,
-      "usedDays": 0,
-      "pendingDays": 0,
-      "carriedOver": 0,
-      "year": 2026,
-      "carriedForwardDays": 0,
-      "adjustmentDays": 0
-    },
-    {
-      "id": "BAL-SICK-SEC-WC-001",
-      "employeeId": "SEC-WC-001",
-      "leaveTypeId": "LTYPE-SICK",
-      "allocatedDays": 15,
-      "usedDays": 0,
-      "pendingDays": 0,
-      "carriedOver": 0,
-      "year": 2026,
-      "carriedForwardDays": 0,
-      "adjustmentDays": 0
-    },
-    {
-      "id": "BAL-ANNUAL-SEC-WC-002",
-      "employeeId": "SEC-WC-002",
-      "leaveTypeId": "LTYPE-ANNUAL",
-      "allocatedDays": 22,
-      "usedDays": 0,
-      "pendingDays": 0,
-      "carriedOver": 0,
-      "year": 2026,
-      "carriedForwardDays": 0,
-      "adjustmentDays": 0
-    },
-    {
-      "id": "BAL-SICK-SEC-WC-002",
-      "employeeId": "SEC-WC-002",
-      "leaveTypeId": "LTYPE-SICK",
-      "allocatedDays": 15,
-      "usedDays": 0,
-      "pendingDays": 0,
-      "carriedOver": 0,
-      "year": 2026,
-      "carriedForwardDays": 0,
-      "adjustmentDays": 0
-    },
-    {
-      "id": "BAL-ANNUAL-FM-1001",
-      "employeeId": "FM-1001",
-      "leaveTypeId": "LTYPE-ANNUAL",
-      "allocatedDays": 22,
-      "usedDays": 0,
-      "pendingDays": 0,
-      "carriedOver": 0,
-      "year": 2026,
-      "carriedForwardDays": 0,
-      "adjustmentDays": 0
-    },
-    {
-      "id": "BAL-SICK-FM-1001",
-      "employeeId": "FM-1001",
-      "leaveTypeId": "LTYPE-SICK",
-      "allocatedDays": 15,
-      "usedDays": 0,
-      "pendingDays": 0,
-      "carriedOver": 0,
-      "year": 2026,
-      "carriedForwardDays": 0,
-      "adjustmentDays": 0
-    },
-    {
-      "id": "BAL-ANNUAL-FM-1002",
-      "employeeId": "FM-1002",
-      "leaveTypeId": "LTYPE-ANNUAL",
-      "allocatedDays": 22,
-      "usedDays": 0,
-      "pendingDays": 0,
-      "carriedOver": 0,
-      "year": 2026,
-      "carriedForwardDays": 0,
-      "adjustmentDays": 0
-    },
-    {
-      "id": "BAL-SICK-FM-1002",
-      "employeeId": "FM-1002",
-      "leaveTypeId": "LTYPE-SICK",
-      "allocatedDays": 15,
-      "usedDays": 0,
-      "pendingDays": 0,
-      "carriedOver": 0,
-      "year": 2026,
-      "carriedForwardDays": 0,
-      "adjustmentDays": 0
+      "adjustmentDays": 0,
+      "remarks": "First balance",
+      "createdAt": "2026-06-16T06:07:32.281Z",
+      "updatedAt": "2026-06-16T06:07:32.281Z"
     }
   ],
   "leaveBalanceLedgers": [
     {
-      "id": "LEDG-ANNUAL-SK-90210-1783331905992",
+      "id": "LEDG-ANNUAL-SK-90210-1781590052269",
       "employeeId": "SK-90210",
       "leaveTypeId": "LTYPE-ANNUAL",
       "actionType": "INITIAL",
@@ -1136,7 +1042,7 @@
       "remarks": "Initial seed allotment"
     },
     {
-      "id": "LEDG-SICK-SK-90210-1783331905992",
+      "id": "LEDG-SICK-SK-90210-1781590052269",
       "employeeId": "SK-90210",
       "leaveTypeId": "LTYPE-SICK",
       "actionType": "INITIAL",
@@ -1146,7 +1052,7 @@
       "remarks": "Initial seed allotment"
     },
     {
-      "id": "LEDG-ANNUAL-AM-8821-1783331905992",
+      "id": "LEDG-ANNUAL-AM-8821-1781590052269",
       "employeeId": "AM-8821",
       "leaveTypeId": "LTYPE-ANNUAL",
       "actionType": "INITIAL",
@@ -1156,7 +1062,7 @@
       "remarks": "Initial seed allotment"
     },
     {
-      "id": "LEDG-SICK-AM-8821-1783331905992",
+      "id": "LEDG-SICK-AM-8821-1781590052269",
       "employeeId": "AM-8821",
       "leaveTypeId": "LTYPE-SICK",
       "actionType": "INITIAL",
@@ -1166,7 +1072,7 @@
       "remarks": "Initial seed allotment"
     },
     {
-      "id": "LEDG-ANNUAL-BR-8823-1783331905992",
+      "id": "LEDG-ANNUAL-BR-8823-1781590052269",
       "employeeId": "BR-8823",
       "leaveTypeId": "LTYPE-ANNUAL",
       "actionType": "INITIAL",
@@ -1176,7 +1082,7 @@
       "remarks": "Initial seed allotment"
     },
     {
-      "id": "LEDG-SICK-BR-8823-1783331905992",
+      "id": "LEDG-SICK-BR-8823-1781590052269",
       "employeeId": "BR-8823",
       "leaveTypeId": "LTYPE-SICK",
       "actionType": "INITIAL",
@@ -1186,7 +1092,7 @@
       "remarks": "Initial seed allotment"
     },
     {
-      "id": "LEDG-ANNUAL-JL-8824-1783331905992",
+      "id": "LEDG-ANNUAL-JL-8824-1781590052269",
       "employeeId": "JL-8824",
       "leaveTypeId": "LTYPE-ANNUAL",
       "actionType": "INITIAL",
@@ -1196,7 +1102,7 @@
       "remarks": "Initial seed allotment"
     },
     {
-      "id": "LEDG-SICK-JL-8824-1783331905992",
+      "id": "LEDG-SICK-JL-8824-1781590052269",
       "employeeId": "JL-8824",
       "leaveTypeId": "LTYPE-SICK",
       "actionType": "INITIAL",
@@ -1206,7 +1112,7 @@
       "remarks": "Initial seed allotment"
     },
     {
-      "id": "LEDG-ANNUAL-AA-1001-1783331905992",
+      "id": "LEDG-ANNUAL-AA-1001-1781590052269",
       "employeeId": "AA-1001",
       "leaveTypeId": "LTYPE-ANNUAL",
       "actionType": "INITIAL",
@@ -1216,7 +1122,7 @@
       "remarks": "Initial seed allotment"
     },
     {
-      "id": "LEDG-SICK-AA-1001-1783331905992",
+      "id": "LEDG-SICK-AA-1001-1781590052269",
       "employeeId": "AA-1001",
       "leaveTypeId": "LTYPE-SICK",
       "actionType": "INITIAL",
@@ -1226,7 +1132,7 @@
       "remarks": "Initial seed allotment"
     },
     {
-      "id": "LEDG-ANNUAL-AD-0001-1783331905992",
+      "id": "LEDG-ANNUAL-AD-0001-1781590052269",
       "employeeId": "AD-0001",
       "leaveTypeId": "LTYPE-ANNUAL",
       "actionType": "INITIAL",
@@ -1236,148 +1142,8 @@
       "remarks": "Initial seed allotment"
     },
     {
-      "id": "LEDG-SICK-AD-0001-1783331905992",
+      "id": "LEDG-SICK-AD-0001-1781590052269",
       "employeeId": "AD-0001",
-      "leaveTypeId": "LTYPE-SICK",
-      "actionType": "INITIAL",
-      "amount": 15,
-      "balanceBefore": 0,
-      "balanceAfter": 15,
-      "remarks": "Initial seed allotment"
-    },
-    {
-      "id": "LEDG-ANNUAL-SEC-1001-1783331905992",
-      "employeeId": "SEC-1001",
-      "leaveTypeId": "LTYPE-ANNUAL",
-      "actionType": "INITIAL",
-      "amount": 22,
-      "balanceBefore": 0,
-      "balanceAfter": 22,
-      "remarks": "Initial seed allotment"
-    },
-    {
-      "id": "LEDG-SICK-SEC-1001-1783331905992",
-      "employeeId": "SEC-1001",
-      "leaveTypeId": "LTYPE-SICK",
-      "actionType": "INITIAL",
-      "amount": 15,
-      "balanceBefore": 0,
-      "balanceAfter": 15,
-      "remarks": "Initial seed allotment"
-    },
-    {
-      "id": "LEDG-ANNUAL-SEC-1002-1783331905992",
-      "employeeId": "SEC-1002",
-      "leaveTypeId": "LTYPE-ANNUAL",
-      "actionType": "INITIAL",
-      "amount": 22,
-      "balanceBefore": 0,
-      "balanceAfter": 22,
-      "remarks": "Initial seed allotment"
-    },
-    {
-      "id": "LEDG-SICK-SEC-1002-1783331905992",
-      "employeeId": "SEC-1002",
-      "leaveTypeId": "LTYPE-SICK",
-      "actionType": "INITIAL",
-      "amount": 15,
-      "balanceBefore": 0,
-      "balanceAfter": 15,
-      "remarks": "Initial seed allotment"
-    },
-    {
-      "id": "LEDG-ANNUAL-SEC-1003-1783331905992",
-      "employeeId": "SEC-1003",
-      "leaveTypeId": "LTYPE-ANNUAL",
-      "actionType": "INITIAL",
-      "amount": 22,
-      "balanceBefore": 0,
-      "balanceAfter": 22,
-      "remarks": "Initial seed allotment"
-    },
-    {
-      "id": "LEDG-SICK-SEC-1003-1783331905992",
-      "employeeId": "SEC-1003",
-      "leaveTypeId": "LTYPE-SICK",
-      "actionType": "INITIAL",
-      "amount": 15,
-      "balanceBefore": 0,
-      "balanceAfter": 15,
-      "remarks": "Initial seed allotment"
-    },
-    {
-      "id": "LEDG-ANNUAL-SEC-WC-001-1783331905992",
-      "employeeId": "SEC-WC-001",
-      "leaveTypeId": "LTYPE-ANNUAL",
-      "actionType": "INITIAL",
-      "amount": 22,
-      "balanceBefore": 0,
-      "balanceAfter": 22,
-      "remarks": "Initial seed allotment"
-    },
-    {
-      "id": "LEDG-SICK-SEC-WC-001-1783331905992",
-      "employeeId": "SEC-WC-001",
-      "leaveTypeId": "LTYPE-SICK",
-      "actionType": "INITIAL",
-      "amount": 15,
-      "balanceBefore": 0,
-      "balanceAfter": 15,
-      "remarks": "Initial seed allotment"
-    },
-    {
-      "id": "LEDG-ANNUAL-SEC-WC-002-1783331905992",
-      "employeeId": "SEC-WC-002",
-      "leaveTypeId": "LTYPE-ANNUAL",
-      "actionType": "INITIAL",
-      "amount": 22,
-      "balanceBefore": 0,
-      "balanceAfter": 22,
-      "remarks": "Initial seed allotment"
-    },
-    {
-      "id": "LEDG-SICK-SEC-WC-002-1783331905992",
-      "employeeId": "SEC-WC-002",
-      "leaveTypeId": "LTYPE-SICK",
-      "actionType": "INITIAL",
-      "amount": 15,
-      "balanceBefore": 0,
-      "balanceAfter": 15,
-      "remarks": "Initial seed allotment"
-    },
-    {
-      "id": "LEDG-ANNUAL-FM-1001-1783331905992",
-      "employeeId": "FM-1001",
-      "leaveTypeId": "LTYPE-ANNUAL",
-      "actionType": "INITIAL",
-      "amount": 22,
-      "balanceBefore": 0,
-      "balanceAfter": 22,
-      "remarks": "Initial seed allotment"
-    },
-    {
-      "id": "LEDG-SICK-FM-1001-1783331905992",
-      "employeeId": "FM-1001",
-      "leaveTypeId": "LTYPE-SICK",
-      "actionType": "INITIAL",
-      "amount": 15,
-      "balanceBefore": 0,
-      "balanceAfter": 15,
-      "remarks": "Initial seed allotment"
-    },
-    {
-      "id": "LEDG-ANNUAL-FM-1002-1783331905992",
-      "employeeId": "FM-1002",
-      "leaveTypeId": "LTYPE-ANNUAL",
-      "actionType": "INITIAL",
-      "amount": 22,
-      "balanceBefore": 0,
-      "balanceAfter": 22,
-      "remarks": "Initial seed allotment"
-    },
-    {
-      "id": "LEDG-SICK-FM-1002-1783331905992",
-      "employeeId": "FM-1002",
       "leaveTypeId": "LTYPE-SICK",
       "actionType": "INITIAL",
       "amount": 15,
@@ -1625,8 +1391,8 @@
       "userId": "sf_sync_user",
       "privateKeyVaultId": "VAULT_REF_SF_SANDBOX_KEY",
       "isActive": true,
-      "createdAt": "2026-07-06T09:58:25.852Z",
-      "updatedAt": "2026-07-06T09:58:25.852Z"
+      "createdAt": "2026-06-16T06:07:32.168Z",
+      "updatedAt": "2026-06-16T06:07:32.168Z"
     }
   ],
   "sapFieldMappings": [
@@ -1788,8 +1554,8 @@
       "isSupervisorPosition": true,
       "isRelieverEligible": false,
       "isActive": true,
-      "createdAt": "2026-07-06T09:58:25.852Z",
-      "updatedAt": "2026-07-06T09:58:25.852Z"
+      "createdAt": "2026-06-16T06:07:32.168Z",
+      "updatedAt": "2026-06-16T06:07:32.168Z"
     },
     {
       "id": "DES-ACC",
@@ -1800,8 +1566,8 @@
       "isSupervisorPosition": false,
       "isRelieverEligible": false,
       "isActive": true,
-      "createdAt": "2026-07-06T09:58:25.852Z",
-      "updatedAt": "2026-07-06T09:58:25.852Z"
+      "createdAt": "2026-06-16T06:07:32.168Z",
+      "updatedAt": "2026-06-16T06:07:32.168Z"
     },
     {
       "id": "DES-001",
@@ -1812,8 +1578,8 @@
       "isSupervisorPosition": false,
       "isRelieverEligible": true,
       "isActive": true,
-      "createdAt": "2026-07-06T09:58:25.852Z",
-      "updatedAt": "2026-07-06T09:58:25.852Z"
+      "createdAt": "2026-06-16T06:07:32.168Z",
+      "updatedAt": "2026-06-16T06:07:32.168Z"
     },
     {
       "id": "DES-002",
@@ -1824,8 +1590,8 @@
       "isSupervisorPosition": true,
       "isRelieverEligible": true,
       "isActive": true,
-      "createdAt": "2026-07-06T09:58:25.852Z",
-      "updatedAt": "2026-07-06T09:58:25.852Z"
+      "createdAt": "2026-06-16T06:07:32.168Z",
+      "updatedAt": "2026-06-16T06:07:32.168Z"
     },
     {
       "id": "DES-003",
@@ -1836,8 +1602,8 @@
       "isSupervisorPosition": true,
       "isRelieverEligible": false,
       "isActive": true,
-      "createdAt": "2026-07-06T09:58:25.852Z",
-      "updatedAt": "2026-07-06T09:58:25.852Z"
+      "createdAt": "2026-06-16T06:07:32.168Z",
+      "updatedAt": "2026-06-16T06:07:32.168Z"
     }
   ],
   "tradeClassifications": [
@@ -1848,8 +1614,8 @@
       "description": "Masonry and bricklaying",
       "linkedDesignationId": "DES-001",
       "isActive": true,
-      "createdAt": "2026-07-06T09:58:25.852Z",
-      "updatedAt": "2026-07-06T09:58:25.852Z"
+      "createdAt": "2026-06-16T06:07:32.168Z",
+      "updatedAt": "2026-06-16T06:07:32.168Z"
     },
     {
       "id": "TRD-002",
@@ -1858,8 +1624,8 @@
       "description": "Carpentry and woodwork",
       "linkedDesignationId": "DES-001",
       "isActive": true,
-      "createdAt": "2026-07-06T09:58:25.852Z",
-      "updatedAt": "2026-07-06T09:58:25.852Z"
+      "createdAt": "2026-06-16T06:07:32.168Z",
+      "updatedAt": "2026-06-16T06:07:32.168Z"
     },
     {
       "id": "TRD-003",
@@ -1868,8 +1634,8 @@
       "description": "Electrical installations and repair",
       "linkedDesignationId": "DES-001",
       "isActive": true,
-      "createdAt": "2026-07-06T09:58:25.852Z",
-      "updatedAt": "2026-07-06T09:58:25.852Z"
+      "createdAt": "2026-06-16T06:07:32.168Z",
+      "updatedAt": "2026-06-16T06:07:32.168Z"
     }
   ],
   "locations": [
@@ -1883,8 +1649,8 @@
       "longitude": 51.5284,
       "defaultGeofenceRadiusMeters": 150,
       "isActive": true,
-      "createdAt": "2026-07-06T09:58:25.852Z",
-      "updatedAt": "2026-07-06T09:58:25.852Z"
+      "createdAt": "2026-06-16T06:07:32.168Z",
+      "updatedAt": "2026-06-16T06:07:32.168Z"
     },
     {
       "id": "LOC-002",
@@ -1896,8 +1662,8 @@
       "longitude": 51.4567,
       "defaultGeofenceRadiusMeters": 200,
       "isActive": true,
-      "createdAt": "2026-07-06T09:58:25.852Z",
-      "updatedAt": "2026-07-06T09:58:25.852Z"
+      "createdAt": "2026-06-16T06:07:32.168Z",
+      "updatedAt": "2026-06-16T06:07:32.168Z"
     }
   ],
   "costCenters": [
@@ -1909,8 +1675,8 @@
       "description": "Cost center for Operations department",
       "sapCostCenterCode": "SAP-CC-OPS",
       "isActive": true,
-      "createdAt": "2026-07-06T09:58:25.852Z",
-      "updatedAt": "2026-07-06T09:58:25.852Z"
+      "createdAt": "2026-06-16T06:07:32.168Z",
+      "updatedAt": "2026-06-16T06:07:32.168Z"
     },
     {
       "id": "CC-002",
@@ -1920,8 +1686,8 @@
       "description": "Cost center for Engineering department",
       "sapCostCenterCode": "SAP-CC-ENG",
       "isActive": true,
-      "createdAt": "2026-07-06T09:58:25.852Z",
-      "updatedAt": "2026-07-06T09:58:25.852Z"
+      "createdAt": "2026-06-16T06:07:32.168Z",
+      "updatedAt": "2026-06-16T06:07:32.168Z"
     }
   ],
   "shiftRelieverAssignments": [],
@@ -1935,8 +1701,8 @@
       "relieverRequiredForOff": false,
       "relieverRequiredForVacation": true,
       "isActive": true,
-      "createdAt": "2026-07-06T09:58:25.852Z",
-      "updatedAt": "2026-07-06T09:58:25.852Z"
+      "createdAt": "2026-06-16T06:07:32.168Z",
+      "updatedAt": "2026-06-16T06:07:32.168Z"
     },
     {
       "id": "RULE-002",
@@ -1947,8 +1713,8 @@
       "relieverRequiredForOff": true,
       "relieverRequiredForVacation": true,
       "isActive": true,
-      "createdAt": "2026-07-06T09:58:25.852Z",
-      "updatedAt": "2026-07-06T09:58:25.852Z"
+      "createdAt": "2026-06-16T06:07:32.168Z",
+      "updatedAt": "2026-06-16T06:07:32.168Z"
     }
   ],
   "allowedPunchLocations": [
@@ -1961,8 +1727,8 @@
       "longitude": 51.531,
       "radiusMeters": 150,
       "isActive": true,
-      "createdAt": "2026-07-06T09:58:25.852Z",
-      "updatedAt": "2026-07-06T09:58:25.852Z"
+      "createdAt": "2026-06-16T06:07:32.168Z",
+      "updatedAt": "2026-06-16T06:07:32.168Z"
     },
     {
       "id": "APL-002",
@@ -1973,8 +1739,8 @@
       "longitude": 51.5325,
       "radiusMeters": 150,
       "isActive": true,
-      "createdAt": "2026-07-06T09:58:25.852Z",
-      "updatedAt": "2026-07-06T09:58:25.852Z"
+      "createdAt": "2026-06-16T06:07:32.168Z",
+      "updatedAt": "2026-06-16T06:07:32.168Z"
     },
     {
       "id": "APL-003",
@@ -1985,8 +1751,8 @@
       "longitude": 51.5201,
       "radiusMeters": 150,
       "isActive": true,
-      "createdAt": "2026-07-06T09:58:25.852Z",
-      "updatedAt": "2026-07-06T09:58:25.852Z"
+      "createdAt": "2026-06-16T06:07:32.168Z",
+      "updatedAt": "2026-06-16T06:07:32.168Z"
     }
   ],
   "employeeAllowedPunchLocations": [],
@@ -2055,8 +1821,7 @@
       "lng": 51.5208,
       "radiusMeters": 100,
       "operationType": "SECURITY_GUARDING",
-      "isActive": true,
-      "gatePassRequired": true
+      "isActive": true
     },
     {
       "id": "MSITE-002",
@@ -2066,8 +1831,7 @@
       "lng": 51.5201,
       "radiusMeters": 100,
       "operationType": "FACILITY_MANAGEMENT",
-      "isActive": true,
-      "gatePassRequired": false
+      "isActive": true
     }
   ],
   "manpowerLocationUnits": [
@@ -2110,199 +1874,113 @@
       "name": "CCTV Operator",
       "code": "CCTV",
       "operationType": "SECURITY_GUARDING",
-      "isActive": true,
-      "isBlueCollar": true,
-      "isDeployableInRoster": true,
-      "canWorkOvertime": true,
-      "requiresMoiLicense": true,
-      "requiresGatePassCheck": false
+      "isActive": true
     },
     {
       "id": "PM-CAT-SEC-02",
       "name": "Security Guard",
       "code": "GUARD",
       "operationType": "SECURITY_GUARDING",
-      "isActive": true,
-      "isBlueCollar": true,
-      "isDeployableInRoster": true,
-      "canWorkOvertime": true,
-      "requiresMoiLicense": true,
-      "requiresGatePassCheck": true
+      "isActive": true
     },
     {
       "id": "PM-CAT-SEC-03",
       "name": "Head Guard",
       "code": "HEAD_GUARD",
       "operationType": "SECURITY_GUARDING",
-      "isActive": true,
-      "isBlueCollar": true,
-      "isDeployableInRoster": true,
-      "canWorkOvertime": true,
-      "requiresMoiLicense": true,
-      "requiresGatePassCheck": true
+      "isActive": true
     },
     {
       "id": "PM-CAT-SEC-04",
       "name": "Security Supervisor",
       "code": "SEC_SUPERVISOR",
       "operationType": "SECURITY_GUARDING",
-      "isActive": true,
-      "isBlueCollar": true,
-      "isDeployableInRoster": true,
-      "canWorkOvertime": true,
-      "requiresMoiLicense": true,
-      "requiresGatePassCheck": true
+      "isActive": true
+    },
+    {
+      "id": "PM-CAT-SEC-05",
+      "name": "Security Project Manager",
+      "code": "SEC_PM",
+      "operationType": "SECURITY_GUARDING",
+      "isActive": true
     },
     {
       "id": "PM-CAT-SEC-06",
       "name": "Reliever Guard",
       "code": "RELIEVER_GUARD",
       "operationType": "SECURITY_GUARDING",
-      "isActive": true,
-      "isBlueCollar": true,
-      "isDeployableInRoster": true,
-      "canWorkOvertime": true,
-      "requiresMoiLicense": true,
-      "requiresGatePassCheck": true
-    },
-    {
-      "id": "PM-CAT-SEC-07",
-      "name": "Patrolling Supervisor",
-      "code": "PATROL_SUPERVISOR",
-      "operationType": "SECURITY_GUARDING",
-      "isActive": true,
-      "isBlueCollar": true,
-      "isDeployableInRoster": true,
-      "canWorkOvertime": true,
-      "requiresMoiLicense": true,
-      "requiresGatePassCheck": true
-    },
-    {
-      "id": "PM-CAT-SEC-08",
-      "name": "Patrolling Guard",
-      "code": "PATROL_GUARD",
-      "operationType": "SECURITY_GUARDING",
-      "isActive": true,
-      "isBlueCollar": true,
-      "isDeployableInRoster": true,
-      "canWorkOvertime": true,
-      "requiresMoiLicense": true,
-      "requiresGatePassCheck": true
-    },
-    {
-      "id": "PM-CAT-SEC-09",
-      "name": "Project Coordinator",
-      "code": "COORDINATOR",
-      "operationType": "SECURITY_GUARDING",
-      "isActive": true,
-      "isBlueCollar": false,
-      "isDeployableInRoster": false,
-      "canWorkOvertime": false,
-      "requiresMoiLicense": false,
-      "requiresGatePassCheck": false
-    },
-    {
-      "id": "PM-CAT-SEC-10",
-      "name": "Event Guard",
-      "code": "EVENT_GUARD",
-      "operationType": "SECURITY_GUARDING",
-      "isActive": true,
-      "isBlueCollar": true,
-      "isDeployableInRoster": true,
-      "canWorkOvertime": true,
-      "requiresMoiLicense": false,
-      "requiresGatePassCheck": false
-    },
-    {
-      "id": "PM-CAT-SEC-11",
-      "name": "Other Security Manpower",
-      "code": "OTHER_SEC",
-      "operationType": "SECURITY_GUARDING",
-      "isActive": true,
-      "isBlueCollar": true,
-      "isDeployableInRoster": true,
-      "canWorkOvertime": true,
-      "requiresMoiLicense": false,
-      "requiresGatePassCheck": false
+      "isActive": true
     },
     {
       "id": "PM-CAT-FM-01",
       "name": "Cleaner",
       "code": "CLEANER",
       "operationType": "FACILITY_MANAGEMENT",
-      "isActive": true,
-      "isBlueCollar": true,
-      "isDeployableInRoster": true,
-      "canWorkOvertime": true,
-      "requiresMoiLicense": false,
-      "requiresGatePassCheck": false
+      "isActive": true
     },
     {
       "id": "PM-CAT-FM-02",
       "name": "Office Boy",
       "code": "OFFICE_BOY",
       "operationType": "FACILITY_MANAGEMENT",
-      "isActive": true,
-      "isBlueCollar": true,
-      "isDeployableInRoster": true,
-      "canWorkOvertime": true,
-      "requiresMoiLicense": false,
-      "requiresGatePassCheck": false
+      "isActive": true
     },
     {
       "id": "PM-CAT-FM-03",
       "name": "Technician",
       "code": "TECHNICIAN",
       "operationType": "FACILITY_MANAGEMENT",
-      "isActive": true,
-      "isBlueCollar": true,
-      "isDeployableInRoster": true,
-      "canWorkOvertime": true,
-      "requiresMoiLicense": false,
-      "requiresGatePassCheck": false
+      "isActive": true
     },
     {
       "id": "PM-CAT-FM-04",
       "name": "FM Supervisor",
       "code": "FM_SUPERVISOR",
       "operationType": "FACILITY_MANAGEMENT",
-      "isActive": true,
-      "isBlueCollar": true,
-      "isDeployableInRoster": true,
-      "canWorkOvertime": true,
-      "requiresMoiLicense": false,
-      "requiresGatePassCheck": false
+      "isActive": true
     },
     {
       "id": "PM-CAT-FM-05",
       "name": "FM Project Manager",
       "code": "FM_PM",
       "operationType": "FACILITY_MANAGEMENT",
-      "isActive": true,
-      "isBlueCollar": false,
-      "isDeployableInRoster": false,
-      "canWorkOvertime": false,
-      "requiresMoiLicense": false,
-      "requiresGatePassCheck": false
+      "isActive": true
     },
     {
       "id": "PM-CAT-FM-06",
       "name": "Reliever Cleaner",
       "code": "RELIEVER_CLEANER",
       "operationType": "FACILITY_MANAGEMENT",
-      "isActive": true,
-      "isBlueCollar": true,
-      "isDeployableInRoster": true,
-      "canWorkOvertime": true,
-      "requiresMoiLicense": false,
-      "requiresGatePassCheck": false
+      "isActive": true
     }
   ],
   "manpowerShiftRequirements": [],
   "manpowerDeployments": [],
   "manpowerDeploymentAssignments": [],
   "manpowerRelieverAssignments": [],
-  "userOperationAccesses": [],
+  "userOperationAccesses": [
+    {
+      "id": "ACC-SEC-99",
+      "employeeId": "SEC-SUP-99",
+      "allowedSecurityGuarding": true,
+      "allowedFacilityManagement": false,
+      "allowedWhiteCollar": false
+    },
+    {
+      "id": "ACC-FM-99",
+      "employeeId": "FM-SUP-99",
+      "allowedSecurityGuarding": false,
+      "allowedFacilityManagement": true,
+      "allowedWhiteCollar": false
+    },
+    {
+      "id": "ACC-SK-90210",
+      "employeeId": "SK-90210",
+      "allowedSecurityGuarding": true,
+      "allowedFacilityManagement": false,
+      "allowedWhiteCollar": true
+    }
+  ],
   "securityLicenses": [],
   "securityGatePasses": [],
   "securityProjectRelieverPools": [],
@@ -2316,6 +1994,7 @@
   "contractShiftRequirements": [],
   "manpowerClientDocuments": [],
   "manpowerContractAddendums": [],
+  "securityOperationsPeriodLocks": [],
   "manpowerMaterialMasters": [],
   "manpowerContractAddendumLineItems": [],
   "contractApprovalWorkflows": [],
@@ -2325,20 +2004,14 @@
   "workflowTemplateLevels": [],
   "workflowTemplateApprovers": [],
   "workflowDelegations": [],
-  "siteAllowances": [
-    {
-      "id": "sa-1783516107869",
-      "siteId": "892b0b42-ccd7-4396-824e-e2edc3f4a0c9",
-      "siteAllowanceEnabled": true,
-      "siteAllowanceAmount": 450,
-      "siteAllowanceFrequency": "DAILY",
-      "allowanceDescription": "Automated test site allowance of 450 QAR daily.",
-      "effectiveFrom": null,
-      "effectiveTo": null,
-      "isActive": true,
-      "createdAt": "2026-07-08T13:08:27.869Z",
-      "updatedAt": "2026-07-08T13:08:27.869Z"
-    }
-  ],
-  "securityOperationsPeriodLocks": []
+  "securityOperationalEmployees": [],
+  "secfacCheckpoints": [],
+  "secfacChecklistTemplates": [],
+  "secfacChecklistItems": [],
+  "secfacAssignments": [],
+  "secfacChecklistExecutions": [],
+  "secfacChecklistResponses": [],
+  "secfacChecklistExecutionHistories": [],
+  "secfacEvidenceAttachments": [],
+  "secfacScanProofs": []
 }

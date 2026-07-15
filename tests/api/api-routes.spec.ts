@@ -1660,4 +1660,410 @@ describe('AHH WFM API Routes Verification', () => {
       }
     } catch (err) {}
   });
+
+  test('SECFAC Phase 3A — NFC / QR Proof Validation APIs', async () => {
+    // 1. Authenticate roles
+    const loginUser = async (email: string) => {
+      try {
+        const csrfRes = await axios.get(`${WEB_URL}/api/auth/csrf`);
+        const csrfToken = csrfRes.data.csrfToken;
+        const csrfCookie = csrfRes.headers['set-cookie']?.map(c => c.split(';')[0]).join('; ');
+        
+        const loginRes = await axios.post(
+          `${WEB_URL}/api/auth/callback/credentials`,
+          new URLSearchParams({
+            csrfToken,
+            email,
+            password: 'Password123!',
+            json: 'true'
+          }).toString(),
+          {
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+              'Cookie': csrfCookie
+            },
+            validateStatus: () => true
+          }
+        );
+        const cookies = loginRes.headers['set-cookie'];
+        return cookies ? cookies.map(c => c.split(';')[0]).join('; ') : '';
+      } catch (e) {
+        return '';
+      }
+    };
+
+    const adminWebCookie = await loginUser('admin@alhattab.qa');
+    const empWebCookie = await loginUser('sarah.kim@alhattab.qa');
+    const secSupCookie = await loginUser('sec.supervisor@alhattab.qa');
+    const fmSupCookie = await loginUser('fm.supervisor@alhattab.qa');
+
+    const adminHeaders = adminWebCookie ? { Cookie: adminWebCookie } : {};
+    const empHeaders = empWebCookie ? { Cookie: empWebCookie } : {};
+    const secSupHeaders = secSupCookie ? { Cookie: secSupCookie } : {};
+    const fmSupHeaders = fmSupCookie ? { Cookie: fmSupCookie } : {};
+
+    // 2. Resolve database resources dynamically
+    let testSiteId = 'SITE-001';
+    let otherEmployeeId = 'SEC-1002';
+    
+    if (prisma) {
+      try {
+        const site = await prisma.manpowerSite.findFirst();
+        if (site) testSiteId = site.id;
+        
+        const otherEmp = await prisma.employee.findFirst({
+          where: { id: { not: 'SK-90210' }, operationType: 'SECURITY_GUARDING' }
+        });
+        if (otherEmp) otherEmployeeId = otherEmp.id;
+      } catch (err) {}
+    } else {
+      const db = readDb();
+      if (db.manpowerSites && db.manpowerSites[0]) {
+        testSiteId = db.manpowerSites[0].id;
+      }
+      const otherEmp = (db.employees || []).find((e: any) => e.id !== 'SK-90210' && e.isActive);
+      if (otherEmp) {
+        otherEmployeeId = otherEmp.id;
+      }
+    }
+
+    // 3. Create test checkpoint, template, assignments
+    let checkpointId = '';
+    let otherCheckpointId = '';
+    let tempId = '';
+    let assignId = '';
+    let otherAssignId = '';
+    let scanProofId = '';
+
+    const randTag = `NFC-TAG-${Date.now()}`;
+    const randQr = `QR-CODE-${Date.now()}`;
+    const randManual = `MAN-CODE-${Date.now()}`;
+
+    // Create Checkpoint via API
+    const cpRes = await axios.post(`${WEB_URL}/api/v1/secfac/checkpoints`, {
+      checkpointName: 'Test Checkpoint Phase 3A',
+      siteId: testSiteId,
+      locationDetails: 'Front Gate Test',
+      latitude: 25.2854,
+      longitude: 51.5310,
+      radiusMeters: 50,
+      scanRequired: true,
+      nfcTagId: randTag,
+      qrCode: randQr,
+      operationType: 'SECURITY_GUARDING'
+    }, { headers: adminHeaders, validateStatus: () => true });
+    expect(cpRes.status).toBe(201);
+    checkpointId = cpRes.data.data.id;
+
+    // Create Checkpoint 2 (mismatched checkpoint) via API
+    const cp2Res = await axios.post(`${WEB_URL}/api/v1/secfac/checkpoints`, {
+      checkpointName: 'Test Checkpoint Phase 3A Mismatched',
+      siteId: testSiteId,
+      locationDetails: 'Back Gate Test',
+      latitude: 25.2854,
+      longitude: 51.5310,
+      radiusMeters: 50,
+      scanRequired: true,
+      nfcTagId: `NFC-${Date.now()}-2`,
+      qrCode: `QR-${Date.now()}-2`,
+      operationType: 'SECURITY_GUARDING'
+    }, { headers: adminHeaders, validateStatus: () => true });
+    expect(cp2Res.status).toBe(201);
+    otherCheckpointId = cp2Res.data.data.id;
+
+    // Create Checklist Template via API
+    const tempRes = await axios.post(`${WEB_URL}/api/v1/secfac/checklists`, {
+      templateName: 'Test Checklist Template Phase 3A',
+      operationType: 'SECURITY_GUARDING',
+      requiresNfcScan: true,
+      requiresGeoFence: true,
+      items: [
+        { itemText: 'Check Front Gate Lock', itemType: 'YES_NO', isRequired: true, sortOrder: 1 }
+      ]
+    }, { headers: adminHeaders, validateStatus: () => true });
+    expect(tempRes.status).toBe(201);
+    tempId = tempRes.data.data.id;
+
+    // Create Assignment for employee via API
+    const assignRes = await axios.post(`${WEB_URL}/api/v1/secfac/assignments`, {
+      assignmentName: 'Test Assignment Phase 3A',
+      operationType: 'SECURITY_GUARDING',
+      employeeId: 'SK-90210',
+      siteId: testSiteId,
+      templateId: tempId,
+      checkpointId: checkpointId,
+      scheduledStart: new Date().toISOString(),
+      scheduledEnd: new Date(Date.now() + 3600000).toISOString(),
+      status: 'PENDING'
+    }, { headers: adminHeaders, validateStatus: () => true });
+    expect(assignRes.status).toBe(201);
+    assignId = assignRes.data.data.id;
+
+    // Create Assignment for other employee
+    const otherAssignRes = await axios.post(`${WEB_URL}/api/v1/secfac/assignments`, {
+      assignmentName: 'Test Other Assignment Phase 3A',
+      operationType: 'SECURITY_GUARDING',
+      employeeId: otherEmployeeId,
+      siteId: testSiteId,
+      templateId: tempId,
+      checkpointId: checkpointId,
+      scheduledStart: new Date().toISOString(),
+      scheduledEnd: new Date(Date.now() + 3600000).toISOString(),
+      status: 'PENDING'
+    }, { headers: adminHeaders, validateStatus: () => true });
+    expect(otherAssignRes.status).toBe(201);
+    otherAssignId = otherAssignRes.data.data.id;
+
+    // --- TEST SUITE FOR SCAN PROOFS ---
+
+    // 1. Unauthenticated request to POST returns 401
+    const unauthPost = await axios.post(`${WEB_URL}/api/v1/secfac/scan-proofs`, {
+      assignmentId: assignId,
+      scanMode: 'NFC',
+      scannedValue: randTag
+    }, { validateStatus: () => true });
+    expect(unauthPost.status).toBe(401);
+
+    // 2. Missing assignmentId returns 400
+    const missingAssignPost = await axios.post(`${WEB_URL}/api/v1/secfac/scan-proofs`, {
+      scanMode: 'NFC',
+      scannedValue: randTag
+    }, { headers: empHeaders, validateStatus: () => true });
+    expect(missingAssignPost.status).toBe(400);
+
+    // 3. Non-existent assignmentId returns 400
+    const nonExistentPost = await axios.post(`${WEB_URL}/api/v1/secfac/scan-proofs`, {
+      assignmentId: 'non-existent-assign-id',
+      scanMode: 'NFC',
+      scannedValue: randTag
+    }, { headers: empHeaders, validateStatus: () => true });
+    expect(nonExistentPost.status).toBe(400);
+
+    // 4. Mismatched checkpointId returns 400
+    const mismatchedCpPost = await axios.post(`${WEB_URL}/api/v1/secfac/scan-proofs`, {
+      assignmentId: assignId,
+      checkpointId: otherCheckpointId,
+      scanMode: 'NFC',
+      scannedValue: randTag
+    }, { headers: empHeaders, validateStatus: () => true });
+    expect(mismatchedCpPost.status).toBe(400);
+
+    // 5. Inactive assignment returns 400
+    if (prisma) {
+      await prisma.secfacAssignment.update({ where: { id: assignId }, data: { isActive: false } });
+    } else {
+      const db = readDb();
+      const a = db.secfacAssignments.find((x: any) => x.id === assignId);
+      if (a) a.isActive = false;
+      writeDb(db);
+    }
+    const inactivePost = await axios.post(`${WEB_URL}/api/v1/secfac/scan-proofs`, {
+      assignmentId: assignId,
+      scanMode: 'NFC',
+      scannedValue: randTag
+    }, { headers: empHeaders, validateStatus: () => true });
+    expect(inactivePost.status).toBe(400);
+
+    // Restore to active
+    if (prisma) {
+      await prisma.secfacAssignment.update({ where: { id: assignId }, data: { isActive: true } });
+    } else {
+      const db = readDb();
+      const a = db.secfacAssignments.find((x: any) => x.id === assignId);
+      if (a) a.isActive = true;
+      writeDb(db);
+    }
+
+    // 6. Valid NFC tag code match + inside radius returns validationStatus = VALID
+    const validNfcPost = await axios.post(`${WEB_URL}/api/v1/secfac/scan-proofs`, {
+      assignmentId: assignId,
+      checkpointId: checkpointId,
+      scanMode: 'NFC',
+      scannedValue: randTag,
+      latitude: 25.2854,
+      longitude: 51.5310
+    }, { headers: empHeaders, validateStatus: () => true });
+    expect(validNfcPost.status).toBe(201);
+    expect(validNfcPost.data.data.validationStatus).toBe('VALID');
+    scanProofId = validNfcPost.data.data.id;
+
+    // 7. Invalid NFC tag code mismatch returns validationStatus = INVALID + failureReason
+    const invalidNfcPost = await axios.post(`${WEB_URL}/api/v1/secfac/scan-proofs`, {
+      assignmentId: assignId,
+      checkpointId: checkpointId,
+      scanMode: 'NFC',
+      scannedValue: 'WRONG-NFC-TAG',
+      latitude: 25.2854,
+      longitude: 51.5310
+    }, { headers: empHeaders, validateStatus: () => true });
+    expect(invalidNfcPost.status).toBe(201);
+    expect(invalidNfcPost.data.data.validationStatus).toBe('INVALID');
+    expect(invalidNfcPost.data.data.failureReason).toContain('Incorrect NFC tag ID');
+
+    // 8. Valid QR code match + inside radius returns validationStatus = VALID
+    const validQrPost = await axios.post(`${WEB_URL}/api/v1/secfac/scan-proofs`, {
+      assignmentId: assignId,
+      checkpointId: checkpointId,
+      scanMode: 'QR',
+      scannedValue: randQr,
+      latitude: 25.2854,
+      longitude: 51.5310
+    }, { headers: empHeaders, validateStatus: () => true });
+    expect(validQrPost.status).toBe(201);
+    expect(validQrPost.data.data.validationStatus).toBe('VALID');
+
+    // 9. Mismatched QR code returns validationStatus = INVALID + failureReason
+    const invalidQrPost = await axios.post(`${WEB_URL}/api/v1/secfac/scan-proofs`, {
+      assignmentId: assignId,
+      checkpointId: checkpointId,
+      scanMode: 'QR',
+      scannedValue: 'WRONG-QR',
+      latitude: 25.2854,
+      longitude: 51.5310
+    }, { headers: empHeaders, validateStatus: () => true });
+    expect(invalidQrPost.status).toBe(201);
+    expect(invalidQrPost.data.data.validationStatus).toBe('INVALID');
+    expect(invalidQrPost.data.data.failureReason).toContain('Incorrect QR code');
+
+    // 10. Manual code entry matches returns validationStatus = VALID
+    const manualCodePost = await axios.post(`${WEB_URL}/api/v1/secfac/scan-proofs`, {
+      assignmentId: assignId,
+      checkpointId: checkpointId,
+      scanMode: 'MANUAL_ENTRY',
+      scannedValue: randTag,
+      latitude: 25.2854,
+      longitude: 51.5310
+    }, { headers: empHeaders, validateStatus: () => true });
+    expect(manualCodePost.status).toBe(201);
+    expect(manualCodePost.data.data.validationStatus).toBe('VALID');
+
+    // 11. Manual exception report (mode = MANUAL_EXCEPTION) returns validationStatus = PENDING_REVIEW + exceptionReason
+    const exceptionPost = await axios.post(`${WEB_URL}/api/v1/secfac/scan-proofs`, {
+      assignmentId: assignId,
+      checkpointId: checkpointId,
+      scanMode: 'MANUAL_EXCEPTION',
+      exceptionReason: 'NFC tag is physically damaged',
+      latitude: 25.2854,
+      longitude: 51.5310
+    }, { headers: empHeaders, validateStatus: () => true });
+    expect(exceptionPost.status).toBe(201);
+    expect(exceptionPost.data.data.validationStatus).toBe('PENDING_REVIEW');
+    expect(exceptionPost.data.data.exceptionReason).toBe('NFC tag is physically damaged');
+
+    // 12. Manual exception report fails if exceptionReason is missing (returns 400)
+    const missingReasonPost = await axios.post(`${WEB_URL}/api/v1/secfac/scan-proofs`, {
+      assignmentId: assignId,
+      checkpointId: checkpointId,
+      scanMode: 'MANUAL_EXCEPTION',
+      latitude: 25.2854,
+      longitude: 51.5310
+    }, { headers: empHeaders, validateStatus: () => true });
+    expect(missingReasonPost.status).toBe(400);
+
+    // 13. Coordinates check: if template requiresGeoFence = true, and scan location is outside radius, returns validationStatus = INVALID
+    const outsideGeoPost = await axios.post(`${WEB_URL}/api/v1/secfac/scan-proofs`, {
+      assignmentId: assignId,
+      checkpointId: checkpointId,
+      scanMode: 'NFC',
+      scannedValue: randTag,
+      latitude: 10.0,
+      longitude: 10.0
+    }, { headers: empHeaders, validateStatus: () => true });
+    expect(outsideGeoPost.status).toBe(201);
+    expect(outsideGeoPost.data.data.validationStatus).toBe('INVALID');
+    expect(outsideGeoPost.data.data.failureReason).toContain('Out of geofence zone');
+
+    // 14. Coordinates check: if template requiresGeoFence = false, and location is outside radius, returns validationStatus = VALID
+    if (prisma) {
+      await prisma.secfacChecklistTemplate.update({ where: { id: tempId }, data: { requiresGeoFence: false } });
+    } else {
+      const db = readDb();
+      const t = db.secfacChecklistTemplates.find((x: any) => x.id === tempId);
+      if (t) t.requiresGeoFence = false;
+      writeDb(db);
+    }
+    const outsideGeoNoFencePost = await axios.post(`${WEB_URL}/api/v1/secfac/scan-proofs`, {
+      assignmentId: assignId,
+      checkpointId: checkpointId,
+      scanMode: 'NFC',
+      scannedValue: randTag,
+      latitude: 10.0,
+      longitude: 10.0
+    }, { headers: empHeaders, validateStatus: () => true });
+    expect(outsideGeoNoFencePost.status).toBe(201);
+    expect(outsideGeoNoFencePost.data.data.validationStatus).toBe('VALID');
+
+    // Restore template requiresGeoFence back to true
+    if (prisma) {
+      await prisma.secfacChecklistTemplate.update({ where: { id: tempId }, data: { requiresGeoFence: true } });
+    } else {
+      const db = readDb();
+      const t = db.secfacChecklistTemplates.find((x: any) => x.id === tempId);
+      if (t) t.requiresGeoFence = true;
+      writeDb(db);
+    }
+
+    // 15. Standard employee cannot submit scan proof for another employee's assignment (returns 403)
+    const unauthorizedSubmit = await axios.post(`${WEB_URL}/api/v1/secfac/scan-proofs`, {
+      assignmentId: otherAssignId,
+      checkpointId: checkpointId,
+      scanMode: 'NFC',
+      scannedValue: randTag,
+      latitude: 25.2854,
+      longitude: 51.5310
+    }, { headers: empHeaders, validateStatus: () => true });
+    expect(unauthorizedSubmit.status).toBe(403);
+
+    // 16. GET /api/v1/secfac/scan-proofs: Unauthenticated request returns 401
+    const unauthGet = await axios.get(`${WEB_URL}/api/v1/secfac/scan-proofs`, { validateStatus: () => true });
+    expect(unauthGet.status).toBe(401);
+
+    // 17. Standard employee can list own scan proofs
+    const empList = await axios.get(`${WEB_URL}/api/v1/secfac/scan-proofs?assignmentId=${assignId}`, { headers: empHeaders, validateStatus: () => true });
+    expect(empList.status).toBe(200);
+    expect(empList.data.data.length).toBeGreaterThan(0);
+
+    // 18. Supervisor restricted by operation scope (403 if scope mismatch)
+    const scopeMismatchList = await axios.get(`${WEB_URL}/api/v1/secfac/scan-proofs?operationType=FACILITY_MANAGEMENT`, { headers: secSupHeaders, validateStatus: () => true });
+    expect(scopeMismatchList.status).toBe(403);
+
+    // 19. Admin/Super Admin can list all scan proofs
+    const adminList = await axios.get(`${WEB_URL}/api/v1/secfac/scan-proofs`, { headers: adminHeaders, validateStatus: () => true });
+    expect(adminList.status).toBe(200);
+    expect(adminList.data.data.length).toBeGreaterThan(0);
+
+    // 20. PATCH /api/v1/secfac/scan-proofs/[scanProofId]/review: Unauthenticated review returns 401
+    const unauthReview = await axios.patch(`${WEB_URL}/api/v1/secfac/scan-proofs/${scanProofId}/review`, {
+      validationStatus: 'VALID',
+      reviewRemarks: 'Approved manual scan'
+    }, { validateStatus: () => true });
+    expect(unauthReview.status).toBe(401);
+
+    // 21. Standard employee cannot review (returns 403)
+    const empReview = await axios.patch(`${WEB_URL}/api/v1/secfac/scan-proofs/${scanProofId}/review`, {
+      validationStatus: 'VALID',
+      reviewRemarks: 'Sarah tries to approve her own'
+    }, { headers: empHeaders, validateStatus: () => true });
+    expect(empReview.status).toBe(403);
+
+    // 22. Supervisor/Admin can review and update validationStatus to VALID or REJECTED
+    const supervisorReview = await axios.patch(`${WEB_URL}/api/v1/secfac/scan-proofs/${scanProofId}/review`, {
+      validationStatus: 'VALID',
+      reviewRemarks: 'Looks ok, approved by supervisor'
+    }, { headers: secSupHeaders, validateStatus: () => true });
+    expect(supervisorReview.status).toBe(200);
+    expect(supervisorReview.data.data.validationStatus).toBe('VALID');
+    expect(supervisorReview.data.data.reviewRemarks).toBe('Looks ok, approved by supervisor');
+
+    // Clean up created resources
+    try {
+      if (prisma) {
+        await prisma.secfacScanProof.deleteMany({ where: { assignmentId: { in: [assignId, otherAssignId] } } });
+        await prisma.secfacAssignment.deleteMany({ where: { id: { in: [assignId, otherAssignId] } } });
+        await prisma.secfacChecklistItem.deleteMany({ where: { templateId: tempId } });
+        await prisma.secfacChecklistTemplate.delete({ where: { id: tempId } });
+        await prisma.secfacCheckpoint.deleteMany({ where: { id: { in: [checkpointId, otherCheckpointId] } } });
+      }
+    } catch (err) {}
+  });
 });

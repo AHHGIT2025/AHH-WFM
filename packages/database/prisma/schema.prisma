@@ -131,6 +131,8 @@ model Employee {
   secfacExecutionHistories    SecfacChecklistExecutionHistory[] @relation("SecfacExecutionHistoryPerformer")
   secfacEvidenceAttachments   SecfacEvidenceAttachment[] @relation("SecfacEmployeeEvidence")
   secfacEvidenceUploadedBy    SecfacEvidenceAttachment[] @relation("SecfacEvidenceUploadedBy")
+  secfacScanProofs            SecfacScanProof[]          @relation("SecfacEmployeeScanProofs")
+  secfacReviewedScanProofs    SecfacScanProof[]          @relation("SecfacScanProofReviewedBy")
 }
 
 model Department {
@@ -1380,6 +1382,7 @@ model ManpowerSite {
   secfacAssignments      SecfacAssignment[]
   secfacChecklistExecutions SecfacChecklistExecution[]
   secfacEvidenceAttachments SecfacEvidenceAttachment[]
+  secfacScanProofs          SecfacScanProof[]
 }
 
 model SecuritySiteManpowerAllocation {
@@ -1977,6 +1980,7 @@ model SecfacCheckpoint {
   secfacAssignments        SecfacAssignment[]
   secfacChecklistExecutions SecfacChecklistExecution[]
   secfacEvidenceAttachments SecfacEvidenceAttachment[]
+  secfacScanProofs          SecfacScanProof[]
 
   @@index([operationType])
   @@index([siteId])
@@ -2104,6 +2108,7 @@ model SecfacAssignment {
   updatedAt       DateTime @updatedAt
   secfacChecklistExecutions SecfacChecklistExecution[]
   evidenceAttachments SecfacEvidenceAttachment[]
+  secfacScanProofs          SecfacScanProof[]
 
   @@index([operationType])
   @@index([employeeId])
@@ -2157,6 +2162,7 @@ model SecfacChecklistExecution {
   responses           SecfacChecklistResponse[]
   history             SecfacChecklistExecutionHistory[]
   evidenceAttachments SecfacEvidenceAttachment[]
+  secfacScanProofs    SecfacScanProof[]
 
   @@index([operationType])
   @@index([assignmentId])
@@ -2261,4 +2267,60 @@ model SecfacEvidenceAttachment {
   @@index([evidenceType])
   @@index([isActive])
 }
+
+model SecfacScanProof {
+  id                String   @id @default(uuid())
+  operationType     String
+
+  assignmentId      String
+  assignment        SecfacAssignment @relation(fields: [assignmentId], references: [id], onDelete: Restrict)
+
+  executionId       String?
+  execution         SecfacChecklistExecution? @relation(fields: [executionId], references: [id], onDelete: SetNull)
+
+  checkpointId      String
+  checkpoint        SecfacCheckpoint @relation(fields: [checkpointId], references: [id], onDelete: Restrict)
+
+  employeeId        String
+  employee          Employee @relation("SecfacEmployeeScanProofs", fields: [employeeId], references: [id], onDelete: Restrict)
+
+  siteId            String
+  site              ManpowerSite @relation(fields: [siteId], references: [id], onDelete: Restrict)
+
+  scanMode          String   // NFC | QR | MANUAL_ENTRY | MANUAL_EXCEPTION
+  scannedValue      String?
+  expectedValue     String?
+  validationStatus  String   @default("PENDING") // VALID | INVALID | PENDING_REVIEW | REJECTED
+
+  failureReason     String?
+  exceptionReason   String?  @db.Text
+
+  latitude          Float?
+  longitude         Float?
+  gpsAccuracyMeters Float?
+
+  deviceInfo        String?
+  scannedAt         DateTime @default(now())
+
+  reviewedById      String?
+  reviewedBy        Employee? @relation("SecfacScanProofReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  reviewedAt        DateTime?
+  reviewRemarks     String? @db.Text
+
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([operationType])
+  @@index([assignmentId])
+  @@index([executionId])
+  @@index([checkpointId])
+  @@index([employeeId])
+  @@index([siteId])
+  @@index([scanMode])
+  @@index([validationStatus])
+  @@index([scannedAt])
+}
+
 

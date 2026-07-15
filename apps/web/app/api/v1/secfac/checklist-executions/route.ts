@@ -120,7 +120,7 @@ export async function POST(request: Request) {
     if (isDbConnected()) {
       assignment = await prisma.secfacAssignment.findUnique({
         where: { id: assignmentId },
-        include: { template: { include: { items: true } } }
+        include: { template: { include: { items: true } }, checkpoint: true }
       });
     } else {
       const db = readDb();
@@ -131,9 +131,11 @@ export async function POST(request: Request) {
         if (t) {
           items = (db.secfacChecklistItems || []).filter((item: any) => item.templateId === t.id && item.isActive);
         }
+        const c = (db.secfacCheckpoints || []).find((x: any) => x.id === a.checkpointId) || null;
         assignment = {
           ...a,
-          template: t ? { ...t, items } : null
+          template: t ? { ...t, items } : null,
+          checkpoint: c
         };
       }
     }
@@ -185,35 +187,70 @@ export async function POST(request: Request) {
       }
     }
 
+    let finalStatus = targetStatus;
+
     // 8. Required items validation for SUBMITTED state
-    if (targetStatus === "SUBMITTED" && assignment.template?.items) {
-      const requiredItems = assignment.template.items.filter((x: any) => x.isRequired && x.isActive);
-      const responsesList = Array.isArray(responses) ? responses : [];
+    if (targetStatus === "SUBMITTED") {
+      // 8a. Scan Proof validation
+      const isScanRequired = (assignment.checkpoint?.scanRequired === true) || (assignment.template?.requiresNfcScan === true);
+      if (isScanRequired) {
+        const scanProofs = await mockDb.getSecfacScanProofs({
+          assignmentId,
+          isActive: true
+        });
 
-      const evidence = await mockDb.getSecfacEvidenceAttachments({
-        executionId: id || undefined,
-        isActive: true
-      });
-
-      for (const reqItem of requiredItems) {
-        const matchingResp = responsesList.find((r: any) => r.checklistItemId === reqItem.id);
-        if (!matchingResp || matchingResp.answerValue === undefined || matchingResp.answerValue === null || matchingResp.answerValue.toString().trim() === "") {
+        if (scanProofs.length === 0) {
           return NextResponse.json({
             success: false,
-            error: `Validation Error: Required checklist item '${reqItem.itemText}' is not answered`
+            error: "Validation Error: Required checkpoint scan proof is missing"
           }, { status: 400 });
         }
 
-        const isPhotoReq = reqItem.requiresPhoto || reqItem.itemType === "PHOTO";
-        if (isPhotoReq) {
-          const hasPhoto = evidence.some(
-            (e: any) => e.responseId === matchingResp?.id || (matchingResp?.id && e.responseId === matchingResp.id)
-          );
-          if (!hasPhoto) {
+        const hasValid = scanProofs.some((p: any) => p.validationStatus === "VALID");
+        const hasPendingReview = scanProofs.some((p: any) => p.validationStatus === "PENDING_REVIEW");
+
+        if (hasValid) {
+          // satisfied
+        } else if (hasPendingReview) {
+          finalStatus = "PENDING_REVIEW";
+        } else {
+          return NextResponse.json({
+            success: false,
+            error: "Validation Error: Checkpoint scan proof is invalid or rejected"
+          }, { status: 400 });
+        }
+      }
+
+      // 8b. Checklist items validation
+      if (assignment.template?.items) {
+        const requiredItems = assignment.template.items.filter((x: any) => x.isRequired && x.isActive);
+        const responsesList = Array.isArray(responses) ? responses : [];
+
+        const evidence = await mockDb.getSecfacEvidenceAttachments({
+          executionId: id || undefined,
+          isActive: true
+        });
+
+        for (const reqItem of requiredItems) {
+          const matchingResp = responsesList.find((r: any) => r.checklistItemId === reqItem.id);
+          if (!matchingResp || matchingResp.answerValue === undefined || matchingResp.answerValue === null || matchingResp.answerValue.toString().trim() === "") {
             return NextResponse.json({
               success: false,
-              error: `Validation Error: Required photo evidence for '${reqItem.itemText}' is missing`
+              error: `Validation Error: Required checklist item '${reqItem.itemText}' is not answered`
             }, { status: 400 });
+          }
+
+          const isPhotoReq = reqItem.requiresPhoto || reqItem.itemType === "PHOTO";
+          if (isPhotoReq) {
+            const hasPhoto = evidence.some(
+              (e: any) => e.responseId === matchingResp?.id || (matchingResp?.id && e.responseId === matchingResp.id)
+            );
+            if (!hasPhoto) {
+              return NextResponse.json({
+                success: false,
+                error: `Validation Error: Required photo evidence for '${reqItem.itemText}' is missing`
+              }, { status: 400 });
+            }
           }
         }
       }
@@ -228,7 +265,7 @@ export async function POST(request: Request) {
       employeeId: assignment.employeeId,
       siteId: assignment.siteId,
       checkpointId: assignment.checkpointId || null,
-      status: targetStatus,
+      status: finalStatus,
       latitude: latitude !== undefined ? latitude : undefined,
       longitude: longitude !== undefined ? longitude : undefined,
       gpsAccuracyMeters: gpsAccuracyMeters !== undefined ? gpsAccuracyMeters : undefined,

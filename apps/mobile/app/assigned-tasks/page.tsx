@@ -17,12 +17,13 @@ interface SecfacAssignment {
   locationUnitId?: string | null;
   locationUnit?: { id: string; name: string } | null;
   checkpointId?: string | null;
-  checkpoint?: { id: string; checkpointName: string } | null;
+  checkpoint?: { id: string; checkpointName: string; scanRequired?: boolean } | null;
   templateId?: string | null;
   template?: {
     id: string;
     templateName: string;
     description?: string | null;
+    requiresNfcScan?: boolean;
     items: Array<{
       id: string;
       itemText: string;
@@ -71,8 +72,128 @@ export default function AssignedTasksPage() {
   const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
 
+  // Scan proof states
+  const [scanProofs, setScanProofs] = useState<any[]>([]);
+  const [loadingProofs, setLoadingProofs] = useState<boolean>(false);
+  const [scanningNfc, setScanningNfc] = useState(false);
+  const [submittingProof, setSubmittingProof] = useState(false);
+  const [openQrInput, setOpenQrInput] = useState(false);
+  const [openManualInput, setOpenManualInput] = useState(false);
+  const [openIssueReport, setOpenIssueReport] = useState(false);
+  const [qrInputValue, setQrInputValue] = useState("");
+  const [manualInputValue, setManualInputValue] = useState("");
+  const [issueReasonValue, setIssueReasonValue] = useState("");
+
   const employeeId = (session?.user as any)?.id;
   const isAdmin = (session?.user as any)?.role === "ADMIN" || (session?.user as any)?.role === "SUPER_ADMIN";
+
+  const fetchScanProofs = (assignmentId: string) => {
+    setLoadingProofs(true);
+    fetch(`/api/v1/secfac/scan-proofs?assignmentId=${assignmentId}`)
+      .then((res) => res.json())
+      .then((json) => {
+        if (json.success && json.data) {
+          setScanProofs(json.data);
+        }
+      })
+      .catch((err) => console.error("Failed to load scan proofs", err))
+      .finally(() => setLoadingProofs(false));
+  };
+
+  const triggerNfcScan = async () => {
+    if (typeof window === "undefined" || !("NDEFReader" in window)) {
+      alert("Web NFC (NDEFReader) is not supported on this browser or device. Please use manual entry or QR fallback.");
+      return;
+    }
+
+    try {
+      setScanningNfc(true);
+      setErrorMsg("");
+      // @ts-ignore
+      const reader = new NDEFReader();
+      await reader.scan();
+      
+      reader.addEventListener("readingerror", () => {
+        setScanningNfc(false);
+        setErrorMsg("NFC reading error. Please hold the tag close to your device and try again.");
+      });
+
+      reader.addEventListener("reading", async ({ serialNumber }: any) => {
+        setScanningNfc(false);
+        if (serialNumber) {
+          await submitProof("NFC", serialNumber);
+        } else {
+          setErrorMsg("Failed to read NFC serial number.");
+        }
+      });
+    } catch (e: any) {
+      setScanningNfc(false);
+      setErrorMsg("NFC error: " + e.message);
+    }
+  };
+
+  const submitProof = async (mode: string, value?: string, reason?: string) => {
+    if (!activeTaskForModal) return;
+    setSubmittingProof(true);
+    setErrorMsg("");
+    setSuccessMsg("");
+
+    let lat: number | null = null;
+    let lng: number | null = null;
+    let accuracy: number | null = null;
+
+    try {
+      const pos: any = await new Promise((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 2000 });
+      });
+      lat = pos.coords.latitude;
+      lng = pos.coords.longitude;
+      accuracy = pos.coords.accuracy;
+    } catch (e) {
+      console.log("GPS coordinates capture timed out or failed", e);
+    }
+
+    try {
+      const res = await fetch("/api/v1/secfac/scan-proofs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          assignmentId: activeTaskForModal.id,
+          executionId: execution?.id || null,
+          checkpointId: activeTaskForModal.checkpointId,
+          scanMode: mode,
+          scannedValue: value,
+          exceptionReason: reason,
+          latitude: lat,
+          longitude: lng,
+          gpsAccuracyMeters: accuracy,
+          deviceInfo: "Mobile App Web Client (AHH WFM Mobile)"
+        })
+      });
+
+      const json = await res.json();
+      if (!json.success) {
+        setErrorMsg(json.error || "Validation failed");
+      } else {
+        setSuccessMsg(
+          mode === "MANUAL_EXCEPTION"
+            ? "Tag issue reported successfully. Proof is pending supervisor review."
+            : `Proof validation result: ${json.data.validationStatus}!`
+        );
+        fetchScanProofs(activeTaskForModal.id);
+        setOpenQrInput(false);
+        setOpenManualInput(false);
+        setOpenIssueReport(false);
+        setQrInputValue("");
+        setManualInputValue("");
+        setIssueReasonValue("");
+      }
+    } catch (e: any) {
+      setErrorMsg("Submit error: " + e.message);
+    } finally {
+      setSubmittingProof(false);
+    }
+  };
 
   useEffect(() => {
     if (authStatus === "authenticated") {
@@ -102,8 +223,11 @@ export default function AssignedTasksPage() {
       setRemarks("");
       setErrorMsg("");
       setSuccessMsg("");
+      setScanProofs([]);
       return;
     }
+
+    fetchScanProofs(activeTaskForModal.id);
 
     const curExec = activeTaskForModal.currentExecution;
     if (curExec) {
@@ -300,6 +424,25 @@ export default function AssignedTasksPage() {
     if (!activeTaskForModal) return;
     setErrorMsg("");
     setSuccessMsg("");
+
+    // Scan proof verification for final submission
+    if (submitStatus === "SUBMITTED") {
+      const isScanRequired = (activeTaskForModal.checkpoint?.scanRequired === true) || (activeTaskForModal.template?.requiresNfcScan === true);
+      if (isScanRequired) {
+        if (scanProofs.length === 0) {
+          setErrorMsg("Validation Error: Required checkpoint scan proof is missing");
+          return;
+        }
+
+        const hasValid = scanProofs.some((p: any) => p.validationStatus === "VALID");
+        const hasPending = scanProofs.some((p: any) => p.validationStatus === "PENDING_REVIEW");
+
+        if (!hasValid && !hasPending) {
+          setErrorMsg("Validation Error: Checkpoint scan proof is invalid or rejected");
+          return;
+        }
+      }
+    }
 
     // Photo evidence verification for final submission
     if (submitStatus === "SUBMITTED" && activeTaskForModal.template?.items) {
@@ -547,7 +690,7 @@ export default function AssignedTasksPage() {
             <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 flex items-start gap-2 text-amber-800 text-[10px]">
               <span className="material-symbols-outlined text-sm text-amber-600 shrink-0">info</span>
               <p className="font-semibold leading-normal">
-                Photo evidence is enabled. NFC proof will be enabled in a later phase.
+                Checkpoint proof validation is active. Please scan NFC, QR code, or enter manual proof.
               </p>
             </div>
 
@@ -568,6 +711,13 @@ export default function AssignedTasksPage() {
                 <p className="text-[10.5px] text-on-surface-variant italic leading-relaxed border-b border-outline-variant/30 pb-2">
                   {activeTaskForModal.template.description}
                 </p>
+              )}
+
+              {((activeTaskForModal.checkpoint?.scanRequired === true) || (activeTaskForModal.template?.requiresNfcScan === true)) && (
+                <div className="inline-flex items-center gap-1 bg-[#002D72]/10 text-[#002D72] px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider">
+                  <span className="material-symbols-outlined text-[10px]">fingerprint</span>
+                  Checkpoint Proof Required
+                </div>
               )}
 
               {execution?.status === "REJECTED" && (
@@ -610,6 +760,165 @@ export default function AssignedTasksPage() {
                 <div className="p-3 bg-blue-50 border border-blue-200 text-blue-800 rounded-xl text-[10px] flex items-center gap-1.5 font-bold">
                   <span className="material-symbols-outlined text-blue-700 text-xs">info</span>
                   <span>Checklist submitted and awaiting supervisor review.</span>
+                </div>
+              )}
+
+              {/* Checkpoint Scan Proof Section */}
+              {((activeTaskForModal.checkpoint?.scanRequired === true) || (activeTaskForModal.template?.requiresNfcScan === true)) && (
+                <div className="p-3.5 bg-surface-variant/40 border border-outline-variant/60 rounded-2xl space-y-2 text-[10px]">
+                  <div className="flex justify-between items-center">
+                    <span className="font-bold text-on-surface">Checkpoint Scan Proof</span>
+                    <span className={`px-2 py-0.5 rounded-full font-bold uppercase text-[9px] ${
+                      !scanProofs || scanProofs.length === 0 ? "bg-outline-variant text-on-surface-variant" :
+                      scanProofs[0].validationStatus === "VALID" ? "bg-green-100 text-green-800" :
+                      scanProofs[0].validationStatus === "PENDING_REVIEW" ? "bg-amber-100 text-amber-800" :
+                      scanProofs[0].validationStatus === "INVALID" ? "bg-red-100 text-red-800" :
+                      "bg-red-200 text-red-900"
+                    }`}>
+                      {!scanProofs || scanProofs.length === 0 ? "Not Scanned" : scanProofs[0].validationStatus.replace("_", " ")}
+                    </span>
+                  </div>
+
+                  {scanProofs && scanProofs.length > 0 && (
+                    <div className="bg-surface/60 p-2.5 rounded-xl border border-outline-variant/30 space-y-1">
+                      <div className="flex justify-between text-[9px] text-on-surface-variant">
+                        <span>Mode: <strong className="text-on-surface">{scanProofs[0].scanMode.replace("_", " ")}</strong></span>
+                        <span>Time: <strong className="text-on-surface">{new Date(scanProofs[0].scannedAt).toLocaleTimeString()}</strong></span>
+                      </div>
+                      {scanProofs[0].failureReason && (
+                        <p className="text-red-700 font-semibold">Failure: {scanProofs[0].failureReason}</p>
+                      )}
+                      {scanProofs[0].exceptionReason && (
+                        <p className="text-amber-800 font-semibold">Issue Details: {scanProofs[0].exceptionReason}</p>
+                      )}
+                    </div>
+                  )}
+
+                  {!["SUBMITTED", "PENDING_REVIEW", "APPROVED", "CANCELLED"].includes(execution?.status || "") && (
+                    <div className="space-y-2 pt-1.5 border-t border-outline-variant/20">
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={triggerNfcScan}
+                          disabled={scanningNfc}
+                          className="flex-1 py-1.5 px-3 bg-[#002D72] text-white rounded-xl font-bold flex items-center justify-center gap-1 hover:bg-[#002D72]/90 disabled:opacity-50"
+                        >
+                          <span className="material-symbols-outlined text-[13px]">nfc</span>
+                          <span>{scanningNfc ? "Scanning..." : "Scan NFC"}</span>
+                        </button>
+                        
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setOpenQrInput(!openQrInput);
+                            setOpenManualInput(false);
+                            setOpenIssueReport(false);
+                          }}
+                          className="flex-1 py-1.5 px-3 bg-surface border border-outline rounded-xl font-bold flex items-center justify-center gap-1 hover:bg-outline-variant/10"
+                        >
+                          <span className="material-symbols-outlined text-[13px]">qr_code_scanner</span>
+                          <span>Enter QR</span>
+                        </button>
+                      </div>
+
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setOpenManualInput(!openManualInput);
+                            setOpenQrInput(false);
+                            setOpenIssueReport(false);
+                          }}
+                          className="flex-1 py-1.5 px-3 bg-surface border border-outline rounded-xl font-bold flex items-center justify-center gap-1 hover:bg-outline-variant/10 text-on-surface"
+                        >
+                          <span className="material-symbols-outlined text-[13px]">keyboard</span>
+                          <span>Manual Entry</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setOpenIssueReport(!openIssueReport);
+                            setOpenQrInput(false);
+                            setOpenManualInput(false);
+                          }}
+                          className="flex-1 py-1.5 px-3 bg-red-50 border border-red-200 text-red-700 rounded-xl font-bold flex items-center justify-center gap-1 hover:bg-red-100/60"
+                        >
+                          <span className="material-symbols-outlined text-[13px]">report_problem</span>
+                          <span>Report Issue</span>
+                        </button>
+                      </div>
+
+                      {openQrInput && (
+                        <div className="p-2.5 bg-surface border border-outline-variant rounded-xl space-y-1.5">
+                          <label className="block text-[9px] font-bold text-on-surface-variant">Enter QR Code Value</label>
+                          <div className="flex gap-1.5">
+                            <input
+                              type="text"
+                              value={qrInputValue}
+                              onChange={(e) => setQrInputValue(e.target.value)}
+                              placeholder="e.g. QR-12345"
+                              className="flex-1 bg-surface-variant/40 border border-outline rounded-lg px-2 py-1 text-[10px] text-on-surface focus:outline-none"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => submitProof("QR", qrInputValue)}
+                              disabled={submittingProof}
+                              className="px-3 bg-[#002D72] text-white rounded-lg font-bold"
+                            >
+                              Submit
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {openManualInput && (
+                        <div className="p-2.5 bg-surface border border-outline-variant rounded-xl space-y-1.5">
+                          <label className="block text-[9px] font-bold text-on-surface-variant">Enter NFC Tag ID or Code</label>
+                          <div className="flex gap-1.5">
+                            <input
+                              type="text"
+                              value={manualInputValue}
+                              onChange={(e) => setManualInputValue(e.target.value)}
+                              placeholder="e.g. NFC-TAG-ID"
+                              className="flex-1 bg-surface-variant/40 border border-outline rounded-lg px-2 py-1 text-[10px] text-on-surface focus:outline-none"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => submitProof("MANUAL_ENTRY", manualInputValue)}
+                              disabled={submittingProof}
+                              className="px-3 bg-[#002D72] text-white rounded-lg font-bold"
+                            >
+                              Submit
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {openIssueReport && (
+                        <div className="p-2.5 bg-surface border border-outline-variant rounded-xl space-y-1.5">
+                          <label className="block text-[9px] font-bold text-on-surface-variant">Describe Tag/NFC Issue</label>
+                          <textarea
+                            value={issueReasonValue}
+                            onChange={(e) => setIssueReasonValue(e.target.value)}
+                            placeholder="Provide reason (e.g. Tag damaged, unreadable, missing)..."
+                            rows={2}
+                            className="w-full bg-surface-variant/40 border border-outline rounded-lg px-2 py-1 text-[10px] text-on-surface focus:outline-none resize-none"
+                          />
+                          <div className="flex justify-end gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => submitProof("MANUAL_EXCEPTION", undefined, issueReasonValue)}
+                              disabled={submittingProof}
+                              className="px-3 py-1 bg-red-600 text-white rounded-lg font-bold"
+                            >
+                              Report Exception
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 

@@ -1,4 +1,4 @@
-import { Employee, AttendanceRecord, Shift, LeaveRequest, SapMapping, SyncLog, Announcement, Department, Worksite, AttendanceCorrection, LeaveType, LeaveBalance, LeaveBalanceLedger, Holiday, LeaveApprovalWorkflow, LeaveApprovalStep, LeaveApprovalHistory, LeaveApprovalDelegation, ShiftTemplate, RotationTemplate, ShiftAssignment, ShiftSwapRequest, OvertimeRate, SapConnection, SapSyncJob, SapSyncLog, SapFieldMapping, SapRetryQueue, SapExportQueue, SapPayrollStage, SapReconciliationLog, SapPayrollPeriodLock, SecurityOperationsPeriodLock, SavedReport, ReportExportLog, UserActivityLog, ProductionCheckLog, BackupJob, BackupAuditLog, EmployeeBulkUploadJob, SystemRole, SystemPermission, RolePermission, UserRoleAssignment, BlueCollarPositionCategory, Project, ProjectSite, EmployeeDeployment, Designation, TradeClassification, LocationMaster, CostCenter, ShiftRelieverAssignment, RelieverStandbyRule, Company, AllowedPunchLocation, EmployeeAllowedPunchLocation, ManpowerClient, ManpowerContract, ManpowerProject, ManpowerSite, ManpowerLocationUnit, ManpowerCategory, ManpowerShiftRequirement, ManpowerDeployment, ManpowerDeploymentAssignment, ManpowerRelieverAssignment, UserOperationAccess, SecfacCheckpoint, SecfacChecklistTemplate, SecfacChecklistItem, SecfacAssignment, SecfacChecklistExecution, SecfacChecklistResponse, SecfacChecklistExecutionHistory, SecfacEvidenceAttachment } from "@ahh-wfm/types";
+import { Employee, AttendanceRecord, Shift, LeaveRequest, SapMapping, SyncLog, Announcement, Department, Worksite, AttendanceCorrection, LeaveType, LeaveBalance, LeaveBalanceLedger, Holiday, LeaveApprovalWorkflow, LeaveApprovalStep, LeaveApprovalHistory, LeaveApprovalDelegation, ShiftTemplate, RotationTemplate, ShiftAssignment, ShiftSwapRequest, OvertimeRate, SapConnection, SapSyncJob, SapSyncLog, SapFieldMapping, SapRetryQueue, SapExportQueue, SapPayrollStage, SapReconciliationLog, SapPayrollPeriodLock, SecurityOperationsPeriodLock, SavedReport, ReportExportLog, UserActivityLog, ProductionCheckLog, BackupJob, BackupAuditLog, EmployeeBulkUploadJob, SystemRole, SystemPermission, RolePermission, UserRoleAssignment, BlueCollarPositionCategory, Project, ProjectSite, EmployeeDeployment, Designation, TradeClassification, LocationMaster, CostCenter, ShiftRelieverAssignment, RelieverStandbyRule, Company, AllowedPunchLocation, EmployeeAllowedPunchLocation, ManpowerClient, ManpowerContract, ManpowerProject, ManpowerSite, ManpowerLocationUnit, ManpowerCategory, ManpowerShiftRequirement, ManpowerDeployment, ManpowerDeploymentAssignment, ManpowerRelieverAssignment, UserOperationAccess, SecfacCheckpoint, SecfacChecklistTemplate, SecfacChecklistItem, SecfacAssignment, SecfacChecklistExecution, SecfacChecklistResponse, SecfacChecklistExecutionHistory, SecfacEvidenceAttachment, SecfacScanProof } from "@ahh-wfm/types";
 const uuid = () => Math.random().toString(36).substring(2) + Date.now().toString(36);
 import * as fs from "fs";
 import * as path from "path";
@@ -478,6 +478,7 @@ let memoryDb: {
   secfacChecklistResponses: SecfacChecklistResponse[];
   secfacChecklistExecutionHistories: SecfacChecklistExecutionHistory[];
   secfacEvidenceAttachments: SecfacEvidenceAttachment[];
+  secfacScanProofs: SecfacScanProof[];
 } = {
   companies: [
     { id: "COMP-001", companyCode: "AHH", companyName: "Al Hattab Holding", isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
@@ -765,7 +766,8 @@ let memoryDb: {
   secfacChecklistExecutions: [],
   secfacChecklistResponses: [],
   secfacChecklistExecutionHistories: [],
-  secfacEvidenceAttachments: []
+  secfacEvidenceAttachments: [],
+  secfacScanProofs: []
 };
 
 // Seeding helper to pre-fill MySQL with mock data if it is empty
@@ -11683,6 +11685,10 @@ export const mockDb = {
                 include: { uploadedBy: true }
               }
             }
+          },
+          secfacScanProofs: {
+            where: { isActive: true },
+            include: { reviewedBy: true }
           }
         }
       });
@@ -11712,6 +11718,13 @@ export const mockDb = {
             createdAt: e.createdAt?.toISOString(),
             updatedAt: e.updatedAt?.toISOString()
           }))
+        })),
+        secfacScanProofs: res.secfacScanProofs?.map((p: any) => ({
+          ...p,
+          scannedAt: p.scannedAt?.toISOString(),
+          reviewedAt: p.reviewedAt?.toISOString(),
+          createdAt: p.createdAt?.toISOString(),
+          updatedAt: p.updatedAt?.toISOString()
         }))
       };
     }
@@ -11748,6 +11761,13 @@ export const mockDb = {
       }))
       .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
+    const secfacScanProofs = (db.secfacScanProofs || [])
+      .filter((p: any) => p.assignmentId === x.assignmentId && p.isActive !== false)
+      .map((p: any) => ({
+        ...p,
+        reviewedBy: p.reviewedById ? ((db.employees || []).find((e: any) => e.id === p.reviewedById) || null) : null
+      }));
+
     return {
       ...x,
       assignment: (db.secfacAssignments || []).find((a: any) => a.id === x.assignmentId) || null,
@@ -11758,7 +11778,8 @@ export const mockDb = {
       reviewedBy: x.reviewedById ? ((db.employees || []).find((e: any) => e.id === x.reviewedById) || null) : null,
       history,
       responses,
-      evidenceAttachments
+      evidenceAttachments,
+      secfacScanProofs
     };
   },
 
@@ -12450,6 +12471,201 @@ export const mockDb = {
 
   getEvidenceForResponse: async (responseId: string): Promise<any[]> => {
     return mockDb.getSecfacEvidenceAttachments({ responseId, isActive: true });
+  },
+
+  getSecfacScanProofs: async (filters: any = {}): Promise<any[]> => {
+    if (isDbConnected()) {
+      const where: any = {};
+      if (filters.operationType) where.operationType = filters.operationType;
+      if (filters.assignmentId) where.assignmentId = filters.assignmentId;
+      if (filters.executionId) where.executionId = filters.executionId;
+      if (filters.checkpointId) where.checkpointId = filters.checkpointId;
+      if (filters.employeeId) where.employeeId = filters.employeeId;
+      if (filters.siteId) where.siteId = filters.siteId;
+      if (filters.scanMode) where.scanMode = filters.scanMode;
+      if (filters.validationStatus) where.validationStatus = filters.validationStatus;
+      if (filters.isActive !== undefined) {
+        where.isActive = filters.isActive === 'true' || filters.isActive === true;
+      }
+      
+      const res = await prismaClient.secfacScanProof.findMany({
+        where,
+        include: {
+          assignment: true,
+          execution: true,
+          checkpoint: true,
+          employee: true,
+          site: true,
+          reviewedBy: true
+        },
+        orderBy: { scannedAt: "desc" }
+      });
+      return res.map((x: any) => ({
+        ...x,
+        scannedAt: x.scannedAt?.toISOString(),
+        reviewedAt: x.reviewedAt?.toISOString(),
+        createdAt: x.createdAt?.toISOString(),
+        updatedAt: x.updatedAt?.toISOString()
+      }));
+    }
+    const db = readDb();
+    let list = db.secfacScanProofs || [];
+    if (filters.operationType) list = list.filter((x: any) => x.operationType === filters.operationType);
+    if (filters.assignmentId) list = list.filter((x: any) => x.assignmentId === filters.assignmentId);
+    if (filters.executionId) list = list.filter((x: any) => x.executionId === filters.executionId);
+    if (filters.checkpointId) list = list.filter((x: any) => x.checkpointId === filters.checkpointId);
+    if (filters.employeeId) list = list.filter((x: any) => x.employeeId === filters.employeeId);
+    if (filters.siteId) list = list.filter((x: any) => x.siteId === filters.siteId);
+    if (filters.scanMode) list = list.filter((x: any) => x.scanMode === filters.scanMode);
+    if (filters.validationStatus) list = list.filter((x: any) => x.validationStatus === filters.validationStatus);
+    if (filters.isActive !== undefined) {
+      const activeBool = filters.isActive === 'true' || filters.isActive === true;
+      list = list.filter((x: any) => x.isActive === activeBool);
+    }
+    return list.map((x: any) => {
+      const assignment = (db.secfacAssignments || []).find((a: any) => a.id === x.assignmentId) || null;
+      const execution = (db.secfacChecklistExecutions || []).find((e: any) => e.id === x.executionId) || null;
+      const checkpoint = (db.secfacCheckpoints || []).find((c: any) => c.id === x.checkpointId) || null;
+      const employee = (db.employees || []).find((emp: any) => emp.id === x.employeeId) || null;
+      const site = (db.manpowerSites || []).find((s: any) => s.id === x.siteId) || null;
+      const reviewedBy = (db.employees || []).find((emp: any) => emp.id === x.reviewedById) || null;
+      return { ...x, assignment, execution, checkpoint, employee, site, reviewedBy };
+    });
+  },
+
+  getSecfacScanProofById: async (id: string): Promise<any | null> => {
+    if (isDbConnected()) {
+      const res = await prismaClient.secfacScanProof.findUnique({
+        where: { id },
+        include: {
+          assignment: true,
+          execution: true,
+          checkpoint: true,
+          employee: true,
+          site: true,
+          reviewedBy: true
+        }
+      });
+      if (!res) return null;
+      return {
+        ...res,
+        scannedAt: res.scannedAt?.toISOString(),
+        reviewedAt: res.reviewedAt?.toISOString(),
+        createdAt: res.createdAt?.toISOString(),
+        updatedAt: res.updatedAt?.toISOString()
+      };
+    }
+    const db = readDb();
+    const x = (db.secfacScanProofs || []).find((item: any) => item.id === id);
+    if (!x) return null;
+    const assignment = (db.secfacAssignments || []).find((a: any) => a.id === x.assignmentId) || null;
+    const execution = (db.secfacChecklistExecutions || []).find((e: any) => e.id === x.executionId) || null;
+    const checkpoint = (db.secfacCheckpoints || []).find((c: any) => c.id === x.checkpointId) || null;
+    const employee = (db.employees || []).find((emp: any) => emp.id === x.employeeId) || null;
+    const site = (db.manpowerSites || []).find((s: any) => s.id === x.siteId) || null;
+    const reviewedBy = (db.employees || []).find((emp: any) => emp.id === x.reviewedById) || null;
+    return { ...x, assignment, execution, checkpoint, employee, site, reviewedBy };
+  },
+
+  createSecfacScanProof: async (data: any): Promise<any> => {
+    if (isDbConnected()) {
+      const res = await prismaClient.secfacScanProof.create({
+        data: {
+          id: data.id || undefined,
+          operationType: data.operationType,
+          assignmentId: data.assignmentId,
+          executionId: data.executionId || null,
+          checkpointId: data.checkpointId,
+          employeeId: data.employeeId,
+          siteId: data.siteId,
+          scanMode: data.scanMode,
+          scannedValue: data.scannedValue || null,
+          expectedValue: data.expectedValue || null,
+          validationStatus: data.validationStatus || "PENDING",
+          failureReason: data.failureReason || null,
+          exceptionReason: data.exceptionReason || null,
+          latitude: data.latitude ? Number(data.latitude) : null,
+          longitude: data.longitude ? Number(data.longitude) : null,
+          gpsAccuracyMeters: data.gpsAccuracyMeters ? Number(data.gpsAccuracyMeters) : null,
+          deviceInfo: data.deviceInfo || null,
+          scannedAt: data.scannedAt ? new Date(data.scannedAt) : new Date(),
+          reviewedById: data.reviewedById || null,
+          reviewedAt: data.reviewedAt ? new Date(data.reviewedAt) : null,
+          reviewRemarks: data.reviewRemarks || null,
+          isActive: data.isActive !== false
+        }
+      });
+      return {
+        ...res,
+        scannedAt: res.scannedAt?.toISOString(),
+        reviewedAt: res.reviewedAt?.toISOString(),
+        createdAt: res.createdAt?.toISOString(),
+        updatedAt: res.updatedAt?.toISOString()
+      };
+    }
+    const db = readDb();
+    const newRecord = {
+      id: data.id || require("crypto").randomUUID(),
+      operationType: data.operationType,
+      assignmentId: data.assignmentId,
+      executionId: data.executionId || null,
+      checkpointId: data.checkpointId,
+      employeeId: data.employeeId,
+      siteId: data.siteId,
+      scanMode: data.scanMode,
+      scannedValue: data.scannedValue || null,
+      expectedValue: data.expectedValue || null,
+      validationStatus: data.validationStatus || "PENDING",
+      failureReason: data.failureReason || null,
+      exceptionReason: data.exceptionReason || null,
+      latitude: data.latitude ? Number(data.latitude) : null,
+      longitude: data.longitude ? Number(data.longitude) : null,
+      gpsAccuracyMeters: data.gpsAccuracyMeters ? Number(data.gpsAccuracyMeters) : null,
+      deviceInfo: data.deviceInfo || null,
+      scannedAt: data.scannedAt || new Date().toISOString(),
+      reviewedById: data.reviewedById || null,
+      reviewedAt: data.reviewedAt || null,
+      reviewRemarks: data.reviewRemarks || null,
+      isActive: data.isActive !== false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    db.secfacScanProofs = db.secfacScanProofs || [];
+    db.secfacScanProofs.push(newRecord);
+    writeDb(db);
+    return newRecord;
+  },
+
+  reviewSecfacScanProof: async (id: string, reviewedById: string, validationStatus: string, remarks: string): Promise<any> => {
+    if (isDbConnected()) {
+      const res = await prismaClient.secfacScanProof.update({
+        where: { id },
+        data: {
+          validationStatus,
+          reviewedById,
+          reviewRemarks: remarks,
+          reviewedAt: new Date()
+        }
+      });
+      return {
+        ...res,
+        scannedAt: res.scannedAt?.toISOString(),
+        reviewedAt: res.reviewedAt?.toISOString(),
+        createdAt: res.createdAt?.toISOString(),
+        updatedAt: res.updatedAt?.toISOString()
+      };
+    }
+    const db = readDb();
+    db.secfacScanProofs = db.secfacScanProofs || [];
+    const idx = db.secfacScanProofs.findIndex((x: any) => x.id === id);
+    if (idx === -1) throw new Error("Scan proof not found");
+    db.secfacScanProofs[idx].validationStatus = validationStatus;
+    db.secfacScanProofs[idx].reviewedById = reviewedById;
+    db.secfacScanProofs[idx].reviewRemarks = remarks;
+    db.secfacScanProofs[idx].reviewedAt = new Date().toISOString();
+    db.secfacScanProofs[idx].updatedAt = new Date().toISOString();
+    writeDb(db);
+    return db.secfacScanProofs[idx];
   },
 
   // --- User Operation Access CRUD ---

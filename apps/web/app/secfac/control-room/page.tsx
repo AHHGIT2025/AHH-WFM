@@ -61,6 +61,7 @@ interface ChecklistExecution {
   checklistTemplate?: {
     id: string;
     templateName: string;
+    requiresNfcScan?: boolean;
   } | null;
   employee?: {
     id: string;
@@ -74,6 +75,7 @@ interface ChecklistExecution {
   checkpoint?: {
     id: string;
     checkpointName: string;
+    scanRequired?: boolean;
   } | null;
   reviewedBy?: {
     id: string;
@@ -83,6 +85,7 @@ interface ChecklistExecution {
   responses?: ChecklistResponse[];
   history?: ExecutionHistory[];
   evidenceAttachments?: any[];
+  secfacScanProofs?: any[];
 }
 
 export default function ControlRoomPage() {
@@ -107,6 +110,7 @@ export default function ControlRoomPage() {
   const [reviewError, setReviewError] = useState<string | null>(null);
   const [reviewSuccess, setReviewSuccess] = useState(false);
   const [previewPhoto, setPreviewPhoto] = useState<any | null>(null);
+  const [proofReviewRemarks, setProofReviewRemarks] = useState("");
 
   // Filters State
   const [filterOpType, setFilterOpType] = useState("ALL");
@@ -214,6 +218,32 @@ export default function ControlRoomPage() {
       setReviewError(err.message || "An unexpected error occurred");
     } finally {
       setReviewLoading(false);
+    }
+  };
+
+  const handleProofReview = async (proofId: string, validationStatus: "VALID" | "REJECTED") => {
+    if (!selectedExec) return;
+    try {
+      const res = await fetch(`/api/v1/secfac/scan-proofs/${proofId}/review`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          validationStatus,
+          reviewRemarks: proofReviewRemarks
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setProofReviewRemarks("");
+        alert(`Scan proof successfully updated to ${validationStatus}!`);
+        // Refresh details
+        fetchExecutionDetail(selectedExec.id);
+        fetchExecutions();
+      } else {
+        alert(data.error || data.message || "Failed to submit review");
+      }
+    } catch (err: any) {
+      alert("Error reviewing proof: " + err.message);
     }
   };
 
@@ -644,6 +674,116 @@ export default function ControlRoomPage() {
                       )}
                     </div>
                   </div>
+
+                  {/* Checkpoint Scan Proof Card */}
+                  {(() => {
+                    const activeProof = selectedExec.secfacScanProofs?.[0];
+                    const isScanRequired = (selectedExec.checkpoint?.scanRequired === true) || (selectedExec.checklistTemplate?.requiresNfcScan === true);
+                    if (!isScanRequired && !activeProof) return null;
+
+                    return (
+                      <div className="bg-slate-50 border border-slate-200 p-3 rounded-lg text-xs space-y-2">
+                        <div className="flex justify-between items-center border-b border-slate-200 pb-1.5">
+                          <span className="font-bold text-[#001A48] flex items-center gap-1">
+                            <span className="material-symbols-outlined text-sm">fingerprint</span>
+                            Checkpoint Scan Proof
+                          </span>
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${
+                            !activeProof ? "bg-slate-200 text-slate-700" :
+                            activeProof.validationStatus === "VALID" ? "bg-green-150 text-green-800 border border-green-300" :
+                            activeProof.validationStatus === "PENDING_REVIEW" ? "bg-amber-150 text-amber-800 border border-amber-300" :
+                            activeProof.validationStatus === "INVALID" ? "bg-red-150 text-red-800 border border-red-300" :
+                            "bg-red-200 text-red-900 border border-red-400"
+                          }`}>
+                            {!activeProof ? "Not Scanned" : activeProof.validationStatus.replace("_", " ")}
+                          </span>
+                        </div>
+
+                        {!activeProof ? (
+                          <p className="text-slate-500 italic text-[11px]">No scan proof submitted for this execution.</p>
+                        ) : (
+                          <div className="space-y-1.5 text-[11px] text-slate-700">
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <span className="text-slate-500 font-medium">Scan Mode: </span>
+                                <span className="font-mono bg-slate-200/50 px-1.5 py-0.5 rounded">{activeProof.scanMode.replace("_", " ")}</span>
+                              </div>
+                              <div>
+                                <span className="text-slate-500 font-medium">Scanned At: </span>
+                                <span>{new Date(activeProof.scannedAt).toLocaleString()}</span>
+                              </div>
+                            </div>
+                            {activeProof.scannedValue && (
+                              <div>
+                                <span className="text-slate-500 font-medium">Scanned Tag/Code: </span>
+                                <span className="font-mono bg-slate-200/50 px-1.5 py-0.5 rounded text-on-surface">{activeProof.scannedValue}</span>
+                              </div>
+                            )}
+                            {activeProof.latitude && (
+                              <div>
+                                <span className="text-slate-500 font-medium">Scan Coordinates: </span>
+                                <span className="font-mono">{activeProof.latitude.toFixed(6)}, {activeProof.longitude?.toFixed(6)}</span>
+                              </div>
+                            )}
+                            {activeProof.failureReason && (
+                              <div className="p-2 bg-red-55 text-red-800 rounded border border-red-200 font-medium">
+                                <strong>Failure Reason:</strong> {activeProof.failureReason}
+                              </div>
+                            )}
+                            {activeProof.exceptionReason && (
+                              <div className="p-2 bg-amber-50 text-amber-800 rounded border border-amber-250 font-medium">
+                                <strong>Exception Reason:</strong> {activeProof.exceptionReason}
+                              </div>
+                            )}
+
+                            {/* Exception Review Actions */}
+                            {activeProof.validationStatus === "PENDING_REVIEW" && (
+                              <div className="bg-amber-50/50 border border-amber-250 p-2.5 rounded-lg space-y-2 mt-2">
+                                <span className="font-bold text-amber-900 block text-[10px] uppercase tracking-wider">Manual Exception Review Required</span>
+                                
+                                <textarea
+                                  value={proofReviewRemarks}
+                                  onChange={(e) => setProofReviewRemarks(e.target.value)}
+                                  placeholder="Enter review comments/remarks (optional)..."
+                                  className="w-full bg-white border border-[#C4C6D2] rounded-lg p-2 text-xs focus:outline-none focus:border-[#002D72] resize-none"
+                                  rows={2}
+                                />
+
+                                <div className="flex gap-2 justify-end">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleProofReview(activeProof.id, "REJECTED")}
+                                    className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg font-bold text-[10.5px] transition-colors"
+                                  >
+                                    Reject Exception
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleProofReview(activeProof.id, "VALID")}
+                                    className="px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg font-bold text-[10.5px] transition-colors"
+                                  >
+                                    Approve Exception
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+
+                            {activeProof.reviewedById && (
+                              <div className="p-2 bg-slate-100 rounded border border-slate-200 text-[10px] space-y-0.5 mt-2">
+                                <span className="font-bold text-slate-800 block">Exception Review:</span>
+                                <div>
+                                  Reviewed by: <strong>{activeProof.reviewedBy?.name || "System"}</strong> at {new Date(activeProof.reviewedAt).toLocaleString()}
+                                </div>
+                                {activeProof.reviewRemarks && (
+                                  <div className="italic text-slate-600 font-medium">Remarks: "{activeProof.reviewRemarks}"</div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
 
                   {/* Checklist Answers Snapshot */}
                   <div>

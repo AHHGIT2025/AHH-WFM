@@ -130,8 +130,66 @@ export async function PATCH(
       }
     }
 
+    let finalStatus = targetStatus;
+
     // Validate required answers if status is SUBMITTED
     if (targetStatus === "SUBMITTED") {
+      // Load assignment with checkpoint/template for verification
+      let assignment: any = null;
+      if (isDbConnected()) {
+        assignment = await prisma.secfacAssignment.findUnique({
+          where: { id: execution.assignmentId },
+          include: { template: { include: { items: true } }, checkpoint: true }
+        });
+      } else {
+        const db = readDb();
+        const a = (db.secfacAssignments || []).find((x: any) => x.id === execution.assignmentId);
+        if (a) {
+          const t = (db.secfacChecklistTemplates || []).find((x: any) => x.id === a.templateId);
+          let items: any[] = [];
+          if (t) {
+            items = (db.secfacChecklistItems || []).filter((item: any) => item.templateId === t.id && item.isActive);
+          }
+          const c = (db.secfacCheckpoints || []).find((x: any) => x.id === a.checkpointId) || null;
+          assignment = {
+            ...a,
+            template: t ? { ...t, items } : null,
+            checkpoint: c
+          };
+        }
+      }
+
+      // Check scan requirements
+      const isScanRequired = (assignment?.checkpoint?.scanRequired === true) || (assignment?.template?.requiresNfcScan === true);
+      if (isScanRequired) {
+        const scanProofs = await mockDb.getSecfacScanProofs({
+          assignmentId: execution.assignmentId,
+          isActive: true
+        });
+
+        if (scanProofs.length === 0) {
+          return NextResponse.json({
+            success: false,
+            error: "Validation Error: Required checkpoint scan proof is missing"
+          }, { status: 400 });
+        }
+
+        const hasValid = scanProofs.some((p: any) => p.validationStatus === "VALID");
+        const hasPendingReview = scanProofs.some((p: any) => p.validationStatus === "PENDING_REVIEW");
+
+        if (hasValid) {
+          // satisfied
+        } else if (hasPendingReview) {
+          finalStatus = "PENDING_REVIEW";
+        } else {
+          return NextResponse.json({
+            success: false,
+            error: "Validation Error: Checkpoint scan proof is invalid or rejected"
+          }, { status: 400 });
+        }
+      }
+
+      // Checklist items validation
       const requiredItems = templateItems.filter((x: any) => x.isRequired);
       const responsesList = Array.isArray(responses) ? responses : (execution.responses || []);
 
@@ -173,7 +231,7 @@ export async function PATCH(
       employeeId: execution.employeeId,
       siteId: execution.siteId,
       checkpointId: execution.checkpointId,
-      status: targetStatus,
+      status: finalStatus,
       startedAt: execution.startedAt,
       latitude: latitude !== undefined ? latitude : execution.latitude,
       longitude: longitude !== undefined ? longitude : execution.longitude,
