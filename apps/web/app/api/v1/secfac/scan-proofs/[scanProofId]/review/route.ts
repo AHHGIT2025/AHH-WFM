@@ -66,7 +66,16 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     // 5. Update scan proof status
     const result = await mockDb.reviewSecfacScanProof(scanProofId, user.id, validationStatus, reviewRemarks);
 
-    return NextResponse.json({ success: true, data: result });
+    // 6. Sync with linked patrol checkpoints
+    const patrolSync = await (mockDb as any).syncPatrolCheckpointFromScanProof(scanProofId);
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        scanProof: result,
+        patrolSync
+      }
+    });
   } catch (e: any) {
     return NextResponse.json({ success: false, error: e.message }, { status: 500 });
   }

@@ -1215,6 +1215,15 @@ export default function ControlRoomPage() {
                     {getStatusBadge(selectedPatrol.status)}
                   </div>
 
+                  {["COMPLETED", "INCOMPLETE"].includes(selectedPatrol.status) && selectedPatrol.checkpoints?.some((c: any) => c.scanProof?.reviewedById) && (
+                    <div className="p-3 bg-[#EBF3FF] border border-[#B3D4FF] text-[#002D72] rounded-lg text-[11px] flex items-center gap-2">
+                      <span className="material-symbols-outlined text-base">info</span>
+                      <div>
+                        This tour completion state was finalized via <strong>Supervisor Exception Review</strong>.
+                      </div>
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-2 gap-4">
                     <div className="bg-[#F9F9FF] border border-[#C4C6D2] p-3 rounded-lg">
                       <span className="text-[9px] font-bold text-[#747782] uppercase tracking-wider font-mono">Employee Assigned</span>

@@ -2052,8 +2052,8 @@ describe('AHH WFM API Routes Verification', () => {
       reviewRemarks: 'Looks ok, approved by supervisor'
     }, { headers: secSupHeaders, validateStatus: () => true });
     expect(supervisorReview.status).toBe(200);
-    expect(supervisorReview.data.data.validationStatus).toBe('VALID');
-    expect(supervisorReview.data.data.reviewRemarks).toBe('Looks ok, approved by supervisor');
+    expect(supervisorReview.data.data.scanProof.validationStatus).toBe('VALID');
+    expect(supervisorReview.data.data.scanProof.reviewRemarks).toBe('Looks ok, approved by supervisor');
 
     // Clean up created resources
     try {
@@ -2368,6 +2368,168 @@ describe('AHH WFM API Routes Verification', () => {
       routeId, assignmentId: assignId
     }, { headers: empHeaders, validateStatus: () => true });
     expect(dupExec.status).toBe(400);
+
+    // ─── Phase 3C. Patrol Exception Review Sync & Completion Hardening ───
+    const cp2ScanProofId = scanRes2.data.data.id;
+
+    // T22. Field employee cannot review scan proof -> 403
+    const empReview = await axios.patch(
+      `${WEB_URL}/api/v1/secfac/scan-proofs/${cp2ScanProofId}/review`,
+      { validationStatus: 'VALID', reviewRemarks: 'Field employee tries to review' },
+      { headers: empHeaders, validateStatus: () => true }
+    );
+    expect(empReview.status).toBe(403);
+
+    // T23. Security supervisor cannot review FM scan proof -> 403
+    if (fmRouteId) {
+      const fmAssignRes = await axios.post(`${WEB_URL}/api/v1/secfac/assignments`, {
+        assignmentName: `FM Sync Assign ${Date.now()}`, operationType: 'FACILITY_MANAGEMENT',
+        employeeId: 'AD-0001', siteId: testSiteId,
+        scheduledStart: new Date().toISOString(), scheduledEnd: new Date(Date.now() + 86400000).toISOString(),
+        patrolRouteId: fmRouteId
+      }, { headers: adminHeaders, validateStatus: () => true });
+
+      if (fmAssignRes.status === 201) {
+        const fmScanRes = await axios.post(`${WEB_URL}/api/v1/secfac/scan-proofs`, {
+          assignmentId: fmAssignRes.data.data.id,
+          checkpointId: fmCheckpointId,
+          scanMode: 'MANUAL_EXCEPTION',
+          exceptionReason: 'NFC faulty'
+        }, { headers: empHeaders, validateStatus: () => true });
+
+        if (fmScanRes.status === 201) {
+          const fmProofId = fmScanRes.data.data.id;
+          const secSupReviewFm = await axios.patch(
+            `${WEB_URL}/api/v1/secfac/scan-proofs/${fmProofId}/review`,
+            { validationStatus: 'VALID', reviewRemarks: 'Security supervisor reviews FM' },
+            { headers: secSupHeaders, validateStatus: () => true }
+          );
+          expect(secSupReviewFm.status).toBe(403);
+
+          try {
+            if (prisma) {
+              await prisma.secfacScanProof.delete({ where: { id: fmProofId } });
+              await prisma.secfacAssignment.delete({ where: { id: fmAssignRes.data.data.id } });
+            }
+          } catch (e) {}
+        }
+      }
+    }
+
+    // T24. Admin/Supervisor approves linked PENDING_REVIEW scan proof
+    const approveProofRes = await axios.patch(
+      `${WEB_URL}/api/v1/secfac/scan-proofs/${cp2ScanProofId}/review`,
+      { validationStatus: 'VALID', reviewRemarks: 'Looks clean, exception approved' },
+      { headers: secSupHeaders, validateStatus: () => true }
+    );
+    expect(approveProofRes.status).toBe(200);
+    expect(approveProofRes.data.data.scanProof.validationStatus).toBe('VALID');
+    expect(approveProofRes.data.data.patrolSync).not.toBeNull();
+    expect(approveProofRes.data.data.patrolSync.checkpointStatus).toBe('VALIDATED');
+    expect(approveProofRes.data.data.patrolSync.patrolExecutionStatus).toBe('COMPLETED');
+
+    // Verify parent route state in GET response
+    const verifyCompletedExec = await axios.get(
+      `${WEB_URL}/api/v1/secfac/patrol-executions/${execId}`,
+      { headers: empHeaders, validateStatus: () => true }
+    );
+    expect(verifyCompletedExec.status).toBe(200);
+    expect(verifyCompletedExec.data.data.status).toBe('COMPLETED');
+    expect(verifyCompletedExec.data.data.completedAt).not.toBeNull();
+
+    // T25. Admin/Supervisor rejects linked scan proof afterwards
+    const rejectProofRes = await axios.patch(
+      `${WEB_URL}/api/v1/secfac/scan-proofs/${cp2ScanProofId}/review`,
+      { validationStatus: 'REJECTED', reviewRemarks: 'Invalid proof coordinates' },
+      { headers: secSupHeaders, validateStatus: () => true }
+    );
+    expect(rejectProofRes.status).toBe(200);
+    expect(rejectProofRes.data.data.scanProof.validationStatus).toBe('REJECTED');
+    expect(rejectProofRes.data.data.patrolSync.checkpointStatus).toBe('INVALID');
+    expect(rejectProofRes.data.data.patrolSync.patrolExecutionStatus).toBe('INCOMPLETE');
+
+    // Verify parent route state is downgraded to INCOMPLETE
+    const verifyIncompleteExec = await axios.get(
+      `${WEB_URL}/api/v1/secfac/patrol-executions/${execId}`,
+      { headers: empHeaders, validateStatus: () => true }
+    );
+    expect(verifyIncompleteExec.status).toBe(200);
+    expect(verifyIncompleteExec.data.data.status).toBe('INCOMPLETE');
+
+    // T26. Reviewing scan proof with no linked patrol checkpoint works as Phase 3A
+    const standaloneProofRes = await axios.post(`${WEB_URL}/api/v1/secfac/scan-proofs`, {
+      assignmentId: assignId,
+      checkpointId: cpIds[0],
+      scanMode: 'MANUAL_EXCEPTION',
+      exceptionReason: 'NFC scanner test'
+    }, { headers: empHeaders, validateStatus: () => true });
+
+    if (standaloneProofRes.status === 201) {
+      const standaloneProofId = standaloneProofRes.data.data.id;
+      const standaloneReview = await axios.patch(
+        `${WEB_URL}/api/v1/secfac/scan-proofs/${standaloneProofId}/review`,
+        { validationStatus: 'VALID', reviewRemarks: 'Direct review' },
+        { headers: secSupHeaders, validateStatus: () => true }
+      );
+      expect(standaloneReview.status).toBe(200);
+      expect(standaloneReview.data.data.scanProof.validationStatus).toBe('VALID');
+      expect(standaloneReview.data.data.patrolSync).toBeNull();
+    }
+
+    // T27. IN_PROGRESS patrol execution is not auto-completed or auto-transitioned
+    const inProgressAssign = await axios.post(`${WEB_URL}/api/v1/secfac/assignments`, {
+      assignmentName: `InProgress Assign ${Date.now()}`, operationType: 'SECURITY_GUARDING',
+      employeeId: 'AD-0001', siteId: testSiteId,
+      scheduledStart: new Date().toISOString(), scheduledEnd: new Date(Date.now() + 86400000).toISOString(),
+      patrolRouteId: routeId
+    }, { headers: adminHeaders, validateStatus: () => true });
+
+    if (inProgressAssign.status === 201) {
+      const inProgressAssignId = inProgressAssign.data.data.id;
+      const startInProgress = await axios.post(`${WEB_URL}/api/v1/secfac/patrol-executions`, {
+        routeId, assignmentId: inProgressAssignId
+      }, { headers: empHeaders, validateStatus: () => true });
+
+      if (startInProgress.status === 201) {
+        const inProgressExecId = startInProgress.data.data.id;
+        const inProgressCpId = startInProgress.data.data.checkpoints[0].id;
+
+        const inProgressScan = await axios.post(`${WEB_URL}/api/v1/secfac/scan-proofs`, {
+          assignmentId: inProgressAssignId,
+          checkpointId: cpIds[0],
+          scanMode: 'MANUAL_EXCEPTION',
+          exceptionReason: 'Temporary exception'
+        }, { headers: empHeaders, validateStatus: () => true });
+
+        if (inProgressScan.status === 201) {
+          const inProgressScanId = inProgressScan.data.data.id;
+
+          await axios.post(
+            `${WEB_URL}/api/v1/secfac/patrol-executions/${inProgressExecId}/checkpoints/${inProgressCpId}/validate`,
+            { scanProofId: inProgressScanId },
+            { headers: empHeaders, validateStatus: () => true }
+          );
+
+          const reviewInProgressScan = await axios.patch(
+            `${WEB_URL}/api/v1/secfac/scan-proofs/${inProgressScanId}/review`,
+            { validationStatus: 'VALID', reviewRemarks: 'Approve early' },
+            { headers: secSupHeaders, validateStatus: () => true }
+          );
+          expect(reviewInProgressScan.status).toBe(200);
+          expect(reviewInProgressScan.data.data.patrolSync.checkpointStatus).toBe('VALIDATED');
+          expect(reviewInProgressScan.data.data.patrolSync.patrolExecutionStatus).toBe('IN_PROGRESS');
+
+          try {
+            if (prisma) {
+              await prisma.secfacPatrolExecutionCheckpoint.deleteMany({ where: { executionId: inProgressExecId } });
+              await prisma.secfacPatrolExecution.delete({ where: { id: inProgressExecId } });
+              await prisma.secfacScanProof.delete({ where: { id: inProgressScanId } });
+              await prisma.secfacAssignment.delete({ where: { id: inProgressAssignId } });
+            }
+          } catch (e) {}
+        }
+      }
+    }
 
     // ─── Cleanup ───
     try {

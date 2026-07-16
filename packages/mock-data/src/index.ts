@@ -15709,6 +15709,155 @@ export const mockDb = {
 
     writeDb(db);
     return await mockDb.getSecfacPatrolExecutionById(executionId);
+  },
+
+  syncPatrolCheckpointFromScanProof: async (scanProofId: string): Promise<any | null> => {
+    if (isDbConnected()) {
+      const scanProof = await prismaClient.secfacScanProof.findUnique({
+        where: { id: scanProofId }
+      });
+      if (!scanProof) return null;
+
+      const checkpointExec = await prismaClient.secfacPatrolExecutionCheckpoint.findFirst({
+        where: { scanProofId }
+      });
+      if (!checkpointExec) return null;
+
+      let checkpointStatus = checkpointExec.status;
+      if (scanProof.validationStatus === "VALID") {
+        checkpointStatus = "VALIDATED";
+      } else if (scanProof.validationStatus === "REJECTED") {
+        checkpointStatus = "INVALID";
+      }
+
+      await prismaClient.secfacPatrolExecutionCheckpoint.update({
+        where: { id: checkpointExec.id },
+        data: {
+          status: checkpointStatus,
+          validatedAt: new Date()
+        }
+      });
+
+      const patrolExec = await prismaClient.secfacPatrolExecution.findUnique({
+        where: { id: checkpointExec.executionId }
+      });
+      if (!patrolExec) {
+        return {
+          checkpointExecutionId: checkpointExec.id,
+          checkpointStatus,
+          patrolExecutionId: checkpointExec.executionId,
+          patrolExecutionStatus: "UNKNOWN"
+        };
+      }
+
+      let nextParentStatus = patrolExec.status;
+      let completedAt = patrolExec.completedAt;
+
+      if (!["NOT_STARTED", "IN_PROGRESS", "CANCELLED"].includes(patrolExec.status)) {
+        const allCheckpoints = await prismaClient.secfacPatrolExecutionCheckpoint.findMany({
+          where: { executionId: patrolExec.id }
+        });
+        const required = allCheckpoints.filter((c: any) => c.required === true);
+
+        if (required.some((c: any) => c.status === "INVALID")) {
+          nextParentStatus = "INCOMPLETE";
+        } else if (required.some((c: any) => c.status === "PENDING_REVIEW")) {
+          nextParentStatus = "PENDING_REVIEW";
+        } else if (required.some((c: any) => c.status === "PENDING")) {
+          nextParentStatus = "PENDING_REVIEW";
+        } else if (required.every((c: any) => c.status === "VALIDATED" || c.status === "SKIPPED")) {
+          nextParentStatus = "COMPLETED";
+          if (!completedAt) {
+            completedAt = new Date();
+          }
+        }
+
+        if (nextParentStatus !== patrolExec.status) {
+          await prismaClient.secfacPatrolExecution.update({
+            where: { id: patrolExec.id },
+            data: {
+              status: nextParentStatus,
+              completedAt
+            }
+          });
+        }
+      }
+
+      return {
+        checkpointExecutionId: checkpointExec.id,
+        checkpointStatus,
+        patrolExecutionId: patrolExec.id,
+        patrolExecutionStatus: nextParentStatus
+      };
+    }
+
+    const db = readDb();
+    const scanProof = (db.secfacScanProofs || []).find((s: any) => s.id === scanProofId);
+    if (!scanProof) return null;
+
+    db.secfacPatrolExecutionCheckpoints = db.secfacPatrolExecutionCheckpoints || [];
+    const checkpointExecIndex = db.secfacPatrolExecutionCheckpoints.findIndex((c: any) => c.scanProofId === scanProofId);
+    if (checkpointExecIndex === -1) return null;
+
+    const checkpointExec = db.secfacPatrolExecutionCheckpoints[checkpointExecIndex];
+
+    let checkpointStatus = checkpointExec.status;
+    if (scanProof.validationStatus === "VALID") {
+      checkpointStatus = "VALIDATED";
+    } else if (scanProof.validationStatus === "REJECTED") {
+      checkpointStatus = "INVALID";
+    }
+
+    db.secfacPatrolExecutionCheckpoints[checkpointExecIndex].status = checkpointStatus;
+    db.secfacPatrolExecutionCheckpoints[checkpointExecIndex].validatedAt = new Date().toISOString();
+    db.secfacPatrolExecutionCheckpoints[checkpointExecIndex].updatedAt = new Date().toISOString();
+
+    db.secfacPatrolExecutions = db.secfacPatrolExecutions || [];
+    const patrolExecIndex = db.secfacPatrolExecutions.findIndex((pe: any) => pe.id === checkpointExec.executionId);
+    if (patrolExecIndex === -1) {
+      writeDb(db);
+      return {
+        checkpointExecutionId: checkpointExec.id,
+        checkpointStatus,
+        patrolExecutionId: checkpointExec.executionId,
+        patrolExecutionStatus: "UNKNOWN"
+      };
+    }
+
+    const patrolExec = db.secfacPatrolExecutions[patrolExecIndex];
+    let nextParentStatus = patrolExec.status;
+    let completedAt = patrolExec.completedAt;
+
+    if (!["NOT_STARTED", "IN_PROGRESS", "CANCELLED"].includes(patrolExec.status)) {
+      const allCheckpoints = db.secfacPatrolExecutionCheckpoints.filter((c: any) => c.executionId === patrolExec.id);
+      const required = allCheckpoints.filter((c: any) => c.required === true);
+
+      if (required.some((c: any) => c.status === "INVALID")) {
+        nextParentStatus = "INCOMPLETE";
+      } else if (required.some((c: any) => c.status === "PENDING_REVIEW")) {
+        nextParentStatus = "PENDING_REVIEW";
+      } else if (required.some((c: any) => c.status === "PENDING")) {
+        nextParentStatus = "PENDING_REVIEW";
+      } else if (required.every((c: any) => c.status === "VALIDATED" || c.status === "SKIPPED")) {
+        nextParentStatus = "COMPLETED";
+        if (!completedAt) {
+          completedAt = new Date().toISOString();
+        }
+      }
+
+      db.secfacPatrolExecutions[patrolExecIndex].status = nextParentStatus;
+      db.secfacPatrolExecutions[patrolExecIndex].completedAt = completedAt;
+      db.secfacPatrolExecutions[patrolExecIndex].updatedAt = new Date().toISOString();
+    }
+
+    writeDb(db);
+
+    return {
+      checkpointExecutionId: checkpointExec.id,
+      checkpointStatus,
+      patrolExecutionId: patrolExec.id,
+      patrolExecutionStatus: nextParentStatus
+    };
   }
 };
 
