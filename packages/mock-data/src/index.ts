@@ -1,4 +1,4 @@
-import { Employee, AttendanceRecord, Shift, LeaveRequest, SapMapping, SyncLog, Announcement, Department, Worksite, AttendanceCorrection, LeaveType, LeaveBalance, LeaveBalanceLedger, Holiday, LeaveApprovalWorkflow, LeaveApprovalStep, LeaveApprovalHistory, LeaveApprovalDelegation, ShiftTemplate, RotationTemplate, ShiftAssignment, ShiftSwapRequest, OvertimeRate, SapConnection, SapSyncJob, SapSyncLog, SapFieldMapping, SapRetryQueue, SapExportQueue, SapPayrollStage, SapReconciliationLog, SapPayrollPeriodLock, SecurityOperationsPeriodLock, SavedReport, ReportExportLog, UserActivityLog, ProductionCheckLog, BackupJob, BackupAuditLog, EmployeeBulkUploadJob, SystemRole, SystemPermission, RolePermission, UserRoleAssignment, BlueCollarPositionCategory, Project, ProjectSite, EmployeeDeployment, Designation, TradeClassification, LocationMaster, CostCenter, ShiftRelieverAssignment, RelieverStandbyRule, Company, AllowedPunchLocation, EmployeeAllowedPunchLocation, ManpowerClient, ManpowerContract, ManpowerProject, ManpowerSite, ManpowerLocationUnit, ManpowerCategory, ManpowerShiftRequirement, ManpowerDeployment, ManpowerDeploymentAssignment, ManpowerRelieverAssignment, UserOperationAccess, SecfacCheckpoint, SecfacChecklistTemplate, SecfacChecklistItem, SecfacAssignment, SecfacChecklistExecution, SecfacChecklistResponse, SecfacChecklistExecutionHistory, SecfacEvidenceAttachment, SecfacScanProof } from "@ahh-wfm/types";
+import { Employee, AttendanceRecord, Shift, LeaveRequest, SapMapping, SyncLog, Announcement, Department, Worksite, AttendanceCorrection, LeaveType, LeaveBalance, LeaveBalanceLedger, Holiday, LeaveApprovalWorkflow, LeaveApprovalStep, LeaveApprovalHistory, LeaveApprovalDelegation, ShiftTemplate, RotationTemplate, ShiftAssignment, ShiftSwapRequest, OvertimeRate, SapConnection, SapSyncJob, SapSyncLog, SapFieldMapping, SapRetryQueue, SapExportQueue, SapPayrollStage, SapReconciliationLog, SapPayrollPeriodLock, SecurityOperationsPeriodLock, SavedReport, ReportExportLog, UserActivityLog, ProductionCheckLog, BackupJob, BackupAuditLog, EmployeeBulkUploadJob, SystemRole, SystemPermission, RolePermission, UserRoleAssignment, BlueCollarPositionCategory, Project, ProjectSite, EmployeeDeployment, Designation, TradeClassification, LocationMaster, CostCenter, ShiftRelieverAssignment, RelieverStandbyRule, Company, AllowedPunchLocation, EmployeeAllowedPunchLocation, ManpowerClient, ManpowerContract, ManpowerProject, ManpowerSite, ManpowerLocationUnit, ManpowerCategory, ManpowerShiftRequirement, ManpowerDeployment, ManpowerDeploymentAssignment, ManpowerRelieverAssignment, UserOperationAccess, SecfacCheckpoint, SecfacChecklistTemplate, SecfacChecklistItem, SecfacAssignment, SecfacChecklistExecution, SecfacChecklistResponse, SecfacChecklistExecutionHistory, SecfacEvidenceAttachment, SecfacScanProof, SecfacPatrolRoute, SecfacPatrolRouteCheckpoint, SecfacPatrolExecution, SecfacPatrolExecutionCheckpoint } from "@ahh-wfm/types";
 const uuid = () => Math.random().toString(36).substring(2) + Date.now().toString(36);
 import * as fs from "fs";
 import * as path from "path";
@@ -479,6 +479,10 @@ let memoryDb: {
   secfacChecklistExecutionHistories: SecfacChecklistExecutionHistory[];
   secfacEvidenceAttachments: SecfacEvidenceAttachment[];
   secfacScanProofs: SecfacScanProof[];
+  secfacPatrolRoutes: SecfacPatrolRoute[];
+  secfacPatrolRouteCheckpoints: SecfacPatrolRouteCheckpoint[];
+  secfacPatrolExecutions: SecfacPatrolExecution[];
+  secfacPatrolExecutionCheckpoints: SecfacPatrolExecutionCheckpoint[];
 } = {
   companies: [
     { id: "COMP-001", companyCode: "AHH", companyName: "Al Hattab Holding", isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
@@ -767,7 +771,11 @@ let memoryDb: {
   secfacChecklistResponses: [],
   secfacChecklistExecutionHistories: [],
   secfacEvidenceAttachments: [],
-  secfacScanProofs: []
+  secfacScanProofs: [],
+  secfacPatrolRoutes: [],
+  secfacPatrolRouteCheckpoints: [],
+  secfacPatrolExecutions: [],
+  secfacPatrolExecutionCheckpoints: []
 };
 
 // Seeding helper to pre-fill MySQL with mock data if it is empty
@@ -11340,6 +11348,7 @@ export const mockDb = {
           locationUnitId: data.locationUnitId || null,
           checkpointId: data.checkpointId || null,
           templateId: data.templateId || null,
+          patrolRouteId: data.patrolRouteId || null,
           employeeId: data.employeeId,
           supervisorId: data.supervisorId || null,
           assignmentName: data.assignmentName,
@@ -11357,6 +11366,7 @@ export const mockDb = {
           locationUnit: true,
           checkpoint: true,
           template: true,
+          patrolRoute: true,
           employee: true,
           supervisor: true
         }
@@ -11382,6 +11392,7 @@ export const mockDb = {
       locationUnitId: data.locationUnitId || null,
       checkpointId: data.checkpointId || null,
       templateId: data.templateId || null,
+      patrolRouteId: data.patrolRouteId || null,
       employeeId: data.employeeId,
       supervisorId: data.supervisorId || null,
       assignmentName: data.assignmentName,
@@ -11406,6 +11417,7 @@ export const mockDb = {
       locationUnit: (db.manpowerLocationUnits || []).find((l: any) => l.id === data.locationUnitId) || null,
       checkpoint: (db.secfacCheckpoints || []).find((cp: any) => cp.id === data.checkpointId) || null,
       template: (db.secfacChecklistTemplates || []).find((t: any) => t.id === data.templateId) || null,
+      patrolRoute: (db.secfacPatrolRoutes || []).find((r: any) => r.id === data.patrolRouteId) || null,
       employee: (db.employees || []).find((e: any) => e.id === data.employeeId) || null,
       supervisor: (db.employees || []).find((e: any) => e.id === data.supervisorId) || null
     };
@@ -11421,6 +11433,7 @@ export const mockDb = {
         locationUnitId: data.locationUnitId !== undefined ? data.locationUnitId : undefined,
         checkpointId: data.checkpointId !== undefined ? data.checkpointId : undefined,
         templateId: data.templateId !== undefined ? data.templateId : undefined,
+        patrolRouteId: data.patrolRouteId !== undefined ? data.patrolRouteId : undefined,
         employeeId: data.employeeId !== undefined ? data.employeeId : undefined,
         supervisorId: data.supervisorId !== undefined ? data.supervisorId : undefined,
         assignmentName: data.assignmentName !== undefined ? data.assignmentName : undefined,
@@ -11442,6 +11455,7 @@ export const mockDb = {
           locationUnit: true,
           checkpoint: true,
           template: true,
+          patrolRoute: true,
           employee: true,
           supervisor: true
         }
@@ -11471,6 +11485,7 @@ export const mockDb = {
       locationUnitId: data.locationUnitId !== undefined ? data.locationUnitId : db.secfacAssignments[aIdx].locationUnitId,
       checkpointId: data.checkpointId !== undefined ? data.checkpointId : db.secfacAssignments[aIdx].checkpointId,
       templateId: data.templateId !== undefined ? data.templateId : db.secfacAssignments[aIdx].templateId,
+      patrolRouteId: data.patrolRouteId !== undefined ? data.patrolRouteId : db.secfacAssignments[aIdx].patrolRouteId,
       employeeId: data.employeeId !== undefined ? data.employeeId : db.secfacAssignments[aIdx].employeeId,
       supervisorId: data.supervisorId !== undefined ? data.supervisorId : db.secfacAssignments[aIdx].supervisorId,
       assignmentName: data.assignmentName !== undefined ? data.assignmentName : db.secfacAssignments[aIdx].assignmentName,
@@ -11494,6 +11509,7 @@ export const mockDb = {
       locationUnit: (db.manpowerLocationUnits || []).find((l: any) => l.id === updatedAssignment.locationUnitId) || null,
       checkpoint: (db.secfacCheckpoints || []).find((cp: any) => cp.id === updatedAssignment.checkpointId) || null,
       template: (db.secfacChecklistTemplates || []).find((t: any) => t.id === updatedAssignment.templateId) || null,
+      patrolRoute: (db.secfacPatrolRoutes || []).find((r: any) => r.id === updatedAssignment.patrolRouteId) || null,
       employee: (db.employees || []).find((e: any) => e.id === updatedAssignment.employeeId) || null,
       supervisor: (db.employees || []).find((e: any) => e.id === updatedAssignment.supervisorId) || null
     };
@@ -12150,6 +12166,28 @@ export const mockDb = {
               }
             }
           },
+          patrolRoute: {
+            include: {
+              checkpoints: {
+                include: {
+                  checkpoint: true
+                },
+                orderBy: { sequenceNo: "asc" }
+              }
+            }
+          },
+          patrolExecutions: {
+            include: {
+              checkpoints: {
+                include: {
+                  checkpoint: true,
+                  scanProof: true
+                },
+                orderBy: { sequenceNo: "asc" }
+              }
+            },
+            orderBy: { createdAt: "desc" }
+          },
           employee: true,
           supervisor: true
         },
@@ -12175,6 +12213,34 @@ export const mockDb = {
           finalTemplate = { ...template, items };
         }
 
+        const patrolRoute = x.patrolRouteId ? (db.secfacPatrolRoutes || []).find((pr: any) => pr.id === x.patrolRouteId) : null;
+        let finalPatrolRoute = null;
+        if (patrolRoute) {
+          const routeCheckpoints = (db.secfacPatrolRouteCheckpoints || [])
+            .filter((rc: any) => rc.routeId === patrolRoute.id)
+            .map((rc: any) => ({
+              ...rc,
+              checkpoint: (db.secfacCheckpoints || []).find((cp: any) => cp.id === rc.checkpointId) || null
+            }))
+            .sort((a: any, b: any) => a.sequenceNo - b.sequenceNo);
+          finalPatrolRoute = { ...patrolRoute, checkpoints: routeCheckpoints };
+        }
+
+        const patrolExecutions = (db.secfacPatrolExecutions || [])
+          .filter((pe: any) => pe.assignmentId === x.id)
+          .map((pe: any) => {
+            const executionCheckpoints = (db.secfacPatrolExecutionCheckpoints || [])
+              .filter((pec: any) => pec.executionId === pe.id)
+              .map((pec: any) => ({
+                ...pec,
+                checkpoint: (db.secfacCheckpoints || []).find((cp: any) => cp.id === pec.checkpointId) || null,
+                scanProof: (db.secfacScanProofs || []).find((sp: any) => sp.id === pec.scanProofId) || null
+              }))
+              .sort((a: any, b: any) => a.sequenceNo - b.sequenceNo);
+            return { ...pe, checkpoints: executionCheckpoints };
+          })
+          .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
         return {
           ...x,
           client: (db.manpowerClients || []).find((c: any) => c.id === x.clientId) || null,
@@ -12183,6 +12249,8 @@ export const mockDb = {
           locationUnit: (db.manpowerLocationUnits || []).find((l: any) => l.id === x.locationUnitId) || null,
           checkpoint: (db.secfacCheckpoints || []).find((cp: any) => cp.id === x.checkpointId) || null,
           template: finalTemplate,
+          patrolRoute: finalPatrolRoute,
+          patrolExecutions,
           employee: (db.employees || []).find((e: any) => e.id === x.employeeId) || null,
           supervisor: (db.employees || []).find((e: any) => e.id === x.supervisorId) || null
         };
@@ -15138,6 +15206,509 @@ export const mockDb = {
     }
     writeDb(db);
     return record;
+  },
+  
+  // --- SECFAC Patrol Routes CRUD ---
+  getSecfacPatrolRoutes: async (filters: any = {}): Promise<any[]> => {
+    if (isDbConnected()) {
+      const where: any = {};
+      if (filters.operationType) where.operationType = filters.operationType;
+      if (filters.siteId) where.siteId = filters.siteId;
+      if (filters.isActive !== undefined) {
+        where.isActive = filters.isActive === 'true' || filters.isActive === true;
+      }
+      const res = await prismaClient.secfacPatrolRoute.findMany({
+        where,
+        include: {
+          site: true,
+          checkpoints: {
+            include: { checkpoint: true },
+            orderBy: { sequenceNo: "asc" }
+          }
+        },
+        orderBy: { routeName: "asc" }
+      });
+      return res.map((x: any) => ({
+        ...x,
+        createdAt: x.createdAt?.toISOString(),
+        updatedAt: x.updatedAt?.toISOString()
+      }));
+    }
+
+    const db = readDb();
+    let list = db.secfacPatrolRoutes || [];
+    if (filters.operationType) list = list.filter((x: any) => x.operationType === filters.operationType);
+    if (filters.siteId) list = list.filter((x: any) => x.siteId === filters.siteId);
+    if (filters.isActive !== undefined) {
+      const act = filters.isActive === 'true' || filters.isActive === true;
+      list = list.filter((x: any) => x.isActive === act);
+    }
+    return list.map((x: any) => {
+      const checkpoints = (db.secfacPatrolRouteCheckpoints || [])
+        .filter((c: any) => c.routeId === x.id)
+        .map((c: any) => ({
+          ...c,
+          checkpoint: (db.secfacCheckpoints || []).find((cp: any) => cp.id === c.checkpointId) || null
+        }))
+        .sort((a: any, b: any) => a.sequenceNo - b.sequenceNo);
+      return {
+        ...x,
+        site: (db.manpowerSites || []).find((s: any) => s.id === x.siteId) || null,
+        checkpoints
+      };
+    });
+  },
+
+  getSecfacPatrolRouteById: async (id: string): Promise<any> => {
+    if (isDbConnected()) {
+      const res = await prismaClient.secfacPatrolRoute.findUnique({
+        where: { id },
+        include: {
+          site: true,
+          checkpoints: {
+            include: { checkpoint: true },
+            orderBy: { sequenceNo: "asc" }
+          }
+        }
+      });
+      if (!res) return null;
+      return {
+        ...res,
+        createdAt: res.createdAt?.toISOString(),
+        updatedAt: res.updatedAt?.toISOString()
+      };
+    }
+
+    const db = readDb();
+    const x = (db.secfacPatrolRoutes || []).find((r: any) => r.id === id);
+    if (!x) return null;
+    const checkpoints = (db.secfacPatrolRouteCheckpoints || [])
+      .filter((c: any) => c.routeId === x.id)
+      .map((c: any) => ({
+        ...c,
+        checkpoint: (db.secfacCheckpoints || []).find((cp: any) => cp.id === c.checkpointId) || null
+      }))
+      .sort((a: any, b: any) => a.sequenceNo - b.sequenceNo);
+    return {
+      ...x,
+      site: (db.manpowerSites || []).find((s: any) => s.id === x.siteId) || null,
+      checkpoints
+    };
+  },
+
+  createSecfacPatrolRoute: async (data: any): Promise<any> => {
+    if (isDbConnected()) {
+      const { checkpoints, ...routeData } = data;
+      const routeId = routeData.id || uuid();
+      const res = await prismaClient.secfacPatrolRoute.create({
+        data: {
+          ...routeData,
+          id: routeId,
+          checkpoints: {
+            create: checkpoints.map((c: any) => ({
+              checkpointId: c.checkpointId,
+              sequenceNo: c.sequenceNo,
+              required: c.required !== undefined ? c.required : true
+            }))
+          }
+        },
+        include: {
+          site: true,
+          checkpoints: {
+            include: { checkpoint: true },
+            orderBy: { sequenceNo: "asc" }
+          }
+        }
+      });
+      return {
+        ...res,
+        createdAt: res.createdAt?.toISOString(),
+        updatedAt: res.updatedAt?.toISOString()
+      };
+    }
+
+    const db = readDb();
+    db.secfacPatrolRoutes = db.secfacPatrolRoutes || [];
+    db.secfacPatrolRouteCheckpoints = db.secfacPatrolRouteCheckpoints || [];
+    const routeId = data.id || `route-${uuid()}`;
+    const newRoute = {
+      id: routeId,
+      operationType: data.operationType,
+      routeName: data.routeName,
+      routeCode: data.routeCode || null,
+      description: data.description || null,
+      siteId: data.siteId,
+      isActive: data.isActive !== undefined ? !!data.isActive : true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    db.secfacPatrolRoutes.push(newRoute);
+
+    if (data.checkpoints && Array.isArray(data.checkpoints)) {
+      data.checkpoints.forEach((c: any) => {
+        db.secfacPatrolRouteCheckpoints.push({
+          id: uuid(),
+          routeId,
+          checkpointId: c.checkpointId,
+          sequenceNo: c.sequenceNo,
+          required: c.required !== undefined ? !!c.required : true,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        });
+      });
+    }
+    writeDb(db);
+    return await mockDb.getSecfacPatrolRouteById(routeId);
+  },
+
+  updateSecfacPatrolRoute: async (id: string, data: any): Promise<any> => {
+    if (isDbConnected()) {
+      const { checkpoints, ...routeData } = data;
+      if (checkpoints) {
+        await prismaClient.$transaction([
+          prismaClient.secfacPatrolRouteCheckpoint.deleteMany({ where: { routeId: id } }),
+          prismaClient.secfacPatrolRoute.update({
+            where: { id },
+            data: {
+              ...routeData,
+              checkpoints: {
+                create: checkpoints.map((c: any) => ({
+                  checkpointId: c.checkpointId,
+                  sequenceNo: c.sequenceNo,
+                  required: c.required !== undefined ? c.required : true
+                }))
+              }
+            }
+          })
+        ]);
+      } else {
+        await prismaClient.secfacPatrolRoute.update({
+          where: { id },
+          data: routeData
+        });
+      }
+      return await mockDb.getSecfacPatrolRouteById(id);
+    }
+
+    const db = readDb();
+    db.secfacPatrolRoutes = db.secfacPatrolRoutes || [];
+    const idx = db.secfacPatrolRoutes.findIndex((r: any) => r.id === id);
+    if (idx < 0) throw new Error("Patrol route not found");
+
+    const nowStr = new Date().toISOString();
+    db.secfacPatrolRoutes[idx] = {
+      ...db.secfacPatrolRoutes[idx],
+      routeName: data.routeName !== undefined ? data.routeName : db.secfacPatrolRoutes[idx].routeName,
+      routeCode: data.routeCode !== undefined ? data.routeCode : db.secfacPatrolRoutes[idx].routeCode,
+      description: data.description !== undefined ? data.description : db.secfacPatrolRoutes[idx].description,
+      isActive: data.isActive !== undefined ? !!data.isActive : db.secfacPatrolRoutes[idx].isActive,
+      updatedAt: nowStr
+    };
+
+    if (data.checkpoints && Array.isArray(data.checkpoints)) {
+      db.secfacPatrolRouteCheckpoints = (db.secfacPatrolRouteCheckpoints || []).filter((c: any) => c.routeId !== id);
+      data.checkpoints.forEach((c: any) => {
+        db.secfacPatrolRouteCheckpoints.push({
+          id: uuid(),
+          routeId: id,
+          checkpointId: c.checkpointId,
+          sequenceNo: c.sequenceNo,
+          required: c.required !== undefined ? !!c.required : true,
+          createdAt: nowStr,
+          updatedAt: nowStr
+        });
+      });
+    }
+    writeDb(db);
+    return await mockDb.getSecfacPatrolRouteById(id);
+  },
+
+  deleteSecfacPatrolRoute: async (id: string): Promise<boolean> => {
+    if (isDbConnected()) {
+      await prismaClient.secfacPatrolRoute.update({
+        where: { id },
+        data: { isActive: false }
+      });
+      return true;
+    }
+
+    const db = readDb();
+    db.secfacPatrolRoutes = db.secfacPatrolRoutes || [];
+    const idx = db.secfacPatrolRoutes.findIndex((r: any) => r.id === id);
+    if (idx >= 0) {
+      db.secfacPatrolRoutes[idx].isActive = false;
+      db.secfacPatrolRoutes[idx].updatedAt = new Date().toISOString();
+      writeDb(db);
+      return true;
+    }
+    return false;
+  },
+
+  // --- SECFAC Patrol Executions CRUD ---
+  getSecfacPatrolExecutions: async (filters: any = {}): Promise<any[]> => {
+    if (isDbConnected()) {
+      const where: any = {};
+      if (filters.routeId) where.routeId = filters.routeId;
+      if (filters.assignmentId) where.assignmentId = filters.assignmentId;
+      if (filters.employeeId) where.employeeId = filters.employeeId;
+      if (filters.status) where.status = filters.status;
+
+      const res = await prismaClient.secfacPatrolExecution.findMany({
+        where,
+        include: {
+          route: {
+            include: { site: true }
+          },
+          assignment: true,
+          employee: true,
+          checkpoints: {
+            include: {
+              checkpoint: true,
+              scanProof: true
+            },
+            orderBy: { sequenceNo: "asc" }
+          }
+        },
+        orderBy: { createdAt: "desc" }
+      });
+      return res.map((x: any) => ({
+        ...x,
+        startedAt: x.startedAt?.toISOString(),
+        completedAt: x.completedAt?.toISOString(),
+        createdAt: x.createdAt?.toISOString(),
+        updatedAt: x.updatedAt?.toISOString()
+      }));
+    }
+
+    const db = readDb();
+    let list = db.secfacPatrolExecutions || [];
+    if (filters.routeId) list = list.filter((x: any) => x.routeId === filters.routeId);
+    if (filters.assignmentId) list = list.filter((x: any) => x.assignmentId === filters.assignmentId);
+    if (filters.employeeId) list = list.filter((x: any) => x.employeeId === filters.employeeId);
+    if (filters.status) list = list.filter((x: any) => x.status === filters.status);
+
+    return list.map((x: any) => {
+      const route = (db.secfacPatrolRoutes || []).find((r: any) => r.id === x.routeId) || null;
+      let finalRoute = null;
+      if (route) {
+        finalRoute = {
+          ...route,
+          site: (db.manpowerSites || []).find((s: any) => s.id === route.siteId) || null
+        };
+      }
+      const checkpoints = (db.secfacPatrolExecutionCheckpoints || [])
+        .filter((c: any) => c.executionId === x.id)
+        .map((c: any) => ({
+          ...c,
+          checkpoint: (db.secfacCheckpoints || []).find((cp: any) => cp.id === c.checkpointId) || null,
+          scanProof: (db.secfacScanProofs || []).find((sp: any) => sp.id === c.scanProofId) || null
+        }))
+        .sort((a: any, b: any) => a.sequenceNo - b.sequenceNo);
+      return {
+        ...x,
+        route: finalRoute,
+        assignment: (db.secfacAssignments || []).find((a: any) => a.id === x.assignmentId) || null,
+        employee: (db.employees || []).find((e: any) => e.id === x.employeeId) || null,
+        checkpoints
+      };
+    }).sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  },
+
+  getSecfacPatrolExecutionById: async (id: string): Promise<any> => {
+    if (isDbConnected()) {
+      const res = await prismaClient.secfacPatrolExecution.findUnique({
+        where: { id },
+        include: {
+          route: {
+            include: { site: true }
+          },
+          assignment: true,
+          employee: true,
+          checkpoints: {
+            include: {
+              checkpoint: true,
+              scanProof: true
+            },
+            orderBy: { sequenceNo: "asc" }
+          }
+        }
+      });
+      if (!res) return null;
+      return {
+        ...res,
+        startedAt: res.startedAt?.toISOString(),
+        completedAt: res.completedAt?.toISOString(),
+        createdAt: res.createdAt?.toISOString(),
+        updatedAt: res.updatedAt?.toISOString()
+      };
+    }
+
+    const db = readDb();
+    const x = (db.secfacPatrolExecutions || []).find((pe: any) => pe.id === id);
+    if (!x) return null;
+    const route = (db.secfacPatrolRoutes || []).find((r: any) => r.id === x.routeId) || null;
+    let finalRoute = null;
+    if (route) {
+      finalRoute = {
+        ...route,
+        site: (db.manpowerSites || []).find((s: any) => s.id === route.siteId) || null
+      };
+    }
+    const checkpoints = (db.secfacPatrolExecutionCheckpoints || [])
+      .filter((c: any) => c.executionId === x.id)
+      .map((c: any) => ({
+        ...c,
+        checkpoint: (db.secfacCheckpoints || []).find((cp: any) => cp.id === c.checkpointId) || null,
+        scanProof: (db.secfacScanProofs || []).find((sp: any) => sp.id === c.scanProofId) || null
+      }))
+      .sort((a: any, b: any) => a.sequenceNo - b.sequenceNo);
+    return {
+      ...x,
+      route: finalRoute,
+      assignment: (db.secfacAssignments || []).find((a: any) => a.id === x.assignmentId) || null,
+      employee: (db.employees || []).find((e: any) => e.id === x.employeeId) || null,
+      checkpoints
+    };
+  },
+
+  createSecfacPatrolExecution: async (data: any): Promise<any> => {
+    if (isDbConnected()) {
+      const route = await prismaClient.secfacPatrolRoute.findUnique({
+        where: { id: data.routeId },
+        include: { checkpoints: true }
+      });
+      if (!route) throw new Error("Patrol route not found");
+      const execId = uuid();
+      await prismaClient.secfacPatrolExecution.create({
+        data: {
+          id: execId,
+          routeId: data.routeId,
+          assignmentId: data.assignmentId,
+          employeeId: data.employeeId,
+          status: "IN_PROGRESS",
+          startedAt: new Date(),
+          checkpoints: {
+            create: route.checkpoints.map((c: any) => ({
+              checkpointId: c.checkpointId,
+              sequenceNo: c.sequenceNo,
+              required: c.required,
+              status: "PENDING"
+            }))
+          }
+        }
+      });
+      return await mockDb.getSecfacPatrolExecutionById(execId);
+    }
+
+    const db = readDb();
+    const route = (db.secfacPatrolRoutes || []).find((r: any) => r.id === data.routeId);
+    if (!route) throw new Error("Patrol route not found");
+
+    db.secfacPatrolExecutions = db.secfacPatrolExecutions || [];
+    db.secfacPatrolExecutionCheckpoints = db.secfacPatrolExecutionCheckpoints || [];
+
+    const execId = `exec-${uuid()}`;
+    const nowStr = new Date().toISOString();
+
+    db.secfacPatrolExecutions.push({
+      id: execId,
+      routeId: data.routeId,
+      assignmentId: data.assignmentId,
+      employeeId: data.employeeId,
+      status: "IN_PROGRESS",
+      startedAt: nowStr,
+      completedAt: null,
+      createdAt: nowStr,
+      updatedAt: nowStr
+    });
+
+    const routeCheckpoints = (db.secfacPatrolRouteCheckpoints || []).filter((rc: any) => rc.routeId === data.routeId);
+    routeCheckpoints.forEach((rc: any) => {
+      db.secfacPatrolExecutionCheckpoints.push({
+        id: uuid(),
+        executionId: execId,
+        checkpointId: rc.checkpointId,
+        sequenceNo: rc.sequenceNo,
+        required: rc.required,
+        status: "PENDING",
+        scanProofId: null,
+        validatedAt: null,
+        createdAt: nowStr,
+        updatedAt: nowStr
+      });
+    });
+    writeDb(db);
+    return await mockDb.getSecfacPatrolExecutionById(execId);
+  },
+
+  updateSecfacPatrolExecution: async (id: string, data: any): Promise<any> => {
+    if (isDbConnected()) {
+      const updateData: any = {};
+      if (data.status) updateData.status = data.status;
+      if (data.completedAt !== undefined) {
+        updateData.completedAt = data.completedAt ? new Date(data.completedAt) : null;
+      }
+      await prismaClient.secfacPatrolExecution.update({
+        where: { id },
+        data: updateData
+      });
+      return await mockDb.getSecfacPatrolExecutionById(id);
+    }
+
+    const db = readDb();
+    db.secfacPatrolExecutions = db.secfacPatrolExecutions || [];
+    const idx = db.secfacPatrolExecutions.findIndex((e: any) => e.id === id);
+    if (idx < 0) throw new Error("Patrol execution not found");
+
+    if (data.status) db.secfacPatrolExecutions[idx].status = data.status;
+    if (data.completedAt !== undefined) db.secfacPatrolExecutions[idx].completedAt = data.completedAt;
+    db.secfacPatrolExecutions[idx].updatedAt = new Date().toISOString();
+
+    writeDb(db);
+    return await mockDb.getSecfacPatrolExecutionById(id);
+  },
+
+  validateSecfacPatrolCheckpoint: async (executionId: string, checkpointExecutionId: string, scanProofId: string): Promise<any> => {
+    if (isDbConnected()) {
+      const scanProof = await prismaClient.secfacScanProof.findUnique({ where: { id: scanProofId } });
+      if (!scanProof) throw new Error("Scan proof not found");
+
+      let status = "PENDING";
+      if (scanProof.validationStatus === "VALID") status = "VALIDATED";
+      else if (scanProof.validationStatus === "PENDING_REVIEW") status = "PENDING_REVIEW";
+      else if (scanProof.validationStatus === "INVALID") status = "INVALID";
+
+      await prismaClient.secfacPatrolExecutionCheckpoint.update({
+        where: { id: checkpointExecutionId },
+        data: {
+          scanProofId,
+          status,
+          validatedAt: new Date()
+        }
+      });
+      return await mockDb.getSecfacPatrolExecutionById(executionId);
+    }
+
+    const db = readDb();
+    const scanProof = (db.secfacScanProofs || []).find((s: any) => s.id === scanProofId);
+    if (!scanProof) throw new Error("Scan proof not found");
+
+    db.secfacPatrolExecutionCheckpoints = db.secfacPatrolExecutionCheckpoints || [];
+    const idx = db.secfacPatrolExecutionCheckpoints.findIndex((c: any) => c.id === checkpointExecutionId);
+    if (idx < 0) throw new Error("Checkpoint execution not found");
+
+    let status = "PENDING";
+    if (scanProof.validationStatus === "VALID") status = "VALIDATED";
+    else if (scanProof.validationStatus === "PENDING_REVIEW") status = "PENDING_REVIEW";
+    else if (scanProof.validationStatus === "INVALID") status = "INVALID";
+
+    db.secfacPatrolExecutionCheckpoints[idx].scanProofId = scanProofId;
+    db.secfacPatrolExecutionCheckpoints[idx].status = status;
+    db.secfacPatrolExecutionCheckpoints[idx].validatedAt = new Date().toISOString();
+    db.secfacPatrolExecutionCheckpoints[idx].updatedAt = new Date().toISOString();
+
+    writeDb(db);
+    return await mockDb.getSecfacPatrolExecutionById(executionId);
   }
 };
 

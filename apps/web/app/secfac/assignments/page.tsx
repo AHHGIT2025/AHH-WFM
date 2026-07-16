@@ -32,6 +32,9 @@ interface SecfacAssignment {
   isActive: boolean;
   createdAt?: string;
   updatedAt?: string;
+  evidenceAttachments?: any[];
+  secfacScanProofs?: any[];
+  patrolRouteId?: string | null;
 }
 
 export default function AssignmentsPlannerPage() {
@@ -47,6 +50,7 @@ export default function AssignmentsPlannerPage() {
   const [checkpoints, setCheckpoints] = useState<any[]>([]);
   const [templates, setTemplates] = useState<any[]>([]);
   const [employees, setEmployees] = useState<any[]>([]);
+  const [patrolRoutes, setPatrolRoutes] = useState<any[]>([]);
 
   // Selected Assignment details
   const [selectedAssignment, setSelectedAssignment] = useState<SecfacAssignment | null>(null);
@@ -100,6 +104,7 @@ export default function AssignmentsPlannerPage() {
   const [formLocationUnitId, setFormLocationUnitId] = useState("");
   const [formCheckpointId, setFormCheckpointId] = useState("");
   const [formTemplateId, setFormTemplateId] = useState("");
+  const [formPatrolRouteId, setFormPatrolRouteId] = useState("");
   const [formEmployeeId, setFormEmployeeId] = useState("");
   const [formSupervisorId, setFormSupervisorId] = useState("");
   const [formName, setFormName] = useState("");
@@ -215,6 +220,11 @@ export default function AssignmentsPlannerPage() {
       const empRes = await fetch("/api/v1/employees");
       const empJson = await empRes.json();
       if (Array.isArray(empJson)) setEmployees(empJson);
+
+      // 8. Fetch Patrol Routes
+      const prRes = await fetch("/api/v1/secfac/patrol-routes?isActive=true");
+      const prJson = await prRes.json();
+      if (prJson.success) setPatrolRoutes(prJson.data || []);
     } catch (e) {
       console.error("Failed to load master planning data:", e);
     }
@@ -291,6 +301,7 @@ export default function AssignmentsPlannerPage() {
   const formFilteredLocations = locationUnits.filter(l => l.siteId === formSiteId);
   const formFilteredCheckpoints = checkpoints.filter(c => c.operationType === formOpType && (!formSiteId || c.siteId === formSiteId));
   const formFilteredTemplates = templates.filter(t => t.operationType === formOpType && (!formSiteId || t.siteId === formSiteId || !t.siteId));
+  const formFilteredPatrolRoutes = patrolRoutes.filter(r => r.operationType === formOpType && (!formSiteId || r.siteId === formSiteId));
   const formFilteredEmployees = employees.filter(e => e.operationType === formOpType);
   const formFilteredSupervisors = employees.filter(e => e.role === "SUPERVISOR" || e.role === "ADMIN" || e.role === "SUPER_ADMIN");
 
@@ -328,6 +339,7 @@ export default function AssignmentsPlannerPage() {
       locationUnitId: formLocationUnitId || null,
       checkpointId: formCheckpointId || null,
       templateId: formTemplateId || null,
+      patrolRouteId: formPatrolRouteId || null,
       employeeId: formEmployeeId,
       supervisorId: formSupervisorId || null,
       assignmentName: formName,
@@ -378,6 +390,7 @@ export default function AssignmentsPlannerPage() {
     setFormLocationUnitId(a.locationUnitId || "");
     setFormCheckpointId(a.checkpointId || "");
     setFormTemplateId(a.templateId || "");
+    setFormPatrolRouteId(a.patrolRouteId || "");
     setFormEmployeeId(a.employeeId);
     setFormSupervisorId(a.supervisorId || "");
     setFormName(a.assignmentName);
@@ -439,6 +452,7 @@ export default function AssignmentsPlannerPage() {
     setFormEmployeeId("");
     setFormSupervisorId("");
     setFormTemplateId("");
+    setFormPatrolRouteId("");
     setFormCheckpointId("");
     setFormLocationUnitId("");
   };
@@ -1195,6 +1209,23 @@ export default function AssignmentsPlannerPage() {
                       ))}
                     </select>
                   </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] font-bold text-[#444651] uppercase tracking-wide">Patrol Route Link</label>
+                    <select
+                      value={formPatrolRouteId}
+                      onChange={(e) => setFormPatrolRouteId(e.target.value)}
+                      className="bg-[#F0F3FF] border border-[#C4C6D2] rounded-lg px-2.5 py-2 focus:ring-1 focus:ring-[#002D72]"
+                    >
+                      <option value="">Select Patrol Route (Optional)</option>
+                      {formFilteredPatrolRoutes.map((r) => (
+                        <option key={r.id} value={r.id}>{r.routeName}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div></div>
                 </div>
 
                 <div className="flex flex-col gap-1">

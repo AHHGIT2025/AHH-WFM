@@ -133,6 +133,7 @@ model Employee {
   secfacEvidenceUploadedBy    SecfacEvidenceAttachment[] @relation("SecfacEvidenceUploadedBy")
   secfacScanProofs            SecfacScanProof[]          @relation("SecfacEmployeeScanProofs")
   secfacReviewedScanProofs    SecfacScanProof[]          @relation("SecfacScanProofReviewedBy")
+  secfacPatrolExecutions      SecfacPatrolExecution[]    @relation("SecfacPatrolExecutionEmployee")
 }
 
 model Department {
@@ -1383,6 +1384,7 @@ model ManpowerSite {
   secfacChecklistExecutions SecfacChecklistExecution[]
   secfacEvidenceAttachments SecfacEvidenceAttachment[]
   secfacScanProofs          SecfacScanProof[]
+  secfacPatrolRoutes        SecfacPatrolRoute[]        @relation("SecfacPatrolRouteSite")
 }
 
 model SecuritySiteManpowerAllocation {
@@ -1981,6 +1983,8 @@ model SecfacCheckpoint {
   secfacChecklistExecutions SecfacChecklistExecution[]
   secfacEvidenceAttachments SecfacEvidenceAttachment[]
   secfacScanProofs          SecfacScanProof[]
+  secfacPatrolRouteCheckpoints SecfacPatrolRouteCheckpoint[] @relation("CheckpointToRouteCheckpoints")
+  secfacPatrolExecutionCheckpoints SecfacPatrolExecutionCheckpoint[] @relation("CheckpointToExecutionCheckpoints")
 
   @@index([operationType])
   @@index([siteId])
@@ -2109,8 +2113,12 @@ model SecfacAssignment {
   secfacChecklistExecutions SecfacChecklistExecution[]
   evidenceAttachments SecfacEvidenceAttachment[]
   secfacScanProofs          SecfacScanProof[]
+  patrolRouteId   String?
+  patrolRoute     SecfacPatrolRoute? @relation("SecfacAssignmentPatrolRoute", fields: [patrolRouteId], references: [id], onDelete: SetNull)
+  patrolExecutions SecfacPatrolExecution[] @relation("SecfacPatrolExecutionAssignment")
 
   @@index([operationType])
+  @@index([patrolRouteId])
   @@index([employeeId])
   @@index([supervisorId])
   @@index([siteId])
@@ -2311,6 +2319,7 @@ model SecfacScanProof {
   isActive          Boolean  @default(true)
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
+  patrolExecutionCheckpoint SecfacPatrolExecutionCheckpoint? @relation("SecfacScanProofPatrolCheckpoint")
 
   @@index([operationType])
   @@index([assignmentId])
@@ -2322,5 +2331,86 @@ model SecfacScanProof {
   @@index([validationStatus])
   @@index([scannedAt])
 }
+
+model SecfacPatrolRoute {
+  id            String   @id @default(uuid())
+  operationType String   // SECURITY_GUARDING | FACILITY_MANAGEMENT
+  routeName     String
+  routeCode     String?
+  description   String?  @db.Text
+  siteId        String
+  site          ManpowerSite @relation("SecfacPatrolRouteSite", fields: [siteId], references: [id], onDelete: Restrict)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  checkpoints   SecfacPatrolRouteCheckpoint[] @relation("SecfacRouteCheckpoints")
+  assignments   SecfacAssignment[]            @relation("SecfacAssignmentPatrolRoute")
+  executions    SecfacPatrolExecution[]       @relation("SecfacPatrolExecutionRoute")
+
+  @@index([operationType])
+  @@index([siteId])
+  @@index([isActive])
+}
+
+model SecfacPatrolRouteCheckpoint {
+  id           String   @id @default(uuid())
+  routeId      String
+  route        SecfacPatrolRoute @relation("SecfacRouteCheckpoints", fields: [routeId], references: [id], onDelete: Cascade)
+  checkpointId String
+  checkpoint   SecfacCheckpoint @relation("CheckpointToRouteCheckpoints", fields: [checkpointId], references: [id], onDelete: Restrict)
+  sequenceNo   Int
+  required     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([routeId, sequenceNo])
+  @@index([routeId])
+  @@index([checkpointId])
+}
+
+model SecfacPatrolExecution {
+  id           String   @id @default(uuid())
+  routeId      String
+  route        SecfacPatrolRoute @relation("SecfacPatrolExecutionRoute", fields: [routeId], references: [id], onDelete: Restrict)
+  assignmentId String
+  assignment   SecfacAssignment @relation("SecfacPatrolExecutionAssignment", fields: [assignmentId], references: [id], onDelete: Restrict)
+  employeeId   String
+  employee     Employee @relation("SecfacPatrolExecutionEmployee", fields: [employeeId], references: [id], onDelete: Restrict)
+  status       String   @default("NOT_STARTED") // NOT_STARTED | IN_PROGRESS | PENDING_REVIEW | COMPLETED | INCOMPLETE | CANCELLED
+  startedAt    DateTime?
+  completedAt  DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  checkpoints  SecfacPatrolExecutionCheckpoint[] @relation("SecfacExecutionCheckpoints")
+
+  @@index([routeId])
+  @@index([assignmentId])
+  @@index([employeeId])
+  @@index([status])
+}
+
+model SecfacPatrolExecutionCheckpoint {
+  id           String   @id @default(uuid())
+  executionId  String
+  execution    SecfacPatrolExecution @relation("SecfacExecutionCheckpoints", fields: [executionId], references: [id], onDelete: Cascade)
+  checkpointId String
+  checkpoint   SecfacCheckpoint @relation("CheckpointToExecutionCheckpoints", fields: [checkpointId], references: [id], onDelete: Restrict)
+  sequenceNo   Int
+  required     Boolean  @default(true)
+  status       String   @default("PENDING") // PENDING | VALIDATED | PENDING_REVIEW | INVALID | SKIPPED
+  scanProofId  String?  @unique
+  scanProof    SecfacScanProof? @relation("SecfacScanProofPatrolCheckpoint", fields: [scanProofId], references: [id], onDelete: SetNull)
+  validatedAt  DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([executionId, sequenceNo])
+  @@index([executionId])
+  @@index([checkpointId])
+  @@index([status])
+}
+
 
 

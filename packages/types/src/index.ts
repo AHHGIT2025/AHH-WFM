@@ -1582,6 +1582,9 @@ export interface SecfacAssignment {
   updatedAt?: string;
   evidenceAttachments?: SecfacEvidenceAttachment[];
   secfacScanProofs?: SecfacScanProof[];
+  patrolRouteId?: string | null;
+  patrolRoute?: SecfacPatrolRoute | null;
+  patrolExecutions?: SecfacPatrolExecution[];
 }
 
 export interface SecfacChecklistExecution {
@@ -1712,7 +1715,69 @@ export interface SecfacScanProof {
   isActive: boolean;
   createdAt?: string;
   updatedAt?: string;
+  patrolExecutionCheckpoint?: SecfacPatrolExecutionCheckpoint | null;
 }
+
+export interface SecfacPatrolRoute {
+  id: string;
+  operationType: string;
+  routeName: string;
+  routeCode?: string | null;
+  description?: string | null;
+  siteId: string;
+  site?: ManpowerSite | null;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+  checkpoints?: SecfacPatrolRouteCheckpoint[];
+  assignments?: SecfacAssignment[];
+  executions?: SecfacPatrolExecution[];
+}
+
+export interface SecfacPatrolRouteCheckpoint {
+  id: string;
+  routeId: string;
+  route?: SecfacPatrolRoute | null;
+  checkpointId: string;
+  checkpoint?: SecfacCheckpoint | null;
+  sequenceNo: number;
+  required: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface SecfacPatrolExecution {
+  id: string;
+  routeId: string;
+  route?: SecfacPatrolRoute | null;
+  assignmentId: string;
+  assignment?: SecfacAssignment | null;
+  employeeId: string;
+  employee?: Employee | null;
+  status: "NOT_STARTED" | "IN_PROGRESS" | "PENDING_REVIEW" | "COMPLETED" | "INCOMPLETE" | "CANCELLED" | string;
+  startedAt?: string | null;
+  completedAt?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+  checkpoints?: SecfacPatrolExecutionCheckpoint[];
+}
+
+export interface SecfacPatrolExecutionCheckpoint {
+  id: string;
+  executionId: string;
+  execution?: SecfacPatrolExecution | null;
+  checkpointId: string;
+  checkpoint?: SecfacCheckpoint | null;
+  sequenceNo: number;
+  required: boolean;
+  status: "PENDING" | "VALIDATED" | "PENDING_REVIEW" | "INVALID" | "SKIPPED" | string;
+  scanProofId?: string | null;
+  scanProof?: SecfacScanProof | null;
+  validatedAt?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 
 
 

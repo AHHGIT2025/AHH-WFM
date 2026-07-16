@@ -82,6 +82,7 @@ export const LayoutShell: React.FC<{ children: React.ReactNode }> = ({ children 
       { label: "Control Room", path: "/secfac/control-room", icon: "dashboard" },
       { label: "Checkpoints", path: "/secfac/checkpoints", icon: "location_on" },
       { label: "Checklist Builder", path: "/secfac/checklist-builder", icon: "rule" },
+      { label: "Patrol Routes", path: "/secfac/patrol-routes", icon: "route" },
       { label: "Assignments", path: "/secfac/assignments", icon: "assignment" },
       { label: "Live Monitoring", path: "/secfac/live-monitoring", icon: "visibility" },
       { label: "SOS Alerts", path: "/secfac/sos-alerts", icon: "emergency" },

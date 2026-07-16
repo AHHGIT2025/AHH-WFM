@@ -109,6 +109,7 @@ export async function POST(request: Request) {
       locationUnitId,
       checkpointId,
       templateId,
+      patrolRouteId,
       employeeId,
       supervisorId,
       assignmentName,
@@ -245,6 +246,23 @@ export async function POST(request: Request) {
       }
     }
 
+    // 11. Validate Patrol Route Existence & Operation Type Match
+    if (patrolRouteId) {
+      let route: any = null;
+      if (isDbConnected()) {
+        route = await prisma.secfacPatrolRoute.findUnique({ where: { id: patrolRouteId } });
+      } else {
+        const db = readDb();
+        route = (db.secfacPatrolRoutes || []).find((r: any) => r.id === patrolRouteId);
+      }
+      if (!route) {
+        return NextResponse.json({ success: false, error: "Patrol route not found" }, { status: 400 });
+      }
+      if (route.operationType !== operationType) {
+        return NextResponse.json({ success: false, error: "Operation type mismatch between assignment and patrol route" }, { status: 400 });
+      }
+    }
+
     // Save Assignment
     const result = await mockDb.createSecfacAssignment({
       operationType,
@@ -254,6 +272,7 @@ export async function POST(request: Request) {
       locationUnitId: locationUnitId || null,
       checkpointId: checkpointId || null,
       templateId: templateId || null,
+      patrolRouteId: patrolRouteId || null,
       employeeId,
       supervisorId: supervisorId || null,
       assignmentName,

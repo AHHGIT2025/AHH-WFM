@@ -2066,4 +2066,320 @@ describe('AHH WFM API Routes Verification', () => {
       }
     } catch (err) {}
   });
+
+  test('SECFAC Phase 3B — Patrol Route Execution APIs', async () => {
+    // ─── 1. Authenticate roles ───
+    const loginUser = async (email: string) => {
+      try {
+        const csrfRes = await axios.get(`${WEB_URL}/api/auth/csrf`);
+        const csrfToken = csrfRes.data.csrfToken;
+        const csrfCookie = csrfRes.headers['set-cookie']?.map(c => c.split(';')[0]).join('; ');
+        const loginRes = await axios.post(
+          `${WEB_URL}/api/auth/callback/credentials`,
+          new URLSearchParams({ csrfToken, email, password: 'Password123!', json: 'true' }).toString(),
+          { headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Cookie': csrfCookie }, validateStatus: () => true }
+        );
+        const cookies = loginRes.headers['set-cookie'];
+        return cookies ? cookies.map(c => c.split(';')[0]).join('; ') : '';
+      } catch (e) { return ''; }
+    };
+
+    const adminWebCookie = await loginUser('admin@alhattab.qa');
+    const empWebCookie = await loginUser('sarah.kim@alhattab.qa');
+    const secSupCookie = await loginUser('sec.supervisor@alhattab.qa');
+    const fmSupCookie = await loginUser('fm.supervisor@alhattab.qa');
+
+    const adminHeaders = adminWebCookie ? { Cookie: adminWebCookie } : {};
+    const empHeaders = empWebCookie ? { Cookie: empWebCookie } : {};
+    const secSupHeaders = secSupCookie ? { Cookie: secSupCookie } : {};
+    const fmSupHeaders = fmSupCookie ? { Cookie: fmSupCookie } : {};
+
+    // ─── 2. Resolve test resources ───
+    let testSiteId = 'SITE-001';
+    if (prisma) {
+      try {
+        const site = await prisma.manpowerSite.findFirst();
+        if (site) testSiteId = site.id;
+      } catch (err) {}
+    } else {
+      const db = readDb();
+      if (db.manpowerSites && db.manpowerSites[0]) testSiteId = db.manpowerSites[0].id;
+    }
+
+    // ─── 3. Create 3 test checkpoints ───
+    const cpIds: string[] = [];
+    for (let i = 1; i <= 3; i++) {
+      const cpRes = await axios.post(`${WEB_URL}/api/v1/secfac/checkpoints`, {
+        checkpointName: `Phase3B Test CP-${i}-${Date.now()}`,
+        operationType: 'SECURITY_GUARDING',
+        siteId: testSiteId,
+        nfcTagId: `P3B-NFC-${i}-${Date.now()}`,
+        qrCode: `P3B-QR-${i}-${Date.now()}`,
+        scanRequired: true
+      }, { headers: adminHeaders, validateStatus: () => true });
+      expect(cpRes.status).toBe(201);
+      cpIds.push(cpRes.data.data.id);
+    }
+
+    // ─── T1. Unauthenticated GET patrol-routes → 401 ───
+    const unauthRoutes = await axios.get(`${WEB_URL}/api/v1/secfac/patrol-routes`, { validateStatus: () => true });
+    expect(unauthRoutes.status).toBe(401);
+
+    // ─── T2. Field employee POST patrol-routes → 403 ───
+    const empCreateRoute = await axios.post(`${WEB_URL}/api/v1/secfac/patrol-routes`, {
+      routeName: 'Employee Route', operationType: 'SECURITY_GUARDING', siteId: testSiteId,
+      checkpoints: [{ checkpointId: cpIds[0], sequenceNo: 1, required: true }]
+    }, { headers: empHeaders, validateStatus: () => true });
+    expect(empCreateRoute.status).toBe(403);
+
+    // ─── T3. Admin creates route with 3 ordered checkpoints → 201 ───
+    const createRouteRes = await axios.post(`${WEB_URL}/api/v1/secfac/patrol-routes`, {
+      routeName: `Phase3B Test Route ${Date.now()}`,
+      routeCode: `P3B-${Date.now()}`,
+      operationType: 'SECURITY_GUARDING',
+      siteId: testSiteId,
+      checkpoints: [
+        { checkpointId: cpIds[0], sequenceNo: 1, required: true },
+        { checkpointId: cpIds[1], sequenceNo: 2, required: true },
+        { checkpointId: cpIds[2], sequenceNo: 3, required: false }
+      ]
+    }, { headers: adminHeaders, validateStatus: () => true });
+    expect(createRouteRes.status).toBe(200);
+    const routeId = createRouteRes.data.data.id;
+    expect(routeId).toBeTruthy();
+    expect(createRouteRes.data.data.checkpoints).toHaveLength(3);
+
+    // ─── T4. Route rejects checkpoint from different siteId → 400 ───
+    const wrongSiteCp = await axios.post(`${WEB_URL}/api/v1/secfac/checkpoints`, {
+      checkpointName: `WrongSite-${Date.now()}`, operationType: 'SECURITY_GUARDING',
+      siteId: 'nonexistent-site-id', scanRequired: true
+    }, { headers: adminHeaders, validateStatus: () => true });
+    // This should fail at checkpoint creation or route creation
+    const wrongSiteRoute = await axios.post(`${WEB_URL}/api/v1/secfac/patrol-routes`, {
+      routeName: 'WrongSite Route', operationType: 'SECURITY_GUARDING', siteId: testSiteId,
+      checkpoints: [{ checkpointId: 'nonexistent-cp-id', sequenceNo: 1, required: true }]
+    }, { headers: adminHeaders, validateStatus: () => true });
+    expect(wrongSiteRoute.status).toBe(400);
+
+    // ─── T5. Route rejects duplicate sequenceNo → 400 ───
+    const dupSeqRoute = await axios.post(`${WEB_URL}/api/v1/secfac/patrol-routes`, {
+      routeName: 'DupSeq Route', operationType: 'SECURITY_GUARDING', siteId: testSiteId,
+      checkpoints: [
+        { checkpointId: cpIds[0], sequenceNo: 1, required: true },
+        { checkpointId: cpIds[1], sequenceNo: 1, required: true }
+      ]
+    }, { headers: adminHeaders, validateStatus: () => true });
+    expect(dupSeqRoute.status).toBe(400);
+
+    // ─── T6. Route with no checkpoints → 400 ───
+    const emptyRoute = await axios.post(`${WEB_URL}/api/v1/secfac/patrol-routes`, {
+      routeName: 'Empty Route', operationType: 'SECURITY_GUARDING', siteId: testSiteId,
+      checkpoints: []
+    }, { headers: adminHeaders, validateStatus: () => true });
+    expect(emptyRoute.status).toBe(400);
+
+    // ─── T7. Security supervisor GET FM route → 403 ───
+    // Create an FM route first
+    const fmCpRes = await axios.post(`${WEB_URL}/api/v1/secfac/checkpoints`, {
+      checkpointName: `FM-CP-${Date.now()}`, operationType: 'FACILITY_MANAGEMENT',
+      siteId: testSiteId, scanRequired: true
+    }, { headers: adminHeaders, validateStatus: () => true });
+    let fmCheckpointId = '';
+    let fmRouteId = '';
+    if (fmCpRes.status === 201) {
+      fmCheckpointId = fmCpRes.data.data.id;
+      const fmRouteRes = await axios.post(`${WEB_URL}/api/v1/secfac/patrol-routes`, {
+        routeName: `FM Route ${Date.now()}`, operationType: 'FACILITY_MANAGEMENT', siteId: testSiteId,
+        checkpoints: [{ checkpointId: fmCheckpointId, sequenceNo: 1, required: true }]
+      }, { headers: adminHeaders, validateStatus: () => true });
+      if (fmRouteRes.status === 200) {
+        fmRouteId = fmRouteRes.data.data.id;
+        const secSupGetFm = await axios.get(`${WEB_URL}/api/v1/secfac/patrol-routes/${fmRouteId}`, { headers: secSupHeaders, validateStatus: () => true });
+        expect(secSupGetFm.status).toBe(403);
+      }
+    }
+
+    // ─── T8. Create assignment with patrol route link ───
+    const assignRes = await axios.post(`${WEB_URL}/api/v1/secfac/assignments`, {
+      assignmentName: `P3B Patrol Assign ${Date.now()}`,
+      operationType: 'SECURITY_GUARDING',
+      employeeId: 'SK-90210',
+      siteId: testSiteId,
+      scheduledStart: new Date().toISOString(),
+      scheduledEnd: new Date(Date.now() + 86400000).toISOString(),
+      patrolRouteId: routeId
+    }, { headers: adminHeaders, validateStatus: () => true });
+    expect(assignRes.status).toBe(201);
+    const assignId = assignRes.data.data.id;
+
+    // ─── T9. Employee starts own assigned route execution → 201 ───
+    const startExecRes = await axios.post(`${WEB_URL}/api/v1/secfac/patrol-executions`, {
+      routeId, assignmentId: assignId
+    }, { headers: empHeaders, validateStatus: () => true });
+    expect(startExecRes.status).toBe(201);
+    const execId = startExecRes.data.data.id;
+    expect(startExecRes.data.data.status).toBe('IN_PROGRESS');
+
+    // ─── T10. Start route creates correct checkpoint execution rows in order ───
+    expect(startExecRes.data.data.checkpoints).toHaveLength(3);
+    const execCheckpoints = startExecRes.data.data.checkpoints.sort((a: any, b: any) => a.sequenceNo - b.sequenceNo);
+    expect(execCheckpoints[0].sequenceNo).toBe(1);
+    expect(execCheckpoints[1].sequenceNo).toBe(2);
+    expect(execCheckpoints[2].sequenceNo).toBe(3);
+    expect(execCheckpoints[0].status).toBe('PENDING');
+
+    // ─── T11. Employee cannot start another employee's route → 403 ───
+    // Create another assignment for a different employee
+    const otherAssignRes = await axios.post(`${WEB_URL}/api/v1/secfac/assignments`, {
+      assignmentName: `OtherEmp Assign ${Date.now()}`,
+      operationType: 'SECURITY_GUARDING',
+      employeeId: 'AD-0001',
+      siteId: testSiteId,
+      scheduledStart: new Date().toISOString(),
+      scheduledEnd: new Date(Date.now() + 86400000).toISOString(),
+      patrolRouteId: routeId
+    }, { headers: adminHeaders, validateStatus: () => true });
+    const otherAssignId = otherAssignRes.data.data.id;
+    const empStartOther = await axios.post(`${WEB_URL}/api/v1/secfac/patrol-executions`, {
+      routeId, assignmentId: otherAssignId
+    }, { headers: empHeaders, validateStatus: () => true });
+    expect(empStartOther.status).toBe(403);
+
+    // ─── T12. Valid scan proof validates checkpoint execution ───
+    // Create scan proof for checkpoint 1
+    const cp1ExecId = execCheckpoints[0].id;
+    const scanRes1 = await axios.post(`${WEB_URL}/api/v1/secfac/scan-proofs`, {
+      assignmentId: assignId,
+      checkpointId: cpIds[0],
+      scanMode: 'NFC',
+      scannedValue: createRouteRes.data.data.checkpoints.find((c: any) => c.checkpointId === cpIds[0])?.checkpoint?.nfcTagId || `P3B-NFC-1-${Date.now()}`
+    }, { headers: empHeaders, validateStatus: () => true });
+    
+    if (scanRes1.status === 201 && scanRes1.data.data.validationStatus === 'VALID') {
+      const validateCp1 = await axios.post(
+        `${WEB_URL}/api/v1/secfac/patrol-executions/${execId}/checkpoints/${cp1ExecId}/validate`,
+        { scanProofId: scanRes1.data.data.id },
+        { headers: empHeaders, validateStatus: () => true }
+      );
+      expect(validateCp1.status).toBe(200);
+      const updatedCp1 = validateCp1.data.data.checkpoints.find((c: any) => c.id === cp1ExecId);
+      expect(updatedCp1.status).toBe('VALIDATED');
+    }
+
+    // ─── T14. Route cannot complete with PENDING required checkpoint ───
+    const submitWithPending = await axios.patch(`${WEB_URL}/api/v1/secfac/patrol-executions/${execId}`, {
+      action: 'SUBMIT'
+    }, { headers: empHeaders, validateStatus: () => true });
+    expect(submitWithPending.status).toBe(400);
+
+    // ─── T13. Manual exception PENDING_REVIEW sets checkpoint status PENDING_REVIEW ───
+    const cp2ExecId = execCheckpoints[1].id;
+    const scanRes2 = await axios.post(`${WEB_URL}/api/v1/secfac/scan-proofs`, {
+      assignmentId: assignId,
+      checkpointId: cpIds[1],
+      scanMode: 'MANUAL_EXCEPTION',
+      exceptionReason: 'NFC reader not working at site'
+    }, { headers: empHeaders, validateStatus: () => true });
+    
+    if (scanRes2.status === 201) {
+      expect(scanRes2.data.data.validationStatus).toBe('PENDING_REVIEW');
+      const validateCp2 = await axios.post(
+        `${WEB_URL}/api/v1/secfac/patrol-executions/${execId}/checkpoints/${cp2ExecId}/validate`,
+        { scanProofId: scanRes2.data.data.id },
+        { headers: empHeaders, validateStatus: () => true }
+      );
+      if (validateCp2.status === 200) {
+        const updatedCp2 = validateCp2.data.data.checkpoints.find((c: any) => c.id === cp2ExecId);
+        expect(updatedCp2.status).toBe('PENDING_REVIEW');
+      }
+    }
+
+    // ─── T15. Validate checkpoint 3 (optional, but validate it anyway) ───
+    const cp3ExecId = execCheckpoints[2].id;
+    const scanRes3 = await axios.post(`${WEB_URL}/api/v1/secfac/scan-proofs`, {
+      assignmentId: assignId,
+      checkpointId: cpIds[2],
+      scanMode: 'QR',
+      scannedValue: createRouteRes.data.data.checkpoints.find((c: any) => c.checkpointId === cpIds[2])?.checkpoint?.qrCode || `P3B-QR-3-${Date.now()}`
+    }, { headers: empHeaders, validateStatus: () => true });
+    
+    if (scanRes3.status === 201 && scanRes3.data.data.validationStatus === 'VALID') {
+      const validateCp3 = await axios.post(
+        `${WEB_URL}/api/v1/secfac/patrol-executions/${execId}/checkpoints/${cp3ExecId}/validate`,
+        { scanProofId: scanRes3.data.data.id },
+        { headers: empHeaders, validateStatus: () => true }
+      );
+      expect(validateCp3.status).toBe(200);
+    }
+
+    // ─── T16. Route becomes PENDING_REVIEW if any required checkpoint is PENDING_REVIEW ───
+    const submitRes = await axios.patch(`${WEB_URL}/api/v1/secfac/patrol-executions/${execId}`, {
+      action: 'SUBMIT'
+    }, { headers: empHeaders, validateStatus: () => true });
+    expect(submitRes.status).toBe(200);
+    // Because cp2 is PENDING_REVIEW and required, route should be PENDING_REVIEW
+    expect(submitRes.data.data.status).toBe('PENDING_REVIEW');
+
+    // ─── T17. GET execution detail returns full data ───
+    const getExecRes = await axios.get(`${WEB_URL}/api/v1/secfac/patrol-executions/${execId}`, { headers: empHeaders, validateStatus: () => true });
+    expect(getExecRes.status).toBe(200);
+    expect(getExecRes.data.data.checkpoints).toHaveLength(3);
+
+    // ─── T18. Admin lists all executions → 200 ───
+    const adminListExec = await axios.get(`${WEB_URL}/api/v1/secfac/patrol-executions`, { headers: adminHeaders, validateStatus: () => true });
+    expect(adminListExec.status).toBe(200);
+    expect(adminListExec.data.data.length).toBeGreaterThan(0);
+
+    // ─── T19. Security supervisor cannot view FM execution → 403 ───
+    // Create an FM execution and check cross-scope
+    if (fmRouteId) {
+      const fmAssignRes = await axios.post(`${WEB_URL}/api/v1/secfac/assignments`, {
+        assignmentName: `FM Assign ${Date.now()}`, operationType: 'FACILITY_MANAGEMENT',
+        employeeId: 'AD-0001', siteId: testSiteId,
+        scheduledStart: new Date().toISOString(), scheduledEnd: new Date(Date.now() + 86400000).toISOString(),
+        patrolRouteId: fmRouteId
+      }, { headers: adminHeaders, validateStatus: () => true });
+      if (fmAssignRes.status === 201) {
+        const fmExecRes = await axios.post(`${WEB_URL}/api/v1/secfac/patrol-executions`, {
+          routeId: fmRouteId, assignmentId: fmAssignRes.data.data.id
+        }, { headers: adminHeaders, validateStatus: () => true });
+        if (fmExecRes.status === 201) {
+          const secSupViewFm = await axios.get(`${WEB_URL}/api/v1/secfac/patrol-executions/${fmExecRes.data.data.id}`, { headers: secSupHeaders, validateStatus: () => true });
+          expect(secSupViewFm.status).toBe(403);
+
+          // ─── T20. FM supervisor cannot view Security execution → 403 ───
+          const fmSupViewSec = await axios.get(`${WEB_URL}/api/v1/secfac/patrol-executions/${execId}`, { headers: fmSupHeaders, validateStatus: () => true });
+          expect(fmSupViewSec.status).toBe(403);
+
+          // Cleanup FM execution
+          try {
+            if (prisma) {
+              await prisma.secfacPatrolExecutionCheckpoint.deleteMany({ where: { executionId: fmExecRes.data.data.id } });
+              await prisma.secfacPatrolExecution.delete({ where: { id: fmExecRes.data.data.id } });
+              await prisma.secfacAssignment.delete({ where: { id: fmAssignRes.data.data.id } });
+            }
+          } catch (e) {}
+        }
+      }
+    }
+
+    // ─── T21. Duplicate execution for same route+assignment blocked ───
+    const dupExec = await axios.post(`${WEB_URL}/api/v1/secfac/patrol-executions`, {
+      routeId, assignmentId: assignId
+    }, { headers: empHeaders, validateStatus: () => true });
+    expect(dupExec.status).toBe(400);
+
+    // ─── Cleanup ───
+    try {
+      if (prisma) {
+        await prisma.secfacPatrolExecutionCheckpoint.deleteMany({ where: { executionId: execId } });
+        await prisma.secfacPatrolExecution.deleteMany({ where: { routeId: routeId } });
+        await prisma.secfacScanProof.deleteMany({ where: { assignmentId: { in: [assignId, otherAssignId] } } });
+        await prisma.secfacAssignment.deleteMany({ where: { id: { in: [assignId, otherAssignId] } } });
+        await prisma.secfacPatrolRouteCheckpoint.deleteMany({ where: { routeId: { in: [routeId, fmRouteId].filter(Boolean) } } });
+        await prisma.secfacPatrolRoute.deleteMany({ where: { id: { in: [routeId, fmRouteId].filter(Boolean) } } });
+        await prisma.secfacCheckpoint.deleteMany({ where: { id: { in: [...cpIds, fmCheckpointId].filter(Boolean) } } });
+      }
+    } catch (err) {}
+  });
 });

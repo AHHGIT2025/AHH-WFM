@@ -96,13 +96,18 @@ export default function ControlRoomPage() {
   const isAdmin = ["ADMIN", "SUPER_ADMIN"].includes(userRole);
 
   const [executions, setExecutions] = useState<ChecklistExecution[]>([]);
+  const [patrolExecutions, setPatrolExecutions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<"checklist" | "patrol">("checklist");
 
   // Detail Drawer State
   const [selectedExecId, setSelectedExecId] = useState<string | null>(null);
   const [selectedExec, setSelectedExec] = useState<ChecklistExecution | null>(null);
+  const [selectedPatrolId, setSelectedPatrolId] = useState<string | null>(null);
+  const [selectedPatrol, setSelectedPatrol] = useState<any | null>(null);
   const [drawerLoading, setDrawerLoading] = useState(false);
+  const [patrolDrawerLoading, setPatrolDrawerLoading] = useState(false);
   
   // Review Submission State
   const [reviewRemarks, setReviewRemarks] = useState("");
@@ -124,10 +129,7 @@ export default function ControlRoomPage() {
     setLoading(true);
     setError(null);
     try {
-      // Build query parameters
       const params = new URLSearchParams();
-      
-      // Enforce OperationType scope restrictions for non-admin supervisors
       if (!isAdmin) {
         if (operationAccess.allowedSecurityGuarding && !operationAccess.allowedFacilityManagement) {
           params.append("operationType", "SECURITY_GUARDING");
@@ -136,12 +138,22 @@ export default function ControlRoomPage() {
         }
       }
 
-      const res = await fetch(`/api/v1/secfac/checklist-executions?${params.toString()}`);
-      const data = await res.json();
-      if (data.success) {
-        setExecutions(data.data || []);
+      const [resChecklist, resPatrol] = await Promise.all([
+        fetch(`/api/v1/secfac/checklist-executions?${params.toString()}`),
+        fetch(`/api/v1/secfac/patrol-executions?${params.toString()}`)
+      ]);
+
+      const dataChecklist = await resChecklist.json();
+      const dataPatrol = await resPatrol.json();
+
+      if (dataChecklist.success) {
+        setExecutions(dataChecklist.data || []);
       } else {
-        setError(data.error || "Failed to fetch executions");
+        setError(dataChecklist.error || "Failed to fetch checklist executions");
+      }
+
+      if (dataPatrol.success) {
+        setPatrolExecutions(dataPatrol.data || []);
       }
     } catch (err: any) {
       setError(err.message || "An unexpected error occurred");
@@ -170,6 +182,23 @@ export default function ControlRoomPage() {
     }
   };
 
+  const fetchPatrolDetail = async (id: string) => {
+    setPatrolDrawerLoading(true);
+    try {
+      const res = await fetch(`/api/v1/secfac/patrol-executions/${id}`);
+      const data = await res.json();
+      if (data.success) {
+        setSelectedPatrol(data.data);
+      } else {
+        alert(data.error || "Failed to load patrol details");
+      }
+    } catch (err: any) {
+      alert(err.message || "Failed to load patrol details");
+    } finally {
+      setPatrolDrawerLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchExecutions();
   }, [session]);
@@ -181,6 +210,14 @@ export default function ControlRoomPage() {
       setSelectedExec(null);
     }
   }, [selectedExecId]);
+
+  useEffect(() => {
+    if (selectedPatrolId) {
+      fetchPatrolDetail(selectedPatrolId);
+    } else {
+      setSelectedPatrol(null);
+    }
+  }, [selectedPatrolId]);
 
   const handleReviewSubmit = async (targetStatus: "APPROVED" | "REJECTED" | "REOPENED") => {
     if (!selectedExec) return;
@@ -222,7 +259,6 @@ export default function ControlRoomPage() {
   };
 
   const handleProofReview = async (proofId: string, validationStatus: "VALID" | "REJECTED") => {
-    if (!selectedExec) return;
     try {
       const res = await fetch(`/api/v1/secfac/scan-proofs/${proofId}/review`, {
         method: "PATCH",
@@ -237,7 +273,8 @@ export default function ControlRoomPage() {
         setProofReviewRemarks("");
         alert(`Scan proof successfully updated to ${validationStatus}!`);
         // Refresh details
-        fetchExecutionDetail(selectedExec.id);
+        if (selectedExecId) fetchExecutionDetail(selectedExecId);
+        if (selectedPatrolId) fetchPatrolDetail(selectedPatrolId);
         fetchExecutions();
       } else {
         alert(data.error || data.message || "Failed to submit review");
@@ -248,8 +285,15 @@ export default function ControlRoomPage() {
   };
 
   // Extract unique filter dropdown values from loaded executions
-  const uniqueSites = Array.from(new Set(executions.map(x => x.site?.siteName || "").filter(Boolean)));
-  const uniqueEmployees = Array.from(new Set(executions.map(x => x.employee?.name || "").filter(Boolean)));
+  const uniqueSites = Array.from(new Set([
+    ...executions.map(x => x.site?.siteName || ""),
+    ...patrolExecutions.map(x => x.route?.site?.name || x.assignment?.site?.name || "")
+  ].filter(Boolean)));
+
+  const uniqueEmployees = Array.from(new Set([
+    ...executions.map(x => x.employee?.name || ""),
+    ...patrolExecutions.map(x => x.employee?.name || "")
+  ].filter(Boolean)));
 
   // Filter Logic
   const filteredExecutions = executions.filter(x => {
@@ -287,15 +331,50 @@ export default function ControlRoomPage() {
     return true;
   });
 
+  const filteredPatrolExecutions = patrolExecutions.filter(x => {
+    const routeOp = x.route?.operationType || x.assignment?.operationType;
+    const siteName = x.route?.site?.name || x.assignment?.site?.name;
+    const routeName = x.route?.routeName || x.assignment?.assignmentName;
+
+    // Op Type filter
+    if (filterOpType !== "ALL" && routeOp !== filterOpType) return false;
+
+    // Status filter
+    if (filterStatus !== "ALL" && x.status !== filterStatus) return false;
+
+    // Employee filter
+    if (filterEmployee && x.employee?.name !== filterEmployee) return false;
+
+    // Site filter
+    if (filterSite && siteName !== filterSite) return false;
+
+    // Date filter
+    if (filterDate) {
+      const executionDate = x.completedAt || x.startedAt || x.createdAt;
+      if (executionDate && !executionDate.startsWith(filterDate)) return false;
+    }
+
+    // Search query free text
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      const matchName = x.employee?.name?.toLowerCase().includes(q);
+      const matchSite = siteName?.toLowerCase().includes(q);
+      const matchRoute = routeName?.toLowerCase().includes(q);
+      if (!matchName && !matchSite && !matchRoute) return false;
+    }
+
+    return true;
+  });
+
   // KPI Calculations
   const stats = {
-    total: executions.length,
-    pending: executions.filter(x => x.status === "SUBMITTED" || x.status === "PENDING_REVIEW").length,
-    approved: executions.filter(x => x.status === "APPROVED").length,
-    rejected: executions.filter(x => x.status === "REJECTED").length,
+    total: executions.length + patrolExecutions.length,
+    pending: executions.filter(x => x.status === "SUBMITTED" || x.status === "PENDING_REVIEW").length + patrolExecutions.filter(x => x.status === "PENDING_REVIEW" || x.status === "IN_PROGRESS").length,
+    approved: executions.filter(x => x.status === "APPROVED").length + patrolExecutions.filter(x => x.status === "COMPLETED").length,
+    rejected: executions.filter(x => x.status === "REJECTED").length + patrolExecutions.filter(x => x.status === "CANCELLED").length,
     reopened: executions.filter(x => x.status === "REOPENED").length,
-    today: executions.filter(x => {
-      const dateStr = x.submittedAt || x.createdAt;
+    today: [...executions, ...patrolExecutions].filter(x => {
+      const dateStr = x.submittedAt || x.completedAt || x.createdAt;
       return dateStr && dateStr.startsWith(new Date().toISOString().split("T")[0]);
     }).length
   };
@@ -475,6 +554,30 @@ export default function ControlRoomPage() {
         </div>
       </div>
 
+      {/* Tabs */}
+      <div className="flex border-b border-[#C4C6D2]/60 mb-4 gap-4">
+        <button
+          onClick={() => setActiveTab("checklist")}
+          className={`pb-2 text-xs font-bold transition-all border-b-2 px-1 ${
+            activeTab === "checklist"
+              ? "border-[#002D72] text-[#002D72]"
+              : "border-transparent text-[#747782] hover:text-[#001A48]"
+          }`}
+        >
+          Checklist Executions ({filteredExecutions.length})
+        </button>
+        <button
+          onClick={() => setActiveTab("patrol")}
+          className={`pb-2 text-xs font-bold transition-all border-b-2 px-1 ${
+            activeTab === "patrol"
+              ? "border-[#002D72] text-[#002D72]"
+              : "border-transparent text-[#747782] hover:text-[#001A48]"
+          }`}
+        >
+          Patrol Route Executions ({filteredPatrolExecutions.length})
+        </button>
+      </div>
+
       {/* Main Review Queue Table */}
       <div className="bg-white border border-[#C4C6D2] rounded-xl shadow-sm overflow-hidden mb-8">
         {loading ? (
@@ -487,102 +590,188 @@ export default function ControlRoomPage() {
             <span className="material-symbols-outlined text-3xl mb-2">error</span>
             <p className="text-xs font-bold">{error}</p>
           </div>
-        ) : filteredExecutions.length === 0 ? (
-          <div className="p-12 text-center text-[#747782]">
-            <span className="material-symbols-outlined text-3xl mb-2 text-[#C4C6D2]">inbox</span>
-            <p className="text-xs font-bold font-mono">No checklist submissions match the active filters</p>
-          </div>
+        ) : activeTab === "checklist" ? (
+          filteredExecutions.length === 0 ? (
+            <div className="p-12 text-center text-[#747782]">
+              <span className="material-symbols-outlined text-3xl mb-2 text-[#C4C6D2]">inbox</span>
+              <p className="text-xs font-bold font-mono">No checklist submissions match the active filters</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="bg-[#002D72]/5 text-[#001A48] border-b border-[#C4C6D2] font-bold font-mono text-[10px] uppercase">
+                    <th className="p-3">Assignment / Task</th>
+                    <th className="p-3">Employee</th>
+                    <th className="p-3">Op Type</th>
+                    <th className="p-3">Site / Checkpoint</th>
+                    <th className="p-3">Checklist Template</th>
+                    <th className="p-3">Submitted At</th>
+                    <th className="p-3">Status</th>
+                    <th className="p-3">Reviewer</th>
+                    <th className="p-3 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#C4C6D2]/40">
+                  {filteredExecutions.map((x) => {
+                    const hasFlagged = x.responses?.some(r => r.isFlagged);
+                    return (
+                      <tr
+                        key={x.id}
+                        onClick={() => setSelectedExecId(x.id)}
+                        className={`hover:bg-slate-50 cursor-pointer transition-all ${
+                          x.status === "SUBMITTED" || x.status === "PENDING_REVIEW" ? "font-semibold bg-[#002D72]/[0.01]" : ""
+                        }`}
+                      >
+                        <td className="p-3 text-[#001A48]">
+                          {x.assignment?.assignmentName || "Ad-hoc Execution"}
+                        </td>
+                        <td className="p-3">
+                          <div className="flex flex-col">
+                            <span className="font-bold text-slate-800">{x.employee?.name}</span>
+                            <span className="text-[10px] text-[#747782] font-mono">{x.employee?.employeeId}</span>
+                          </div>
+                        </td>
+                        <td className="p-3 font-mono text-[10px]">
+                          {x.operationType === "SECURITY_GUARDING" ? (
+                            <span className="text-blue-800 font-bold bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">SG</span>
+                          ) : (
+                            <span className="text-purple-800 font-bold bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200">FM</span>
+                          )}
+                        </td>
+                        <td className="p-3">
+                          <div className="flex flex-col">
+                            <span className="text-slate-800">{x.site?.siteName || "-"}</span>
+                            {x.checkpoint && (
+                              <span className="text-[10px] text-teal-800 flex items-center gap-0.5">
+                                <span className="material-symbols-outlined text-[10px]">location_on</span>
+                                {x.checkpoint.checkpointName}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="p-3 text-slate-700 font-medium">
+                          <div className="flex items-center gap-1.5">
+                            {x.checklistTemplate?.templateName}
+                            {hasFlagged && (
+                              <span className="material-symbols-outlined text-red-600 text-sm animate-pulse" title="Flagged (failed) checklist answers present">
+                                warning
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="p-3 text-[#747782] font-mono">
+                          {formatDateTime(x.submittedAt || x.createdAt)}
+                        </td>
+                        <td className="p-3">
+                          {getStatusBadge(x.status)}
+                        </td>
+                        <td className="p-3 text-slate-700">
+                          {x.reviewedBy ? (
+                            <span className="text-[11px] font-medium">{x.reviewedBy.name}</span>
+                          ) : (
+                            <span className="text-[10px] text-[#747782] font-mono">Unreviewed</span>
+                          )}
+                        </td>
+                        <td className="p-3 text-right" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            onClick={() => setSelectedExecId(x.id)}
+                            className="px-2.5 py-1 bg-[#002D72] hover:bg-[#001A48] text-white text-[10px] font-bold rounded transition-all"
+                          >
+                            {x.status === "SUBMITTED" || x.status === "PENDING_REVIEW" ? "Review" : "View"}
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-xs">
-              <thead>
-                <tr className="bg-[#002D72]/5 text-[#001A48] border-b border-[#C4C6D2] font-bold font-mono text-[10px] uppercase">
-                  <th className="p-3">Assignment / Task</th>
-                  <th className="p-3">Employee</th>
-                  <th className="p-3">Op Type</th>
-                  <th className="p-3">Site / Checkpoint</th>
-                  <th className="p-3">Checklist Template</th>
-                  <th className="p-3">Submitted At</th>
-                  <th className="p-3">Status</th>
-                  <th className="p-3">Reviewer</th>
-                  <th className="p-3 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#C4C6D2]/40">
-                {filteredExecutions.map((x) => {
-                  const hasFlagged = x.responses?.some(r => r.isFlagged);
-                  return (
-                    <tr
-                      key={x.id}
-                      onClick={() => setSelectedExecId(x.id)}
-                      className={`hover:bg-slate-50 cursor-pointer transition-all ${
-                        x.status === "SUBMITTED" || x.status === "PENDING_REVIEW" ? "font-semibold bg-[#002D72]/[0.01]" : ""
-                      }`}
-                    >
-                      <td className="p-3 text-[#001A48]">
-                        {x.assignment?.assignmentName || "Ad-hoc Execution"}
-                      </td>
-                      <td className="p-3">
-                        <div className="flex flex-col">
-                          <span className="font-bold text-slate-800">{x.employee?.name}</span>
-                          <span className="text-[10px] text-[#747782] font-mono">{x.employee?.employeeId}</span>
-                        </div>
-                      </td>
-                      <td className="p-3 font-mono text-[10px]">
-                        {x.operationType === "SECURITY_GUARDING" ? (
-                          <span className="text-blue-800 font-bold bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">SG</span>
-                        ) : (
-                          <span className="text-purple-800 font-bold bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200">FM</span>
-                        )}
-                      </td>
-                      <td className="p-3">
-                        <div className="flex flex-col">
-                          <span className="text-slate-800">{x.site?.siteName || "-"}</span>
-                          {x.checkpoint && (
-                            <span className="text-[10px] text-teal-800 flex items-center gap-0.5">
-                              <span className="material-symbols-outlined text-[10px]">location_on</span>
-                              {x.checkpoint.checkpointName}
-                            </span>
+          filteredPatrolExecutions.length === 0 ? (
+            <div className="p-12 text-center text-[#747782]">
+              <span className="material-symbols-outlined text-3xl mb-2 text-[#C4C6D2]">inbox</span>
+              <p className="text-xs font-bold font-mono">No patrol route executions match the active filters</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="bg-[#002D72]/5 text-[#001A48] border-b border-[#C4C6D2] font-bold font-mono text-[10px] uppercase">
+                    <th className="p-3">Route / Assignment</th>
+                    <th className="p-3">Employee</th>
+                    <th className="p-3">Op Type</th>
+                    <th className="p-3">Site Location</th>
+                    <th className="p-3">Progress</th>
+                    <th className="p-3">Started At</th>
+                    <th className="p-3">Completed At</th>
+                    <th className="p-3">Status</th>
+                    <th className="p-3 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#C4C6D2]/40">
+                  {filteredPatrolExecutions.map((x) => {
+                    const checkpoints = x.checkpoints || [];
+                    const completedCheckpoints = checkpoints.filter((c: any) => c.status === "VALIDATED" || c.status === "PENDING_REVIEW").length;
+                    const totalCheckpoints = checkpoints.length;
+                    const routeName = x.route?.routeName || x.assignment?.assignmentName;
+                    const siteName = x.route?.site?.name || x.assignment?.site?.name;
+                    const routeOp = x.route?.operationType || x.assignment?.operationType;
+                    return (
+                      <tr
+                        key={x.id}
+                        onClick={() => setSelectedPatrolId(x.id)}
+                        className={`hover:bg-slate-50 cursor-pointer transition-all ${
+                          x.status === "PENDING_REVIEW" ? "font-semibold bg-[#002D72]/[0.01]" : ""
+                        }`}
+                      >
+                        <td className="p-3 text-[#001A48] font-bold">
+                          {routeName}
+                        </td>
+                        <td className="p-3">
+                          <div className="flex flex-col">
+                            <span className="font-bold text-slate-800">{x.employee?.name}</span>
+                            <span className="text-[10px] text-[#747782] font-mono">{x.employee?.employeeId}</span>
+                          </div>
+                        </td>
+                        <td className="p-3 font-mono text-[10px]">
+                          {routeOp === "SECURITY_GUARDING" ? (
+                            <span className="text-blue-800 font-bold bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">SG</span>
+                          ) : (
+                            <span className="text-purple-800 font-bold bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200">FM</span>
                           )}
-                        </div>
-                      </td>
-                      <td className="p-3 text-slate-700 font-medium">
-                        <div className="flex items-center gap-1.5">
-                          {x.checklistTemplate?.templateName}
-                          {hasFlagged && (
-                            <span className="material-symbols-outlined text-red-600 text-sm animate-pulse" title="Flagged (failed) checklist answers present">
-                              warning
-                            </span>
-                          )}
-                        </div>
-                      </td>
-                      <td className="p-3 text-[#747782] font-mono">
-                        {formatDateTime(x.submittedAt || x.createdAt)}
-                      </td>
-                      <td className="p-3">
-                        {getStatusBadge(x.status)}
-                      </td>
-                      <td className="p-3 text-slate-700">
-                        {x.reviewedBy ? (
-                          <span className="text-[11px] font-medium">{x.reviewedBy.name}</span>
-                        ) : (
-                          <span className="text-[10px] text-[#747782] font-mono">Unreviewed</span>
-                        )}
-                      </td>
-                      <td className="p-3 text-right" onClick={(e) => e.stopPropagation()}>
-                        <button
-                          onClick={() => setSelectedExecId(x.id)}
-                          className="px-2.5 py-1 bg-[#002D72] hover:bg-[#001A48] text-white text-[10px] font-bold rounded transition-all"
-                        >
-                          {x.status === "SUBMITTED" || x.status === "PENDING_REVIEW" ? "Review" : "View"}
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                        </td>
+                        <td className="p-3 text-slate-800 font-medium">
+                          {siteName || "-"}
+                        </td>
+                        <td className="p-3 font-mono text-xs font-semibold">
+                          {completedCheckpoints} / {totalCheckpoints} Done
+                        </td>
+                        <td className="p-3 text-[#747782] font-mono">
+                          {formatDateTime(x.startedAt)}
+                        </td>
+                        <td className="p-3 text-[#747782] font-mono">
+                          {formatDateTime(x.completedAt)}
+                        </td>
+                        <td className="p-3">
+                          {getStatusBadge(x.status)}
+                        </td>
+                        <td className="p-3 text-right" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            onClick={() => setSelectedPatrolId(x.id)}
+                            className="px-2.5 py-1 bg-[#002D72] hover:bg-[#001A48] text-white text-[10px] font-bold rounded transition-all"
+                          >
+                            View
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )
         )}
       </div>
 
@@ -987,6 +1176,199 @@ export default function ControlRoomPage() {
                   )}
                 </>
               ) : null}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Patrol Execution Sliding Drawer */}
+      {selectedPatrolId && (
+        <div className="fixed inset-0 bg-[#001A48]/40 backdrop-blur-sm z-50 flex justify-end transition-opacity duration-300">
+          <div className="flex-1" onClick={() => setSelectedPatrolId(null)}></div>
+          
+          <div className="w-full max-w-2xl bg-white h-full shadow-2xl flex flex-col relative transform translate-x-0 transition-transform duration-300">
+            <div className="p-4 border-b border-[#E7EEFF] bg-[#002D72] text-white flex items-center justify-between">
+              <div>
+                <h2 className="text-sm font-bold tracking-tight font-sans">Patrol Route Execution Details</h2>
+                <p className="text-[10px] opacity-80 font-mono mt-0.5">ID: {selectedPatrolId}</p>
+              </div>
+              <button
+                onClick={() => setSelectedPatrolId(null)}
+                className="w-8 h-8 rounded-full hover:bg-white/10 flex items-center justify-center text-white"
+              >
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-5 space-y-5">
+              {patrolDrawerLoading ? (
+                <div className="h-full flex flex-col items-center justify-center gap-2">
+                  <div className="w-6 h-6 border-3 border-[#002D72] border-t-transparent rounded-full animate-spin"></div>
+                  <span className="text-[10px] text-[#747782] font-mono">Loading patrol details...</span>
+                </div>
+              ) : selectedPatrol ? (
+                <>
+                  <div className="flex items-center justify-between p-3 rounded-lg bg-slate-50 border border-slate-200">
+                    <div className="text-xs">
+                      <span className="font-bold text-slate-700">Patrol Status:</span>
+                    </div>
+                    {getStatusBadge(selectedPatrol.status)}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="bg-[#F9F9FF] border border-[#C4C6D2] p-3 rounded-lg">
+                      <span className="text-[9px] font-bold text-[#747782] uppercase tracking-wider font-mono">Employee Assigned</span>
+                      <h4 className="text-xs font-bold text-[#001A48] mt-0.5">{selectedPatrol.employee?.name}</h4>
+                      <p className="text-[10px] text-[#747782] font-mono mt-0.5">ID: {selectedPatrol.employee?.employeeId}</p>
+                    </div>
+                    <div className="bg-[#F9F9FF] border border-[#C4C6D2] p-3 rounded-lg">
+                      <span className="text-[9px] font-bold text-[#747782] uppercase tracking-wider font-mono">Site / Location</span>
+                      <h4 className="text-xs font-bold text-slate-800 mt-0.5">{selectedPatrol.route?.site?.name || selectedPatrol.assignment?.site?.name || "-"}</h4>
+                    </div>
+                  </div>
+
+                  <div className="bg-white border border-[#C4C6D2] rounded-lg p-3 text-[11px] text-slate-700 space-y-1.5">
+                    <div className="flex justify-between border-b border-slate-100 pb-1.5">
+                      <span className="font-medium text-slate-500">Route Name:</span>
+                      <span className="font-bold text-[#001A48]">{selectedPatrol.route?.routeName || selectedPatrol.assignment?.assignmentName}</span>
+                    </div>
+                    <div className="flex justify-between border-b border-slate-100 pb-1.5">
+                      <span className="font-medium text-slate-500">Started At:</span>
+                      <span className="font-mono">{formatDateTime(selectedPatrol.startedAt)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="font-medium text-slate-500">Completed At:</span>
+                      <span className="font-mono">{formatDateTime(selectedPatrol.completedAt)}</span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <h3 className="text-xs font-bold text-[#001A48] uppercase tracking-wide font-mono">Route Checkpoints execution</h3>
+                    
+                    <div className="border border-[#C4C6D2]/60 rounded-xl overflow-hidden text-xs">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="bg-slate-100 text-slate-700 font-bold border-b border-[#C4C6D2]/60">
+                            <th className="p-2.5 w-12 text-center">Seq</th>
+                            <th className="p-2.5">Checkpoint</th>
+                            <th className="p-2.5 w-16 text-center">Req</th>
+                            <th className="p-2.5 w-24">Status</th>
+                            <th className="p-2.5">Validated At</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-[#C4C6D2]/40">
+                          {selectedPatrol.checkpoints?.map((item: any) => (
+                            <React.Fragment key={item.id}>
+                              <tr className="hover:bg-slate-50">
+                                <td className="p-2.5 text-center font-mono font-bold text-slate-400">{item.sequenceNo}</td>
+                                <td className="p-2.5 font-medium text-slate-800">{item.checkpoint?.checkpointName}</td>
+                                <td className="p-2.5 text-center">
+                                  {item.required ? (
+                                    <span className="text-[9px] font-bold text-red-600 bg-red-50 border border-red-200 px-1 rounded uppercase">Yes</span>
+                                  ) : (
+                                    <span className="text-[9px] font-bold text-slate-400 bg-slate-50 border border-slate-200 px-1 rounded uppercase">No</span>
+                                  )}
+                                </td>
+                                <td className="p-2.5">
+                                  {item.status === "VALIDATED" ? (
+                                    <span className="text-green-700 bg-green-50 px-2 py-0.5 rounded font-bold border border-green-250">Validated</span>
+                                  ) : item.status === "PENDING_REVIEW" ? (
+                                    <span className="text-amber-700 bg-amber-50 px-2 py-0.5 rounded font-bold border border-amber-250">Review</span>
+                                  ) : item.status === "INVALID" ? (
+                                    <span className="text-red-700 bg-red-50 px-2 py-0.5 rounded font-bold border border-red-250">Invalid</span>
+                                  ) : (
+                                    <span className="text-slate-500 bg-slate-100 px-2 py-0.5 rounded font-bold border border-slate-200">Pending</span>
+                                  )}
+                                </td>
+                                <td className="p-2.5 text-[#747782] font-mono">{formatDateTime(item.validatedAt)}</td>
+                              </tr>
+                              
+                              {/* If scan proof is attached, show details inline */}
+                              {item.scanProof && (
+                                <tr className="bg-slate-50/50">
+                                  <td colSpan={5} className="p-3 border-t-0">
+                                    <div className="bg-white border border-[#C4C6D2]/60 rounded-lg p-3 space-y-2 text-[11px] text-slate-700">
+                                      <div className="flex justify-between">
+                                        <span className="font-semibold text-slate-500">Scan Proof ID:</span>
+                                        <span className="font-mono">{item.scanProof.id}</span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span className="font-semibold text-slate-500">Verification Type:</span>
+                                        <span className="font-bold">{item.scanProof.proofType}</span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span className="font-semibold text-slate-500">Location GPS:</span>
+                                        <span>
+                                          {item.scanProof.latitude ? (
+                                            <a
+                                              href={`https://maps.google.com/?q=${item.scanProof.latitude},${item.scanProof.longitude}`}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className="text-[#002D72] underline font-mono font-semibold"
+                                            >
+                                              {Number(item.scanProof.latitude).toFixed(6)}, {Number(item.scanProof.longitude).toFixed(6)}
+                                            </a>
+                                          ) : "No GPS Captured"}
+                                        </span>
+                                      </div>
+                                      {item.scanProof.remarks && (
+                                        <div className="bg-amber-50 border border-amber-250 p-2 rounded text-[11px] text-amber-900">
+                                          <strong>Exception Reason:</strong> {item.scanProof.remarks}
+                                        </div>
+                                      )}
+                                      
+                                      {/* Review actions if scan proof is pending review */}
+                                      {item.scanProof.validationStatus === "PENDING_REVIEW" && (
+                                        <div className="mt-3 border-t border-[#C4C6D2]/40 pt-3 space-y-2">
+                                          <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wide">Reviewer Decision Remarks</label>
+                                          <textarea
+                                            placeholder="Enter review decision notes..."
+                                            value={proofReviewRemarks}
+                                            onChange={(e) => setProofReviewRemarks(e.target.value)}
+                                            rows={2}
+                                            className="w-full bg-slate-50 border border-[#C4C6D2] rounded-lg p-2 text-xs focus:ring-1 focus:ring-[#002D72] outline-none"
+                                          />
+                                          <div className="flex justify-end gap-2">
+                                            <button
+                                              onClick={() => handleProofReview(item.scanProof.id, "REJECTED")}
+                                              className="border border-red-300 text-red-600 hover:bg-red-50 px-2.5 py-1 rounded text-[10.5px] font-bold transition-all"
+                                            >
+                                              Reject Scan
+                                            </button>
+                                            <button
+                                              onClick={() => handleProofReview(item.scanProof.id, "VALID")}
+                                              className="bg-green-600 hover:bg-green-700 text-white px-2.5 py-1 rounded text-[10.5px] font-bold transition-all shadow-sm"
+                                            >
+                                              Approve Scan
+                                            </button>
+                                          </div>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </td>
+                                </tr>
+                              )}
+                            </React.Fragment>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="h-full flex items-center justify-center">
+                  <span className="text-xs text-[#747782] font-mono">No patrol details loaded</span>
+                </div>
+              )}
+            </div>
+
+            <div className="bg-slate-50 border-t border-[#C4C6D2]/60 p-4 flex justify-end">
+              <button
+                onClick={() => setSelectedPatrolId(null)}
+                className="border border-[#C4C6D2] hover:bg-slate-100 text-slate-700 px-4 py-1.5 rounded-lg text-xs font-bold transition-all"
+              >
+                Close Details
+              </button>
             </div>
           </div>
         </div>

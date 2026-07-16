@@ -35,6 +35,21 @@ interface SecfacAssignment {
       helpText?: string | null;
     }>;
   } | null;
+  patrolRouteId?: string | null;
+  patrolRoute?: {
+    id: string;
+    routeName: string;
+    routeCode?: string | null;
+    description?: string | null;
+    siteId: string;
+    checkpoints?: Array<{
+      id: string;
+      checkpointId: string;
+      checkpoint?: { id: string; checkpointName: string; nfcTagId?: string | null; qrCode?: string | null; scanRequired?: boolean } | null;
+      sequenceNo: number;
+      required: boolean;
+    }>;
+  } | null;
   employeeId: string;
   employee?: { id: string; name: string } | null;
   supervisorId?: string | null;
@@ -54,6 +69,7 @@ interface SecfacAssignment {
     startedAt?: string | null;
     submittedAt?: string | null;
   } | null;
+  patrolExecutions?: any[];
 }
 
 export default function AssignedTasksPage() {
@@ -83,6 +99,13 @@ export default function AssignedTasksPage() {
   const [qrInputValue, setQrInputValue] = useState("");
   const [manualInputValue, setManualInputValue] = useState("");
   const [issueReasonValue, setIssueReasonValue] = useState("");
+
+  // Patrol Execution states
+  const [activePatrolForModal, setActivePatrolForModal] = useState<SecfacAssignment | null>(null);
+  const [patrolExecution, setPatrolExecution] = useState<any>(null);
+  const [selectedPatrolCheckpoint, setSelectedPatrolCheckpoint] = useState<any | null>(null);
+  const [loadingPatrol, setLoadingPatrol] = useState(false);
+  const [submittingPatrol, setSubmittingPatrol] = useState(false);
 
   const employeeId = (session?.user as any)?.id;
   const isAdmin = (session?.user as any)?.role === "ADMIN" || (session?.user as any)?.role === "SUPER_ADMIN";
@@ -195,6 +218,200 @@ export default function AssignedTasksPage() {
     }
   };
 
+  const submitPatrolProof = async (mode: string, value?: string, reason?: string) => {
+    if (!activePatrolForModal || !patrolExecution || !selectedPatrolCheckpoint) return;
+    setSubmittingProof(true);
+    setErrorMsg("");
+    setSuccessMsg("");
+
+    let lat: number | null = null;
+    let lng: number | null = null;
+    let accuracy: number | null = null;
+
+    try {
+      const pos: any = await new Promise((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 2000 });
+      });
+      lat = pos.coords.latitude;
+      lng = pos.coords.longitude;
+      accuracy = pos.coords.accuracy;
+    } catch (e) {
+      console.log("GPS coordinates capture timed out or failed", e);
+    }
+
+    try {
+      // 1. Create Scan Proof
+      const resProof = await fetch("/api/v1/secfac/scan-proofs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          assignmentId: activePatrolForModal.id,
+          executionId: null,
+          checkpointId: selectedPatrolCheckpoint.checkpointId,
+          scanMode: mode,
+          scannedValue: value,
+          exceptionReason: reason,
+          latitude: lat,
+          longitude: lng,
+          gpsAccuracyMeters: accuracy,
+          deviceInfo: "Mobile App Web Client (AHH WFM Mobile Patrol)"
+        })
+      });
+
+      const jsonProof = await resProof.json();
+      if (!jsonProof.success) {
+        setErrorMsg(jsonProof.error || "Validation failed");
+        return;
+      }
+
+      // 2. Validate Checkpoint on Patrol Execution
+      const resVal = await fetch(`/api/v1/secfac/patrol-executions/${patrolExecution.id}/checkpoints/${selectedPatrolCheckpoint.id}/validate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          scanProofId: jsonProof.data.id
+        })
+      });
+
+      const jsonVal = await resVal.json();
+      if (!jsonVal.success) {
+        setErrorMsg(jsonVal.error || "Failed to update checkpoint validation status");
+      } else {
+        setSuccessMsg(
+          mode === "MANUAL_EXCEPTION"
+            ? "Issue reported successfully. Pending supervisor review."
+            : `Checkpoint validated successfully!`
+        );
+        // Refresh Patrol execution state
+        setPatrolExecution(jsonVal.data);
+        setSelectedPatrolCheckpoint(jsonVal.data.checkpoints.find((c: any) => c.id === selectedPatrolCheckpoint.id) || null);
+        
+        setOpenQrInput(false);
+        setOpenManualInput(false);
+        setOpenIssueReport(false);
+        setQrInputValue("");
+        setManualInputValue("");
+        setIssueReasonValue("");
+
+        // Refresh assignments list
+        const url = isAdmin ? "/api/v1/secfac/assignments" : "/api/v1/secfac/assigned-tasks";
+        fetch(url)
+          .then((res) => res.json())
+          .then((json) => {
+            if (json.success) setAssignments(json.data || []);
+          });
+      }
+    } catch (e: any) {
+      setErrorMsg("Submit error: " + e.message);
+    } finally {
+      setSubmittingProof(false);
+    }
+  };
+
+  const triggerPatrolNfcScan = async () => {
+    if (typeof window === "undefined" || !("NDEFReader" in window)) {
+      alert("Web NFC (NDEFReader) is not supported on this browser or device. Please use manual entry or QR fallback.");
+      return;
+    }
+
+    try {
+      setScanningNfc(true);
+      setErrorMsg("");
+      // @ts-ignore
+      const reader = new NDEFReader();
+      await reader.scan();
+      
+      reader.addEventListener("readingerror", () => {
+        setScanningNfc(false);
+        setErrorMsg("NFC reading error. Please hold the tag close to your device and try again.");
+      });
+
+      reader.addEventListener("reading", async ({ serialNumber }: any) => {
+        setScanningNfc(false);
+        if (serialNumber) {
+          await submitPatrolProof("NFC", serialNumber);
+        } else {
+          setErrorMsg("Failed to read NFC serial number.");
+        }
+      });
+    } catch (e: any) {
+      setScanningNfc(false);
+      setErrorMsg("NFC error: " + e.message);
+    }
+  };
+
+  const handleStartPatrol = async (task: SecfacAssignment) => {
+    setErrorMsg("");
+    setSuccessMsg("");
+    setLoadingPatrol(true);
+    try {
+      const res = await fetch("/api/v1/secfac/patrol-executions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          routeId: task.patrolRouteId,
+          assignmentId: task.id
+        })
+      });
+      const json = await res.json();
+      if (res.ok && json.success) {
+        setPatrolExecution(json.data);
+        setActivePatrolForModal(task);
+        
+        // Refresh assignments list
+        const url = isAdmin ? "/api/v1/secfac/assignments" : "/api/v1/secfac/assigned-tasks";
+        const listRes = await fetch(url);
+        const listJson = await listRes.json();
+        if (listJson.success) setAssignments(listJson.data || []);
+      } else {
+        alert(json.error || "Failed to start patrol execution");
+      }
+    } catch (e: any) {
+      alert("Error starting patrol: " + e.message);
+    } finally {
+      setLoadingPatrol(false);
+    }
+  };
+
+  const handleSubmitPatrol = async () => {
+    if (!patrolExecution) return;
+    setSubmittingPatrol(true);
+    setErrorMsg("");
+    setSuccessMsg("");
+    try {
+      const res = await fetch(`/api/v1/secfac/patrol-executions/${patrolExecution.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "COMPLETED" })
+      });
+      const json = await res.json();
+      if (res.ok && json.success) {
+        setSuccessMsg(
+          json.data.status === "PENDING_REVIEW"
+            ? "Patrol submitted successfully! (Awaiting supervisor review for exception scans)"
+            : "Patrol completed successfully!"
+        );
+        setPatrolExecution(json.data);
+        
+        // Refresh assignments list
+        const url = isAdmin ? "/api/v1/secfac/assignments" : "/api/v1/secfac/assigned-tasks";
+        const listRes = await fetch(url);
+        const listJson = await listRes.json();
+        if (listJson.success) setAssignments(listJson.data || []);
+
+        setTimeout(() => {
+          setActivePatrolForModal(null);
+        }, 1500);
+      } else {
+        setErrorMsg(json.error || "Failed to submit patrol execution");
+      }
+    } catch (e: any) {
+      setErrorMsg("Submit error: " + e.message);
+    } finally {
+      setSubmittingPatrol(false);
+    }
+  };
+
   useEffect(() => {
     if (authStatus === "authenticated") {
       const url = isAdmin ? "/api/v1/secfac/assignments" : "/api/v1/secfac/assigned-tasks";
@@ -224,6 +441,10 @@ export default function AssignedTasksPage() {
       setErrorMsg("");
       setSuccessMsg("");
       setScanProofs([]);
+      // Reset patrol state
+      setPatrolExecution(null);
+      setSelectedPatrolCheckpoint(null);
+      setLoadingPatrol(false);
       return;
     }
 
@@ -595,36 +816,47 @@ export default function AssignedTasksPage() {
         <div className="space-y-4">
           {activeTasks.map((task) => {
             const execStatus = task.currentExecution?.status || "Not Started";
+            const latestPatrol = task.patrolExecutions?.[0] || null;
+            const patrolStatus = latestPatrol?.status || "Not Started";
             return (
               <div
                 key={task.id}
-                onClick={() => {
-                  if (task.template) {
-                    setActiveTaskForModal(task);
-                  }
-                }}
-                className="bg-surface border border-outline-variant/40 rounded-2xl p-4 shadow-sm space-y-3 cursor-pointer hover:border-primary/50 transition-colors"
+                className="bg-surface border border-outline-variant/40 rounded-2xl p-4 shadow-sm space-y-3"
               >
                 <div className="flex justify-between items-start gap-2">
                   <div>
                     <span className="text-[9px] text-primary font-bold uppercase tracking-wider font-mono">
-                      {task.operationType === "SECURITY_GUARDING" ? "Security Patrol" : "FM Inspection"}
+                      {task.operationType === "SECURITY_GUARDING" ? "Security Operations" : "FM Operations"}
                     </span>
                     <h3 className="text-sm font-bold text-on-surface mt-0.5">{task.assignmentName}</h3>
                     {task.assignmentCode && (
                       <span className="text-[8px] font-mono text-on-surface-variant block">{task.assignmentCode}</span>
                     )}
                   </div>
-                  <span className={`px-2 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider ${
-                    execStatus === "APPROVED" ? "bg-green-100 text-green-700" :
-                    execStatus === "REJECTED" ? "bg-red-100 text-red-700" :
-                    execStatus === "REOPENED" ? "bg-amber-100 text-amber-700 font-semibold" :
-                    execStatus === "SUBMITTED" || execStatus === "PENDING_REVIEW" ? "bg-blue-100 text-blue-700" :
-                    execStatus === "DRAFT" ? "bg-slate-100 text-slate-700" :
-                    "bg-on-surface/10 text-on-surface-variant"
-                  }`}>
-                    {execStatus}
-                  </span>
+                  <div className="flex flex-col gap-1 items-end">
+                    {task.template && (
+                      <span className={`px-2 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider ${
+                        execStatus === "APPROVED" ? "bg-green-100 text-green-700" :
+                        execStatus === "REJECTED" ? "bg-red-100 text-red-700" :
+                        execStatus === "REOPENED" ? "bg-amber-100 text-amber-700 font-semibold" :
+                        execStatus === "SUBMITTED" || execStatus === "PENDING_REVIEW" ? "bg-blue-100 text-blue-700" :
+                        execStatus === "DRAFT" ? "bg-slate-100 text-slate-700" :
+                        "bg-on-surface/10 text-on-surface-variant"
+                      }`}>
+                        Checklist: {execStatus}
+                      </span>
+                    )}
+                    {task.patrolRouteId && (
+                      <span className={`px-2 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider ${
+                        patrolStatus === "COMPLETED" ? "bg-green-100 text-green-700" :
+                        patrolStatus === "PENDING_REVIEW" ? "bg-blue-100 text-blue-700" :
+                        patrolStatus === "IN_PROGRESS" ? "bg-amber-100 text-amber-800 font-semibold" :
+                        "bg-on-surface/10 text-on-surface-variant"
+                      }`}>
+                        Patrol: {patrolStatus.replace("_", " ")}
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 <div className="space-y-1.5 text-[10px] text-on-surface-variant border-t border-outline-variant/20 pt-2.5">
@@ -644,6 +876,12 @@ export default function AssignedTasksPage() {
                       <span>Checklist: {task.template.templateName}</span>
                     </p>
                   )}
+                  {task.patrolRouteId && task.patrolRoute && (
+                    <p className="flex items-center gap-1.5 text-amber-800 font-semibold">
+                      <span className="material-symbols-outlined text-[12px]">route</span>
+                      <span>Patrol Route: {task.patrolRoute.routeName} ({task.patrolRoute.checkpoints?.length || 0} checkpoints)</span>
+                    </p>
+                  )}
                   <p className="flex items-center gap-1.5">
                     <span className="material-symbols-outlined text-[12px]">schedule</span>
                     <span>Start: {formatDate(task.scheduledStart)}</span>
@@ -655,8 +893,31 @@ export default function AssignedTasksPage() {
                 </div>
 
                 {task.template && (
-                  <div className="bg-primary/5 rounded-xl p-2 flex justify-between items-center text-[10px] text-primary font-bold">
+                  <div
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setActiveTaskForModal(task);
+                    }}
+                    className="bg-primary/5 hover:bg-primary/10 rounded-xl p-2 flex justify-between items-center text-[10px] text-primary font-bold cursor-pointer transition-colors"
+                  >
                     <span>{["SUBMITTED", "PENDING_REVIEW", "APPROVED", "CANCELLED"].includes(execStatus) ? "Review Completed Checklist" : "Execute Checklist"}</span>
+                    <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
+                  </div>
+                )}
+                {task.patrolRouteId && (
+                  <div
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (latestPatrol) {
+                        setPatrolExecution(latestPatrol);
+                        setActivePatrolForModal(task);
+                      } else {
+                        handleStartPatrol(task);
+                      }
+                    }}
+                    className="bg-amber-50 hover:bg-amber-100/70 rounded-xl p-2 flex justify-between items-center text-[10px] text-amber-800 font-bold cursor-pointer transition-colors"
+                  >
+                    <span>{patrolStatus === "IN_PROGRESS" ? "Resume Patrol Route Execution" : patrolStatus === "Not Started" ? "Start Patrol Route Tour" : "View Completed Patrol Route"}</span>
                     <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
                   </div>
                 )}
@@ -673,7 +934,7 @@ export default function AssignedTasksPage() {
             {/* Modal Header */}
             <div className="p-4 bg-[#002D72] text-white flex justify-between items-center">
               <div>
-                <h3 className="text-sm font-bold truncate max-w-[280px]">{activeTaskForModal.template.templateName}</h3>
+                <h3 className="text-sm font-bold truncate max-w-[280px]">{activeTaskForModal.template?.templateName || activeTaskForModal.assignmentName}</h3>
                 <span className="text-[9px] font-mono opacity-85 block uppercase tracking-wider">
                   {["SUBMITTED", "PENDING_REVIEW", "APPROVED", "CANCELLED"].includes(execution?.status || "") ? `${execution?.status || "SUBMITTED"} (READ-ONLY)` : `Execution Draft (${execution?.status || "DRAFT"})`}
                 </span>
@@ -707,7 +968,7 @@ export default function AssignedTasksPage() {
                 </div>
               )}
 
-              {activeTaskForModal.template.description && (
+              {activeTaskForModal.template?.description && (
                 <p className="text-[10.5px] text-on-surface-variant italic leading-relaxed border-b border-outline-variant/30 pb-2">
                   {activeTaskForModal.template.description}
                 </p>
@@ -926,11 +1187,11 @@ export default function AssignedTasksPage() {
                 <div className="text-center py-12 text-xs font-mono animate-pulse text-[#002D72]">
                   Fetching execution data...
                 </div>
-              ) : activeTaskForModal.template.items.length === 0 ? (
+              ) : activeTaskForModal.template && activeTaskForModal.template.items.length === 0 ? (
                 <div className="text-center py-6 text-on-surface-variant/60 text-[10px]">
                   No question items in this checklist template.
                 </div>
-              ) : (
+              ) : activeTaskForModal.template ? (
                 activeTaskForModal.template.items.map((item, idx) => {
                   const ansObj = answers[item.id] || { answerValue: "", comment: "", evidenceAttachments: [] };
                   const activeAttachments = (ansObj.evidenceAttachments || []).filter((e: any) => e.isActive !== false);
@@ -1120,10 +1381,10 @@ export default function AssignedTasksPage() {
                     </div>
                   );
                 })
-              )}
+              ) : null}
 
               {/* Execution level remarks */}
-              {!loadingExecution && (
+              {!loadingExecution && activeTaskForModal.template && (
                 <div className="p-3 bg-surface-container border border-outline-variant/30 rounded-xl space-y-1.5 text-[10px]">
                   <label className="font-bold text-[#002D72] uppercase block tracking-wider text-[8px]">Execution Remarks (Overall Notes)</label>
                   <textarea
@@ -1170,6 +1431,308 @@ export default function AssignedTasksPage() {
                 {execution?.status === "APPROVED" ? "Completed Checklist Approved & Locked" :
                  execution?.status === "CANCELLED" ? "Completed Checklist Cancelled" :
                  "Completed Checklist Submitted & Locked"}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Patrol Execution Modal */}
+      {activePatrolForModal && patrolExecution && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+          <div className="bg-surface max-w-md w-full rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[85vh] border border-outline-variant">
+            {/* Modal Header */}
+            <div className="p-4 bg-[#002D72] text-white flex justify-between items-center">
+              <div>
+                <h3 className="text-sm font-bold truncate max-w-[280px]">{activePatrolForModal.patrolRoute?.routeName || "Patrol Route Execution"}</h3>
+                <span className="text-[9px] font-mono opacity-85 block uppercase tracking-wider">
+                  Patrol status: {patrolExecution.status.replace("_", " ")}
+                </span>
+              </div>
+              <button
+                onClick={() => {
+                  setActivePatrolForModal(null);
+                  setSelectedPatrolCheckpoint(null);
+                }}
+                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white"
+              >
+                <span className="material-symbols-outlined text-[16px]">close</span>
+              </button>
+            </div>
+
+            {/* Overall Progress Tracker */}
+            <div className="bg-[#F9F9FF] border-b border-[#C4C6D2]/35 px-4 py-3 text-[10px]">
+              {(() => {
+                const total = patrolExecution.checkpoints?.length || 0;
+                const completed = patrolExecution.checkpoints?.filter((c: any) => c.status === "VALIDATED" || c.status === "PENDING_REVIEW").length || 0;
+                const progressPct = total > 0 ? (completed / total) * 100 : 0;
+                return (
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center font-bold text-slate-700">
+                      <span className="flex items-center gap-1">
+                        <span className="material-symbols-outlined text-xs text-amber-700">route</span>
+                        Route Checkpoints Progress
+                      </span>
+                      <span className="font-mono">{completed} / {total} Completed</span>
+                    </div>
+                    <div className="w-full bg-slate-200 h-2 rounded-full overflow-hidden">
+                      <div
+                        className="bg-[#002D72] h-full rounded-full transition-all duration-300"
+                        style={{ width: `${progressPct}%` }}
+                      ></div>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* Modal Body: Checkpoints List */}
+            <div className="p-4 overflow-y-auto space-y-3 flex-1">
+              {errorMsg && (
+                <div className="p-2.5 bg-red-50 border border-red-200 text-red-700 rounded-xl text-[10px] font-semibold">
+                  {errorMsg}
+                </div>
+              )}
+              {successMsg && (
+                <div className="p-2.5 bg-green-50 border border-green-200 text-green-700 rounded-xl text-[10px] font-semibold">
+                  {successMsg}
+                </div>
+              )}
+
+              <div className="space-y-2">
+                {patrolExecution.checkpoints?.map((item: any) => {
+                  const isSelected = selectedPatrolCheckpoint?.id === item.id;
+                  const isReadOnly = ["COMPLETED", "PENDING_REVIEW", "APPROVED", "CANCELLED"].includes(patrolExecution.status);
+                  
+                  return (
+                    <div
+                      key={item.id}
+                      onClick={() => {
+                        if (!isReadOnly) {
+                          setSelectedPatrolCheckpoint(isSelected ? null : item);
+                          setOpenQrInput(false);
+                          setOpenManualInput(false);
+                          setOpenIssueReport(false);
+                        }
+                      }}
+                      className={`p-3 rounded-xl border text-[10.5px] transition-all cursor-pointer ${
+                        isSelected
+                          ? "bg-slate-50 border-[#002D72]"
+                          : "bg-surface-container-low border-outline-variant/30 hover:border-slate-300"
+                      }`}
+                    >
+                      <div className="flex justify-between items-center">
+                        <div className="flex items-center gap-2">
+                          <span className="w-5 h-5 flex items-center justify-center rounded-full text-[9px] font-mono font-bold bg-slate-100 text-slate-500 border border-slate-200">
+                            {item.sequenceNo}
+                          </span>
+                          <span className="font-bold text-on-surface text-slate-800">{item.checkpoint?.checkpointName}</span>
+                          {item.required && (
+                            <span className="text-[8px] font-bold text-red-600 bg-red-50 px-1.5 py-0.5 rounded border border-red-200">REQ</span>
+                          )}
+                        </div>
+
+                        {item.status === "VALIDATED" ? (
+                          <span className="text-[8.5px] font-bold bg-green-50 text-green-700 px-2 py-0.5 rounded border border-green-200 uppercase tracking-wider flex items-center gap-0.5">
+                            <span className="material-symbols-outlined text-[10px] font-extrabold">check</span>
+                            Validated
+                          </span>
+                        ) : item.status === "PENDING_REVIEW" ? (
+                          <span className="text-[8.5px] font-bold bg-amber-50 text-amber-700 px-2 py-0.5 rounded border border-amber-200 uppercase tracking-wider flex items-center gap-0.5">
+                            <span className="material-symbols-outlined text-[10px]">schedule</span>
+                            Review
+                          </span>
+                        ) : item.status === "INVALID" ? (
+                          <span className="text-[8.5px] font-bold bg-red-50 text-red-700 px-2 py-0.5 rounded border border-red-200 uppercase tracking-wider flex items-center gap-0.5">
+                            <span className="material-symbols-outlined text-[10px]">close</span>
+                            Invalid
+                          </span>
+                        ) : (
+                          <span className="text-[8.5px] font-bold bg-slate-100 text-slate-500 px-2 py-0.5 rounded border border-slate-200 uppercase tracking-wider">
+                            Pending
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Scan Proof Details if Validated */}
+                      {item.scanProof && (
+                        <div className="mt-2 bg-white border border-[#C4C6D2]/40 rounded-lg p-2.5 space-y-1.5 text-[9.5px] text-slate-700 font-sans">
+                          <div className="flex justify-between">
+                            <span className="font-semibold text-slate-500">Scan Mode:</span>
+                            <span className="font-bold">{item.scanProof.proofType || item.scanProof.scanMode}</span>
+                          </div>
+                          {item.scanProof.remarks && (
+                            <div className="bg-amber-50 border border-amber-250 p-2 rounded text-amber-900 leading-tight">
+                              <strong>Exception:</strong> {item.scanProof.remarks}
+                            </div>
+                          )}
+                          <div className="flex justify-between text-[8px] text-[#747782] font-mono pt-1 border-t border-slate-100">
+                            <span>Proof ID: {item.scanProof.id.slice(0, 8)}...</span>
+                            <span>{new Date(item.scanProof.createdAt).toLocaleTimeString()}</span>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Scan Proof Action Controls */}
+                      {isSelected && !isReadOnly && (
+                        <div className="mt-3 border-t border-[#C4C6D2]/35 pt-3 space-y-3" onClick={(e) => e.stopPropagation()}>
+                          <div className="grid grid-cols-2 gap-2">
+                            <button
+                              type="button"
+                              onClick={triggerPatrolNfcScan}
+                              disabled={scanningNfc}
+                              className="py-1.5 px-3 bg-[#002D72] text-white rounded-xl font-bold flex items-center justify-center gap-1 hover:bg-[#002D72]/90 disabled:opacity-50 text-[10px]"
+                            >
+                              <span className="material-symbols-outlined text-[13px]">nfc</span>
+                              <span>{scanningNfc ? "Scanning..." : "Scan NFC"}</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setOpenQrInput(!openQrInput);
+                                setOpenManualInput(false);
+                                setOpenIssueReport(false);
+                              }}
+                              className="py-1.5 px-3 bg-white border border-outline rounded-xl font-bold flex items-center justify-center gap-1 hover:bg-slate-50 text-[10px] text-slate-750"
+                            >
+                              <span className="material-symbols-outlined text-[13px]">qr_code_scanner</span>
+                              <span>Enter QR</span>
+                            </button>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setOpenManualInput(!openManualInput);
+                                setOpenQrInput(false);
+                                setOpenIssueReport(false);
+                              }}
+                              className="py-1.5 px-3 bg-white border border-outline rounded-xl font-bold flex items-center justify-center gap-1 hover:bg-slate-50 text-[10px] text-slate-750"
+                            >
+                              <span className="material-symbols-outlined text-[13px]">keyboard</span>
+                              <span>Manual Entry</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setOpenIssueReport(!openIssueReport);
+                                setOpenQrInput(false);
+                                setOpenManualInput(false);
+                              }}
+                              className="py-1.5 px-3 bg-red-50 border border-red-200 text-red-700 rounded-xl font-bold flex items-center justify-center gap-1 hover:bg-red-100/60 text-[10px]"
+                            >
+                              <span className="material-symbols-outlined text-[13px]">report_problem</span>
+                              <span>Report Issue</span>
+                            </button>
+                          </div>
+
+                          {/* QR fallback */}
+                          {openQrInput && (
+                            <div className="p-2.5 bg-white border border-slate-200 rounded-xl space-y-1.5">
+                              <label className="block text-[9px] font-bold text-slate-500 uppercase">Enter QR Code Value</label>
+                              <div className="flex gap-1.5">
+                                <input
+                                  type="text"
+                                  value={qrInputValue}
+                                  onChange={(e) => setQrInputValue(e.target.value)}
+                                  placeholder="e.g. QR-12345"
+                                  className="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-[10px] focus:outline-none"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => submitPatrolProof("QR", qrInputValue)}
+                                  disabled={submittingProof}
+                                  className="px-3 bg-[#002D72] text-white rounded-lg font-bold text-[10px]"
+                                >
+                                  Submit
+                                </button>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Manual fallback */}
+                          {openManualInput && (
+                            <div className="p-2.5 bg-white border border-slate-200 rounded-xl space-y-1.5">
+                              <label className="block text-[9px] font-bold text-slate-500 uppercase">Enter NFC Tag ID or Code</label>
+                              <div className="flex gap-1.5">
+                                <input
+                                  type="text"
+                                  value={manualInputValue}
+                                  onChange={(e) => setManualInputValue(e.target.value)}
+                                  placeholder="e.g. NFC-TAG-ID"
+                                  className="flex-1 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-[10px] focus:outline-none"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => submitPatrolProof("MANUAL_ENTRY", manualInputValue)}
+                                  disabled={submittingProof}
+                                  className="px-3 bg-[#002D72] text-white rounded-lg font-bold text-[10px]"
+                                >
+                                  Submit
+                                </button>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Issue / Exception fallback */}
+                          {openIssueReport && (
+                            <div className="p-2.5 bg-white border border-slate-200 rounded-xl space-y-1.5">
+                              <label className="block text-[9px] font-bold text-slate-500 uppercase">Describe Tag/NFC Issue</label>
+                              <textarea
+                                value={issueReasonValue}
+                                onChange={(e) => setIssueReasonValue(e.target.value)}
+                                placeholder="Provide details (e.g. Tag damaged, unreadable)..."
+                                rows={2}
+                                className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-[10px] focus:outline-none resize-none"
+                              />
+                              <div className="flex justify-end">
+                                <button
+                                  type="button"
+                                  onClick={() => submitPatrolProof("MANUAL_EXCEPTION", undefined, issueReasonValue)}
+                                  disabled={submittingProof}
+                                  className="px-3 py-1 bg-red-600 text-white rounded-lg font-bold text-[10px]"
+                                >
+                                  Report Exception
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Modal Actions Footer */}
+            {patrolExecution.status === "IN_PROGRESS" && (
+              <div className="p-4 border-t border-outline-variant/30 bg-surface-container-low grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setActivePatrolForModal(null);
+                    setSelectedPatrolCheckpoint(null);
+                  }}
+                  className="bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold py-2.5 rounded-xl transition-all"
+                >
+                  Close & Resume Later
+                </button>
+                <button
+                  type="button"
+                  disabled={submittingPatrol}
+                  onClick={handleSubmitPatrol}
+                  className="bg-[#002D72] hover:bg-[#001D48] disabled:opacity-60 text-white text-xs font-bold py-2.5 rounded-xl transition-all flex items-center justify-center gap-1.5"
+                >
+                  {submittingPatrol && <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>}
+                  Complete Tour
+                </button>
+              </div>
+            )}
+
+            {["COMPLETED", "PENDING_REVIEW", "APPROVED", "CANCELLED"].includes(patrolExecution.status) && (
+              <div className="p-4 border-t border-outline-variant/30 bg-slate-50 text-slate-500 font-bold text-center text-xs">
+                Patrol Tour Completed & Closed
               </div>
             )}
           </div>
