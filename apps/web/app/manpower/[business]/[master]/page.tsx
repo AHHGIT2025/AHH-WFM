@@ -1000,11 +1000,12 @@ export default function ManpowerMasterPage() {
     const formDataObj = new FormData(form);
     const payload = {
       employeeId: formDataObj.get("employeeId") as string,
+      projectId: gatePassProjectId || undefined,
       siteId: formDataObj.get("siteId") as string,
       passNumber: formDataObj.get("passNumber") as string,
       issueDate: formDataObj.get("issueDate") as string,
       expiryDate: formDataObj.get("expiryDate") as string,
-      status: "ACTIVE"
+      status: "VALID"
     };
 
     try {
@@ -1015,6 +1016,7 @@ export default function ManpowerMasterPage() {
       });
       if (res.ok) {
         setShowAddGatePassModal(false);
+        setGatePassProjectId("");
         loadSecurityComplianceData();
       } else {
         const err = await res.json();
@@ -2447,18 +2449,24 @@ export default function ManpowerMasterPage() {
                   </tr>
                 ) : (
                   gatePassesList.map((gp: any) => {
-                    const emp = data.find(e => e.id === gp.employeeId);
-                    const site = sites.find(s => s.id === gp.siteId);
+                    const emp = gp.employee || data.find((e: any) => e.id === gp.employeeId || e.employeeCode === gp.employeeId);
+                    const site = gp.site || sites.find((s: any) => s.id === gp.siteId);
+                    const project = gp.project || projects.find((p: any) => p.id === gp.projectId || p.id === site?.projectId);
                     const todayStr = new Date().toISOString().split("T")[0];
-                    const isExpired = gp.expiryDate < todayStr;
+                    const expStr = gp.expiryDate ? (typeof gp.expiryDate === "string" ? gp.expiryDate.split("T")[0] : new Date(gp.expiryDate).toISOString().split("T")[0]) : "";
+                    const isExpired = expStr ? expStr < todayStr : false;
+                    const passNum = gp.gatePassNumber || gp.passNumber;
+
                     return (
                       <tr key={gp.id} className="text-xs hover:bg-surface-container-lowest">
                         <td className="px-4 py-3 font-semibold text-on-surface">
-                          {emp ? `${emp.name} (${gp.employeeId})` : gp.employeeId}
+                          {emp ? `${emp.name} (${emp.employeeCode || emp.id || gp.employeeId})` : gp.employeeId}
                         </td>
-                        <td className="px-4 py-3 text-on-surface">{site?.name || gp.siteId}</td>
-                        <td className="px-4 py-3 text-on-surface-variant">{gp.passNumber}</td>
-                        <td className="px-4 py-3 text-on-surface-variant">{gp.expiryDate}</td>
+                        <td className="px-4 py-3 text-on-surface">
+                          {site?.name || gp.siteId}{project?.name ? ` (${project.name})` : ""}
+                        </td>
+                        <td className="px-4 py-3 text-on-surface-variant">{passNum}</td>
+                        <td className="px-4 py-3 text-on-surface-variant">{expStr}</td>
                         <td className="px-4 py-3">
                           <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${isExpired ? "bg-status-error/15 text-status-error" : "bg-status-success/15 text-status-success"}`}>
                             {isExpired ? "Expired" : "Active"}
@@ -10217,7 +10225,7 @@ export default function ManpowerMasterPage() {
                   >
                     <option value="">-- Choose Guard --</option>
                     {data.filter((e: any) => e.manpowerCategoryId === "SECURITY_GUARD" || e.manpowerCategoryId === "SENIOR_GUARD" || !e.manpowerCategoryId).map((emp: any) => (
-                      <option key={emp.id} value={emp.id}>{emp.name} ({emp.id})</option>
+                      <option key={emp.id} value={emp.id}>{emp.name} ({emp.employeeCode || emp.id})</option>
                     ))}
                   </select>
                 </div>

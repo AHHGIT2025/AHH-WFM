@@ -13140,7 +13140,7 @@ export const mockDb = {
       if (siteId) where.siteId = siteId;
       const res = await prismaClient.securityGatePass.findMany({
         where,
-        include: { employee: true, site: true },
+        include: { employee: true, site: true, project: true },
         orderBy: { expiryDate: "asc" }
       });
       return res.map((x: any) => ({
@@ -13158,21 +13158,67 @@ export const mockDb = {
     return res.map((x: any) => ({
       ...x,
       employee: (db.employees || []).find((e: any) => e.id === x.employeeId),
-      site: (db.manpowerSites || []).find((s: any) => s.id === x.siteId)
+      site: (db.manpowerSites || []).find((s: any) => s.id === x.siteId),
+      project: (db.manpowerProjects || []).find((p: any) => p.id === x.projectId)
     }));
   },
   createSecurityGatePass: async (data: any): Promise<any> => {
     const gatePassNumber = data.gatePassNumber || data.passNumber || await getNextSequenceCode("SGP");
-    const dataWithCode = { ...data, gatePassNumber };
-    delete (dataWithCode as any).passNumber; // delete compatibility field if present
+    const rawEmployeeId = data.employeeId;
+    const siteId = data.siteId;
+    const inputProjectId = data.projectId;
+
+    let selectedEmployee: any = null;
+    let selectedSite: any = null;
+
     if (isDbConnected()) {
-      const res = await prismaClient.securityGatePass.create({
-        data: {
-          ...dataWithCode,
-          issueDate: new Date(dataWithCode.issueDate),
-          expiryDate: new Date(dataWithCode.expiryDate)
+      // 1. Resolve Employee by id or securityOperationalEmployee.employeeCode
+      selectedEmployee = await prismaClient.employee.findFirst({
+        where: {
+          OR: [
+            { id: rawEmployeeId },
+            { securityOperationalEmployee: { employeeCode: rawEmployeeId } }
+          ],
+          isActive: true
         }
       });
+
+      if (!selectedEmployee) {
+        throw new Error("Selected security guard was not found or is not active.");
+      }
+
+      // 2. Resolve Site
+      selectedSite = await prismaClient.manpowerSite.findFirst({
+        where: {
+          id: siteId,
+          operationType: "SECURITY_GUARDING",
+          isActive: true
+        }
+      });
+
+      if (!selectedSite) {
+        throw new Error("Selected worksite was not found or is not active for Security Guarding.");
+      }
+
+      if (inputProjectId && selectedSite.projectId !== inputProjectId) {
+        throw new Error("Selected worksite does not belong to the selected project.");
+      }
+
+      const res = await prismaClient.securityGatePass.create({
+        data: {
+          gatePassNumber,
+          issueDate: new Date(data.issueDate),
+          expiryDate: new Date(data.expiryDate),
+          status: data.status || "VALID",
+          remarks: data.remarks || null,
+          documentUrl: data.documentUrl || null,
+          employee: { connect: { id: selectedEmployee.id } },
+          site: { connect: { id: selectedSite.id } },
+          project: { connect: { id: selectedSite.projectId } }
+        },
+        include: { employee: true, site: true, project: true }
+      });
+
       return {
         ...res,
         issueDate: res.issueDate?.toISOString(),
@@ -13181,13 +13227,43 @@ export const mockDb = {
         updatedAt: res.updatedAt?.toISOString()
       };
     }
+
     const db = readDb();
+    selectedEmployee = (db.employees || []).find((e: any) =>
+      (e.id === rawEmployeeId || e.employeeCode === rawEmployeeId) && (e.isActive !== false)
+    );
+    if (!selectedEmployee) {
+      throw new Error("Selected security guard was not found or is not active.");
+    }
+
+    selectedSite = (db.manpowerSites || []).find((s: any) =>
+      s.id === siteId && s.operationType === "SECURITY_GUARDING" && s.isActive !== false
+    );
+    if (!selectedSite) {
+      throw new Error("Selected worksite was not found or is not active for Security Guarding.");
+    }
+
+    if (inputProjectId && selectedSite.projectId && selectedSite.projectId !== inputProjectId) {
+      throw new Error("Selected worksite does not belong to the selected project.");
+    }
+
+    const resolvedProjectId = inputProjectId || selectedSite.projectId || "";
+
     const newRecord = {
-      ...dataWithCode,
-      id: dataWithCode.id || `gp-${Date.now()}`,
+      id: data.id || `gp-${Date.now()}`,
+      employeeId: selectedEmployee.id,
+      siteId: selectedSite.id,
+      projectId: resolvedProjectId,
+      gatePassNumber,
+      issueDate: new Date(data.issueDate).toISOString(),
+      expiryDate: new Date(data.expiryDate).toISOString(),
+      status: data.status || "VALID",
+      remarks: data.remarks || null,
+      documentUrl: data.documentUrl || null,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
+
     db.securityGatePasses = db.securityGatePasses || [];
     db.securityGatePasses.push(newRecord);
     writeDb(db);
