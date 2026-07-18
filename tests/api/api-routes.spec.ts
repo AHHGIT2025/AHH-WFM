@@ -2764,6 +2764,118 @@ describe('AHH WFM API Routes Verification', () => {
     const unauthScanProof = await axios.post(`${WEB_URL}/api/v1/secfac/scan-proofs`, scanPayload, { validateStatus: () => true });
     expect(unauthScanProof.status).toBe(401);
 
+    // ─── 12. Test Phase 4B: Sync Conflicts & Structured Errors ───
+    
+    // Create an assignment that we will cancel/deactivate
+    const cancelAssignRes = await axios.post(`${WEB_URL}/api/v1/secfac/assignments`, {
+      assignmentName: `P4B Inactive Assign ${Date.now()}`,
+      operationType: 'SECURITY_GUARDING',
+      employeeId: 'SK-90210',
+      siteId: testSiteId,
+      scheduledStart: new Date().toISOString(),
+      scheduledEnd: new Date(Date.now() + 3600000).toISOString()
+    }, { headers: adminHeaders, validateStatus: () => true });
+    const cancelAssignId = cancelAssignRes.data.data.id;
+
+    // Deactivate it
+    if (prisma) {
+      await prisma.secfacAssignment.update({ where: { id: cancelAssignId }, data: { isActive: false } });
+    } else {
+      const db = require("@ahh-wfm/mock-data").readDb();
+      const a = (db.secfacAssignments || []).find((x: any) => x.id === cancelAssignId);
+      if (a) {
+        a.isActive = false;
+        require("@ahh-wfm/mock-data").writeDb(db);
+      }
+    }
+
+    // Try posting checklist-execution for this deactivated assignment -> 409 ASSIGNMENT_CANCELLED
+    const cancelledExecRes = await axios.post(`${WEB_URL}/api/v1/secfac/checklist-executions`, {
+      id: crypto.randomUUID(),
+      assignmentId: cancelAssignId,
+      checklistTemplateId: tempId,
+      status: 'SUBMITTED',
+      responses: []
+    }, { headers: empHeaders, validateStatus: () => true });
+    expect(cancelledExecRes.status).toBe(409);
+    expect(cancelledExecRes.data.success).toBe(false);
+    expect(cancelledExecRes.data.conflict.code).toBe('ASSIGNMENT_CANCELLED');
+
+    // Create a new conflict report (POST /api/v1/secfac/sync-conflicts)
+    const conflictPayload = {
+      operationType: 'SECURITY_GUARDING',
+      employeeId: 'SK-90210',
+      employeeCode: 'SK-90210',
+      employeeName: 'Sarah Kim',
+      assignmentId: cancelAssignId,
+      actionType: 'CHECKLIST_SUBMIT',
+      queueItemId: 'queue-item-p4b-test-1',
+      idempotencyKey: 'ikey-p4b-test-1',
+      conflictType: 'ASSIGNMENT_CANCELLED',
+      serverMessage: 'Assignment was cancelled'
+    };
+
+    const postConflictRes = await axios.post(`${WEB_URL}/api/v1/secfac/sync-conflicts`, conflictPayload, {
+      headers: empHeaders,
+      validateStatus: () => true
+    });
+    expect(postConflictRes.status).toBe(201);
+    expect(postConflictRes.data.success).toBe(true);
+    const conflictId = postConflictRes.data.data.id;
+
+    // POST duplicate conflict report -> should deduplicate safely (return 201 with existing record)
+    const postDuplicateRes = await axios.post(`${WEB_URL}/api/v1/secfac/sync-conflicts`, conflictPayload, {
+      headers: empHeaders,
+      validateStatus: () => true
+    });
+    expect(postDuplicateRes.status).toBe(201);
+    expect(postDuplicateRes.data.data.id).toBe(conflictId);
+
+    // Cross-scope employee check: field employees cannot list conflict reports -> 403
+    const listEmpRes = await axios.get(`${WEB_URL}/api/v1/secfac/sync-conflicts`, {
+      headers: empHeaders,
+      validateStatus: () => true
+    });
+    expect(listEmpRes.status).toBe(403);
+
+    // Security Supervisor (admin/operations role) query conflicts -> 200
+    const listAdminRes = await axios.get(`${WEB_URL}/api/v1/secfac/sync-conflicts?status=ACTIVE`, {
+      headers: adminHeaders,
+      validateStatus: () => true
+    });
+    expect(listAdminRes.status).toBe(200);
+    expect(listAdminRes.data.success).toBe(true);
+    const activeConflicts = listAdminRes.data.data;
+    expect(activeConflicts.some((c: any) => c.id === conflictId)).toBe(true);
+
+    // Acknowledge conflict report (PATCH /api/v1/secfac/sync-conflicts/[id]) -> 200
+    const patchConflictRes = await axios.patch(`${WEB_URL}/api/v1/secfac/sync-conflicts/${conflictId}`, {
+      status: 'ACKNOWLEDGED'
+    }, { headers: adminHeaders, validateStatus: () => true });
+    expect(patchConflictRes.status).toBe(200);
+    expect(patchConflictRes.data.data.status).toBe('ACKNOWLEDGED');
+
+    // Cross-scope supervisor check (other employee with FM access trying to modify SG conflict -> 403)
+    const crossScopeRes = await axios.patch(`${WEB_URL}/api/v1/secfac/sync-conflicts/${conflictId}`, {
+      status: 'RESOLVED'
+    }, { headers: otherEmpHeaders, validateStatus: () => true });
+    expect(crossScopeRes.status).toBe(403);
+
+    // Delete/Dismiss conflict report (DELETE /api/v1/secfac/sync-conflicts/[id]) -> 200
+    const deleteConflictRes = await axios.delete(`${WEB_URL}/api/v1/secfac/sync-conflicts/${conflictId}`, {
+      headers: adminHeaders,
+      validateStatus: () => true
+    });
+    expect(deleteConflictRes.status).toBe(200);
+
+    // Clean up cancelled assignment
+    try {
+      if (prisma) {
+        await prisma.secfacSyncConflict.deleteMany({ where: { id: conflictId } });
+        await prisma.secfacAssignment.delete({ where: { id: cancelAssignId } });
+      }
+    } catch (e) {}
+
     // Cleanup resources
     try {
       if (prisma) {

@@ -82,7 +82,7 @@ export default function SyncStatusPage() {
   const totalPending = queue.filter(x => x.status === "PENDING").length;
   const totalSyncing = queue.filter(x => x.status === "SYNCING").length;
   const totalSynced = queue.filter(x => x.status === "SYNCED").length;
-  const totalFailed = queue.filter(x => x.status === "FAILED").length;
+  const totalFailed = queue.filter(x => x.status === "FAILED" || x.status === "CONFLICT" || x.status === "NEEDS_ACTION").length;
 
   return (
     <div className="space-y-6 font-sans pb-10">
@@ -139,7 +139,7 @@ export default function SyncStatusPage() {
         </div>
         <div className="bg-red-50 border border-red-200/50 p-3 rounded-2xl flex flex-col items-center justify-center text-center">
           <span className="text-xl font-black text-red-800 font-mono">{totalFailed}</span>
-          <span className="text-[8.5px] font-bold text-red-700 uppercase tracking-wider mt-0.5">Failed</span>
+          <span className="text-[8.5px] font-bold text-red-700 uppercase tracking-wider mt-0.5">Sync Issues</span>
         </div>
       </div>
 
@@ -189,7 +189,8 @@ export default function SyncStatusPage() {
               <div
                 key={item.id}
                 className={`bg-surface border rounded-2xl p-4 shadow-sm transition-all space-y-3 ${
-                  item.status === "FAILED" ? "border-red-200" :
+                  item.status === "FAILED" || item.status === "CONFLICT" ? "border-red-200" :
+                  item.status === "NEEDS_ACTION" ? "border-amber-250 bg-amber-50/5" :
                   item.status === "SYNCED" ? "border-green-150" :
                   item.status === "SYNCING" ? "border-blue-200 animate-pulse" :
                   "border-outline-variant/40"
@@ -207,6 +208,8 @@ export default function SyncStatusPage() {
                   <span className={`px-2 py-0.5 rounded text-[8px] font-extrabold font-mono tracking-wider uppercase ${
                     item.status === "SYNCED" ? "bg-green-100 text-green-800" :
                     item.status === "FAILED" ? "bg-red-100 text-red-800" :
+                    item.status === "CONFLICT" ? "bg-red-150 text-red-900 border border-red-250" :
+                    item.status === "NEEDS_ACTION" ? "bg-amber-100 text-amber-900 border border-amber-250 font-extrabold animate-pulse" :
                     item.status === "SYNCING" ? "bg-blue-100 text-blue-800 font-semibold" :
                     item.status === "DISCARDED" ? "bg-slate-100 text-slate-500" :
                     "bg-amber-100 text-amber-800 font-semibold"
@@ -247,17 +250,28 @@ export default function SyncStatusPage() {
 
                 {item.lastError && (
                   <div className="bg-red-50 border border-red-100 text-red-800 p-2.5 rounded-xl text-[9.5px] font-medium leading-tight">
-                    <strong>Sync Error:</strong> {item.lastError}
+                    <p><strong>Sync Error:</strong> {item.lastError}</p>
+                    {item.conflictType && (
+                      <p className="mt-1 text-[8.5px] uppercase tracking-wider text-red-900 font-bold border-t border-red-200/50 pt-1">
+                        Conflict Type: {item.conflictType.replace(/_/g, " ")}
+                      </p>
+                    )}
+                    {item.recommendedAction && (
+                      <p className="mt-1 text-[8.5px] font-bold text-amber-900">
+                        Action Required: {item.recommendedAction.replace(/_/g, " ")}
+                      </p>
+                    )}
                   </div>
                 )}
 
                 {/* Queue Item Actions */}
                 {item.status !== "SYNCED" && item.status !== "DISCARDED" && (
                   <div className="flex justify-end gap-2 pt-1 border-t border-outline-variant/10">
-                    {item.status === "FAILED" && (
+                    {(item.status === "FAILED" || item.status === "NEEDS_ACTION" || item.status === "CONFLICT") && (
                       <button
                         onClick={() => handleRetry(item.id)}
-                        className="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-bold text-[9px] flex items-center gap-1 transition-colors"
+                        disabled={item.status === "CONFLICT" || (item as any).canRetry === false}
+                        className="px-3 py-1 bg-amber-600 hover:bg-amber-700 disabled:opacity-30 disabled:cursor-not-allowed text-white rounded-lg font-bold text-[9px] flex items-center gap-1 transition-colors"
                       >
                         <span className="material-symbols-outlined text-[11px] font-bold">replay</span>
                         <span>Retry</span>

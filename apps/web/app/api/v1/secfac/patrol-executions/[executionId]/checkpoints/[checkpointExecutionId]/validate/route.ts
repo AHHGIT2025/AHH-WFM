@@ -36,20 +36,54 @@ export async function POST(
       return NextResponse.json({ success: false, error: "Forbidden: You do not own this patrol execution" }, { status: 403 });
     }
 
-    // Check route status - "10. Route becomes read-only after COMPLETED/PENDING_REVIEW/CANCELLED."
-    if (["COMPLETED", "PENDING_REVIEW", "CANCELLED"].includes(execution.status)) {
-      return NextResponse.json({ success: false, error: "Cannot validate checkpoint: patrol execution is finalized and read-only" }, { status: 400 });
-    }
-
     // 2. Fetch Checkpoint Execution Row
     const checkpointExec = (execution.checkpoints || []).find((c: any) => c.id === checkpointExecutionId);
     if (!checkpointExec) {
       return NextResponse.json({ success: false, error: "Checkpoint execution not found on this patrol route" }, { status: 404 });
     }
 
+    // Check route status - "10. Route becomes read-only after COMPLETED/PENDING_REVIEW/CANCELLED."
+    if (["COMPLETED", "PENDING_REVIEW", "CANCELLED"].includes(execution.status)) {
+      if (checkpointExec.scanProofId === scanProofId) {
+        return NextResponse.json({ success: true, data: execution });
+      }
+      const errorMsg = "Cannot validate checkpoint: patrol execution is finalized and read-only";
+      return NextResponse.json({
+        success: false,
+        error: errorMsg,
+        conflict: {
+          code: "EXECUTION_ALREADY_FINALIZED",
+          conflictType: "EXECUTION_ALREADY_FINALIZED",
+          message: errorMsg,
+          recommendedAction: "CONTACT_SUPERVISOR",
+          canRetry: false,
+          canDiscard: true,
+          needsSupervisorReview: true
+        }
+      }, { status: 409 });
+    }
+
     // Check if already linked/validated with the same scanProofId (idempotency)
     if (checkpointExec.scanProofId === scanProofId) {
       return NextResponse.json({ success: true, data: execution });
+    }
+
+    // Check if already validated by another scan proof
+    if (checkpointExec.status === "VALIDATED" && checkpointExec.scanProofId && checkpointExec.scanProofId !== scanProofId) {
+      const errorMsg = "This checkpoint has already been validated by another scan proof.";
+      return NextResponse.json({
+        success: false,
+        error: errorMsg,
+        conflict: {
+          code: "CHECKPOINT_ALREADY_VALIDATED",
+          conflictType: "CHECKPOINT_ALREADY_VALIDATED",
+          message: errorMsg,
+          recommendedAction: "CONTACT_SUPERVISOR",
+          canRetry: false,
+          canDiscard: true,
+          needsSupervisorReview: true
+        }
+      }, { status: 409 });
     }
 
     // 3. Fetch Scan Proof
@@ -84,6 +118,23 @@ export async function POST(
     }
 
     // 5. Check validationStatus is VALID, INVALID, or PENDING_REVIEW
+    if (scanProof.validationStatus === "INVALID" || scanProof.validationStatus === "REJECTED") {
+      const errorMsg = `Scan proof was rejected or is invalid: ${scanProof.failureReason || "Incorrect code"}`;
+      return NextResponse.json({
+        success: false,
+        error: errorMsg,
+        conflict: {
+          code: "SCAN_PROOF_REJECTED",
+          conflictType: "SCAN_PROOF_REJECTED",
+          message: errorMsg,
+          recommendedAction: "RE_SCAN",
+          canRetry: true,
+          canDiscard: true,
+          needsSupervisorReview: false
+        }
+      }, { status: 409 });
+    }
+
     if (!["VALID", "INVALID", "PENDING_REVIEW"].includes(scanProof.validationStatus)) {
       return NextResponse.json({ success: false, error: `Invalid scan proof status: ${scanProof.validationStatus}` }, { status: 400 });
     }

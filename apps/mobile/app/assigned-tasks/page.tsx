@@ -1241,11 +1241,15 @@ export default function AssignedTasksPage() {
             const latestPatrol = task.patrolExecutions?.[0] || null;
             const patrolStatus = latestPatrol?.status || "Not Started";
             
-            const pendingItems = getQueue().filter(
-              item => item.assignmentId === task.id && (item.status === "PENDING" || item.status === "FAILED" || item.status === "SYNCING")
+            const assignmentQueueItems = getQueue().filter(
+              item => item.assignmentId === task.id
             );
-            const hasPendingSync = pendingItems.length > 0;
-
+            const hasConflict = assignmentQueueItems.some(item => item.status === "CONFLICT");
+            const hasNeedsAction = assignmentQueueItems.some(item => item.status === "NEEDS_ACTION");
+            const hasPendingSync = assignmentQueueItems.some(
+              item => item.status === "PENDING" || item.status === "SYNCING" || item.status === "FAILED"
+            );
+            
             return (
               <div
                 key={task.id}
@@ -1258,12 +1262,22 @@ export default function AssignedTasksPage() {
                     </span>
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <h3 className="text-sm font-bold text-on-surface mt-0.5">{task.assignmentName}</h3>
-                      {hasPendingSync && (
+                      {hasConflict ? (
+                        <span className="inline-flex items-center gap-0.5 bg-red-100 border border-red-250 text-red-800 text-[8px] font-extrabold px-1.5 py-0.5 rounded-full uppercase tracking-wider">
+                          <span className="material-symbols-outlined text-[10px] font-extrabold">error</span>
+                          Sync Conflict
+                        </span>
+                      ) : hasNeedsAction ? (
+                        <span className="inline-flex items-center gap-0.5 bg-amber-100 border border-amber-250 text-amber-900 text-[8px] font-extrabold px-1.5 py-0.5 rounded-full uppercase tracking-wider animate-pulse">
+                          <span className="material-symbols-outlined text-[10px] font-extrabold">warning</span>
+                          Action Required
+                        </span>
+                      ) : hasPendingSync ? (
                         <span className="inline-flex items-center gap-0.5 bg-amber-50 border border-amber-250 text-amber-800 text-[8px] font-extrabold px-1.5 py-0.5 rounded-full animate-pulse uppercase tracking-wider">
                           <span className="material-symbols-outlined text-[10px] font-extrabold">sync</span>
                           Pending Sync
                         </span>
-                      )}
+                      ) : null}
                     </div>
                     {task.assignmentCode && (
                       <span className="text-[8px] font-mono text-on-surface-variant block">{task.assignmentCode}</span>

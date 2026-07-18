@@ -169,11 +169,49 @@ export async function POST(request: Request) {
       }
     }
 
+    // Verify employee status
+    let employeeRecord: any = null;
+    if (isDbConnected()) {
+      employeeRecord = await prisma.employee.findUnique({ where: { id: currentUserId } });
+    } else {
+      const db = readDb();
+      employeeRecord = (db.employees || []).find((e: any) => e.id === currentUserId);
+    }
+    if (!employeeRecord || !employeeRecord.isActive || employeeRecord.employmentStatus !== "ACTIVE") {
+      const errorMsg = "Your employee account is inactive or removed from operational scope.";
+      return NextResponse.json({
+        success: false,
+        error: errorMsg,
+        conflict: {
+          code: "EMPLOYEE_INACTIVE",
+          conflictType: "EMPLOYEE_INACTIVE",
+          message: errorMsg,
+          recommendedAction: "CONTACT_SUPERVISOR",
+          canRetry: false,
+          canDiscard: true,
+          needsSupervisorReview: true
+        }
+      }, { status: 409 });
+    }
+
     if (!assignment) {
       return NextResponse.json({ success: false, error: "Active assignment not found" }, { status: 400 });
     }
     if (!assignment.isActive) {
-      return NextResponse.json({ success: false, error: "Cannot execute on an inactive assignment" }, { status: 400 });
+      const errorMsg = "This assignment was cancelled while your device was offline.";
+      return NextResponse.json({
+        success: false,
+        error: errorMsg,
+        conflict: {
+          code: "ASSIGNMENT_CANCELLED",
+          conflictType: "ASSIGNMENT_CANCELLED",
+          message: errorMsg,
+          recommendedAction: "CONTACT_SUPERVISOR",
+          canRetry: false,
+          canDiscard: true,
+          needsSupervisorReview: true
+        }
+      }, { status: 409 });
     }
 
     // 4. Employee ownership restriction

@@ -17,8 +17,8 @@
     "@ahh-wfm/mock-data": "*",
     "@ahh-wfm/types": "*",
     "@ahh-wfm/ui": "*",
-    "@capacitor/android": "^8.4.0",
-    "@capacitor/core": "^8.4.0",
+    "@capacitor/android": "^8.4.2",
+    "@capacitor/core": "^8.4.2",
     "@capacitor/geolocation": "^8.2.0",
     "@capacitor/preferences": "^8.0.1",
     "bcryptjs": "^3.0.3",
@@ -28,7 +28,7 @@
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
-    "@capacitor/cli": "^8.4.0",
+    "@capacitor/cli": "^8.4.2",
     "@types/node": "^20.12.12",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",

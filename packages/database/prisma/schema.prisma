@@ -134,6 +134,7 @@ model Employee {
   secfacScanProofs            SecfacScanProof[]          @relation("SecfacEmployeeScanProofs")
   secfacReviewedScanProofs    SecfacScanProof[]          @relation("SecfacScanProofReviewedBy")
   secfacPatrolExecutions      SecfacPatrolExecution[]    @relation("SecfacPatrolExecutionEmployee")
+  secfacSyncConflicts         SecfacSyncConflict[]       @relation("SecfacEmployeeSyncConflicts")
 }
 
 model Department {
@@ -2410,6 +2411,45 @@ model SecfacPatrolExecutionCheckpoint {
   @@index([executionId])
   @@index([checkpointId])
   @@index([status])
+}
+
+model SecfacSyncConflict {
+  id                    String    @id @default(uuid())
+  operationType         String
+  employeeId            String
+  employeeCode          String?
+  employeeName          String?
+  assignmentId          String?
+  checklistExecutionId  String?
+  patrolExecutionId     String?
+  checkpointExecutionId String?
+  actionType            String
+  queueItemId           String
+  idempotencyKey        String
+  status                String    @default("ACTIVE")
+  conflictType          String
+  serverMessage         String    @db.Text
+  recommendedAction     String?
+  canRetry              Boolean   @default(false)
+  canDiscard            Boolean   @default(true)
+  needsSupervisorReview Boolean   @default(true)
+  lastAttemptAt         DateTime?
+  acknowledgedAt        DateTime?
+  acknowledgedById      String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  employee              Employee  @relation("SecfacEmployeeSyncConflicts", fields: [employeeId], references: [id], onDelete: Restrict)
+
+  @@unique([queueItemId, actionType, idempotencyKey])
+  @@index([operationType])
+  @@index([employeeId])
+  @@index([assignmentId])
+  @@index([checklistExecutionId])
+  @@index([patrolExecutionId])
+  @@index([status])
+  @@index([conflictType])
+  @@index([queueItemId])
 }
 
 

@@ -99,7 +99,9 @@ export default function ControlRoomPage() {
   const [patrolExecutions, setPatrolExecutions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"checklist" | "patrol">("checklist");
+  const [activeTab, setActiveTab] = useState<"checklist" | "patrol" | "conflicts">("checklist");
+  const [conflicts, setConflicts] = useState<any[]>([]);
+  const [loadingConflicts, setLoadingConflicts] = useState(false);
 
   // Detail Drawer State
   const [selectedExecId, setSelectedExecId] = useState<string | null>(null);
@@ -199,8 +201,55 @@ export default function ControlRoomPage() {
     }
   };
 
+  const fetchConflicts = async () => {
+    setLoadingConflicts(true);
+    try {
+      const params = new URLSearchParams();
+      if (!isAdmin) {
+        if (operationAccess.allowedSecurityGuarding && !operationAccess.allowedFacilityManagement) {
+          params.append("operationType", "SECURITY_GUARDING");
+        } else if (operationAccess.allowedFacilityManagement && !operationAccess.allowedSecurityGuarding) {
+          params.append("operationType", "FACILITY_MANAGEMENT");
+        }
+      }
+      const res = await fetch(`/api/v1/secfac/sync-conflicts?${params.toString()}`);
+      const data = await res.json();
+      if (data.success) {
+        setConflicts(data.data || []);
+      }
+    } catch (err) {
+      console.error("Failed to fetch sync conflicts:", err);
+    } finally {
+      setLoadingConflicts(false);
+    }
+  };
+
+  const handleAcknowledgeConflict = async (id: string, actionStatus: "ACKNOWLEDGED" | "DISMISSED") => {
+    if (!confirm(`Are you sure you want to mark this conflict as ${actionStatus.toLowerCase()}?`)) {
+      return;
+    }
+    try {
+      const res = await fetch(`/api/v1/secfac/sync-conflicts/${id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ status: actionStatus })
+      });
+      const data = await res.json();
+      if (data.success) {
+        await fetchConflicts();
+      } else {
+        alert(data.error || "Failed to update conflict status");
+      }
+    } catch (err: any) {
+      alert(err.message || "Failed to update conflict status");
+    }
+  };
+
   useEffect(() => {
     fetchExecutions();
+    fetchConflicts();
   }, [session]);
 
   useEffect(() => {
@@ -576,6 +625,16 @@ export default function ControlRoomPage() {
         >
           Patrol Route Executions ({filteredPatrolExecutions.length})
         </button>
+        <button
+          onClick={() => setActiveTab("conflicts")}
+          className={`pb-2 text-xs font-bold transition-all border-b-2 px-1 ${
+            activeTab === "conflicts"
+              ? "border-[#002D72] text-[#002D72]"
+              : "border-transparent text-[#747782] hover:text-[#001A48]"
+          }`}
+        >
+          Offline Sync Issues ({conflicts.length})
+        </button>
       </div>
 
       {/* Main Review Queue Table */}
@@ -688,7 +747,7 @@ export default function ControlRoomPage() {
               </table>
             </div>
           )
-        ) : (
+        ) : activeTab === "patrol" ? (
           filteredPatrolExecutions.length === 0 ? (
             <div className="p-12 text-center text-[#747782]">
               <span className="material-symbols-outlined text-3xl mb-2 text-[#C4C6D2]">inbox</span>
@@ -704,29 +763,27 @@ export default function ControlRoomPage() {
                     <th className="p-3">Op Type</th>
                     <th className="p-3">Site Location</th>
                     <th className="p-3">Progress</th>
-                    <th className="p-3">Started At</th>
-                    <th className="p-3">Completed At</th>
+                    <th className="p-3">Started</th>
+                    <th className="p-3">Completed</th>
                     <th className="p-3">Status</th>
                     <th className="p-3 text-right">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[#C4C6D2]/40">
+                <tbody className="divide-y divide-[#C4C6D2]/40 text-xs">
                   {filteredPatrolExecutions.map((x) => {
-                    const checkpoints = x.checkpoints || [];
-                    const completedCheckpoints = checkpoints.filter((c: any) => c.status === "VALIDATED" || c.status === "PENDING_REVIEW").length;
-                    const totalCheckpoints = checkpoints.length;
-                    const routeName = x.route?.routeName || x.assignment?.assignmentName;
-                    const siteName = x.route?.site?.name || x.assignment?.site?.name;
-                    const routeOp = x.route?.operationType || x.assignment?.operationType;
+                    const routeName = x.patrolRoute?.routeName || x.assignment?.assignmentName || "Patrol Route";
+                    const routeOp = x.operationType || x.assignment?.operationType || "SECURITY_GUARDING";
+                    const siteName = x.site?.siteName || x.assignment?.site?.siteName;
+                    const totalCheckpoints = x.checkpoints?.length || 0;
+                    const completedCheckpoints = x.checkpoints?.filter((c: any) => c.status === "VALIDATED" || c.status === "SKIPPED").length || 0;
+
                     return (
                       <tr
                         key={x.id}
                         onClick={() => setSelectedPatrolId(x.id)}
-                        className={`hover:bg-slate-50 cursor-pointer transition-all ${
-                          x.status === "PENDING_REVIEW" ? "font-semibold bg-[#002D72]/[0.01]" : ""
-                        }`}
+                        className="hover:bg-[#F4F6FC]/30 cursor-pointer transition-colors"
                       >
-                        <td className="p-3 text-[#001A48] font-bold">
+                        <td className="p-3 font-semibold text-slate-800">
                           {routeName}
                         </td>
                         <td className="p-3">
@@ -768,6 +825,98 @@ export default function ControlRoomPage() {
                       </tr>
                     );
                   })}
+                </tbody>
+              </table>
+            </div>
+          )
+        ) : (
+          loadingConflicts ? (
+            <div className="p-12 flex flex-col items-center justify-center gap-3">
+              <div className="w-8 h-8 border-4 border-[#002D72] border-t-transparent rounded-full animate-spin"></div>
+              <span className="text-xs text-[#747782] font-bold font-mono">Loading sync conflicts...</span>
+            </div>
+          ) : conflicts.length === 0 ? (
+            <div className="p-12 text-center text-[#747782]">
+              <span className="material-symbols-outlined text-3xl mb-2 text-[#C4C6D2]">cloud_done</span>
+              <p className="text-xs font-bold font-mono">No active sync conflicts reported</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="bg-[#002D72]/5 text-[#001A48] border-b border-[#C4C6D2] font-bold font-mono text-[10px] uppercase">
+                    <th className="p-3">Employee</th>
+                    <th className="p-3">Operation</th>
+                    <th className="p-3">Action / Attempt Time</th>
+                    <th className="p-3">Conflict Details</th>
+                    <th className="p-3">Recommended Action</th>
+                    <th className="p-3">Status</th>
+                    <th className="p-3 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#C4C6D2]/40 text-xs">
+                  {conflicts.map((c) => (
+                    <tr key={c.id} className="hover:bg-[#F4F6FC]/30">
+                      <td className="p-3">
+                        <div className="flex flex-col">
+                          <span className="font-bold text-slate-800">{c.employeeName || c.employee?.name}</span>
+                          <span className="text-[10px] text-[#747782] font-mono">{c.employeeCode || c.employee?.employeeId}</span>
+                        </div>
+                      </td>
+                      <td className="p-3 font-mono text-[10px]">
+                        {c.operationType === "SECURITY_GUARDING" ? (
+                          <span className="text-blue-800 font-bold bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">Security</span>
+                        ) : (
+                          <span className="text-purple-800 font-bold bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200">Facility</span>
+                        )}
+                      </td>
+                      <td className="p-3">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="font-bold text-slate-700">{c.actionType.replace(/_/g, " ")}</span>
+                          <span className="text-[9px] text-[#747782] font-mono">Key: {c.idempotencyKey.slice(0, 8)}...</span>
+                          <span className="text-[9px] text-[#747782] font-mono">{formatDateTime(c.createdAt)}</span>
+                        </div>
+                      </td>
+                      <td className="p-3 max-w-xs">
+                        <div className="flex flex-col gap-1">
+                          <span className="inline-block bg-red-50 text-red-700 text-[9px] font-extrabold px-1.5 py-0.2 rounded border border-red-200 max-w-fit uppercase tracking-wider font-mono">
+                            {c.conflictType}
+                          </span>
+                          <p className="text-[11px] text-slate-650 leading-tight font-medium">{c.serverMessage}</p>
+                        </div>
+                      </td>
+                      <td className="p-3">
+                        <span className="font-semibold text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                          {c.recommendedAction || "CONTACT_SUPERVISOR"}
+                        </span>
+                      </td>
+                      <td className="p-3">
+                        <span className={`px-2 py-0.5 rounded-[10px] text-[9px] font-bold ${
+                          c.status === "ACTIVE" ? "bg-red-100 text-red-700 font-extrabold animate-pulse" :
+                          c.status === "ACKNOWLEDGED" ? "bg-amber-100 text-amber-700" :
+                          "bg-slate-100 text-slate-700"
+                        }`}>
+                          {c.status}
+                        </span>
+                      </td>
+                      <td className="p-3 text-right">
+                        <div className="flex justify-end gap-1.5">
+                          <button
+                            onClick={() => handleAcknowledgeConflict(c.id, "ACKNOWLEDGED")}
+                            className="bg-[#002D72] hover:bg-[#001A48] text-white px-2.5 py-1 rounded text-[10px] font-bold transition-all"
+                          >
+                            Acknowledge
+                          </button>
+                          <button
+                            onClick={() => handleAcknowledgeConflict(c.id, "DISMISSED")}
+                            className="bg-slate-100 text-slate-700 hover:bg-slate-200 px-2.5 py-1 rounded text-[10px] font-bold transition-all border border-slate-200"
+                          >
+                            Dismiss
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>

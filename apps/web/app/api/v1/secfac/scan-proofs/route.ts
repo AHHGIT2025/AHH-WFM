@@ -71,7 +71,20 @@ export async function POST(request: Request) {
     // 3. Fetch assignment
     const assignment = await mockDb.getSecfacAssignmentById(assignmentId);
     if (!assignment || !assignment.isActive) {
-      return NextResponse.json({ success: false, error: "Active assignment not found" }, { status: 404 });
+      const errorMsg = "This assignment was cancelled while your device was offline.";
+      return NextResponse.json({
+        success: false,
+        error: errorMsg,
+        conflict: {
+          code: "ASSIGNMENT_CANCELLED",
+          conflictType: "ASSIGNMENT_CANCELLED",
+          message: errorMsg,
+          recommendedAction: "CONTACT_SUPERVISOR",
+          canRetry: false,
+          canDiscard: true,
+          needsSupervisorReview: true
+        }
+      }, { status: 409 });
     }
 
     // Enforce role/ownership check for standard employees
@@ -95,7 +108,20 @@ export async function POST(request: Request) {
     // 3. Fetch checkpoint
     const checkpoint = await mockDb.getSecfacCheckpointById(checkpointId);
     if (!checkpoint || !checkpoint.isActive) {
-      return NextResponse.json({ success: false, error: "Checkpoint not found" }, { status: 404 });
+      const errorMsg = "The checkpoint has been deactivated.";
+      return NextResponse.json({
+        success: false,
+        error: errorMsg,
+        conflict: {
+          code: "MASTER_DATA_DEACTIVATED",
+          conflictType: "MASTER_DATA_DEACTIVATED",
+          message: errorMsg,
+          recommendedAction: "CONTACT_SUPERVISOR",
+          canRetry: false,
+          canDiscard: true,
+          needsSupervisorReview: true
+        }
+      }, { status: 409 });
     }
 
     // Checkpoint validations

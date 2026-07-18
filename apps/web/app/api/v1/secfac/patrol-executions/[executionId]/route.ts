@@ -113,7 +113,23 @@ export async function PATCH(
     if (action === "SUBMIT") {
       // Execution status must be IN_PROGRESS to submit
       if (execution.status !== "IN_PROGRESS") {
-        return NextResponse.json({ success: false, error: "Cannot submit: execution status must be IN_PROGRESS" }, { status: 400 });
+        if (execution.status === "COMPLETED" || execution.status === "PENDING_REVIEW") {
+          return NextResponse.json({ success: true, data: execution });
+        }
+        const errorMsg = `Cannot submit: patrol execution status is ${execution.status}`;
+        return NextResponse.json({
+          success: false,
+          error: errorMsg,
+          conflict: {
+            code: "ROUTE_CANCELLED",
+            conflictType: "ROUTE_CANCELLED",
+            message: errorMsg,
+            recommendedAction: "CONTACT_SUPERVISOR",
+            canRetry: false,
+            canDiscard: true,
+            needsSupervisorReview: true
+          }
+        }, { status: 409 });
       }
 
       const checkpoints = execution.checkpoints || [];
@@ -122,13 +138,39 @@ export async function PATCH(
       // All REQUIRED checkpoints must NOT be PENDING (they must have been attempted)
       const hasPending = requiredCheckpoints.some((c: any) => c.status === "PENDING");
       if (hasPending) {
-        return NextResponse.json({ success: false, error: "Cannot submit: one or more required checkpoints are still PENDING" }, { status: 400 });
+        const errorMsg = "Cannot submit: one or more required checkpoints are still PENDING";
+        return NextResponse.json({
+          success: false,
+          error: errorMsg,
+          conflict: {
+            code: "SERVER_VALIDATION_FAILED",
+            conflictType: "SERVER_VALIDATION_FAILED",
+            message: errorMsg,
+            recommendedAction: "VALIDATE_ALL_CHECKPOINTS",
+            canRetry: true,
+            canDiscard: true,
+            needsSupervisorReview: false
+          }
+        }, { status: 400 });
       }
 
       // No INVALID required checkpoints allowed
       const hasInvalid = requiredCheckpoints.some((c: any) => c.status === "INVALID");
       if (hasInvalid) {
-        return NextResponse.json({ success: false, error: "Cannot submit: one or more required checkpoints are INVALID" }, { status: 400 });
+        const errorMsg = "Cannot submit: one or more required checkpoints are INVALID";
+        return NextResponse.json({
+          success: false,
+          error: errorMsg,
+          conflict: {
+            code: "SCAN_PROOF_REJECTED",
+            conflictType: "SCAN_PROOF_REJECTED",
+            message: errorMsg,
+            recommendedAction: "RE_SCAN_INVALID_CHECKPOINTS",
+            canRetry: true,
+            canDiscard: true,
+            needsSupervisorReview: false
+          }
+        }, { status: 400 });
       }
 
       // Determine final status

@@ -483,6 +483,7 @@ let memoryDb: {
   secfacPatrolRouteCheckpoints: SecfacPatrolRouteCheckpoint[];
   secfacPatrolExecutions: SecfacPatrolExecution[];
   secfacPatrolExecutionCheckpoints: SecfacPatrolExecutionCheckpoint[];
+  secfacSyncConflicts: any[];
 } = {
   companies: [
     { id: "COMP-001", companyCode: "AHH", companyName: "Al Hattab Holding", isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
@@ -775,7 +776,8 @@ let memoryDb: {
   secfacPatrolRoutes: [],
   secfacPatrolRouteCheckpoints: [],
   secfacPatrolExecutions: [],
-  secfacPatrolExecutionCheckpoints: []
+  secfacPatrolExecutionCheckpoints: [],
+  secfacSyncConflicts: []
 };
 
 // Seeding helper to pre-fill MySQL with mock data if it is empty
@@ -15858,7 +15860,126 @@ export const mockDb = {
       patrolExecutionId: patrolExec.id,
       patrolExecutionStatus: nextParentStatus
     };
+  },
+
+  getSecfacSyncConflicts: async (filters: any = {}): Promise<any[]> => {
+    if (isDbConnected()) {
+      const where: any = {};
+      if (filters.operationType) where.operationType = filters.operationType;
+      if (filters.employeeId) where.employeeId = filters.employeeId;
+      if (filters.status) where.status = filters.status;
+      return await prismaClient.secfacSyncConflict.findMany({
+        where,
+        include: { employee: true },
+        orderBy: { createdAt: "desc" }
+      });
+    }
+
+    const db = readDb();
+    db.secfacSyncConflicts = db.secfacSyncConflicts || [];
+    let list = [...db.secfacSyncConflicts];
+    if (filters.operationType) list = list.filter((x: any) => x.operationType === filters.operationType);
+    if (filters.employeeId) list = list.filter((x: any) => x.employeeId === filters.employeeId);
+    if (filters.status) list = list.filter((x: any) => x.status === filters.status);
+    
+    const emps = db.employees || [];
+    return list.map((item: any) => ({
+      ...item,
+      employee: emps.find((e: any) => e.id === item.employeeId) || null
+    })).sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  },
+
+  createSecfacSyncConflict: async (data: any): Promise<any> => {
+    if (isDbConnected()) {
+      const existing = await prismaClient.secfacSyncConflict.findUnique({
+        where: {
+          queueItemId_actionType_idempotencyKey: {
+            queueItemId: data.queueItemId,
+            actionType: data.actionType,
+            idempotencyKey: data.idempotencyKey
+          }
+        }
+      });
+      if (existing) return existing;
+
+      return await prismaClient.secfacSyncConflict.create({
+        data,
+        include: { employee: true }
+      });
+    }
+
+    const db = readDb();
+    db.secfacSyncConflicts = db.secfacSyncConflicts || [];
+    
+    const existing = db.secfacSyncConflicts.find(
+      (x: any) => x.queueItemId === data.queueItemId && x.actionType === data.actionType && x.idempotencyKey === data.idempotencyKey
+    );
+    if (existing) {
+      const emps = db.employees || [];
+      return {
+        ...existing,
+        employee: emps.find((e: any) => e.id === existing.employeeId) || null
+      };
+    }
+
+    const newRecord = {
+      ...data,
+      id: data.id || "conflict-" + Math.random().toString(36).substring(2) + Date.now().toString(36),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    db.secfacSyncConflicts.push(newRecord);
+    writeDb(db);
+
+    const emps = db.employees || [];
+    return {
+      ...newRecord,
+      employee: emps.find((e: any) => e.id === newRecord.employeeId) || null
+    };
+  },
+
+  updateSecfacSyncConflict: async (id: string, data: any): Promise<any> => {
+    if (isDbConnected()) {
+      return await prismaClient.secfacSyncConflict.update({
+        where: { id },
+        data,
+        include: { employee: true }
+      });
+    }
+
+    const db = readDb();
+    db.secfacSyncConflicts = db.secfacSyncConflicts || [];
+    const idx = db.secfacSyncConflicts.findIndex((x: any) => x.id === id);
+    if (idx > -1) {
+      db.secfacSyncConflicts[idx] = {
+        ...db.secfacSyncConflicts[idx],
+        ...data,
+        updatedAt: new Date().toISOString()
+      };
+      writeDb(db);
+      const emps = db.employees || [];
+      return {
+        ...db.secfacSyncConflicts[idx],
+        employee: emps.find((e: any) => e.id === db.secfacSyncConflicts[idx].employeeId) || null
+      };
+    }
+    throw new Error("Conflict not found");
+  },
+
+  deleteSecfacSyncConflict: async (id: string): Promise<boolean> => {
+    if (isDbConnected()) {
+      await prismaClient.secfacSyncConflict.delete({ where: { id } });
+      return true;
+    }
+
+    const db = readDb();
+    db.secfacSyncConflicts = db.secfacSyncConflicts || [];
+    const filtered = db.secfacSyncConflicts.filter((x: any) => x.id !== id);
+    if (filtered.length !== db.secfacSyncConflicts.length) {
+      db.secfacSyncConflicts = filtered;
+      writeDb(db);
+      return true;
+    }
+    return false;
   }
 };
-
-

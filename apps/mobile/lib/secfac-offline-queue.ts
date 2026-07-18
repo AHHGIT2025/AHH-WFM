@@ -8,7 +8,7 @@ export interface QueueItem {
   createdAt: string;
   lastAttemptAt?: string;
   attemptCount: number;
-  status: 'PENDING' | 'SYNCING' | 'SYNCED' | 'FAILED' | 'DISCARDED';
+  status: 'PENDING' | 'SYNCING' | 'SYNCED' | 'FAILED' | 'NEEDS_ACTION' | 'CONFLICT' | 'DISCARDED';
   lastError?: string;
   assignmentId?: string;
   executionId?: string;
@@ -18,6 +18,13 @@ export interface QueueItem {
   employeeId?: string;
   dependsOn?: string[];
   resolvedServerIds?: Record<string, string>;
+  conflictType?: string;
+  serverMessage?: string;
+  recommendedAction?: string;
+  canRetry?: boolean;
+  canDiscard?: boolean;
+  needsSupervisorReview?: boolean;
+  conflictReported?: boolean;
 }
 
 const STORAGE_KEY = 'secfac_offline_queue';
@@ -145,7 +152,7 @@ export async function processQueue(): Promise<void> {
         if (item.dependsOn && item.dependsOn.length > 0) {
           const failedDep = item.dependsOn.find(depId => {
             const depItem = queue.find(q => q.id === depId);
-            return !depItem || depItem.status === 'FAILED' || depItem.status === 'DISCARDED';
+            return !depItem || depItem.status === 'FAILED' || depItem.status === 'DISCARDED' || depItem.status === 'CONFLICT' || depItem.status === 'NEEDS_ACTION';
           });
           if (failedDep) {
             updateQueueItem(item.id, {
@@ -231,12 +238,42 @@ export async function processQueue(): Promise<void> {
         });
       } else {
         const errorMsg = result.error || result.message || 'Server error';
-        updateQueueItem(nextItem.id, {
-          status: 'FAILED',
-          lastError: errorMsg,
-          lastAttemptAt: new Date().toISOString(),
-          attemptCount: nextItem.attemptCount + 1
-        });
+        const conflict = result.conflict;
+
+        if (conflict) {
+          const localStatus = conflict.canRetry ? 'NEEDS_ACTION' : 'CONFLICT';
+          updateQueueItem(nextItem.id, {
+            status: localStatus,
+            lastError: errorMsg,
+            lastAttemptAt: new Date().toISOString(),
+            attemptCount: nextItem.attemptCount + 1,
+            conflictType: conflict.conflictType,
+            serverMessage: conflict.message || errorMsg,
+            recommendedAction: conflict.recommendedAction || null,
+            canRetry: conflict.canRetry === true,
+            canDiscard: conflict.canDiscard !== false,
+            needsSupervisorReview: conflict.needsSupervisorReview !== false
+          });
+
+          // Report conflict to server
+          await reportConflictToServer({
+            ...nextItem,
+            status: localStatus,
+            conflictType: conflict.conflictType,
+            serverMessage: conflict.message || errorMsg,
+            recommendedAction: conflict.recommendedAction,
+            canRetry: conflict.canRetry,
+            canDiscard: conflict.canDiscard,
+            needsSupervisorReview: conflict.needsSupervisorReview
+          }, conflict, errorMsg);
+        } else {
+          updateQueueItem(nextItem.id, {
+            status: 'FAILED',
+            lastError: errorMsg,
+            lastAttemptAt: new Date().toISOString(),
+            attemptCount: nextItem.attemptCount + 1
+          });
+        }
       }
     } catch (err: any) {
       updateQueueItem(nextItem.id, {
@@ -247,4 +284,57 @@ export async function processQueue(): Promise<void> {
       });
     }
   }
+
+  // Attempt to report any previously unreported conflicts
+  const unreported = getQueue().filter(item => 
+    (item.status === 'CONFLICT' || item.status === 'NEEDS_ACTION') && !item.conflictReported
+  );
+  for (const item of unreported) {
+    await reportConflictToServer(item, {
+      conflictType: item.conflictType,
+      message: item.serverMessage || item.lastError,
+      recommendedAction: item.recommendedAction,
+      canRetry: item.canRetry,
+      canDiscard: item.canDiscard,
+      needsSupervisorReview: item.needsSupervisorReview
+    }, item.lastError || '');
+  }
+}
+
+async function reportConflictToServer(item: QueueItem, conflict: any, errorMsg: string): Promise<boolean> {
+  try {
+    const reportPayload = {
+      operationType: item.operationType || 'SECURITY_GUARDING',
+      employeeId: item.employeeId || '',
+      assignmentId: item.assignmentId || null,
+      checklistExecutionId: item.executionId || null,
+      patrolExecutionId: item.patrolExecutionId || null,
+      checkpointExecutionId: item.checkpointExecutionId || null,
+      actionType: item.actionType,
+      queueItemId: item.id,
+      idempotencyKey: item.idempotencyKey,
+      conflictType: conflict.conflictType,
+      serverMessage: conflict.message || errorMsg,
+      recommendedAction: conflict.recommendedAction || null,
+      canRetry: conflict.canRetry === true,
+      canDiscard: conflict.canDiscard !== false,
+      needsSupervisorReview: conflict.needsSupervisorReview !== false
+    };
+
+    const res = await fetch('/api/v1/secfac/sync-conflicts', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(reportPayload)
+    });
+
+    if (res.ok) {
+      updateQueueItem(item.id, { conflictReported: true });
+      return true;
+    }
+  } catch (e) {
+    console.error('Failed to report conflict to server, will retry later:', e);
+  }
+  return false;
 }

@@ -99,8 +99,38 @@ export async function PATCH(
         return NextResponse.json({ success: true, data: execution });
       }
       if (!isAdmin) {
-        return NextResponse.json({ success: false, error: `Cannot update a checklist with status ${execution.status}` }, { status: 400 });
+        const errorMsg = "This task was already submitted or reviewed. Your offline update was not applied.";
+        return NextResponse.json({
+          success: false,
+          error: errorMsg,
+          conflict: {
+            code: "EXECUTION_ALREADY_FINALIZED",
+            conflictType: "EXECUTION_ALREADY_FINALIZED",
+            message: errorMsg,
+            recommendedAction: "CONTACT_SUPERVISOR",
+            canRetry: false,
+            canDiscard: true,
+            needsSupervisorReview: true
+          }
+        }, { status: 409 });
       }
+    }
+
+    if (["REOPENED", "REJECTED"].includes(execution.status) && targetStatus === "DRAFT") {
+      const errorMsg = "This checklist execution was rejected or reopened by a supervisor while your device was offline.";
+      return NextResponse.json({
+        success: false,
+        error: errorMsg,
+        conflict: {
+          code: "EXECUTION_REOPENED",
+          conflictType: "EXECUTION_REOPENED",
+          message: errorMsg,
+          recommendedAction: "RE_EXECUTE",
+          canRetry: false,
+          canDiscard: true,
+          needsSupervisorReview: true
+        }
+      }, { status: 409 });
     }
 
     // Validate Status value
@@ -169,6 +199,27 @@ export async function PATCH(
         }
       }
 
+      if (!assignment || !assignment.isActive) {
+        const errorMsg = "This assignment was cancelled while your device was offline.";
+        return NextResponse.json({
+          success: false,
+          error: errorMsg,
+          conflict: {
+            code: "ASSIGNMENT_CANCELLED",
+            conflictType: "ASSIGNMENT_CANCELLED",
+            message: errorMsg,
+            recommendedAction: "CONTACT_SUPERVISOR",
+            canRetry: false,
+            canDiscard: true,
+            needsSupervisorReview: true
+          }
+        }, { status: 409 });
+      }
+
+      if (!isAdmin && assignment.employeeId !== currentUserId) {
+        return NextResponse.json({ success: false, error: "Forbidden: Cannot execute checklist for another employee's assignment" }, { status: 403 });
+      }
+
       // Check scan requirements
       const isScanRequired = (assignment?.checkpoint?.scanRequired === true) || (assignment?.template?.requiresNfcScan === true);
       if (isScanRequired) {
@@ -211,9 +262,19 @@ export async function PATCH(
       for (const reqItem of requiredItems) {
         const matchingResp = responsesList.find((r: any) => r.checklistItemId === reqItem.id);
         if (!matchingResp || matchingResp.answerValue === undefined || matchingResp.answerValue === null || matchingResp.answerValue.toString().trim() === "") {
+          const errorMsg = `Required checklist item '${reqItem.itemText}' is not answered.`;
           return NextResponse.json({
             success: false,
-            error: `Validation Error: Required checklist item '${reqItem.itemText}' is not answered`
+            error: errorMsg,
+            conflict: {
+              code: "SERVER_VALIDATION_FAILED",
+              conflictType: "SERVER_VALIDATION_FAILED",
+              message: errorMsg,
+              recommendedAction: "FILL_ANSWERS",
+              canRetry: true,
+              canDiscard: true,
+              needsSupervisorReview: false
+            }
           }, { status: 400 });
         }
 
@@ -223,9 +284,19 @@ export async function PATCH(
             (e: any) => e.responseId === matchingResp?.id || (matchingResp?.id && e.responseId === matchingResp.id)
           );
           if (!hasPhoto) {
+            const errorMsg = `Required photo evidence for '${reqItem.itemText}' is missing.`;
             return NextResponse.json({
               success: false,
-              error: `Validation Error: Required photo evidence for '${reqItem.itemText}' is missing`
+              error: errorMsg,
+              conflict: {
+                code: "REQUIRED_EVIDENCE_MISSING",
+                conflictType: "REQUIRED_EVIDENCE_MISSING",
+                message: errorMsg,
+                recommendedAction: "ATTACH_PHOTO",
+                canRetry: true,
+                canDiscard: true,
+                needsSupervisorReview: false
+              }
             }, { status: 400 });
           }
         }
