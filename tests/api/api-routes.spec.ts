@@ -2948,4 +2948,60 @@ describe('AHH WFM API Routes Verification', () => {
       }
     } catch (err) {}
   });
+
+  test('Phase 5A: Live Monitoring API & RBAC Checks', async () => {
+    const loginUser = async (email: string) => {
+      try {
+        const csrfRes = await axios.get(`${WEB_URL}/api/auth/csrf`);
+        const csrfToken = csrfRes.data.csrfToken;
+        const csrfCookie = csrfRes.headers['set-cookie']?.map(c => c.split(';')[0]).join('; ');
+        const loginRes = await axios.post(
+          `${WEB_URL}/api/auth/callback/credentials`,
+          new URLSearchParams({ csrfToken, email, password: 'Password123!', json: 'true' }).toString(),
+          { headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Cookie': csrfCookie }, validateStatus: () => true }
+        );
+        const cookies = loginRes.headers['set-cookie'];
+        return cookies ? cookies.map(c => c.split(';')[0]).join('; ') : '';
+      } catch (e) { return ''; }
+    };
+
+    const adminWebCookie = await loginUser('admin@alhattab.qa');
+    const empWebCookie = await loginUser('sarah.kim@alhattab.qa');
+    const fmSuperCookie = await loginUser('fm.supervisor@alhattab.qa');
+
+    const adminHeaders = adminWebCookie ? { Cookie: adminWebCookie } : {};
+    const empHeaders = empWebCookie ? { Cookie: empWebCookie } : {};
+    const fmHeaders = fmSuperCookie ? { Cookie: fmSuperCookie } : {};
+
+    // 1. Enforce RBAC: Standard Employee must be blocked (403)
+    const empRes = await axios.get(`${WEB_URL}/api/v1/secfac/live-monitoring`, {
+      headers: empHeaders,
+      validateStatus: () => true
+    });
+    expect(empRes.status).toBe(403);
+
+    // 2. Enforce RBAC: Admin must be allowed (200)
+    const adminRes = await axios.get(`${WEB_URL}/api/v1/secfac/live-monitoring`, {
+      headers: adminHeaders,
+      validateStatus: () => true
+    });
+    expect(adminRes.status).toBe(200);
+    expect(adminRes.data.success).toBe(true);
+    expect(adminRes.data.data.summary).toBeDefined();
+
+    // 3. Enforce RBAC: Supervisor must be allowed (200)
+    const fmRes = await axios.get(`${WEB_URL}/api/v1/secfac/live-monitoring`, {
+      headers: fmHeaders,
+      validateStatus: () => true
+    });
+    expect(fmRes.status).toBe(200);
+    expect(fmRes.data.success).toBe(true);
+
+    // 4. Enforce Operation Type Scope: FM Supervisor requesting Security Guarding scope must be blocked (403)
+    const crossScopeRes = await axios.get(`${WEB_URL}/api/v1/secfac/live-monitoring?operationType=SECURITY_GUARDING`, {
+      headers: fmHeaders,
+      validateStatus: () => true
+    });
+    expect(crossScopeRes.status).toBe(403);
+  });
 });

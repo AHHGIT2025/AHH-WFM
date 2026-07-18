@@ -99,11 +99,18 @@ export default function ControlRoomPage() {
   const [patrolExecutions, setPatrolExecutions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"checklist" | "patrol" | "conflicts" | "audit">("checklist");
+  const [activeTab, setActiveTab] = useState<"monitoring" | "checklist" | "patrol" | "conflicts" | "audit">("checklist");
   const [conflicts, setConflicts] = useState<any[]>([]);
   const [loadingConflicts, setLoadingConflicts] = useState(false);
   const [audits, setAudits] = useState<any[]>([]);
   const [loadingAudits, setLoadingAudits] = useState(false);
+
+  // Live Monitoring States
+  const [monitoringData, setMonitoringData] = useState<any>(null);
+  const [loadingMonitoring, setLoadingMonitoring] = useState(false);
+  const [autoRefresh, setAutoRefresh] = useState(false);
+  const [refreshInterval, setRefreshInterval] = useState(60); // default 60s
+  const [lastRefreshed, setLastRefreshed] = useState<string | null>(null);
 
   // Detail Drawer State
   const [selectedExecId, setSelectedExecId] = useState<string | null>(null);
@@ -248,6 +255,61 @@ export default function ControlRoomPage() {
       setLoadingAudits(false);
     }
   };
+
+  const fetchMonitoringData = async () => {
+    setLoadingMonitoring(true);
+    try {
+      const params = new URLSearchParams();
+      if (filterOpType !== "ALL") params.append("operationType", filterOpType);
+      
+      // Map filter options safely (avoid "ALL" placeholder string queries)
+      if (filterSite && filterSite !== "ALL") {
+        // Resolve target siteId from unique list
+        const match = executions.find(x => x.site?.siteName === filterSite) || patrolExecutions.find(x => (x.route?.site?.name || x.assignment?.site?.name) === filterSite);
+        const matchSiteId = match?.siteId || match?.site?.id || match?.assignment?.siteId;
+        if (matchSiteId) params.append("site", matchSiteId);
+      }
+      
+      if (filterEmployee && filterEmployee !== "ALL") {
+        const match = executions.find(x => x.employee?.name === filterEmployee) || patrolExecutions.find(x => x.employee?.name === filterEmployee);
+        const matchEmpId = match?.employeeId || match?.employee?.id;
+        if (matchEmpId) params.append("employee", matchEmpId);
+      }
+
+      if (filterStatus && filterStatus !== "ALL") params.append("status", filterStatus);
+      if (filterDate) params.append("dateRange", filterDate);
+
+      const res = await fetch(`/api/v1/secfac/live-monitoring?${params.toString()}`);
+      const data = await res.json();
+      if (data.success) {
+        setMonitoringData(data.data);
+        setLastRefreshed(new Date().toLocaleTimeString());
+      }
+    } catch (err) {
+      console.error("Failed to fetch live monitoring snapshot:", err);
+    } finally {
+      setLoadingMonitoring(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === "monitoring") {
+      fetchMonitoringData();
+    }
+  }, [activeTab, filterOpType, filterSite, filterEmployee, filterStatus, filterDate]);
+
+  useEffect(() => {
+    let timer: NodeJS.Timeout | null = null;
+    if (autoRefresh && activeTab === "monitoring") {
+      const intervalMs = Math.max(30, refreshInterval) * 1000;
+      timer = setInterval(() => {
+        fetchMonitoringData();
+      }, intervalMs);
+    }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [autoRefresh, refreshInterval, activeTab, filterOpType, filterSite, filterEmployee, filterStatus, filterDate]);
 
   const handleAcknowledgeConflict = async (id: string, actionStatus: "ACKNOWLEDGED" | "DISMISSED") => {
     if (!confirm(`Are you sure you want to mark this conflict as ${actionStatus.toLowerCase()}?`)) {
@@ -631,7 +693,18 @@ export default function ControlRoomPage() {
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-[#C4C6D2]/60 mb-4 gap-4">
+      <div className="flex border-b border-[#C4C6D2]/60 mb-4 gap-4 font-mono">
+        <button
+          onClick={() => setActiveTab("monitoring")}
+          className={`pb-2 text-xs font-bold transition-all border-b-2 px-1 flex items-center gap-1 ${
+            activeTab === "monitoring"
+              ? "border-[#002D72] text-[#002D72]"
+              : "border-transparent text-[#747782] hover:text-[#001A48]"
+          }`}
+        >
+          <span className="material-symbols-outlined text-sm">monitoring</span>
+          Live Monitoring
+        </button>
         <button
           onClick={() => setActiveTab("checklist")}
           className={`pb-2 text-xs font-bold transition-all border-b-2 px-1 ${
@@ -675,6 +748,495 @@ export default function ControlRoomPage() {
       </div>
 
       {/* Main Review Queue Table */}
+      {activeTab === "monitoring" ? (
+        <div className="space-y-6 mb-8">
+          {/* Polling & Refresh Bar */}
+          <div className="bg-white border border-[#C4C6D2] rounded-xl p-4 flex flex-wrap items-center justify-between gap-4 shadow-sm">
+            <div className="flex items-center gap-3">
+              <span className="flex h-2.5 w-2.5 relative">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+              </span>
+              <span className="text-xs font-bold text-[#001A48] font-mono">Live Monitoring Console</span>
+              {lastRefreshed && (
+                <span className="text-[10px] text-[#747782] font-mono">Last refreshed: {lastRefreshed}</span>
+              )}
+            </div>
+            
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="auto-refresh-toggle"
+                  checked={autoRefresh}
+                  onChange={(e) => setAutoRefresh(e.target.checked)}
+                  className="rounded border-[#C4C6D2] text-[#002D72] focus:ring-[#002D72] h-3.5 w-3.5"
+                />
+                <label htmlFor="auto-refresh-toggle" className="text-xs font-bold text-[#444651] font-mono cursor-pointer">Auto Refresh</label>
+              </div>
+
+              {autoRefresh && (
+                <select
+                  value={refreshInterval}
+                  onChange={(e) => setRefreshInterval(Number(e.target.value))}
+                  className="bg-[#F9F9FF] border border-[#C4C6D2] rounded px-2 py-1 text-[11px] text-[#001A48] font-bold font-mono focus:outline-none"
+                >
+                  <option value={30}>30 Seconds</option>
+                  <option value={60}>60 Seconds</option>
+                  <option value={90}>90 Seconds</option>
+                </select>
+              )}
+
+              <button
+                onClick={fetchMonitoringData}
+                disabled={loadingMonitoring}
+                className="bg-[#002D72] hover:bg-[#001A48] disabled:bg-slate-300 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shadow-sm font-mono"
+              >
+                <span className={`material-symbols-outlined text-sm ${loadingMonitoring ? "animate-spin" : ""}`}>refresh</span>
+                Refresh
+              </button>
+            </div>
+          </div>
+
+          {loadingMonitoring && !monitoringData ? (
+            <div className="bg-white border border-[#C4C6D2] rounded-xl p-12 flex flex-col items-center justify-center gap-3">
+              <div className="w-8 h-8 border-4 border-[#002D72] border-t-transparent rounded-full animate-spin"></div>
+              <span className="text-xs text-[#747782] font-bold font-mono">Loading operations snapshot...</span>
+            </div>
+          ) : !monitoringData ? (
+            <div className="bg-white border border-[#C4C6D2] rounded-xl p-8 text-center text-[#747782]">
+              <span className="material-symbols-outlined text-3xl mb-2 text-[#C4C6D2]">warning</span>
+              <p className="text-xs font-bold font-mono">No live monitoring snapshot loaded. Click Refresh.</p>
+            </div>
+          ) : (
+            <>
+              {/* Summary Cards Grid */}
+              <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
+                {/* Active Assignments */}
+                <div className="bg-white border border-[#C4C6D2] rounded-xl p-4 shadow-sm flex flex-col justify-between min-h-[90px]">
+                  <div className="flex items-center justify-between text-[#747782] mb-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider font-mono">Active Tasks</span>
+                    <span className="material-symbols-outlined text-lg text-blue-600">assignment</span>
+                  </div>
+                  <span className="text-xl font-extrabold text-[#001A48]">{monitoringData.summary.totalActiveAssignments}</span>
+                </div>
+
+                {/* Patrols In Progress */}
+                <div className="bg-white border border-[#C4C6D2] rounded-xl p-4 shadow-sm flex flex-col justify-between min-h-[90px]">
+                  <div className="flex items-center justify-between text-[#747782] mb-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider font-mono">Active Patrols</span>
+                    <span className="material-symbols-outlined text-lg text-indigo-650">explore</span>
+                  </div>
+                  <span className="text-xl font-extrabold text-[#001A48]">{monitoringData.summary.patrolsInProgress}</span>
+                </div>
+
+                {/* Checklists Pending Review */}
+                <div className="bg-white border border-[#C4C6D2] rounded-xl p-4 shadow-sm flex flex-col justify-between min-h-[90px]">
+                  <div className="flex items-center justify-between text-[#747782] mb-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider font-mono">Checklists Review</span>
+                    <span className="material-symbols-outlined text-lg text-emerald-600">fact_check</span>
+                  </div>
+                  <span className="text-xl font-extrabold text-[#001A48]">{monitoringData.summary.checklistsPendingReview}</span>
+                </div>
+
+                {/* Manual Exceptions */}
+                <div className="bg-white border border-[#C4C6D2] rounded-xl p-4 shadow-sm flex flex-col justify-between min-h-[90px]">
+                  <div className="flex items-center justify-between text-[#747782] mb-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider font-mono">Exceptions</span>
+                    <span className="material-symbols-outlined text-lg text-amber-600">gavel</span>
+                  </div>
+                  <span className="text-xl font-extrabold text-[#001A48]">{monitoringData.summary.manualExceptionsPendingReview}</span>
+                </div>
+
+                {/* Sync Conflicts */}
+                <div className="bg-white border border-[#C4C6D2] rounded-xl p-4 shadow-sm flex flex-col justify-between min-h-[90px]">
+                  <div className="flex items-center justify-between text-[#747782] mb-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider font-mono">Sync Conflicts</span>
+                    <span className="material-symbols-outlined text-lg text-rose-600">sync_problem</span>
+                  </div>
+                  <span className="text-xl font-extrabold text-[#001A48]">{monitoringData.summary.unresolvedSyncConflicts}</span>
+                </div>
+
+                {/* Stale Warning Count */}
+                <div className={`border rounded-xl p-4 shadow-sm flex flex-col justify-between min-h-[90px] transition-all ${
+                  monitoringData.summary.staleTasksCount > 0 ? "bg-rose-50 border-rose-300 text-rose-900 animate-pulse" : "bg-white border-[#C4C6D2]"
+                }`}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider font-mono">Stale Tasks</span>
+                    <span className="material-symbols-outlined text-lg">alarm_on</span>
+                  </div>
+                  <span className="text-xl font-extrabold">{monitoringData.summary.staleTasksCount}</span>
+                </div>
+              </div>
+
+              {/* Stale Warnings Panel */}
+              {monitoringData.staleTasks.length > 0 && (
+                <div className="bg-rose-50 border border-rose-250 rounded-xl p-4 shadow-sm">
+                  <div className="flex items-center gap-2 text-rose-800 mb-2">
+                    <span className="material-symbols-outlined text-lg font-bold">warning</span>
+                    <h3 className="text-xs font-bold font-mono uppercase">Stale / No-Update Activity Warnings</h3>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+                    {monitoringData.staleTasks.map((t: any) => (
+                      <div key={t.id} className="bg-white border border-rose-200 rounded-lg p-2.5 flex items-center justify-between">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="font-bold text-slate-800">{t.name}</span>
+                          <span className="text-[9px] text-slate-500 font-mono">Last activity: {formatDateTime(t.lastActivityAt)}</span>
+                        </div>
+                        <span className={`px-2 py-0.5 rounded text-[9px] font-extrabold font-mono uppercase tracking-wider ${
+                          t.staleStatus === "STALE" ? "bg-red-100 text-red-700 border border-red-200" : "bg-amber-100 text-amber-700 border border-amber-250"
+                        }`}>
+                          {t.staleStatus}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Active Patrols Section */}
+              <div className="bg-white border border-[#C4C6D2] rounded-xl shadow-sm overflow-hidden">
+                <div className="bg-[#002D72]/5 px-4 py-3 border-b border-[#C4C6D2]/60 flex items-center justify-between">
+                  <h3 className="text-xs font-bold text-[#001A48] font-mono uppercase flex items-center gap-1.5">
+                    <span className="material-symbols-outlined text-base">explore</span>
+                    Active Patrol Routes In Progress
+                  </h3>
+                </div>
+                {monitoringData.activePatrols.length === 0 ? (
+                  <div className="p-8 text-center text-[#747782] text-xs font-mono">No active patrol routes currently executing.</div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="bg-slate-50 border-b border-[#C4C6D2] text-[#001A48] font-bold font-mono text-[9px] uppercase tracking-wider">
+                          <th className="p-3">Route / Employee</th>
+                          <th className="p-3">Project / Site</th>
+                          <th className="p-3">Checkpoints Progress</th>
+                          <th className="p-3">Started At</th>
+                          <th className="p-3">Activity Status</th>
+                          <th className="p-3 text-right">Details</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[#C4C6D2]/40">
+                        {monitoringData.activePatrols.map((p: any) => (
+                          <tr key={p.patrolExecutionId} className="hover:bg-[#F4F6FC]/20">
+                            <td className="p-3">
+                              <div className="flex flex-col">
+                                <span className="font-bold text-slate-800">{p.routeName}</span>
+                                <span className="text-[10px] text-[#747782] font-mono">{p.employeeName} ({p.employeeCode})</span>
+                              </div>
+                            </td>
+                            <td className="p-3">
+                              <div className="flex flex-col">
+                                <span className="font-semibold text-slate-700">{p.projectName || "Default Project"}</span>
+                                <span className="text-[10px] text-slate-550 font-medium">{p.siteName}</span>
+                              </div>
+                            </td>
+                            <td className="p-3">
+                              <div className="flex items-center gap-3 max-w-xs">
+                                <div className="flex-1 bg-slate-100 rounded-full h-2 overflow-hidden border border-slate-200">
+                                  <div
+                                    className="bg-[#002D72] h-full rounded-full"
+                                    style={{ width: `${(p.completedCheckpointCount / (p.totalCheckpointCount || 1)) * 100}%` }}
+                                  ></div>
+                                </div>
+                                <span className="font-bold text-slate-800 font-mono whitespace-nowrap">
+                                  {p.completedCheckpointCount}/{p.totalCheckpointCount}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="p-3 font-mono text-slate-605">{p.startedAt ? formatDateTime(p.startedAt) : "N/A"}</td>
+                            <td className="p-3">
+                              <span className={`px-2 py-0.5 rounded text-[9px] font-extrabold font-mono uppercase border ${
+                                p.staleStatus === "STALE" ? "bg-red-50 text-red-700 border-red-200" :
+                                p.staleStatus === "WATCH" ? "bg-amber-50 text-amber-750 border-amber-250" :
+                                "bg-green-50 text-green-700 border-green-200"
+                              }`}>
+                                {p.staleStatus === "OK" ? "ACTIVE" : p.staleStatus}
+                              </span>
+                            </td>
+                            <td className="p-3 text-right">
+                              <button
+                                onClick={() => setSelectedPatrolId(p.patrolExecutionId)}
+                                className="bg-[#002D72]/5 hover:bg-[#002D72]/15 text-[#002D72] px-2.5 py-1 rounded text-[10px] font-bold border border-[#002D72]/20"
+                              >
+                                View
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              {/* Secondary Lists Sub-grids */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Latest Checkpoint Activity */}
+                <div className="bg-white border border-[#C4C6D2] rounded-xl shadow-sm overflow-hidden">
+                  <div className="bg-[#002D72]/5 px-4 py-3 border-b border-[#C4C6D2]/60 flex items-center justify-between">
+                    <h3 className="text-xs font-bold text-[#001A48] font-mono uppercase flex items-center gap-1.5">
+                      <span className="material-symbols-outlined text-base">explore</span>
+                      Latest Checkpoint Validations
+                    </h3>
+                  </div>
+                  {monitoringData.latestCheckpointActivity.length === 0 ? (
+                    <div className="p-8 text-center text-[#747782] text-xs font-mono">No checkpoint activity recorded recently.</div>
+                  ) : (
+                    <div className="overflow-x-auto max-h-[350px] overflow-y-auto">
+                      <table className="w-full text-left border-collapse text-xs">
+                        <thead>
+                          <tr className="bg-slate-50 border-b border-[#C4C6D2] text-[#001A48] font-bold font-mono text-[9px] uppercase tracking-wider sticky top-0 z-10">
+                            <th className="p-3 bg-slate-50">Checkpoint / Agent</th>
+                            <th className="p-3 bg-slate-50">Mode</th>
+                            <th className="p-3 bg-slate-50">Status</th>
+                            <th className="p-3 bg-slate-50 text-right">Validated At</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-[#C4C6D2]/40">
+                          {monitoringData.latestCheckpointActivity.map((c: any) => (
+                            <tr key={c.checkpointExecutionId} className="hover:bg-[#F4F6FC]/20">
+                              <td className="p-3">
+                                <div className="flex flex-col">
+                                  <span className="font-bold text-slate-800">{c.checkpointName}</span>
+                                  <span className="text-[9px] text-slate-500 font-mono">{c.employeeName}</span>
+                                </div>
+                              </td>
+                              <td className="p-3 font-mono text-[10px] text-slate-600 uppercase font-extrabold">{c.scanMode}</td>
+                              <td className="p-3">
+                                <span className={`px-1.5 py-0.5 rounded-[10px] text-[9px] font-bold ${
+                                  c.validationStatus === "VALIDATED" || c.validationStatus === "VALID" ? "bg-green-100 text-green-700 font-extrabold" : "bg-red-100 text-red-700"
+                                }`}>
+                                  {c.validationStatus}
+                                </span>
+                              </td>
+                              <td className="p-3 text-right font-mono text-slate-550">{c.validatedAt ? formatDateTime(c.validatedAt) : "N/A"}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+
+                {/* Checklist Pending Review Queue */}
+                <div className="bg-white border border-[#C4C6D2] rounded-xl shadow-sm overflow-hidden">
+                  <div className="bg-[#002D72]/5 px-4 py-3 border-b border-[#C4C6D2]/60 flex items-center justify-between">
+                    <h3 className="text-xs font-bold text-[#001A48] font-mono uppercase flex items-center gap-1.5">
+                      <span className="material-symbols-outlined text-base">fact_check</span>
+                      Checklists Pending Review Queue
+                    </h3>
+                  </div>
+                  {monitoringData.checklistQueue.filter((x: any) => x.status === "PENDING_REVIEW" || x.status === "SUBMITTED").length === 0 ? (
+                    <div className="p-8 text-center text-[#747782] text-xs font-mono">No checklists pending review at this time.</div>
+                  ) : (
+                    <div className="overflow-x-auto max-h-[350px] overflow-y-auto">
+                      <table className="w-full text-left border-collapse text-xs">
+                        <thead>
+                          <tr className="bg-slate-50 border-b border-[#C4C6D2] text-[#001A48] font-bold font-mono text-[9px] uppercase tracking-wider sticky top-0 z-10">
+                            <th className="p-3 bg-slate-50">Template / Employee</th>
+                            <th className="p-3 bg-slate-50">Status</th>
+                            <th className="p-3 bg-slate-50">Submitted</th>
+                            <th className="p-3 bg-slate-50 text-right">Action</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-[#C4C6D2]/40">
+                          {monitoringData.checklistQueue
+                            .filter((x: any) => x.status === "PENDING_REVIEW" || x.status === "SUBMITTED")
+                            .map((c: any) => (
+                              <tr key={c.checklistExecutionId} className="hover:bg-[#F4F6FC]/20">
+                                <td className="p-3">
+                                  <div className="flex flex-col">
+                                    <span className="font-bold text-slate-800">{c.templateName}</span>
+                                    <span className="text-[10px] text-[#747782] font-mono">{c.employeeName} ({c.employeeCode})</span>
+                                  </div>
+                                </td>
+                                <td className="p-3">
+                                  <span className="bg-amber-100 text-amber-700 font-extrabold text-[9px] px-1.5 py-0.5 rounded">PENDING</span>
+                                </td>
+                                <td className="p-3 font-mono text-slate-550">{c.submittedAt ? formatDateTime(c.submittedAt) : "N/A"}</td>
+                                <td className="p-3 text-right">
+                                  <button
+                                    onClick={() => setSelectedExecId(c.checklistExecutionId)}
+                                    className="bg-[#002D72] text-white hover:bg-[#001A48] px-2 py-0.5 rounded text-[10px] font-bold"
+                                  >
+                                    Review
+                                  </button>
+                                </td>
+                              </tr>
+                            ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Exceptions & Sync Conflicts */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Manual Exceptions */}
+                <div className="bg-white border border-[#C4C6D2] rounded-xl shadow-sm overflow-hidden">
+                  <div className="bg-[#002D72]/5 px-4 py-3 border-b border-[#C4C6D2]/60 flex items-center justify-between">
+                    <h3 className="text-xs font-bold text-[#001A48] font-mono uppercase flex items-center gap-1.5">
+                      <span className="material-symbols-outlined text-base">gavel</span>
+                      Scan Proof Manual Exceptions
+                    </h3>
+                  </div>
+                  {monitoringData.pendingManualExceptions.length === 0 ? (
+                    <div className="p-8 text-center text-[#747782] text-xs font-mono">No pending scan exceptions requiring validation.</div>
+                  ) : (
+                    <div className="overflow-y-auto max-h-[350px] divide-y divide-slate-100 p-4 space-y-3 bg-slate-50/50">
+                      {monitoringData.pendingManualExceptions.map((s: any) => (
+                        <div key={s.scanProofId} className="bg-white border border-slate-200 rounded-xl p-3 flex flex-col gap-2 shadow-sm">
+                          <div className="flex items-start justify-between">
+                            <div>
+                              <span className="font-extrabold text-slate-800 text-xs">{s.checkpointName}</span>
+                              <p className="text-[10px] text-slate-500 font-medium mt-0.5">{s.employeeName} ({s.employeeCode}) at {s.siteName}</p>
+                            </div>
+                            <span className="bg-amber-50 text-amber-700 text-[9px] font-extrabold border border-amber-200 px-1.5 py-0.2 rounded font-mono uppercase">{s.scanMode}</span>
+                          </div>
+                          
+                          {s.reason && (
+                            <p className="text-xs text-slate-650 bg-slate-50 border border-slate-100 rounded-lg p-2 leading-tight font-medium font-mono">{s.reason}</p>
+                          )}
+
+                          <div className="flex justify-between items-center mt-1">
+                            <span className="text-[9px] text-[#747782] font-mono">{formatDateTime(s.createdAt)}</span>
+                            <div className="flex gap-1.5">
+                              <button
+                                onClick={() => handleProofReview(s.scanProofId, "VALID")}
+                                className="bg-green-600 hover:bg-green-700 text-white px-2 py-0.5 rounded text-[10px] font-bold shadow-sm"
+                              >
+                                Approve
+                              </button>
+                              <button
+                                onClick={() => handleProofReview(s.scanProofId, "REJECTED")}
+                                className="bg-red-650 hover:bg-red-700 text-white px-2 py-0.5 rounded text-[10px] font-bold shadow-sm"
+                              >
+                                Reject
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Unresolved Sync Conflicts */}
+                <div className="bg-white border border-[#C4C6D2] rounded-xl shadow-sm overflow-hidden">
+                  <div className="bg-[#002D72]/5 px-4 py-3 border-b border-[#C4C6D2]/60 flex items-center justify-between">
+                    <h3 className="text-xs font-bold text-[#001A48] font-mono uppercase flex items-center gap-1.5">
+                      <span className="material-symbols-outlined text-base">sync_problem</span>
+                      Active Sync Conflicts Feed
+                    </h3>
+                  </div>
+                  {monitoringData.unresolvedSyncConflicts.length === 0 ? (
+                    <div className="p-8 text-center text-[#747782] text-xs font-mono">No active sync conflicts reported.</div>
+                  ) : (
+                    <div className="overflow-y-auto max-h-[350px] divide-y divide-slate-100 p-4 space-y-3 bg-slate-50/50">
+                      {monitoringData.unresolvedSyncConflicts.map((c: any) => (
+                        <div key={c.syncConflictId} className="bg-white border border-[#C4C6D2] rounded-xl p-3 flex flex-col gap-2 shadow-sm">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <span className="font-extrabold text-slate-800 text-xs">{c.employeeName || "Unknown Employee"}</span>
+                              <p className="text-[10px] text-slate-500 font-mono font-bold">{c.employeeCode || "Code N/A"}</p>
+                            </div>
+                            <span className="bg-rose-50 text-rose-700 text-[9px] font-extrabold border border-rose-200 px-1.5 py-0.2 rounded font-mono uppercase">{c.conflictType}</span>
+                          </div>
+
+                          <p className="text-xs text-slate-650 font-medium leading-tight">{c.serverMessage}</p>
+
+                          {c.recommendedAction && (
+                            <div className="text-[10px] bg-amber-50 text-amber-800 px-2 py-1 rounded border border-amber-250 font-bold font-mono">
+                              Rec: {c.recommendedAction}
+                            </div>
+                          )}
+
+                          <div className="flex justify-between items-center mt-1">
+                            <span className="text-[9px] text-[#747782] font-mono">{formatDateTime(c.createdAt)}</span>
+                            <div className="flex gap-1.5">
+                              <button
+                                onClick={() => handleAcknowledgeConflict(c.syncConflictId, "ACKNOWLEDGED")}
+                                className="bg-[#002D72] text-white hover:bg-[#001A48] px-2 py-0.5 rounded text-[10px] font-bold"
+                              >
+                                Acknowledge
+                              </button>
+                              <button
+                                onClick={() => handleAcknowledgeConflict(c.syncConflictId, "DISMISSED")}
+                                className="bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200 px-2 py-0.5 rounded text-[10px] font-bold"
+                              >
+                                Dismiss
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Recent AuditEvents Feed */}
+              <div className="bg-white border border-[#C4C6D2] rounded-xl shadow-sm overflow-hidden">
+                <div className="bg-[#002D72]/5 px-4 py-3 border-b border-[#C4C6D2]/60 flex items-center justify-between">
+                  <h3 className="text-xs font-bold text-[#001A48] font-mono uppercase flex items-center gap-1.5">
+                    <span className="material-symbols-outlined text-base">receipt_long</span>
+                    Recent Field Activity Audit Feed
+                  </h3>
+                </div>
+                {monitoringData.recentAuditEvents.length === 0 ? (
+                  <div className="p-8 text-center text-[#747782] text-xs font-mono">No audits available.</div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="bg-slate-50 border-b border-[#C4C6D2] text-[#001A48] font-bold font-mono text-[9px] uppercase tracking-wider">
+                          <th className="p-3">Actor / Agent</th>
+                          <th className="p-3">Action Details</th>
+                          <th className="p-3">Connection</th>
+                          <th className="p-3">Outcome</th>
+                          <th className="p-3 text-right">Timestamp</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[#C4C6D2]/40">
+                        {monitoringData.recentAuditEvents.slice(0, 10).map((a: any) => (
+                          <tr key={a.auditId} className="hover:bg-[#F4F6FC]/20">
+                            <td className="p-3">
+                              <div className="flex flex-col">
+                                <span className="font-bold text-slate-800">{a.actorName || a.employeeName || "Field Agent"}</span>
+                                <span className="text-[9px] text-[#747782] font-mono">{a.actorRole ? `Role: ${a.actorRole}` : a.employeeCode}</span>
+                              </div>
+                            </td>
+                            <td className="p-3">
+                              <div className="flex flex-col gap-0.5 max-w-sm">
+                                <span className="font-bold text-slate-700">{a.actionType.replace(/_/g, " ")}</span>
+                                {a.resultMessage && (
+                                  <p className="text-[11px] text-slate-550 truncate">{a.resultMessage}</p>
+                                )}
+                              </div>
+                            </td>
+                            <td className="p-3 font-mono text-[9px] font-bold text-slate-600 uppercase tracking-wider">{a.syncMode}</td>
+                            <td className="p-3">
+                              <span className={`px-1.5 py-0.5 rounded-[10px] text-[9px] font-bold ${
+                                a.resultStatus === "SUCCESS" ? "bg-green-100 text-green-700 font-extrabold" : "bg-red-100 text-red-700"
+                              }`}>
+                                {a.resultStatus}
+                              </span>
+                            </td>
+                            <td className="p-3 text-right font-mono text-slate-550">{formatDateTime(a.createdAt)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      ) : (
       <div className="bg-white border border-[#C4C6D2] rounded-xl shadow-sm overflow-hidden mb-8">
         {loading ? (
           <div className="p-12 flex flex-col items-center justify-center gap-3">
@@ -1070,6 +1632,7 @@ export default function ControlRoomPage() {
           )
         )}
       </div>
+      )}
 
       {/* Details & Review Sliding Drawer */}
       {selectedExecId && (
