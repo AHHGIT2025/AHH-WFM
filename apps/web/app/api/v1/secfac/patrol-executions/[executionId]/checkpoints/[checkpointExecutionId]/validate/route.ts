@@ -47,6 +47,11 @@ export async function POST(
       return NextResponse.json({ success: false, error: "Checkpoint execution not found on this patrol route" }, { status: 404 });
     }
 
+    // Check if already linked/validated with the same scanProofId (idempotency)
+    if (checkpointExec.scanProofId === scanProofId) {
+      return NextResponse.json({ success: true, data: execution });
+    }
+
     // 3. Fetch Scan Proof
     let scanProof: any = null;
     if (typeof mockDb.getSecfacScanProofById === "function") {

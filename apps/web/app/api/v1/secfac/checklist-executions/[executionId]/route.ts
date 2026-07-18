@@ -54,6 +54,11 @@ export async function PATCH(
   const executionId = params.executionId;
 
   try {
+    const idRegex = /^[a-zA-Z0-9-]+$/i;
+    if (executionId && !idRegex.test(executionId)) {
+      return NextResponse.json({ success: false, error: "Invalid client-supplied ID format" }, { status: 400 });
+    }
+
     const execution = await mockDb.getSecfacChecklistExecutionById(executionId);
     if (!execution) {
       return NextResponse.json({ success: false, error: "Execution not found" }, { status: 404 });
@@ -74,12 +79,6 @@ export async function PATCH(
       }
     }
 
-    // 2. Already submitted/approved read-only block
-    const READ_ONLY_STATUSES = ["SUBMITTED", "PENDING_REVIEW", "APPROVED", "CANCELLED"];
-    if (READ_ONLY_STATUSES.includes(execution.status) && !isAdmin) {
-      return NextResponse.json({ success: false, error: `Cannot update a checklist with status ${execution.status}` }, { status: 400 });
-    }
-
     const payload = await request.json();
     const {
       responses,
@@ -92,6 +91,17 @@ export async function PATCH(
     } = payload;
 
     const targetStatus = status || execution.status;
+
+    // 2. Already submitted/approved read-only block & natural idempotency checks
+    const READ_ONLY_STATUSES = ["SUBMITTED", "PENDING_REVIEW", "APPROVED", "CANCELLED"];
+    if (READ_ONLY_STATUSES.includes(execution.status)) {
+      if (targetStatus === execution.status || (targetStatus === "SUBMITTED" && execution.status === "PENDING_REVIEW")) {
+        return NextResponse.json({ success: true, data: execution });
+      }
+      if (!isAdmin) {
+        return NextResponse.json({ success: false, error: `Cannot update a checklist with status ${execution.status}` }, { status: 400 });
+      }
+    }
 
     // Validate Status value
     if (status && !APPROVED_STATUSES.includes(status)) {

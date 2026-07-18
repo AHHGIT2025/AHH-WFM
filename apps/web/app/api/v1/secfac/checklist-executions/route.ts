@@ -101,7 +101,36 @@ export async function POST(request: Request) {
       status
     } = payload;
 
-    // 1. Mandatory Fields Validation
+    // 1. Validate client-supplied ID format and perform natural idempotency check
+    const idRegex = /^[a-zA-Z0-9-]+$/i;
+    if (id) {
+      if (!idRegex.test(id)) {
+        return NextResponse.json({ success: false, error: "Invalid client-supplied ID format" }, { status: 400 });
+      }
+      let existingExecution: any = null;
+      if (isDbConnected()) {
+        existingExecution = await prisma.secfacChecklistExecution.findUnique({
+          where: { id }
+        });
+      } else {
+        const db = readDb();
+        existingExecution = (db.secfacChecklistExecutions || []).find((x: any) => x.id === id);
+      }
+
+      if (existingExecution) {
+        // Ownership/scope validation:
+        if (existingExecution.employeeId !== currentUserId && !isAdmin) {
+          return NextResponse.json({ success: false, error: "Forbidden: Execution belongs to another user" }, { status: 403 });
+        }
+        const checkStatus = status || "DRAFT";
+        const isFinalized = ["SUBMITTED", "PENDING_REVIEW", "APPROVED", "CANCELLED"].includes(existingExecution.status);
+        if (isFinalized || checkStatus === existingExecution.status) {
+          return NextResponse.json({ success: true, data: existingExecution });
+        }
+      }
+    }
+
+    // 2. Mandatory Fields Validation
     if (!assignmentId) {
       return NextResponse.json({ success: false, error: "assignmentId is required" }, { status: 400 });
     }
@@ -109,7 +138,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: "checklistTemplateId is required" }, { status: 400 });
     }
 
-    // 2. Validate Status
+    // 3. Validate Status
     const targetStatus = status || "DRAFT";
     if (!APPROVED_STATUSES.includes(targetStatus)) {
       return NextResponse.json({ success: false, error: "Invalid status value" }, { status: 400 });

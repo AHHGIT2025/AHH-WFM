@@ -88,7 +88,20 @@ export async function PATCH(
     }
 
     const body = await request.json();
-    const { action, completionRemarks } = body;
+    let { action, status, completionRemarks } = body;
+
+    // Map status: "COMPLETED" to action: "SUBMIT" for compatibility
+    if (!action && status === "COMPLETED") {
+      action = "SUBMIT";
+    }
+
+    // Natural idempotency check
+    if (action === "SUBMIT" && ["COMPLETED", "PENDING_REVIEW"].includes(execution.status)) {
+      return NextResponse.json({ success: true, data: execution });
+    }
+    if (action === "CANCEL" && execution.status === "CANCELLED") {
+      return NextResponse.json({ success: true, data: execution });
+    }
 
     if (!action || !["SUBMIT", "CANCEL"].includes(action)) {
       return NextResponse.json({ success: false, error: "Invalid action. Must be SUBMIT or CANCEL." }, { status: 400 });

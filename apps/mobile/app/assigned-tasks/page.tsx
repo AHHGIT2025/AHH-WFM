@@ -1,9 +1,16 @@
 "use client";
-
+ 
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
+import {
+  getQueue,
+  addQueueItem,
+  getQueueItemsForAssignment,
+  getPendingCount,
+  createIdempotencyKey
+} from "../../lib/secfac-offline-queue";
 
 interface SecfacAssignment {
   id: string;
@@ -77,6 +84,21 @@ export default function AssignedTasksPage() {
   const router = useRouter();
   const [assignments, setAssignments] = useState<SecfacAssignment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isOnline, setIsOnline] = useState(true);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setIsOnline(navigator.onLine);
+      const handleOnline = () => setIsOnline(true);
+      const handleOffline = () => setIsOnline(false);
+      window.addEventListener("online", handleOnline);
+      window.addEventListener("offline", handleOffline);
+      return () => {
+        window.removeEventListener("online", handleOnline);
+        window.removeEventListener("offline", handleOffline);
+      };
+    }
+  }, []);
 
   // Modal / Execution form states
   const [activeTaskForModal, setActiveTaskForModal] = useState<SecfacAssignment | null>(null);
@@ -111,6 +133,22 @@ export default function AssignedTasksPage() {
   const isAdmin = (session?.user as any)?.role === "ADMIN" || (session?.user as any)?.role === "SUPER_ADMIN";
 
   const fetchScanProofs = (assignmentId: string) => {
+    if (!isOnline) {
+      const queuedProofs = getQueue()
+        .filter(item => item.assignmentId === assignmentId && item.actionType === "SCAN_PROOF_CREATE" && item.status !== "DISCARDED")
+        .map(item => ({
+          id: item.payload.id,
+          scanMode: item.payload.scanMode,
+          scannedValue: item.payload.scannedValue,
+          exceptionReason: item.payload.exceptionReason,
+          validationStatus: item.payload.scanMode === "MANUAL_EXCEPTION" ? "PENDING_REVIEW" : "VALID",
+          scannedAt: item.createdAt,
+          isOfflinePlaceholder: true
+        }));
+      setScanProofs(queuedProofs);
+      setLoadingProofs(false);
+      return;
+    }
     setLoadingProofs(true);
     fetch(`/api/v1/secfac/scan-proofs?assignmentId=${assignmentId}`)
       .then((res) => res.json())
@@ -160,11 +198,11 @@ export default function AssignedTasksPage() {
     setSubmittingProof(true);
     setErrorMsg("");
     setSuccessMsg("");
-
+ 
     let lat: number | null = null;
     let lng: number | null = null;
     let accuracy: number | null = null;
-
+ 
     try {
       const pos: any = await new Promise((resolve, reject) => {
         navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 2000 });
@@ -175,7 +213,53 @@ export default function AssignedTasksPage() {
     } catch (e) {
       console.log("GPS coordinates capture timed out or failed", e);
     }
-
+ 
+    if (!isOnline) {
+      const scanProofId = crypto.randomUUID();
+      addQueueItem({
+        id: crypto.randomUUID(),
+        actionType: "SCAN_PROOF_CREATE",
+        endpoint: "/api/v1/secfac/scan-proofs",
+        method: "POST",
+        payload: {
+          id: scanProofId,
+          assignmentId: activeTaskForModal.id,
+          executionId: execution?.id || null,
+          checkpointId: activeTaskForModal.checkpointId,
+          scanMode: mode,
+          scannedValue: value,
+          exceptionReason: reason,
+          latitude: lat,
+          longitude: lng,
+          gpsAccuracyMeters: accuracy,
+          deviceInfo: "Mobile App Web Client (AHH WFM Mobile) (Offline)"
+        },
+        assignmentId: activeTaskForModal.id,
+        executionId: execution?.id || undefined,
+        operationType: activeTaskForModal.operationType
+      });
+ 
+      const mockProof = {
+        id: scanProofId,
+        scanMode: mode,
+        scannedValue: value,
+        exceptionReason: reason,
+        validationStatus: mode === "MANUAL_EXCEPTION" ? "PENDING_REVIEW" : "VALID",
+        scannedAt: new Date().toISOString(),
+        isOfflinePlaceholder: true
+      };
+      setScanProofs([mockProof, ...scanProofs]);
+      setSuccessMsg("Checkpoint scan proof queued offline.");
+      setOpenQrInput(false);
+      setOpenManualInput(false);
+      setOpenIssueReport(false);
+      setQrInputValue("");
+      setManualInputValue("");
+      setIssueReasonValue("");
+      setSubmittingProof(false);
+      return;
+    }
+ 
     try {
       const res = await fetch("/api/v1/secfac/scan-proofs", {
         method: "POST",
@@ -193,7 +277,7 @@ export default function AssignedTasksPage() {
           deviceInfo: "Mobile App Web Client (AHH WFM Mobile)"
         })
       });
-
+ 
       const json = await res.json();
       if (!json.success) {
         setErrorMsg(json.error || "Validation failed");
@@ -223,11 +307,11 @@ export default function AssignedTasksPage() {
     setSubmittingProof(true);
     setErrorMsg("");
     setSuccessMsg("");
-
+ 
     let lat: number | null = null;
     let lng: number | null = null;
     let accuracy: number | null = null;
-
+ 
     try {
       const pos: any = await new Promise((resolve, reject) => {
         navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 2000 });
@@ -238,7 +322,79 @@ export default function AssignedTasksPage() {
     } catch (e) {
       console.log("GPS coordinates capture timed out or failed", e);
     }
-
+ 
+    if (!isOnline) {
+      const scanProofId = crypto.randomUUID();
+      const proofQueueItemId = crypto.randomUUID();
+      const proofQueueItem = addQueueItem({
+        id: proofQueueItemId,
+        actionType: "SCAN_PROOF_CREATE",
+        endpoint: "/api/v1/secfac/scan-proofs",
+        method: "POST",
+        payload: {
+          id: scanProofId,
+          assignmentId: activePatrolForModal.id,
+          executionId: null,
+          checkpointId: selectedPatrolCheckpoint.checkpointId,
+          scanMode: mode,
+          scannedValue: value,
+          exceptionReason: reason,
+          latitude: lat,
+          longitude: lng,
+          gpsAccuracyMeters: accuracy,
+          deviceInfo: "Mobile App Web Client (AHH WFM Mobile Patrol) (Offline)"
+        },
+        assignmentId: activePatrolForModal.id,
+        operationType: activePatrolForModal.operationType
+      });
+ 
+      addQueueItem({
+        id: crypto.randomUUID(),
+        actionType: "PATROL_CHECKPOINT_VALIDATE",
+        endpoint: `/api/v1/secfac/patrol-executions/${patrolExecution.id}/checkpoints/${selectedPatrolCheckpoint.id}/validate`,
+        method: "POST",
+        payload: {
+          scanProofId: scanProofId
+        },
+        dependsOn: [proofQueueItem.id],
+        assignmentId: activePatrolForModal.id,
+        patrolExecutionId: patrolExecution.id,
+        checkpointExecutionId: selectedPatrolCheckpoint.id,
+        operationType: activePatrolForModal.operationType
+      });
+ 
+      // Update local state status instantly
+      const targetStatus = mode === "MANUAL_EXCEPTION" ? "PENDING_REVIEW" : "VALIDATED";
+      const updatedCheckpoints = patrolExecution.checkpoints.map((c: any) => {
+        if (c.id === selectedPatrolCheckpoint.id) {
+          return {
+            ...c,
+            status: targetStatus,
+            scanProof: {
+              id: scanProofId,
+              proofType: mode,
+              remarks: reason,
+              createdAt: new Date().toISOString()
+            }
+          };
+        }
+        return c;
+      });
+ 
+      setPatrolExecution({ ...patrolExecution, checkpoints: updatedCheckpoints });
+      setSelectedPatrolCheckpoint(updatedCheckpoints.find((c: any) => c.id === selectedPatrolCheckpoint.id) || null);
+ 
+      setSuccessMsg("Checkpoint scan proof validation queued offline.");
+      setOpenQrInput(false);
+      setOpenManualInput(false);
+      setOpenIssueReport(false);
+      setQrInputValue("");
+      setManualInputValue("");
+      setIssueReasonValue("");
+      setSubmittingProof(false);
+      return;
+    }
+ 
     try {
       // 1. Create Scan Proof
       const resProof = await fetch("/api/v1/secfac/scan-proofs", {
@@ -257,13 +413,13 @@ export default function AssignedTasksPage() {
           deviceInfo: "Mobile App Web Client (AHH WFM Mobile Patrol)"
         })
       });
-
+ 
       const jsonProof = await resProof.json();
       if (!jsonProof.success) {
         setErrorMsg(jsonProof.error || "Validation failed");
         return;
       }
-
+ 
       // 2. Validate Checkpoint on Patrol Execution
       const resVal = await fetch(`/api/v1/secfac/patrol-executions/${patrolExecution.id}/checkpoints/${selectedPatrolCheckpoint.id}/validate`, {
         method: "POST",
@@ -272,7 +428,7 @@ export default function AssignedTasksPage() {
           scanProofId: jsonProof.data.id
         })
       });
-
+ 
       const jsonVal = await resVal.json();
       if (!jsonVal.success) {
         setErrorMsg(jsonVal.error || "Failed to update checkpoint validation status");
@@ -292,7 +448,7 @@ export default function AssignedTasksPage() {
         setQrInputValue("");
         setManualInputValue("");
         setIssueReasonValue("");
-
+ 
         // Refresh assignments list
         const url = isAdmin ? "/api/v1/secfac/assignments" : "/api/v1/secfac/assigned-tasks";
         fetch(url)
@@ -341,6 +497,10 @@ export default function AssignedTasksPage() {
   };
 
   const handleStartPatrol = async (task: SecfacAssignment) => {
+    if (!isOnline) {
+      alert("Starting a new patrol tour requires an internet connection. Please connect to start the patrol.");
+      return;
+    }
     setErrorMsg("");
     setSuccessMsg("");
     setLoadingPatrol(true);
@@ -378,6 +538,82 @@ export default function AssignedTasksPage() {
     setSubmittingPatrol(true);
     setErrorMsg("");
     setSuccessMsg("");
+
+    if (!isOnline) {
+      const checkpoints = patrolExecution.checkpoints || [];
+      const requiredCheckpoints = checkpoints.filter((c: any) => c.required === true);
+
+      // Local completion validation rules
+      const hasPending = requiredCheckpoints.some((c: any) => c.status === "PENDING");
+      if (hasPending) {
+        setErrorMsg("Cannot submit: one or more required checkpoints are still PENDING");
+        setSubmittingPatrol(false);
+        return;
+      }
+
+      const hasInvalid = requiredCheckpoints.some((c: any) => c.status === "INVALID");
+      if (hasInvalid) {
+        setErrorMsg("Cannot submit: one or more required checkpoints are INVALID");
+        setSubmittingPatrol(false);
+        return;
+      }
+
+      // Queue PATROL_ROUTE_SUBMIT depending on all pending validation queue items for this execution
+      const pendingValItems = getQueue().filter(
+        item => item.patrolExecutionId === patrolExecution.id && item.actionType === "PATROL_CHECKPOINT_VALIDATE" && item.status === "PENDING"
+      );
+      const dependsOnIds = pendingValItems.map(item => item.id);
+
+      addQueueItem({
+        id: crypto.randomUUID(),
+        actionType: "PATROL_ROUTE_SUBMIT",
+        endpoint: `/api/v1/secfac/patrol-executions/${patrolExecution.id}`,
+        method: "PATCH",
+        payload: {
+          action: "SUBMIT"
+        },
+        dependsOn: dependsOnIds,
+        assignmentId: activePatrolForModal?.id,
+        patrolExecutionId: patrolExecution.id,
+        operationType: activePatrolForModal?.operationType
+      });
+
+      // Update local state status status
+      const hasPendingReview = requiredCheckpoints.some((c: any) => c.status === "PENDING_REVIEW");
+      const targetStatus = hasPendingReview ? "PENDING_REVIEW" : "COMPLETED";
+
+      setSuccessMsg("Patrol completion queued offline.");
+      setPatrolExecution({
+        ...patrolExecution,
+        status: targetStatus,
+        completedAt: new Date().toISOString()
+      });
+
+      // Refresh assignments list so status updates locally
+      if (activePatrolForModal) {
+        setAssignments(prev => prev.map(a => {
+          if (a.id === activePatrolForModal.id) {
+            return {
+              ...a,
+              patrolExecutions: [{
+                ...patrolExecution,
+                status: targetStatus,
+                completedAt: new Date().toISOString()
+              }]
+            };
+          }
+          return a;
+        }));
+      }
+
+      setTimeout(() => {
+        setActivePatrolForModal(null);
+      }, 1500);
+
+      setSubmittingPatrol(false);
+      return;
+    }
+
     try {
       const res = await fetch(`/api/v1/secfac/patrol-executions/${patrolExecution.id}`, {
         method: "PATCH",
@@ -421,10 +657,19 @@ export default function AssignedTasksPage() {
         .then((json) => {
           if (json.success) {
             setAssignments(json.data || []);
+            if (typeof window !== "undefined") {
+              localStorage.setItem("secfac_cached_assignments", JSON.stringify(json.data || []));
+            }
           }
           setLoading(false);
         })
         .catch(() => {
+          if (typeof window !== "undefined") {
+            const cached = localStorage.getItem("secfac_cached_assignments");
+            if (cached) {
+              setAssignments(JSON.parse(cached));
+            }
+          }
           setLoading(false);
         });
     } else if (authStatus === "unauthenticated") {
@@ -449,6 +694,45 @@ export default function AssignedTasksPage() {
     }
 
     fetchScanProofs(activeTaskForModal.id);
+
+    // If offline: check local queue first for unsynced drafts!
+    if (!isOnline) {
+      const pendingItems = getQueueItemsForAssignment(activeTaskForModal.id);
+      const queuedDraft = pendingItems.find(x => x.actionType === "CHECKLIST_DRAFT_SAVE");
+      if (queuedDraft) {
+        setExecution(queuedDraft.payload);
+        setRemarks(queuedDraft.payload.remarks || "");
+        const ansMap: Record<string, any> = {};
+        if (queuedDraft.payload.responses) {
+          for (const r of queuedDraft.payload.responses) {
+            ansMap[r.checklistItemId] = {
+              id: r.id,
+              answerValue: r.answerValue || "",
+              comment: r.comment || "",
+              isFlagged: !!r.isFlagged,
+              flagReason: r.flagReason || "",
+              evidenceAttachments: []
+            };
+          }
+        }
+        if (activeTaskForModal.template?.items) {
+          for (const item of activeTaskForModal.template.items) {
+            if (!ansMap[item.id]) {
+              ansMap[item.id] = {
+                id: crypto.randomUUID(),
+                answerValue: "",
+                comment: "",
+                isFlagged: false,
+                flagReason: "",
+                evidenceAttachments: []
+              };
+            }
+          }
+        }
+        setAnswers(ansMap);
+        return;
+      }
+    }
 
     const curExec = activeTaskForModal.currentExecution;
     if (curExec) {
@@ -520,6 +804,37 @@ export default function AssignedTasksPage() {
     }
   }, [activeTaskForModal]);
 
+  // Overlay local queued validations onto patrol execution when offline
+  useEffect(() => {
+    if (!activePatrolForModal) return;
+    if (patrolExecution && !isOnline) {
+      const queuedVals = getQueue().filter(
+        item => item.patrolExecutionId === patrolExecution.id && item.actionType === "PATROL_CHECKPOINT_VALIDATE" && item.status !== "DISCARDED"
+      );
+      if (queuedVals.length > 0) {
+        const updatedCheckpoints = patrolExecution.checkpoints.map((cp: any) => {
+          const match = queuedVals.find(q => q.checkpointExecutionId === cp.id);
+          if (match) {
+            return {
+              ...cp,
+              status: match.payload.scanProofId ? "VALIDATED" : "PENDING",
+              scanProof: {
+                id: match.payload.scanProofId,
+                proofType: "OFFLINE",
+                createdAt: match.createdAt
+              }
+            };
+          }
+          return cp;
+        });
+        setPatrolExecution((prev: any) => ({
+          ...prev,
+          checkpoints: updatedCheckpoints
+        }));
+      }
+    }
+  }, [activePatrolForModal]);
+
   if (loading) {
     return (
       <div className="flex justify-center py-20">
@@ -562,6 +877,32 @@ export default function AssignedTasksPage() {
 
     if (activeCount >= 3) {
       alert("Maximum of 3 attachments per checklist item allowed.");
+      return;
+    }
+
+    if (!isOnline) {
+      alert("Photo upload requires connection. Save checklist draft and attach photo when online.");
+      // Create an in-memory preview (Object URL)
+      const previewUrl = URL.createObjectURL(file);
+      const tempAttachment = {
+        id: "temp-" + Math.random().toString(36).substring(2) + Date.now().toString(36),
+        isPreviewOnly: true,
+        previewUrl,
+        isActive: true
+      };
+
+      setAnswers((prev) => {
+        const current = prev[itemId] || { id: ansObj.id, evidenceAttachments: [] };
+        const attachments = [...(current.evidenceAttachments || []), tempAttachment];
+        return {
+          ...prev,
+          [itemId]: {
+            ...current,
+            answerValue: "ATTACHED",
+            evidenceAttachments: attachments
+          }
+        };
+      });
       return;
     }
 
@@ -612,6 +953,23 @@ export default function AssignedTasksPage() {
     const isReadOnly = ["SUBMITTED", "PENDING_REVIEW", "APPROVED", "CANCELLED"].includes(execution?.status || "");
     if (isReadOnly) return;
 
+    if (evidenceId.startsWith("temp-")) {
+      setAnswers((prev) => {
+        const current = prev[itemId] || { evidenceAttachments: [] };
+        const attachments = (current.evidenceAttachments || []).filter((e: any) => e.id !== evidenceId);
+        const remainingCount = attachments.filter((x: any) => x.isActive !== false).length;
+        return {
+          ...prev,
+          [itemId]: {
+            ...current,
+            answerValue: remainingCount > 0 ? "ATTACHED" : "",
+            evidenceAttachments: attachments
+          }
+        };
+      });
+      return;
+    }
+
     try {
       const res = await fetch(`/api/v1/secfac/evidence/${evidenceId}`, {
         method: "DELETE"
@@ -650,13 +1008,21 @@ export default function AssignedTasksPage() {
     if (submitStatus === "SUBMITTED") {
       const isScanRequired = (activeTaskForModal.checkpoint?.scanRequired === true) || (activeTaskForModal.template?.requiresNfcScan === true);
       if (isScanRequired) {
-        if (scanProofs.length === 0) {
+        // Retrieve offline queued scan proofs as well
+        const queuedProofs = getQueue().filter(
+          item => item.assignmentId === activeTaskForModal.id && item.actionType === "SCAN_PROOF_CREATE" && item.status !== "DISCARDED"
+        );
+        const allProofs = [...scanProofs, ...queuedProofs.map(q => ({
+          validationStatus: q.payload.scanMode === "MANUAL_EXCEPTION" ? "PENDING_REVIEW" : "VALID"
+        }))];
+
+        if (allProofs.length === 0) {
           setErrorMsg("Validation Error: Required checkpoint scan proof is missing");
           return;
         }
 
-        const hasValid = scanProofs.some((p: any) => p.validationStatus === "VALID");
-        const hasPending = scanProofs.some((p: any) => p.validationStatus === "PENDING_REVIEW");
+        const hasValid = allProofs.some((p: any) => p.validationStatus === "VALID");
+        const hasPending = allProofs.some((p: any) => p.validationStatus === "PENDING_REVIEW");
 
         if (!hasValid && !hasPending) {
           setErrorMsg("Validation Error: Checkpoint scan proof is invalid or rejected");
@@ -715,6 +1081,11 @@ export default function AssignedTasksPage() {
         }
       }
 
+      // Filter out temporary previews for payload
+      const serverEvidence = (ansObj.evidenceAttachments || [])
+        .filter((e: any) => e.isActive !== false && !e.isPreviewOnly)
+        .map((e: any) => ({ id: e.id }));
+
       return {
         id: ansObj.id || undefined,
         checklistItemId: item.id,
@@ -745,6 +1116,47 @@ export default function AssignedTasksPage() {
       remarks,
       status: submitStatus
     };
+
+    if (!isOnline) {
+      // Offline queueing
+      addQueueItem({
+        id: crypto.randomUUID(),
+        actionType: submitStatus === "DRAFT" ? "CHECKLIST_DRAFT_SAVE" : "CHECKLIST_SUBMIT",
+        endpoint: url,
+        method,
+        payload,
+        assignmentId: activeTaskForModal.id,
+        executionId: execution?.id || undefined,
+        operationType: activeTaskForModal.operationType
+      });
+
+      setSuccessMsg(submitStatus === "SUBMITTED" ? "Checklist submission queued offline." : "Checklist draft save queued offline.");
+      setExecution(payload);
+
+      setAssignments(prev => prev.map(a => {
+        if (a.id === activeTaskForModal.id) {
+          return {
+            ...a,
+            currentExecution: {
+              id: execution?.id || "",
+              status: submitStatus,
+              startedAt: new Date().toISOString(),
+              submittedAt: submitStatus === "SUBMITTED" ? new Date().toISOString() : null
+            }
+          };
+        }
+        return a;
+      }));
+
+      if (submitStatus === "SUBMITTED") {
+        setTimeout(() => {
+          setActiveTaskForModal(null);
+        }, 1500);
+      }
+
+      setSaving(false);
+      return;
+    }
 
     try {
       const response = await fetch(url, {
@@ -797,6 +1209,16 @@ export default function AssignedTasksPage() {
         </div>
       </div>
 
+      {!isOnline && (
+        <div className="bg-amber-50 border border-amber-250 text-amber-900 px-4 py-3 rounded-2xl flex items-center gap-2.5 text-xs font-semibold shadow-sm">
+          <span className="material-symbols-outlined text-amber-700 text-[20px]">wifi_off</span>
+          <div>
+            <p className="font-bold">Offline Mode Active</p>
+            <p className="text-[10px] text-amber-850 font-normal">Actions will be queued locally and synced when connection is restored.</p>
+          </div>
+        </div>
+      )}
+
       {isAdmin && activeTasks.length === 0 && (
         <div className="bg-amber-50 border border-amber-200 text-amber-800 p-4 rounded-xl text-xs font-semibold">
           No active assignment today (Admin Preview Mode). Please schedule assignments in the Web Command Center first.
@@ -818,6 +1240,12 @@ export default function AssignedTasksPage() {
             const execStatus = task.currentExecution?.status || "Not Started";
             const latestPatrol = task.patrolExecutions?.[0] || null;
             const patrolStatus = latestPatrol?.status || "Not Started";
+            
+            const pendingItems = getQueue().filter(
+              item => item.assignmentId === task.id && (item.status === "PENDING" || item.status === "FAILED" || item.status === "SYNCING")
+            );
+            const hasPendingSync = pendingItems.length > 0;
+
             return (
               <div
                 key={task.id}
@@ -828,7 +1256,15 @@ export default function AssignedTasksPage() {
                     <span className="text-[9px] text-primary font-bold uppercase tracking-wider font-mono">
                       {task.operationType === "SECURITY_GUARDING" ? "Security Operations" : "FM Operations"}
                     </span>
-                    <h3 className="text-sm font-bold text-on-surface mt-0.5">{task.assignmentName}</h3>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <h3 className="text-sm font-bold text-on-surface mt-0.5">{task.assignmentName}</h3>
+                      {hasPendingSync && (
+                        <span className="inline-flex items-center gap-0.5 bg-amber-50 border border-amber-250 text-amber-800 text-[8px] font-extrabold px-1.5 py-0.5 rounded-full animate-pulse uppercase tracking-wider">
+                          <span className="material-symbols-outlined text-[10px] font-extrabold">sync</span>
+                          Pending Sync
+                        </span>
+                      )}
+                    </div>
                     {task.assignmentCode && (
                       <span className="text-[8px] font-mono text-on-surface-variant block">{task.assignmentCode}</span>
                     )}
@@ -1322,7 +1758,7 @@ export default function AssignedTasksPage() {
                               {activeAttachments.map((att: any) => (
                                 <div key={att.id} className="relative w-14 h-14 bg-slate-100 rounded-lg overflow-hidden border border-slate-200 group">
                                   <img
-                                    src={`/api/v1/secfac/evidence/${att.id}/file`}
+                                    src={att.isPreviewOnly ? att.previewUrl : `/api/v1/secfac/evidence/${att.id}/file`}
                                     alt="Evidence"
                                     className="w-full h-full object-cover"
                                   />

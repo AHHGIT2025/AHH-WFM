@@ -11,6 +11,34 @@ export default function MobileDashboard() {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [showSOS, setShowSOS] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [isOffline, setIsOffline] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setIsOffline(!navigator.onLine);
+      const updateStatus = () => {
+        setIsOffline(!navigator.onLine);
+      };
+      window.addEventListener("online", updateStatus);
+      window.addEventListener("offline", updateStatus);
+
+      // Read initial queue pending count
+      const stored = localStorage.getItem("secfac_offline_queue");
+      if (stored) {
+        try {
+          const q = JSON.parse(stored);
+          const pending = q.filter((x: any) => x.status === "PENDING").length;
+          setPendingCount(pending);
+        } catch(e) {}
+      }
+
+      return () => {
+        window.removeEventListener("online", updateStatus);
+        window.removeEventListener("offline", updateStatus);
+      };
+    }
+  }, []);
 
   useEffect(() => {
     fetch("/api/v1/dashboard")
@@ -117,7 +145,9 @@ export default function MobileDashboard() {
           </Link>
           <Link href="/sync-status" className="bg-surface-container-low border border-outline-variant/20 p-3 rounded-xl flex items-center gap-2 col-span-2 active:scale-95 transition-transform">
             <span className="material-symbols-outlined text-on-surface-variant text-[20px]">cloud_sync</span>
-            <span className="text-[10px] font-bold text-on-surface">Sync Queue (Online)</span>
+            <span className="text-[10px] font-bold text-on-surface">
+              {isOffline ? "Sync Queue (Offline)" : `Sync Queue (Pending: ${pendingCount})`}
+            </span>
           </Link>
         </div>
       </div>

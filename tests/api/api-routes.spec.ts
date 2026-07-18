@@ -2544,4 +2544,241 @@ describe('AHH WFM API Routes Verification', () => {
       }
     } catch (err) {}
   });
+
+  test('SECFAC Phase 4A — Offline Replay & Idempotency APIs', async () => {
+    // ─── 1. Authenticate roles ───
+    const loginUser = async (email: string) => {
+      try {
+        const csrfRes = await axios.get(`${WEB_URL}/api/auth/csrf`);
+        const csrfToken = csrfRes.data.csrfToken;
+        const csrfCookie = csrfRes.headers['set-cookie']?.map(c => c.split(';')[0]).join('; ');
+        const loginRes = await axios.post(
+          `${WEB_URL}/api/auth/callback/credentials`,
+          new URLSearchParams({ csrfToken, email, password: 'Password123!', json: 'true' }).toString(),
+          { headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Cookie': csrfCookie }, validateStatus: () => true }
+        );
+        const cookies = loginRes.headers['set-cookie'];
+        return cookies ? cookies.map(c => c.split(';')[0]).join('; ') : '';
+      } catch (e) { return ''; }
+    };
+
+    const adminWebCookie = await loginUser('admin@alhattab.qa');
+    const empWebCookie = await loginUser('sarah.kim@alhattab.qa');
+    const otherEmpWebCookie = await loginUser('fm.supervisor@alhattab.qa');
+
+    const adminHeaders = adminWebCookie ? { Cookie: adminWebCookie } : {};
+    const empHeaders = empWebCookie ? { Cookie: empWebCookie } : {};
+    const otherEmpHeaders = otherEmpWebCookie ? { Cookie: otherEmpWebCookie } : {};
+
+    // ─── 2. Resolve test site ───
+    let testSiteId = 'SITE-001';
+    if (prisma) {
+      try {
+        const site = await prisma.manpowerSite.findFirst();
+        if (site) testSiteId = site.id;
+      } catch (err) {}
+    } else {
+      const db = readDb();
+      if (db.manpowerSites && db.manpowerSites[0]) testSiteId = db.manpowerSites[0].id;
+    }
+
+    // ─── Create Checkpoint First ───
+    const cpRes = await axios.post(`${WEB_URL}/api/v1/secfac/checkpoints`, {
+      checkpointName: 'P4A Gate Checkpoint',
+      nfcTagId: `NFC-4A-${Date.now()}`,
+      qrCode: `QR-4A-${Date.now()}`,
+      latitude: 25.2,
+      longitude: 51.5,
+      siteId: testSiteId,
+      operationType: 'SECURITY_GUARDING'
+    }, { headers: adminHeaders, validateStatus: () => true });
+    expect(cpRes.status).toBe(201);
+    const testCheckpointId = cpRes.data.data.id;
+
+    // ─── 3. Create Template ───
+    const tempRes = await axios.post(`${WEB_URL}/api/v1/secfac/checklists`, {
+      templateName: `Phase 4A Temp ${Date.now()}`,
+      operationType: 'SECURITY_GUARDING',
+      category: 'SECURITY_PATROL',
+      checklistType: 'PATROL',
+      items: [
+        {
+          itemText: 'Check gate lock',
+          itemType: 'YES_NO',
+          sortOrder: 0,
+          isRequired: true
+        }
+      ]
+    }, { headers: adminHeaders, validateStatus: () => true });
+    expect(tempRes.status).toBe(201);
+    const tempId = tempRes.data.data.id;
+
+    // ─── 4. Create Assignment ───
+    const assignRes = await axios.post(`${WEB_URL}/api/v1/secfac/assignments`, {
+      assignmentName: `P4A Replay Assign ${Date.now()}`,
+      operationType: 'SECURITY_GUARDING',
+      employeeId: 'SK-90210',
+      siteId: testSiteId,
+      templateId: tempId,
+      checkpointId: testCheckpointId,
+      scheduledStart: new Date().toISOString(),
+      scheduledEnd: new Date(Date.now() + 86400000).toISOString()
+    }, { headers: adminHeaders, validateStatus: () => true });
+    expect(assignRes.status).toBe(201);
+    const assignId = assignRes.data.data.id;
+
+    // ─── 5. Test Replayed Checklist Draft ───
+    const draftExecutionId = crypto.randomUUID();
+    const draftPayload = {
+      id: draftExecutionId,
+      assignmentId: assignId,
+      checklistTemplateId: tempId,
+      responses: [],
+      remarks: 'Draft 1',
+      status: 'DRAFT'
+    };
+
+    // First draft save -> 201
+    const draftRes1 = await axios.post(`${WEB_URL}/api/v1/secfac/checklist-executions`, draftPayload, { headers: empHeaders, validateStatus: () => true });
+    expect(draftRes1.status).toBe(201);
+
+    // Replay draft save -> 201 or 200
+    const draftRes2 = await axios.post(`${WEB_URL}/api/v1/secfac/checklist-executions`, draftPayload, { headers: empHeaders, validateStatus: () => true });
+    expect([200, 201]).toContain(draftRes2.status);
+    expect(draftRes2.data.data.id).toBe(draftExecutionId);
+
+    // ─── 6. Test Replayed Scan Proof Create ───
+    const scanProofId = crypto.randomUUID();
+    const scanPayload = {
+      id: scanProofId,
+      assignmentId: assignId,
+      checkpointId: testCheckpointId,
+      scanMode: 'MANUAL_ENTRY',
+      scannedValue: cpRes.data.data.nfcTagId || 'SCAN-VAL-123'
+    };
+
+    // First scan proof -> 201
+    const scanRes1 = await axios.post(`${WEB_URL}/api/v1/secfac/scan-proofs`, scanPayload, { headers: empHeaders, validateStatus: () => true });
+    expect(scanRes1.status).toBe(201);
+
+    // Replay scan proof -> 201 or 200
+    const scanRes2 = await axios.post(`${WEB_URL}/api/v1/secfac/scan-proofs`, scanPayload, { headers: empHeaders, validateStatus: () => true });
+    expect([200, 201]).toContain(scanRes2.status);
+    expect(scanRes2.data.data.id).toBe(scanProofId);
+
+    // ─── 7. Test Replayed Scan Proof Wrong User/Scope -> 403 ───
+    const scanResWrong = await axios.post(`${WEB_URL}/api/v1/secfac/scan-proofs`, scanPayload, { headers: otherEmpHeaders, validateStatus: () => true });
+    expect(scanResWrong.status).toBe(403);
+
+    const testItemId = tempRes.data.data.items[0].id;
+
+    // ─── 8. Test Replayed Checklist Submit ───
+    const submitPayload = {
+      ...draftPayload,
+      responses: [
+        {
+          checklistItemId: testItemId,
+          itemTextSnapshot: 'Check gate lock',
+          itemTypeSnapshot: 'YES_NO',
+          answerValue: 'YES'
+        }
+      ],
+      status: 'SUBMITTED'
+    };
+
+    // First submit -> 200
+    const submitRes1 = await axios.patch(`${WEB_URL}/api/v1/secfac/checklist-executions/${draftExecutionId}`, submitPayload, { headers: empHeaders, validateStatus: () => true });
+    expect(submitRes1.status).toBe(200);
+
+    // Replay submit -> 200
+    const submitRes2 = await axios.patch(`${WEB_URL}/api/v1/secfac/checklist-executions/${draftExecutionId}`, submitPayload, { headers: empHeaders, validateStatus: () => true });
+    expect(submitRes2.status).toBe(200);
+    expect(submitRes2.data.data.status).toBe('SUBMITTED');
+
+    // ─── 9. Test Replayed Checkpoint Validation ───
+    const routeRes = await axios.post(`${WEB_URL}/api/v1/secfac/patrol-routes`, {
+      routeName: 'P4A Route',
+      siteId: testSiteId,
+      operationType: 'SECURITY_GUARDING',
+      checkpoints: [{ checkpointId: testCheckpointId, sequenceNo: 1, required: true }]
+    }, { headers: adminHeaders, validateStatus: () => true });
+    const testRouteId = routeRes.data.data.id;
+
+    // Create assignment for patrol
+    const patrolAssignRes = await axios.post(`${WEB_URL}/api/v1/secfac/assignments`, {
+      assignmentName: `P4A Patrol Assign ${Date.now()}`,
+      operationType: 'SECURITY_GUARDING',
+      employeeId: 'SK-90210',
+      siteId: testSiteId,
+      patrolRouteId: testRouteId,
+      scheduledStart: new Date().toISOString(),
+      scheduledEnd: new Date(Date.now() + 86400000).toISOString()
+    }, { headers: adminHeaders, validateStatus: () => true });
+    const patrolAssignId = patrolAssignRes.data.data.id;
+
+    // Start patrol route execution
+    const patrolStartRes = await axios.post(`${WEB_URL}/api/v1/secfac/patrol-executions`, {
+      routeId: testRouteId,
+      assignmentId: patrolAssignId
+    }, { headers: empHeaders, validateStatus: () => true });
+    const patrolExecId = patrolStartRes.data.data.id;
+    const checkpointExecutionId = patrolStartRes.data.data.checkpoints[0].id;
+
+    // Create a scan proof for checkpoint validation
+    const patrolScanProofId = crypto.randomUUID();
+    await axios.post(`${WEB_URL}/api/v1/secfac/scan-proofs`, {
+      id: patrolScanProofId,
+      assignmentId: patrolAssignId,
+      checkpointId: testCheckpointId,
+      scanMode: 'QR',
+      scannedValue: cpRes.data.data.qrCodeValue || cpRes.data.data.qrCode || 'QR-VAL-123'
+    }, { headers: empHeaders, validateStatus: () => true });
+
+    // Validate checkpoint 1st time
+    const valRes1 = await axios.post(`${WEB_URL}/api/v1/secfac/patrol-executions/${patrolExecId}/checkpoints/${checkpointExecutionId}/validate`, {
+      scanProofId: patrolScanProofId
+    }, { headers: empHeaders, validateStatus: () => true });
+    expect(valRes1.status).toBe(200);
+
+    // Validate checkpoint replayed with same scanProofId -> 200
+    const valRes2 = await axios.post(`${WEB_URL}/api/v1/secfac/patrol-executions/${patrolExecId}/checkpoints/${checkpointExecutionId}/validate`, {
+      scanProofId: patrolScanProofId
+    }, { headers: empHeaders, validateStatus: () => true });
+    expect(valRes2.status).toBe(200);
+
+    // ─── 10. Test Replayed Patrol Route Submit ───
+    // First submit -> 200
+    const routeSubmitRes1 = await axios.patch(`${WEB_URL}/api/v1/secfac/patrol-executions/${patrolExecId}`, { status: 'COMPLETED' }, { headers: empHeaders, validateStatus: () => true });
+    expect(routeSubmitRes1.status).toBe(200);
+    expect(routeSubmitRes1.data.data.status).toBe('COMPLETED');
+
+    // Replayed submit -> 200
+    const routeSubmitRes2 = await axios.patch(`${WEB_URL}/api/v1/secfac/patrol-executions/${patrolExecId}`, { status: 'COMPLETED' }, { headers: empHeaders, validateStatus: () => true });
+    expect(routeSubmitRes2.status).toBe(200);
+    expect(routeSubmitRes2.data.data.status).toBe('COMPLETED');
+
+    // ─── 11. Unauthorized action still returns 401/403 ───
+    const unauthChecklistSave = await axios.post(`${WEB_URL}/api/v1/secfac/checklist-executions`, draftPayload, { validateStatus: () => true });
+    expect(unauthChecklistSave.status).toBe(401);
+
+    const unauthScanProof = await axios.post(`${WEB_URL}/api/v1/secfac/scan-proofs`, scanPayload, { validateStatus: () => true });
+    expect(unauthScanProof.status).toBe(401);
+
+    // Cleanup resources
+    try {
+      if (prisma) {
+        await prisma.secfacPatrolExecutionCheckpoint.deleteMany({ where: { executionId: patrolExecId } });
+        await prisma.secfacPatrolExecution.delete({ where: { id: patrolExecId } });
+        await prisma.secfacScanProof.deleteMany({ where: { assignmentId: { in: [assignId, patrolAssignId] } } });
+        await prisma.secfacChecklistResponse.deleteMany({ where: { executionId: draftExecutionId } });
+        await prisma.secfacChecklistExecution.delete({ where: { id: draftExecutionId } });
+        await prisma.secfacAssignment.deleteMany({ where: { id: { in: [assignId, patrolAssignId] } } });
+        await prisma.secfacChecklistItem.deleteMany({ where: { templateId: tempId } });
+        await prisma.secfacChecklistTemplate.delete({ where: { id: tempId } });
+        await prisma.secfacPatrolRouteCheckpoint.deleteMany({ where: { routeId: testRouteId } });
+        await prisma.secfacPatrolRoute.delete({ where: { id: testRouteId } });
+        await prisma.secfacCheckpoint.delete({ where: { id: testCheckpointId } });
+      }
+    } catch (err) {}
+  });
 });

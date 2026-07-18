@@ -29,6 +29,7 @@ export async function POST(request: Request) {
   try {
     const body = await request.json();
     const {
+      id,
       assignmentId,
       executionId,
       checkpointId,
@@ -41,7 +42,22 @@ export async function POST(request: Request) {
       deviceInfo
     } = body;
 
-    // 1. Core validations
+    // 1. Client-supplied UUID validation and idempotency check
+    const idRegex = /^[a-zA-Z0-9-]+$/i;
+    if (id) {
+      if (!idRegex.test(id)) {
+        return NextResponse.json({ success: false, error: "Invalid client-supplied ID format" }, { status: 400 });
+      }
+      const existingProof = await mockDb.getSecfacScanProofById(id);
+      if (existingProof) {
+        if (existingProof.employeeId !== user.id && !isAdmin) {
+          return NextResponse.json({ success: false, error: "Forbidden: Scan proof belongs to another user" }, { status: 403 });
+        }
+        return NextResponse.json({ success: true, data: existingProof });
+      }
+    }
+
+    // 2. Core validations
     if (!assignmentId) {
       return NextResponse.json({ success: false, error: "assignmentId is required" }, { status: 400 });
     }
@@ -52,7 +68,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: "Invalid scanMode" }, { status: 400 });
     }
 
-    // 2. Fetch assignment
+    // 3. Fetch assignment
     const assignment = await mockDb.getSecfacAssignmentById(assignmentId);
     if (!assignment || !assignment.isActive) {
       return NextResponse.json({ success: false, error: "Active assignment not found" }, { status: 404 });
@@ -156,6 +172,7 @@ export async function POST(request: Request) {
 
     // 5. Create scan proof record
     const result = await mockDb.createSecfacScanProof({
+      id: id || undefined,
       operationType: assignment.operationType,
       assignmentId,
       executionId: executionId || null,
