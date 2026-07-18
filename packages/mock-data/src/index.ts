@@ -484,6 +484,7 @@ let memoryDb: {
   secfacPatrolExecutions: SecfacPatrolExecution[];
   secfacPatrolExecutionCheckpoints: SecfacPatrolExecutionCheckpoint[];
   secfacSyncConflicts: any[];
+  secfacFieldExecutionAudits: any[];
 } = {
   companies: [
     { id: "COMP-001", companyCode: "AHH", companyName: "Al Hattab Holding", isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
@@ -777,7 +778,8 @@ let memoryDb: {
   secfacPatrolRouteCheckpoints: [],
   secfacPatrolExecutions: [],
   secfacPatrolExecutionCheckpoints: [],
-  secfacSyncConflicts: []
+  secfacSyncConflicts: [],
+  secfacFieldExecutionAudits: []
 };
 
 // Seeding helper to pre-fill MySQL with mock data if it is empty
@@ -15981,5 +15983,110 @@ export const mockDb = {
       return true;
     }
     return false;
+  },
+
+  getSecfacFieldExecutionAudits: async (filters: any = {}): Promise<any[]> => {
+    if (isDbConnected()) {
+      const where: any = {};
+      if (filters.operationType) where.operationType = filters.operationType;
+      if (filters.employeeId) where.employeeId = filters.employeeId;
+      if (filters.actionType) where.actionType = filters.actionType;
+      if (filters.resultStatus) where.resultStatus = filters.resultStatus;
+      if (filters.syncMode) where.syncMode = filters.syncMode;
+      return await prismaClient.secfacFieldExecutionAudit.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        include: { employee: true }
+      });
+    }
+
+    const db = readDb();
+    let list = db.secfacFieldExecutionAudits || [];
+    if (filters.operationType) {
+      list = list.filter((x: any) => x.operationType === filters.operationType);
+    }
+    if (filters.employeeId) {
+      list = list.filter((x: any) => x.employeeId === filters.employeeId);
+    }
+    if (filters.actionType) {
+      list = list.filter((x: any) => x.actionType === filters.actionType);
+    }
+    if (filters.resultStatus) {
+      list = list.filter((x: any) => x.resultStatus === filters.resultStatus);
+    }
+    if (filters.syncMode) {
+      list = list.filter((x: any) => x.syncMode === filters.syncMode);
+    }
+    
+    // Sort descending by createdAt
+    list = [...list].sort((a: any, b: any) => {
+      return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
+    });
+
+    const emps = db.employees || [];
+    return list.map((x: any) => ({
+      ...x,
+      employee: emps.find((e: any) => e.id === x.employeeId) || null
+    }));
+  },
+
+  createSecfacFieldExecutionAudit: async (data: any): Promise<any> => {
+    const payload = {
+      id: data.id || uuid(),
+      operationType: data.operationType,
+      employeeId: data.employeeId,
+      employeeCode: data.employeeCode,
+      employeeName: data.employeeName,
+      actorUserId: data.actorUserId,
+      actorEmployeeId: data.actorEmployeeId,
+      actorName: data.actorName,
+      actorEmail: data.actorEmail,
+      actorRole: data.actorRole,
+      assignmentId: data.assignmentId,
+      checklistExecutionId: data.checklistExecutionId,
+      patrolExecutionId: data.patrolExecutionId,
+      checkpointExecutionId: data.checkpointExecutionId,
+      scanProofId: data.scanProofId,
+      evidenceAttachmentId: data.evidenceAttachmentId,
+      syncConflictId: data.syncConflictId,
+      actionType: data.actionType,
+      actionSource: data.actionSource,
+      queueItemId: data.queueItemId,
+      idempotencyKey: data.idempotencyKey,
+      deviceSessionId: data.deviceSessionId,
+      deviceLabel: data.deviceLabel,
+      devicePlatform: data.devicePlatform,
+      userAgent: data.userAgent,
+      appSource: data.appSource,
+      clientActionAt: data.clientActionAt ? new Date(data.clientActionAt).toISOString() : null,
+      serverReceivedAt: new Date().toISOString(),
+      syncMode: data.syncMode || "ONLINE",
+      networkStatus: data.networkStatus,
+      latitude: data.latitude,
+      longitude: data.longitude,
+      accuracy: data.accuracy,
+      resultStatus: data.resultStatus || "SUCCESS",
+      resultMessage: data.resultMessage,
+      createdAt: data.createdAt ? new Date(data.createdAt).toISOString() : new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    if (isDbConnected()) {
+      return await prismaClient.secfacFieldExecutionAudit.create({
+        data: payload,
+        include: { employee: true }
+      });
+    }
+
+    const db = readDb();
+    db.secfacFieldExecutionAudits = db.secfacFieldExecutionAudits || [];
+    db.secfacFieldExecutionAudits.push(payload);
+    writeDb(db);
+
+    const emps = db.employees || [];
+    return {
+      ...payload,
+      employee: emps.find((e: any) => e.id === payload.employeeId) || null
+    };
   }
 };

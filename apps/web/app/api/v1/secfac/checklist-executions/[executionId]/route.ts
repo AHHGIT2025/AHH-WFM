@@ -3,6 +3,7 @@ import { mockDb, isDbConnected, readDb } from "@ahh-wfm/mock-data";
 import { checkApiAuth } from "@/lib/api-guards";
 import { isAdminUser } from "@/lib/permissions";
 import { prisma } from "@ahh-wfm/database";
+import { createSecfacFieldExecutionAudit, extractAuditHeaders } from "@/lib/secfac-audit-helpers";
 
 const APPROVED_STATUSES = ["DRAFT", "SUBMITTED", "PENDING_REVIEW", "APPROVED", "REJECTED", "REOPENED", "CANCELLED"];
 
@@ -321,6 +322,45 @@ export async function PATCH(
       remarks: remarks !== undefined ? remarks : execution.remarks,
       responses: responses !== undefined ? responses : execution.responses
     });
+
+    // Write audit record
+    const isSupervisorAction = ["APPROVED", "REJECTED"].includes(finalStatus);
+    const actionType = isSupervisorAction
+      ? (finalStatus === "APPROVED" ? "CHECKLIST_REVIEW_APPROVE" : "CHECKLIST_REVIEW_REJECT")
+      : (finalStatus === "DRAFT" ? "CHECKLIST_DRAFT_SAVE" : "CHECKLIST_SUBMIT");
+
+    const auditHeaders = extractAuditHeaders(request);
+    const auditPayload: any = {
+      operationType: execution.operationType,
+      employeeId: execution.employeeId,
+      employeeCode: execution.employee?.employeeId || null,
+      employeeName: execution.employee?.name || null,
+      assignmentId: execution.assignmentId,
+      checklistExecutionId: result.id,
+      actionType,
+      actionSource: isSupervisorAction
+        ? "WEB_SUPERVISOR"
+        : (auditHeaders.syncMode === "OFFLINE_REPLAY" ? "MOBILE_OFFLINE_SYNC" : "MOBILE_ONLINE"),
+      ...auditHeaders,
+      latitude: latitude !== undefined ? latitude : execution.latitude,
+      longitude: longitude !== undefined ? longitude : execution.longitude,
+      accuracy: gpsAccuracyMeters !== undefined ? gpsAccuracyMeters : execution.gpsAccuracyMeters,
+      resultStatus: "SUCCESS",
+      resultMessage: isSupervisorAction
+        ? `Checklist execution reviewed and updated to status: ${finalStatus}`
+        : `Checklist execution updated with status: ${finalStatus}`
+    };
+
+    if (isSupervisorAction) {
+      auditPayload.actorUserId = user.id;
+      auditPayload.actorEmployeeId = user.employeeId || user.id;
+      auditPayload.actorName = user.name || null;
+      auditPayload.actorEmail = user.email || null;
+      auditPayload.actorRole = user.role || null;
+      auditPayload.syncMode = "SERVER_SIDE";
+    }
+
+    await createSecfacFieldExecutionAudit(auditPayload);
 
     return NextResponse.json({ success: true, data: result });
   } catch (error: any) {

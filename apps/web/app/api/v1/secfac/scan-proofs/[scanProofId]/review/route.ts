@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { mockDb } from "@ahh-wfm/mock-data";
 import { checkApiAuth } from "@/lib/api-guards";
 import { isAdminUser } from "@/lib/permissions";
+import { createSecfacFieldExecutionAudit, extractAuditHeaders } from "@/lib/secfac-audit-helpers";
 
 interface RouteParams {
   params: {
@@ -68,6 +69,28 @@ export async function PATCH(request: Request, { params }: RouteParams) {
 
     // 6. Sync with linked patrol checkpoints
     const patrolSync = await (mockDb as any).syncPatrolCheckpointFromScanProof(scanProofId);
+
+    // Write audit record
+    const auditHeaders = extractAuditHeaders(request);
+    await createSecfacFieldExecutionAudit({
+      operationType: proof.operationType,
+      employeeId: proof.employeeId,
+      employeeCode: proof.employee?.employeeId || null,
+      employeeName: proof.employee?.name || null,
+      assignmentId: proof.assignmentId,
+      scanProofId: proof.id,
+      actionType: validationStatus === "VALID" ? "SCAN_PROOF_REVIEW_APPROVE" : "SCAN_PROOF_REVIEW_REJECT",
+      actionSource: "WEB_SUPERVISOR",
+      ...auditHeaders,
+      syncMode: "SERVER_SIDE",
+      actorUserId: user.id,
+      actorEmployeeId: user.employeeId || user.id,
+      actorName: user.name || null,
+      actorEmail: user.email || null,
+      actorRole: user.role || null,
+      resultStatus: validationStatus === "VALID" ? "SUCCESS" : "REJECTED",
+      resultMessage: `Scan proof reviewed by supervisor. Remarks: ${reviewRemarks}`
+    });
 
     return NextResponse.json({
       success: true,

@@ -4,6 +4,7 @@ import { checkApiAuth } from "@/lib/api-guards";
 import { isAdminUser } from "@/lib/permissions";
 import { saveEvidenceFile } from "@/lib/secfac-evidence-storage";
 import { prisma } from "@ahh-wfm/database";
+import { createSecfacFieldExecutionAudit, extractAuditHeaders } from "@/lib/secfac-audit-helpers";
 
 export async function POST(request: Request) {
   const auth = await checkApiAuth();
@@ -124,6 +125,26 @@ export async function POST(request: Request) {
       longitude,
       gpsAccuracyMeters,
       uploadedById: user.id
+    });
+
+    // Write audit record
+    const auditHeaders = extractAuditHeaders(request);
+    await createSecfacFieldExecutionAudit({
+      operationType: execution.operationType,
+      employeeId: execution.employeeId,
+      employeeCode: execution.employee?.employeeId || null,
+      employeeName: execution.employee?.name || null,
+      assignmentId: assignmentId || execution.assignmentId || null,
+      checklistExecutionId: executionId,
+      evidenceAttachmentId: newAttachment.id,
+      actionType: "EVIDENCE_UPLOAD",
+      actionSource: auditHeaders.syncMode === "OFFLINE_REPLAY" ? "MOBILE_OFFLINE_SYNC" : "MOBILE_ONLINE",
+      ...auditHeaders,
+      latitude,
+      longitude,
+      accuracy: gpsAccuracyMeters,
+      resultStatus: "SUCCESS",
+      resultMessage: `Evidence photo uploaded successfully: ${newAttachment.fileName}`
     });
 
     return NextResponse.json({ success: true, data: newAttachment }, { status: 201 });

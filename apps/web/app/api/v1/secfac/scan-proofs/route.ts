@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { mockDb } from "@ahh-wfm/mock-data";
 import { checkApiAuth } from "@/lib/api-guards";
 import { isAdminUser } from "@/lib/permissions";
+import { createSecfacFieldExecutionAudit, extractAuditHeaders } from "@/lib/secfac-audit-helpers";
 
 function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 6371e3; // meters
@@ -215,6 +216,25 @@ export async function POST(request: Request) {
       longitude,
       gpsAccuracyMeters,
       deviceInfo
+    });
+
+    // Write audit record
+    const auditHeaders = extractAuditHeaders(request);
+    await createSecfacFieldExecutionAudit({
+      operationType: assignment.operationType,
+      employeeId: assignment.employeeId,
+      employeeCode: assignment.employee?.employeeId || null,
+      employeeName: assignment.employee?.name || null,
+      assignmentId,
+      scanProofId: result.id,
+      actionType: "SCAN_PROOF_CREATE",
+      actionSource: auditHeaders.syncMode === "OFFLINE_REPLAY" ? "MOBILE_OFFLINE_SYNC" : "MOBILE_ONLINE",
+      ...auditHeaders,
+      latitude,
+      longitude,
+      accuracy: gpsAccuracyMeters,
+      resultStatus: "SUCCESS",
+      resultMessage: `Scan proof created successfully. Mode: ${scanMode}. Status: ${validationStatus}`
     });
 
     return NextResponse.json({ success: true, data: result }, { status: 201 });

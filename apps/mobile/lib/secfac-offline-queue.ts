@@ -25,7 +25,15 @@ export interface QueueItem {
   canDiscard?: boolean;
   needsSupervisorReview?: boolean;
   conflictReported?: boolean;
+
+  deviceSessionId?: string;
+  deviceLabel?: string;
+  devicePlatform?: string;
+  clientActionAt?: string;
+  networkStatus?: string;
 }
+
+import { getOrCreateDeviceSession } from "./secfac-device-session";
 
 const STORAGE_KEY = 'secfac_offline_queue';
 
@@ -56,10 +64,23 @@ function saveQueue(queue: QueueItem[]): void {
 
 export function addQueueItem(item: Omit<QueueItem, 'createdAt' | 'attemptCount' | 'status' | 'idempotencyKey'> & { idempotencyKey?: string }): QueueItem {
   const queue = getQueue();
+  let sessionMeta = {};
+  try {
+    const session = getOrCreateDeviceSession();
+    sessionMeta = {
+      deviceSessionId: session.deviceSessionId,
+      deviceLabel: session.deviceLabel,
+      devicePlatform: session.devicePlatform
+    };
+  } catch (e) {}
+
   const newItem: QueueItem = {
     ...item,
     idempotencyKey: item.idempotencyKey || createIdempotencyKey(),
     createdAt: new Date().toISOString(),
+    clientActionAt: new Date().toISOString(),
+    networkStatus: (typeof navigator !== "undefined" && navigator.onLine) ? "ONLINE" : "OFFLINE",
+    ...sessionMeta,
     attemptCount: 0,
     status: 'PENDING'
   };
@@ -212,7 +233,14 @@ export async function processQueue(): Promise<void> {
         method: nextItem.method,
         headers: {
           'Content-Type': 'application/json',
-          'X-Idempotency-Key': nextItem.idempotencyKey
+          'X-Idempotency-Key': nextItem.idempotencyKey,
+          'X-Secfac-Device-Session-Id': nextItem.deviceSessionId || '',
+          'X-Secfac-Device-Label': nextItem.deviceLabel || '',
+          'X-Secfac-Device-Platform': nextItem.devicePlatform || '',
+          'X-Secfac-Client-Action-At': nextItem.clientActionAt || nextItem.createdAt,
+          'X-Secfac-Network-Status': 'OFFLINE',
+          'X-Secfac-Queue-Item-Id': nextItem.id,
+          'X-Secfac-Sync-Mode': 'OFFLINE_REPLAY'
         },
         body: JSON.stringify(updatedPayload)
       });

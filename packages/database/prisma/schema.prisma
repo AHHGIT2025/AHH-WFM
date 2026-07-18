@@ -135,6 +135,7 @@ model Employee {
   secfacReviewedScanProofs    SecfacScanProof[]          @relation("SecfacScanProofReviewedBy")
   secfacPatrolExecutions      SecfacPatrolExecution[]    @relation("SecfacPatrolExecutionEmployee")
   secfacSyncConflicts         SecfacSyncConflict[]       @relation("SecfacEmployeeSyncConflicts")
+  secfacFieldAudits           SecfacFieldExecutionAudit[] @relation("SecfacFieldAuditEmployee")
 }
 
 model Department {
@@ -2450,6 +2451,74 @@ model SecfacSyncConflict {
   @@index([status])
   @@index([conflictType])
   @@index([queueItemId])
+}
+
+model SecfacFieldExecutionAudit {
+  id                     String   @id @default(uuid())
+
+  operationType          String
+
+  employeeId             String
+  employeeCode           String?
+  employeeName           String?
+  employee               Employee @relation("SecfacFieldAuditEmployee", fields: [employeeId], references: [id], onDelete: Restrict)
+
+  actorUserId            String?
+  actorEmployeeId        String?
+  actorName              String?
+  actorEmail             String?
+  actorRole              String?
+
+  assignmentId           String?
+  checklistExecutionId   String?
+  patrolExecutionId      String?
+  checkpointExecutionId  String?
+  scanProofId            String?
+  evidenceAttachmentId   String?
+  syncConflictId         String?
+
+  actionType             String
+  actionSource           String
+
+  queueItemId            String?
+  idempotencyKey         String?
+
+  deviceSessionId        String?
+  deviceLabel            String?
+  devicePlatform         String?
+  userAgent              String?  @db.Text
+  appSource              String?
+
+  clientActionAt         DateTime?
+  serverReceivedAt       DateTime @default(now())
+
+  syncMode               String   @default("ONLINE")
+  networkStatus          String?
+
+  latitude               Float?
+  longitude              Float?
+  accuracy               Float?
+
+  resultStatus           String   @default("SUCCESS")
+  resultMessage          String?  @db.Text
+
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  @@index([operationType])
+  @@index([employeeId])
+  @@index([actorUserId])
+  @@index([assignmentId])
+  @@index([checklistExecutionId])
+  @@index([patrolExecutionId])
+  @@index([syncConflictId])
+  @@index([actionType])
+  @@index([actionSource])
+  @@index([resultStatus])
+  @@index([syncMode])
+  @@index([createdAt])
+  @@index([deviceSessionId])
+  @@index([idempotencyKey])
 }
 
 

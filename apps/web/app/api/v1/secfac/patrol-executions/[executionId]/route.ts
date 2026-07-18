@@ -3,6 +3,7 @@ import { mockDb, isDbConnected } from "@ahh-wfm/mock-data";
 import { checkApiAuth } from "@/lib/api-guards";
 import { isAdminUser } from "@/lib/permissions";
 import { prisma } from "@ahh-wfm/database";
+import { createSecfacFieldExecutionAudit, extractAuditHeaders } from "@/lib/secfac-audit-helpers";
 
 export async function GET(
   request: Request,
@@ -194,6 +195,22 @@ export async function PATCH(
     const updated = await mockDb.updateSecfacPatrolExecution(executionId, {
       status: finalStatus,
       completedAt
+    });
+
+    // Write audit record
+    const auditHeaders = extractAuditHeaders(request);
+    await createSecfacFieldExecutionAudit({
+      operationType: execution.route?.operationType || execution.assignment?.operationType || "SECURITY_GUARDING",
+      employeeId: execution.employeeId,
+      employeeCode: execution.employee?.employeeId || null,
+      employeeName: execution.employee?.name || null,
+      assignmentId: execution.assignmentId,
+      patrolExecutionId: executionId,
+      actionType: finalStatus === "CANCELLED" ? "PATROL_ROUTE_CANCEL" : "PATROL_ROUTE_SUBMIT",
+      actionSource: auditHeaders.syncMode === "OFFLINE_REPLAY" ? "MOBILE_OFFLINE_SYNC" : "MOBILE_ONLINE",
+      ...auditHeaders,
+      resultStatus: "SUCCESS",
+      resultMessage: `Patrol route execution updated to: ${finalStatus}`
     });
 
     return NextResponse.json({ success: true, data: updated });

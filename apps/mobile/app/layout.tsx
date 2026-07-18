@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import AuthProvider from "../components/auth-provider";
 import { MobileShell } from "../components/mobile-shell";
+import SecfacSessionInitializer from "../components/secfac-session-initializer";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -17,6 +18,7 @@ export default function RootLayout({
     <html lang="en">
       <body className="antialiased">
         <AuthProvider>
+          <SecfacSessionInitializer />
           <MobileShell>{children}</MobileShell>
         </AuthProvider>
       </body>

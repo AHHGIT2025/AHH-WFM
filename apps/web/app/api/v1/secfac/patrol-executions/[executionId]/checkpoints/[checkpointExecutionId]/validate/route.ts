@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { mockDb } from "@ahh-wfm/mock-data";
 import { checkApiAuth } from "@/lib/api-guards";
 import { isAdminUser } from "@/lib/permissions";
+import { createSecfacFieldExecutionAudit, extractAuditHeaders } from "@/lib/secfac-audit-helpers";
 
 export async function POST(
   request: Request,
@@ -145,6 +146,24 @@ export async function POST(
       checkpointExecutionId,
       scanProofId
     );
+
+    // Write audit record
+    const auditHeaders = extractAuditHeaders(request);
+    await createSecfacFieldExecutionAudit({
+      operationType: execution.operationType || "SECURITY_GUARDING",
+      employeeId: execution.employeeId,
+      employeeCode: execution.employee?.employeeId || null,
+      employeeName: execution.employee?.name || null,
+      assignmentId: execution.assignmentId,
+      patrolExecutionId: executionId,
+      checkpointExecutionId,
+      scanProofId,
+      actionType: "PATROL_CHECKPOINT_VALIDATE",
+      actionSource: auditHeaders.syncMode === "OFFLINE_REPLAY" ? "MOBILE_OFFLINE_SYNC" : "MOBILE_ONLINE",
+      ...auditHeaders,
+      resultStatus: "SUCCESS",
+      resultMessage: `Checkpoint ${checkpointExec.checkpoint?.label || checkpointExecutionId} validated successfully.`
+    });
 
     return NextResponse.json({ success: true, data: updatedExec });
   } catch (error: any) {

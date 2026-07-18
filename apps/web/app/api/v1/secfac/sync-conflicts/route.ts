@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { mockDb } from "@ahh-wfm/mock-data";
 import { checkApiAuth } from "@/lib/api-guards";
 import { isAdminUser } from "@/lib/permissions";
+import { createSecfacFieldExecutionAudit, extractAuditHeaders } from "@/lib/secfac-audit-helpers";
 
 export async function POST(request: Request) {
   const auth = await checkApiAuth();
@@ -80,6 +81,25 @@ export async function POST(request: Request) {
       canRetry: canRetry === true,
       canDiscard: canDiscard !== false,
       needsSupervisorReview: needsSupervisorReview !== false
+    });
+
+    // Write audit record
+    const auditHeaders = extractAuditHeaders(request);
+    await createSecfacFieldExecutionAudit({
+      operationType,
+      employeeId,
+      employeeCode: employeeCode || user.employeeId || null,
+      employeeName: employeeName || user.name || null,
+      assignmentId: assignmentId || null,
+      checklistExecutionId: checklistExecutionId || null,
+      patrolExecutionId: patrolExecutionId || null,
+      checkpointExecutionId: checkpointExecutionId || null,
+      syncConflictId: result.id,
+      actionType: "SYNC_CONFLICT_REPORTED",
+      actionSource: auditHeaders.syncMode === "OFFLINE_REPLAY" ? "MOBILE_OFFLINE_SYNC" : "MOBILE_ONLINE",
+      ...auditHeaders,
+      resultStatus: "CONFLICT",
+      resultMessage: `Sync conflict reported on ${actionType}. Conflict: ${conflictType}. Message: ${serverMessage}`
     });
 
     return NextResponse.json({ success: true, data: result }, { status: 201 });

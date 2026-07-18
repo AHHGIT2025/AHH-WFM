@@ -2868,6 +2868,61 @@ describe('AHH WFM API Routes Verification', () => {
     });
     expect(deleteConflictRes.status).toBe(200);
 
+    // ─── 13. Test Phase 4C: Device Session Hardening & Field Execution Audit Trail ───
+
+    // Cross-scope employee check: field employees cannot list audit logs -> 403
+    const listAuditsEmpRes = await axios.get(`${WEB_URL}/api/v1/secfac/field-audit`, {
+      headers: empHeaders,
+      validateStatus: () => true
+    });
+    expect(listAuditsEmpRes.status).toBe(403);
+
+    // Create a new checklist execution with device headers to trigger audit logging
+    const auditExecutionId = crypto.randomUUID();
+    const auditChecklistRes = await axios.post(`${WEB_URL}/api/v1/secfac/checklist-executions`, {
+      id: auditExecutionId,
+      assignmentId: assignId,
+      checklistTemplateId: tempId,
+      status: 'DRAFT',
+      responses: []
+    }, {
+      headers: {
+        ...empHeaders,
+        'X-Secfac-Device-Session-Id': 'jest-session-abc-4c',
+        'X-Secfac-Device-Label': 'Jest Automation',
+        'X-Secfac-Device-Platform': 'jest-runner',
+        'X-Secfac-Client-Action-At': '2026-07-18T10:00:00.000Z',
+        'X-Secfac-Network-Status': 'ONLINE'
+      },
+      validateStatus: () => true
+    });
+    expect(auditChecklistRes.status).toBe(201);
+
+    // Verify audit record exists via GET /api/v1/secfac/field-audit (supervisor account -> 200)
+    const listAuditsAdminRes = await axios.get(`${WEB_URL}/api/v1/secfac/field-audit`, {
+      headers: adminHeaders,
+      validateStatus: () => true
+    });
+    expect(listAuditsAdminRes.status).toBe(200);
+    expect(listAuditsAdminRes.data.success).toBe(true);
+
+    const auditRecords = listAuditsAdminRes.data.data;
+    const testAudit = auditRecords.find((a: any) => a.checklistExecutionId === auditExecutionId);
+    expect(testAudit).toBeDefined();
+    expect(testAudit.deviceSessionId).toBe('jest-session-abc-4c');
+    expect(testAudit.deviceLabel).toBe('Jest Automation');
+    expect(testAudit.devicePlatform).toBe('jest-runner');
+    expect(testAudit.networkStatus).toBe('ONLINE');
+    expect(testAudit.actionType).toBe('CHECKLIST_DRAFT_SAVE');
+
+    // Clean up Phase 4C records
+    try {
+      if (prisma) {
+        await prisma.secfacFieldExecutionAudit.deleteMany({ where: { checklistExecutionId: auditExecutionId } });
+        await prisma.secfacChecklistExecution.delete({ where: { id: auditExecutionId } });
+      }
+    } catch (e) {}
+
     // Clean up cancelled assignment
     try {
       if (prisma) {

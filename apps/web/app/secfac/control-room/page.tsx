@@ -99,9 +99,11 @@ export default function ControlRoomPage() {
   const [patrolExecutions, setPatrolExecutions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"checklist" | "patrol" | "conflicts">("checklist");
+  const [activeTab, setActiveTab] = useState<"checklist" | "patrol" | "conflicts" | "audit">("checklist");
   const [conflicts, setConflicts] = useState<any[]>([]);
   const [loadingConflicts, setLoadingConflicts] = useState(false);
+  const [audits, setAudits] = useState<any[]>([]);
+  const [loadingAudits, setLoadingAudits] = useState(false);
 
   // Detail Drawer State
   const [selectedExecId, setSelectedExecId] = useState<string | null>(null);
@@ -224,6 +226,29 @@ export default function ControlRoomPage() {
     }
   };
 
+  const fetchAudits = async () => {
+    setLoadingAudits(true);
+    try {
+      const params = new URLSearchParams();
+      if (!isAdmin) {
+        if (operationAccess.allowedSecurityGuarding && !operationAccess.allowedFacilityManagement) {
+          params.append("operationType", "SECURITY_GUARDING");
+        } else if (operationAccess.allowedFacilityManagement && !operationAccess.allowedSecurityGuarding) {
+          params.append("operationType", "FACILITY_MANAGEMENT");
+        }
+      }
+      const res = await fetch(`/api/v1/secfac/field-audit?${params.toString()}`);
+      const data = await res.json();
+      if (data.success) {
+        setAudits(data.data || []);
+      }
+    } catch (err) {
+      console.error("Failed to fetch field audits:", err);
+    } finally {
+      setLoadingAudits(false);
+    }
+  };
+
   const handleAcknowledgeConflict = async (id: string, actionStatus: "ACKNOWLEDGED" | "DISMISSED") => {
     if (!confirm(`Are you sure you want to mark this conflict as ${actionStatus.toLowerCase()}?`)) {
       return;
@@ -239,6 +264,7 @@ export default function ControlRoomPage() {
       const data = await res.json();
       if (data.success) {
         await fetchConflicts();
+        await fetchAudits();
       } else {
         alert(data.error || "Failed to update conflict status");
       }
@@ -250,6 +276,7 @@ export default function ControlRoomPage() {
   useEffect(() => {
     fetchExecutions();
     fetchConflicts();
+    fetchAudits();
   }, [session]);
 
   useEffect(() => {
@@ -635,6 +662,16 @@ export default function ControlRoomPage() {
         >
           Offline Sync Issues ({conflicts.length})
         </button>
+        <button
+          onClick={() => setActiveTab("audit")}
+          className={`pb-2 text-xs font-bold transition-all border-b-2 px-1 ${
+            activeTab === "audit"
+              ? "border-[#002D72] text-[#002D72]"
+              : "border-transparent text-[#747782] hover:text-[#001A48]"
+          }`}
+        >
+          Audit Trail ({audits.length})
+        </button>
       </div>
 
       {/* Main Review Queue Table */}
@@ -829,7 +866,7 @@ export default function ControlRoomPage() {
               </table>
             </div>
           )
-        ) : (
+        ) : activeTab === "conflicts" ? (
           loadingConflicts ? (
             <div className="p-12 flex flex-col items-center justify-center gap-3">
               <div className="w-8 h-8 border-4 border-[#002D72] border-t-transparent rounded-full animate-spin"></div>
@@ -913,6 +950,116 @@ export default function ControlRoomPage() {
                           >
                             Dismiss
                           </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )
+        ) : (
+          loadingAudits ? (
+            <div className="p-12 flex flex-col items-center justify-center gap-3">
+              <div className="w-8 h-8 border-4 border-[#002D72] border-t-transparent rounded-full animate-spin"></div>
+              <span className="text-xs text-[#747782] font-bold font-mono">Loading field audits...</span>
+            </div>
+          ) : audits.length === 0 ? (
+            <div className="p-12 text-center text-[#747782]">
+              <span className="material-symbols-outlined text-3xl mb-2 text-[#C4C6D2]">receipt_long</span>
+              <p className="text-xs font-bold font-mono">No field execution audits recorded yet</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="bg-[#002D72]/5 text-[#001A48] border-b border-[#C4C6D2] font-bold font-mono text-[10px] uppercase">
+                    <th className="p-3">Actor / Employee</th>
+                    <th className="p-3">Operation</th>
+                    <th className="p-3">Action Details</th>
+                    <th className="p-3">Session & Platform</th>
+                    <th className="p-3">Connection</th>
+                    <th className="p-3">Status</th>
+                    <th className="p-3 text-right">Timestamp</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#C4C6D2]/40 text-xs">
+                  {audits.map((a) => (
+                    <tr key={a.id} className="hover:bg-[#F4F6FC]/30">
+                      <td className="p-3">
+                        <div className="flex flex-col">
+                          {a.actorName ? (
+                            <>
+                              <span className="font-bold text-slate-800">{a.actorName}</span>
+                              <span className="text-[9px] text-[#747782] font-mono">Role: {a.actorRole}</span>
+                              <span className="text-[9px] text-slate-500 font-mono">For: {a.employeeName} ({a.employeeCode})</span>
+                            </>
+                          ) : (
+                            <>
+                              <span className="font-bold text-slate-800">{a.employeeName || "Field Agent"}</span>
+                              <span className="text-[10px] text-[#747782] font-mono">{a.employeeCode || "Code N/A"}</span>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                      <td className="p-3 font-mono text-[10px]">
+                        {a.operationType === "SECURITY_GUARDING" ? (
+                          <span className="text-blue-800 font-bold bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">Security</span>
+                        ) : (
+                          <span className="text-purple-800 font-bold bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200">Facility</span>
+                        )}
+                      </td>
+                      <td className="p-3">
+                        <div className="flex flex-col gap-0.5 max-w-sm">
+                          <span className="font-bold text-slate-700">{a.actionType.replace(/_/g, " ")}</span>
+                          {a.resultMessage && (
+                            <p className="text-[11px] text-slate-600 leading-tight font-medium">{a.resultMessage}</p>
+                          )}
+                          <div className="flex gap-1.5 text-[9px] text-slate-500 font-mono mt-0.5">
+                            {a.assignmentId && <span>Assign: {a.assignmentId.slice(0, 8)}...</span>}
+                            {a.checklistExecutionId && <span>Checklist: {a.checklistExecutionId.slice(0, 8)}...</span>}
+                            {a.patrolExecutionId && <span>Patrol: {a.patrolExecutionId.slice(0, 8)}...</span>}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="p-3">
+                        <div className="flex flex-col text-[10px] text-slate-750">
+                          <span className="font-semibold text-slate-800">{a.deviceLabel || "Unknown Device"}</span>
+                          <span className="text-[9px] text-[#747782] font-mono">Platform: {a.devicePlatform || "unknown"}</span>
+                          {a.deviceSessionId && (
+                            <span className="text-[9px] text-[#747782] font-mono">Session ID: {a.deviceSessionId.slice(0, 8)}...</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="p-3">
+                        <div className="flex flex-col gap-0.5">
+                          <span className={`inline-block text-[9px] font-extrabold px-1.5 py-0.2 rounded border max-w-fit font-mono ${
+                            a.syncMode === "ONLINE" ? "bg-green-50 text-green-700 border-green-200" :
+                            a.syncMode === "OFFLINE_REPLAY" ? "bg-amber-50 text-amber-700 border-amber-200 animate-pulse" :
+                            "bg-purple-50 text-purple-700 border-purple-200"
+                          }`}>
+                            {a.syncMode}
+                          </span>
+                          {a.networkStatus && (
+                            <span className="text-[9px] text-slate-500 font-mono">Status: {a.networkStatus}</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="p-3">
+                        <span className={`px-2 py-0.5 rounded-[10px] text-[9px] font-bold ${
+                          a.resultStatus === "SUCCESS" ? "bg-green-100 text-green-700 font-extrabold" :
+                          a.resultStatus === "CONFLICT" ? "bg-amber-100 text-amber-700" :
+                          "bg-red-100 text-red-700"
+                        }`}>
+                          {a.resultStatus}
+                        </span>
+                      </td>
+                      <td className="p-3 text-right">
+                        <div className="flex flex-col items-end">
+                          <span className="font-bold text-slate-800">{formatDateTime(a.createdAt)}</span>
+                          {a.clientActionAt && (
+                            <span className="text-[9px] text-[#747782] font-mono">Client: {formatDateTime(a.clientActionAt)}</span>
+                          )}
                         </div>
                       </td>
                     </tr>

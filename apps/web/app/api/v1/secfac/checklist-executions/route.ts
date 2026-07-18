@@ -3,6 +3,7 @@ import { mockDb, isDbConnected, readDb } from "@ahh-wfm/mock-data";
 import { checkApiAuth } from "@/lib/api-guards";
 import { isAdminUser } from "@/lib/permissions";
 import { prisma } from "@ahh-wfm/database";
+import { createSecfacFieldExecutionAudit, extractAuditHeaders } from "@/lib/secfac-audit-helpers";
 
 const APPROVED_STATUSES = ["DRAFT", "SUBMITTED", "PENDING_REVIEW", "APPROVED", "REJECTED", "CANCELLED"];
 
@@ -339,6 +340,25 @@ export async function POST(request: Request) {
       deviceInfo: deviceInfo || null,
       remarks: remarks || null,
       responses: responses || []
+    });
+
+    // Write audit record
+    const auditHeaders = extractAuditHeaders(request);
+    await createSecfacFieldExecutionAudit({
+      operationType: assignment.operationType,
+      employeeId: assignment.employeeId,
+      employeeCode: assignment.employee?.employeeId || null,
+      employeeName: assignment.employee?.name || null,
+      assignmentId,
+      checklistExecutionId: result.id,
+      actionType: finalStatus === "DRAFT" ? "CHECKLIST_DRAFT_SAVE" : "CHECKLIST_SUBMIT",
+      actionSource: auditHeaders.syncMode === "OFFLINE_REPLAY" ? "MOBILE_OFFLINE_SYNC" : "MOBILE_ONLINE",
+      ...auditHeaders,
+      latitude: latitude !== undefined ? latitude : null,
+      longitude: longitude !== undefined ? longitude : null,
+      accuracy: gpsAccuracyMeters !== undefined ? gpsAccuracyMeters : null,
+      resultStatus: "SUCCESS",
+      resultMessage: `Checklist execution created with status: ${finalStatus}`
     });
 
     return NextResponse.json({ success: true, data: result }, { status: 201 });

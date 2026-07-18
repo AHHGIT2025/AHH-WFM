@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { mockDb } from "@ahh-wfm/mock-data";
 import { checkApiAuth } from "@/lib/api-guards";
 import { isAdminUser } from "@/lib/permissions";
+import { createSecfacFieldExecutionAudit, extractAuditHeaders } from "@/lib/secfac-audit-helpers";
 
 async function verifyConflictAccess(user: any, conflictId: string) {
   const isAdmin = isAdminUser(user);
@@ -51,10 +52,36 @@ export async function DELETE(
   const conflictId = params.id;
 
   try {
-    const { error } = await verifyConflictAccess(user, conflictId);
+    const { error, conflict } = await verifyConflictAccess(user, conflictId);
     if (error) return error;
 
     await mockDb.deleteSecfacSyncConflict(conflictId);
+
+    // Write audit record
+    const auditHeaders = extractAuditHeaders(request);
+    await createSecfacFieldExecutionAudit({
+      operationType: conflict.operationType,
+      employeeId: conflict.employeeId,
+      employeeCode: conflict.employeeCode || null,
+      employeeName: conflict.employeeName || null,
+      assignmentId: conflict.assignmentId,
+      checklistExecutionId: conflict.checklistExecutionId,
+      patrolExecutionId: conflict.patrolExecutionId,
+      checkpointExecutionId: conflict.checkpointExecutionId,
+      syncConflictId: conflict.id,
+      actionType: "SYNC_CONFLICT_DISMISSED",
+      actionSource: "WEB_SUPERVISOR",
+      ...auditHeaders,
+      syncMode: "SERVER_SIDE",
+      actorUserId: user.id,
+      actorEmployeeId: user.employeeId || user.id,
+      actorName: user.name || null,
+      actorEmail: user.email || null,
+      actorRole: user.role || null,
+      resultStatus: "SUCCESS",
+      resultMessage: `Sync conflict report ID ${conflictId} dismissed/deleted by supervisor.`
+    });
+
     return NextResponse.json({ success: true });
   } catch (error: any) {
     return NextResponse.json({ success: false, message: "Failed to delete conflict report", error: error.message }, { status: 500 });
@@ -86,6 +113,31 @@ export async function PATCH(
       status,
       acknowledgedAt: status === "ACKNOWLEDGED" ? new Date().toISOString() : conflict.acknowledgedAt,
       acknowledgedById: status === "ACKNOWLEDGED" ? user.id : conflict.acknowledgedById
+    });
+
+    // Write audit record
+    const auditHeaders = extractAuditHeaders(request);
+    await createSecfacFieldExecutionAudit({
+      operationType: conflict.operationType,
+      employeeId: conflict.employeeId,
+      employeeCode: conflict.employeeCode || null,
+      employeeName: conflict.employeeName || null,
+      assignmentId: conflict.assignmentId,
+      checklistExecutionId: conflict.checklistExecutionId,
+      patrolExecutionId: conflict.patrolExecutionId,
+      checkpointExecutionId: conflict.checkpointExecutionId,
+      syncConflictId: conflict.id,
+      actionType: status === "RESOLVED" ? "SYNC_CONFLICT_RESOLVED" : "SYNC_CONFLICT_ACKNOWLEDGED",
+      actionSource: "WEB_SUPERVISOR",
+      ...auditHeaders,
+      syncMode: "SERVER_SIDE",
+      actorUserId: user.id,
+      actorEmployeeId: user.employeeId || user.id,
+      actorName: user.name || null,
+      actorEmail: user.email || null,
+      actorRole: user.role || null,
+      resultStatus: "SUCCESS",
+      resultMessage: `Sync conflict report status updated to: ${status} by supervisor.`
     });
 
     return NextResponse.json({ success: true, data: updated });
