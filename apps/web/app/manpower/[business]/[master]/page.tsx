@@ -88,6 +88,8 @@ export default function ManpowerMasterPage() {
   const [deploymentsList, setDeploymentsList] = useState<any[]>([]);
   const [showAddLicenseModal, setShowAddLicenseModal] = useState(false);
   const [showAddGatePassModal, setShowAddGatePassModal] = useState(false);
+  // Gate pass modal — project/worksite cascade
+  const [gatePassProjectId, setGatePassProjectId] = useState("");
 
   // Security Projects states
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
@@ -438,14 +440,18 @@ export default function ManpowerMasterPage() {
         if (res.ok) setSites(await res.json());
       }
       if (master === "manpower" || master === "contracts") {
-        const [catRes, empRes, delRes] = await Promise.all([
+        const [catRes, empRes, delRes, projRes, sitesRes] = await Promise.all([
           fetch(`/api/v1/manpower/${business}/categories`),
           fetch(`/api/v1/employees`),
-          fetch(`/api/v1/settings/workflow-delegations`).catch(() => null)
+          fetch(`/api/v1/settings/workflow-delegations`).catch(() => null),
+          fetch(`/api/v1/manpower/${business}/projects`).catch(() => null),
+          fetch(`/api/v1/manpower/${business}/sites`).catch(() => null)
         ]);
         if (catRes.ok) setCategories(await catRes.json());
         if (empRes.ok) setWorkforceEmployees(await empRes.json());
         if (delRes && delRes.ok) setDelegations(await delRes.json());
+        if (projRes && projRes.ok) setProjects(await projRes.json());
+        if (sitesRes && sitesRes.ok) setSites(await sitesRes.json());
       }
       if (master === "coordinators") {
         const [projRes, empRes, sitesRes, unitsRes] = await Promise.all([
@@ -6494,7 +6500,7 @@ export default function ManpowerMasterPage() {
           {[
             { id: "directory", label: "Directory", icon: "badge" },
             { id: "licenses", label: "MOI Security Licenses", icon: "shield" },
-            { id: "gatePasses", label: "Site Gate Passes", icon: "badge_card" },
+            { id: "gatePasses", label: "Gate Pass", icon: "id_card" },
             { id: "relieverPools", label: "Reliever Assignment", icon: "groups" },
             { id: "overtimeLogs", label: "Overtime / Event History", icon: "schedule" }
           ].map(tab => (
@@ -10190,7 +10196,7 @@ export default function ManpowerMasterPage() {
           <div className="bg-surface rounded-xl border border-outline-variant shadow-lg max-w-md w-full overflow-hidden animate-fade-in">
             <div className="px-6 py-4 border-b border-outline-variant flex justify-between items-center bg-surface-container-low">
               <h3 className="text-sm font-black text-primary">Record Site Gate Pass</h3>
-              <button onClick={() => setShowAddGatePassModal(false)} className="text-on-surface-variant hover:text-primary">
+              <button onClick={() => { setShowAddGatePassModal(false); setGatePassProjectId(""); }} className="text-on-surface-variant hover:text-primary">
                 <span className="material-symbols-outlined text-[20px]">close</span>
               </button>
             </div>
@@ -10201,6 +10207,7 @@ export default function ManpowerMasterPage() {
                     {formError}
                   </div>
                 )}
+                {/* 1. Select Security Guard */}
                 <div>
                   <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Select Security Guard</label>
                   <select
@@ -10214,19 +10221,39 @@ export default function ManpowerMasterPage() {
                     ))}
                   </select>
                 </div>
+                {/* 2. Select Project (Security Guarding) */}
+                <div>
+                  <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Select Project</label>
+                  <select
+                    value={gatePassProjectId}
+                    onChange={(e) => setGatePassProjectId(e.target.value)}
+                    required
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                  >
+                    <option value="">-- Select Project --</option>
+                    {projects.filter((p: any) => p.isActive !== false && p.status !== "INACTIVE" && p.status !== "CANCELLED").map((p: any) => (
+                      <option key={p.id} value={p.id}>{p.name} ({p.code})</option>
+                    ))}
+                  </select>
+                </div>
+                {/* 3. Select Worksite (filtered by project) */}
                 <div>
                   <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Select Worksite</label>
                   <select
                     name="siteId"
                     required
-                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                    disabled={!gatePassProjectId}
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface disabled:opacity-60 disabled:cursor-not-allowed"
                   >
-                    <option value="">-- Choose Worksite --</option>
-                    {sites.map((site: any) => (
-                      <option key={site.id} value={site.id}>{site.name}</option>
-                    ))}
+                    <option value="">{gatePassProjectId ? "-- Choose Worksite --" : "-- Select Project First --"}</option>
+                    {gatePassProjectId && sites
+                      .filter((s: any) => s.projectId === gatePassProjectId && s.isActive !== false)
+                      .map((site: any) => (
+                        <option key={site.id} value={site.id}>{site.name} ({site.code})</option>
+                      ))}
                   </select>
                 </div>
+                {/* 4. Gate Pass Number (auto-generated) */}
                 <div>
                   <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Gate Pass Number</label>
                   <input
@@ -10237,6 +10264,7 @@ export default function ManpowerMasterPage() {
                     className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-xs text-on-surface-variant focus:outline-none"
                   />
                 </div>
+                {/* 5. Issue Date */}
                 <div>
                   <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Issue Date</label>
                   <input
@@ -10246,6 +10274,7 @@ export default function ManpowerMasterPage() {
                     className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
                   />
                 </div>
+                {/* 6. Expiry Date */}
                 <div>
                   <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Expiry Date</label>
                   <input
@@ -10259,7 +10288,7 @@ export default function ManpowerMasterPage() {
               <div className="px-6 py-4 border-t border-outline-variant flex justify-end gap-3 bg-surface-container-low">
                 <button
                   type="button"
-                  onClick={() => setShowAddGatePassModal(false)}
+                  onClick={() => { setShowAddGatePassModal(false); setGatePassProjectId(""); }}
                   className="px-3 py-2 border border-outline-variant rounded-lg text-xs font-bold text-on-surface hover:bg-surface-container-high transition-colors"
                 >
                   Cancel
