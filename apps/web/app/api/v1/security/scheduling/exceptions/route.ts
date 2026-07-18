@@ -162,8 +162,8 @@ export async function GET(request: Request) {
 
       leaves = (db.leaves || db.leaveRequests || []).filter((l: any) => {
         const isApproved = l.status === "Approved" || l.status === "APPROVED";
-        const lStart = String(l.startDate || l.from || "").split("T")[0];
-        const lEnd = String(l.endDate || l.to || "").split("T")[0];
+        const lStart = !l.startDate && !l.from ? "" : (() => { const v = l.startDate || l.from; if (typeof v === "string") return v.includes("T") ? v.split("T")[0] : v; try { const d = new Date(v); return Number.isNaN(d.getTime()) ? "" : d.toISOString().split("T")[0]; } catch { return ""; } })();
+        const lEnd = !l.endDate && !l.to ? "" : (() => { const v = l.endDate || l.to; if (typeof v === "string") return v.includes("T") ? v.split("T")[0] : v; try { const d = new Date(v); return Number.isNaN(d.getTime()) ? "" : d.toISOString().split("T")[0]; } catch { return ""; } })();
         return isApproved && dateStr >= lStart && dateStr <= lEnd;
       });
     }

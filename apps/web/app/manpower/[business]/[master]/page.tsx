@@ -1075,7 +1075,7 @@ export default function ManpowerMasterPage() {
               <div>
                 <p className="text-[10px] text-on-surface-variant font-medium">Period</p>
                 <p className="font-semibold text-on-surface">
-                  {contract.startDate?.split("T")[0]} to {contract.endDate?.split("T")[0]}
+                  {(() => { const v = contract.startDate; if (!v) return ""; if (typeof v === "string") return v.includes("T") ? v.split("T")[0] : v; try { const d = new Date(v); return Number.isNaN(d.getTime()) ? "" : d.toISOString().split("T")[0]; } catch { return ""; } })()} to {(() => { const v = contract.endDate; if (!v) return ""; if (typeof v === "string") return v.includes("T") ? v.split("T")[0] : v; try { const d = new Date(v); return Number.isNaN(d.getTime()) ? "" : d.toISOString().split("T")[0]; } catch { return ""; } })()}
                 </p>
               </div>
               <div>

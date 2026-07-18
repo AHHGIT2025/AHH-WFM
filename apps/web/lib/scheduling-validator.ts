@@ -1,3 +1,26 @@
+/**
+ * Safely converts any date-like value to a YYYY-MM-DD string.
+ * Handles strings (ISO or plain date), Date objects, and any other
+ * value that can be parsed by `new Date()`. Returns "" for invalid input.
+ */
+export function toDateStr(value: unknown): string {
+  if (!value) return "";
+  if (typeof value === "string") {
+    return value.includes("T") ? value.split("T")[0] : value;
+  }
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) return "";
+    return value.toISOString().split("T")[0];
+  }
+  try {
+    const parsed = new Date(value as any);
+    if (Number.isNaN(parsed.getTime())) return "";
+    return parsed.toISOString().split("T")[0];
+  } catch {
+    return "";
+  }
+}
+
 export interface SiteRequirements {
   requiresMoiLicense?: boolean;
   requiresGatePassCheck?: boolean;
@@ -119,8 +142,8 @@ export function validateDeploymentEligibility(
   const targetDateStr = deploymentSlot.date;
   const hasLeave = leaves.some(l => {
     if (l.employeeId !== employee.id || l.status !== "Approved" && l.status !== "APPROVED") return false;
-    const startStr = (l.startDate || l.from || "").split("T")[0];
-    const endStr = (l.endDate || l.to || "").split("T")[0];
+    const startStr = toDateStr(l.startDate || l.from);
+    const endStr = toDateStr(l.endDate || l.to);
     return targetDateStr >= startStr && targetDateStr <= endStr;
   });
 
