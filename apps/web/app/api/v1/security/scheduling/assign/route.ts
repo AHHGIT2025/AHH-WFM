@@ -63,7 +63,7 @@ export async function POST(request: Request) {
     if (isDb) {
       employee = await prisma.employee.findUnique({
         where: { id: employeeId },
-        include: { securityLicense: true, securityGatePasses: true }
+        include: { securityLicense: true, securityGatePasses: true, designation: true, tradeClassification: true }
       });
       shiftRequirement = await prisma.manpowerShiftRequirement.findUnique({
         where: { id: shiftRequirementId },

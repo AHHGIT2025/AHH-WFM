@@ -3,6 +3,7 @@ import { mockDb, isDbConnected } from "@ahh-wfm/mock-data";
 import { checkApiAuth } from "@/lib/api-guards";
 import { hasPermission } from "@/lib/permissions";
 import { prisma } from "@ahh-wfm/database";
+import { computeDisplayDesignation } from "@/lib/scheduling-validator";
 
 export async function GET(request: Request) {
   const auth = await checkApiAuth();
@@ -175,13 +176,7 @@ export async function POST(request: Request) {
     }
 
     if (existing) {
-      const rawDesig = existing.designation?.name || (existing as any).tradeClassification?.name || (existing as any).position;
-      const isWhiteCollarOrInvalid = (val: string | null | undefined) => {
-        if (!val || typeof val !== "string") return true;
-        const lower = val.toLowerCase();
-        return lower.includes("hr manager") || lower.includes("human resource") || lower.includes("accountant") || lower.includes("admin") || lower === "operations" || lower.includes("department");
-      };
-      const designationName = (rawDesig && !isWhiteCollarOrInvalid(rawDesig)) ? rawDesig : "Security Guard";
+      const designationName = computeDisplayDesignation(null, existing);
 
       const operationalData = {
         sourceEmployeeId: existing.id,

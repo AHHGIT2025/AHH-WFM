@@ -3,7 +3,7 @@ import { checkApiAuth } from "@/lib/api-guards";
 import { hasPermission } from "@/lib/permissions";
 import { mockDb, isDbConnected, readDb } from "@ahh-wfm/mock-data";
 import { prisma } from "@ahh-wfm/database";
-import { validateDeploymentEligibility } from "@/lib/scheduling-validator";
+import { validateDeploymentEligibility, computeDisplayDesignation } from "@/lib/scheduling-validator";
 import { getActiveSiteShiftConfigs } from "@/lib/server-helpers";
 
 function formatDateToYYYYMMDD(d: any): string {
@@ -14,44 +14,6 @@ function formatDateToYYYYMMDD(d: any): string {
   const month = String(dateObj.getMonth() + 1).padStart(2, '0');
   const day = String(dateObj.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
-}
-
-function computeDisplayDesignation(op: any, sourceEmp?: any): string {
-  const isInvalidOrWhiteCollar = (val: string | undefined | null) => {
-    if (!val || typeof val !== "string") return true;
-    const lower = val.trim().toLowerCase();
-    if (!lower || lower === "null" || lower === "undefined") return true;
-    return (
-      lower.includes("hr manager") ||
-      lower.includes("human resource") ||
-      lower.includes("accountant") ||
-      lower.includes("admin") ||
-      lower.includes("department") ||
-      lower === "operations" ||
-      lower === "engineering" ||
-      lower === "logistics" ||
-      lower === "sales"
-    );
-  };
-
-  // Priority a: SecurityOperationalEmployee position / tradePosition / designation
-  if (op?.tradePosition && !isInvalidOrWhiteCollar(op.tradePosition)) return op.tradePosition;
-  if (op?.position && !isInvalidOrWhiteCollar(op.position)) return op.position;
-  if (op?.designation && typeof op.designation === "string" && !isInvalidOrWhiteCollar(op.designation)) return op.designation;
-  if (op?.designation && typeof op.designation === "object" && op.designation.name && !isInvalidOrWhiteCollar(op.designation.name)) return op.designation.name;
-
-  // Priority b & c: Source Employee tradeClassification / designation / position
-  const tradeName = sourceEmp?.tradeClassification?.name || sourceEmp?.tradeClassification;
-  if (tradeName && typeof tradeName === "string" && !isInvalidOrWhiteCollar(tradeName)) return tradeName;
-
-  const desigName = sourceEmp?.designation?.name || sourceEmp?.designation;
-  if (desigName && typeof desigName === "string" && !isInvalidOrWhiteCollar(desigName)) return desigName;
-
-  const posName = sourceEmp?.position || sourceEmp?.tradePosition;
-  if (posName && typeof posName === "string" && !isInvalidOrWhiteCollar(posName)) return posName;
-
-  // Priority d: Fallback for Security Guarding blue collar
-  return "Security Guard";
 }
 
 export async function GET(request: Request) {

@@ -44,7 +44,9 @@ export async function POST(request: Request) {
         where: { id: employeeId },
         include: {
           securityLicense: true,
-          securityGatePasses: true
+          securityGatePasses: true,
+          designation: true,
+          tradeClassification: true
         }
       });
 

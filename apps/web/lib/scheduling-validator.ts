@@ -84,6 +84,79 @@ export function areShiftsOverlapping(start1: string, end1: string, start2: strin
   return false;
 }
 
+export function isGenericOrInvalidDesignation(val: string | undefined | null): boolean {
+  if (!val || typeof val !== "string") return true;
+  const clean = val.trim();
+  if (!clean || clean === "null" || clean === "undefined") return true;
+
+  // Raw IDs or codes like DES-001, DES-HRM, UUIDs
+  if (/^DES-[A-Z0-9]+$/i.test(clean) || /^[0-9a-f-]{30,}$/i.test(clean)) return true;
+
+  const lower = clean.toLowerCase();
+  return (
+    lower === "general worker" ||
+    lower === "worker" ||
+    lower === "staff" ||
+    lower === "employee" ||
+    lower === "operations" ||
+    lower === "guarding" ||
+    lower === "manned security" ||
+    lower === "engineering" ||
+    lower === "logistics" ||
+    lower === "sales" ||
+    lower.includes("hr manager") ||
+    lower.includes("human resource") ||
+    lower.includes("accountant") ||
+    lower.includes("admin") ||
+    lower.includes("department")
+  );
+}
+
+export function computeDisplayDesignation(opOrEmp: any, sourceEmp?: any): string {
+  const op = opOrEmp;
+  const emp = sourceEmp || opOrEmp;
+
+  // Priority 1: employee.tradePosition / tradeClassification.name
+  const empTrade = emp?.tradePosition || emp?.tradeClassification?.name || emp?.tradeClassification;
+  if (empTrade && typeof empTrade === "string" && !isGenericOrInvalidDesignation(empTrade)) {
+    return empTrade;
+  }
+
+  // Priority 2: employee.position / positionCategory
+  const empPos = emp?.position || emp?.positionCategory;
+  if (empPos && typeof empPos === "string" && !isGenericOrInvalidDesignation(empPos)) {
+    return empPos;
+  }
+
+  // Priority 3: employee.jobTitle (only if operational and not white-collar/generic)
+  const empJob = emp?.jobTitle;
+  if (empJob && typeof empJob === "string" && !isGenericOrInvalidDesignation(empJob)) {
+    return empJob;
+  }
+
+  // Priority 4: SecurityOperationalEmployee.tradePosition / position
+  const opTrade = op?.tradePosition || op?.position;
+  if (opTrade && typeof opTrade === "string" && !isGenericOrInvalidDesignation(opTrade)) {
+    return opTrade;
+  }
+
+  // Priority 5 & 6: designation.name / designationName / designation string (if not generic/invalid)
+  const desigObjName = op?.designation?.name || emp?.designation?.name;
+  if (desigObjName && typeof desigObjName === "string" && !isGenericOrInvalidDesignation(desigObjName)) {
+    return desigObjName;
+  }
+
+  const desigStr = (typeof op?.designation === "string" ? op.designation : null) || 
+                   (typeof emp?.designation === "string" ? emp.designation : null) ||
+                   op?.designationName || emp?.designationName;
+  if (desigStr && typeof desigStr === "string" && !isGenericOrInvalidDesignation(desigStr)) {
+    return desigStr;
+  }
+
+  // Priority 7: Fallback for Security Guarding blue collar
+  return "Security Guard";
+}
+
 export function validateDeploymentEligibility(
   employee: any,
   deploymentSlot: any,
@@ -260,7 +333,7 @@ export function validateDeploymentEligibility(
   // Rule 7: Designation match / Acting Duty Advisory
   const reqDesig = siteRequirements.requiredDesignation;
   if (reqDesig && reqDesig !== "any" && reqDesig !== "ANY") {
-    const empDesig = employee.designationName || (employee.designation && employee.designation.name) || employee.designationId;
+    const empDesig = employee.displayDesignation || computeDisplayDesignation(employee);
     if (empDesig !== reqDesig) {
       if (siteRequirements.strictDesignationMatch) {
         result.canDeploy = false;
