@@ -66,6 +66,7 @@ interface EmployeeCard {
   employeeCode: string;
   name: string;
   designation: string;
+  displayDesignation?: string;
   grade: string;
   defaultSiteId: string;
   securityLicenseExpiry: string | null;
@@ -837,7 +838,7 @@ export default function DeploymentCalendarPage() {
                   <span className="text-[9px] text-on-surface-variant font-mono bg-surface-container-low px-1.5 py-0.5 rounded">{emp.employeeCode}</span>
                 </div>
                 <div className="flex flex-wrap gap-1.5 mt-2">
-                  <Badge variant="neutral" className="text-[8px] py-0.5 px-1 bg-surface-container-high">{emp.designation}</Badge>
+                  <Badge variant="neutral" className="text-[8px] py-0.5 px-1 bg-surface-container-high">{emp.displayDesignation || emp.designation || (emp as any).tradePosition || (emp as any).position || "Security Guard"}</Badge>
                   <Badge variant="neutral" className="text-[8px] py-0.5 px-1 bg-surface-container-high">{emp.grade}</Badge>
                   {emp.isLicenseExpired ? (
                     <Badge variant="error" className="text-[8px] py-0.5 px-1">MOI Expired</Badge>

@@ -175,8 +175,14 @@ export async function POST(request: Request) {
     }
 
     if (existing) {
-      // 1. Create or update SecurityOperationalEmployee snapshot/copy
-      const designationName = existing.designation?.name || null;
+      const rawDesig = existing.designation?.name || (existing as any).tradeClassification?.name || (existing as any).position;
+      const isWhiteCollarOrInvalid = (val: string | null | undefined) => {
+        if (!val || typeof val !== "string") return true;
+        const lower = val.toLowerCase();
+        return lower.includes("hr manager") || lower.includes("human resource") || lower.includes("accountant") || lower.includes("admin") || lower === "operations" || lower.includes("department");
+      };
+      const designationName = (rawDesig && !isWhiteCollarOrInvalid(rawDesig)) ? rawDesig : "Security Guard";
+
       const operationalData = {
         sourceEmployeeId: existing.id,
         employeeCode: existing.id,
@@ -229,7 +235,7 @@ export async function POST(request: Request) {
         dutyStatus: "OFF_DUTY"
       });
 
-      const designationName = null;
+      const designationName = "Security Guard";
       const operationalData = {
         sourceEmployeeId: newEmp.id,
         employeeCode: newEmp.id,

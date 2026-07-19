@@ -16,6 +16,44 @@ function formatDateToYYYYMMDD(d: any): string {
   return `${year}-${month}-${day}`;
 }
 
+function computeDisplayDesignation(op: any, sourceEmp?: any): string {
+  const isInvalidOrWhiteCollar = (val: string | undefined | null) => {
+    if (!val || typeof val !== "string") return true;
+    const lower = val.trim().toLowerCase();
+    if (!lower || lower === "null" || lower === "undefined") return true;
+    return (
+      lower.includes("hr manager") ||
+      lower.includes("human resource") ||
+      lower.includes("accountant") ||
+      lower.includes("admin") ||
+      lower.includes("department") ||
+      lower === "operations" ||
+      lower === "engineering" ||
+      lower === "logistics" ||
+      lower === "sales"
+    );
+  };
+
+  // Priority a: SecurityOperationalEmployee position / tradePosition / designation
+  if (op?.tradePosition && !isInvalidOrWhiteCollar(op.tradePosition)) return op.tradePosition;
+  if (op?.position && !isInvalidOrWhiteCollar(op.position)) return op.position;
+  if (op?.designation && typeof op.designation === "string" && !isInvalidOrWhiteCollar(op.designation)) return op.designation;
+  if (op?.designation && typeof op.designation === "object" && op.designation.name && !isInvalidOrWhiteCollar(op.designation.name)) return op.designation.name;
+
+  // Priority b & c: Source Employee tradeClassification / designation / position
+  const tradeName = sourceEmp?.tradeClassification?.name || sourceEmp?.tradeClassification;
+  if (tradeName && typeof tradeName === "string" && !isInvalidOrWhiteCollar(tradeName)) return tradeName;
+
+  const desigName = sourceEmp?.designation?.name || sourceEmp?.designation;
+  if (desigName && typeof desigName === "string" && !isInvalidOrWhiteCollar(desigName)) return desigName;
+
+  const posName = sourceEmp?.position || sourceEmp?.tradePosition;
+  if (posName && typeof posName === "string" && !isInvalidOrWhiteCollar(posName)) return posName;
+
+  // Priority d: Fallback for Security Guarding blue collar
+  return "Security Guard";
+}
+
 export async function GET(request: Request) {
   const auth = await checkApiAuth(undefined, { requiredOperation: "SECURITY_GUARDING" });
   if (auth.error) return auth.error;
@@ -77,35 +115,42 @@ export async function GET(request: Request) {
           sourceEmployee: {
             include: {
               securityLicense: true,
-              securityGatePasses: true
+              securityGatePasses: true,
+              designation: true,
+              tradeClassification: true
             }
           }
         }
       });
 
-      employees = operationalGuards.map((op: any) => ({
-        id: op.sourceEmployeeId,
-        sourceEmployeeId: op.sourceEmployeeId,
-        operationalEmployeeId: op.id,
-        employeeCode: op.employeeCode || op.sourceEmployeeId,
-        name: op.fullName,
-        fullName: op.fullName,
-        email: op.email,
-        phone: op.mobile,
-        companyId: op.companyId,
-        companyCode: op.companyCode,
-        employeeCategory: op.employeeCategory,
-        operationType: op.operationType,
-        isActive: op.isActive,
-        employmentStatus: op.employmentStatus,
-        syncStatus: op.syncStatus,
-        lastSyncedAt: op.lastSyncedAt,
-        designation: op.designation ? { name: op.designation } : null,
-        position: op.position || op.designation,
-        securityLicense: op.sourceEmployee?.securityLicense || null,
-        gatePasses: op.sourceEmployee?.securityGatePasses || [],
-        dutyStatus: op.sourceEmployee?.dutyStatus || "OFF_DUTY"
-      }));
+      employees = operationalGuards.map((op: any) => {
+        const displayDesig = computeDisplayDesignation(op, op.sourceEmployee);
+        return {
+          id: op.sourceEmployeeId,
+          sourceEmployeeId: op.sourceEmployeeId,
+          operationalEmployeeId: op.id,
+          employeeCode: op.employeeCode || op.sourceEmployeeId,
+          name: op.fullName,
+          fullName: op.fullName,
+          email: op.email,
+          phone: op.mobile,
+          companyId: op.companyId,
+          companyCode: op.companyCode,
+          employeeCategory: op.employeeCategory,
+          operationType: op.operationType,
+          isActive: op.isActive,
+          employmentStatus: op.employmentStatus,
+          syncStatus: op.syncStatus,
+          lastSyncedAt: op.lastSyncedAt,
+          designation: { name: displayDesig },
+          displayDesignation: displayDesig,
+          position: displayDesig,
+          sourceEmployee: op.sourceEmployee,
+          securityLicense: op.sourceEmployee?.securityLicense || null,
+          gatePasses: op.sourceEmployee?.securityGatePasses || [],
+          dutyStatus: op.sourceEmployee?.dutyStatus || "OFF_DUTY"
+        };
+      });
 
       const [year, month, day] = dateStr.split("-").map(Number);
       const start = new Date(year, month - 1, day, 0, 0, 0, 0);
@@ -147,7 +192,8 @@ export async function GET(request: Request) {
         const lic = securityLicenses.find((l: any) => l.employeeId === op.sourceEmployeeId);
         const gps = securityGatePasses.filter((g: any) => g.employeeId === op.sourceEmployeeId);
         const sourceEmp = (db.employees || []).find((e: any) => e.id === op.sourceEmployeeId);
-        
+        const displayDesig = computeDisplayDesignation(op, sourceEmp);
+
         return {
           id: op.sourceEmployeeId,
           sourceEmployeeId: op.sourceEmployeeId,
@@ -165,8 +211,10 @@ export async function GET(request: Request) {
           employmentStatus: op.employmentStatus,
           syncStatus: op.syncStatus,
           lastSyncedAt: op.lastSyncedAt,
-          designation: op.designation ? { name: op.designation } : null,
-          position: op.position || op.designation,
+          designation: { name: displayDesig },
+          displayDesignation: displayDesig,
+          position: displayDesig,
+          sourceEmployee: sourceEmp,
           securityLicense: lic || null,
           gatePasses: gps,
           dutyStatus: sourceEmp?.dutyStatus || "OFF_DUTY"
@@ -189,7 +237,12 @@ export async function GET(request: Request) {
     // Filter by search text (ID or Name)
     let pool = employees.filter(e => {
       const nameMatch = !search || e.name.toLowerCase().includes(search.toLowerCase()) || e.id.toLowerCase().includes(search.toLowerCase());
-      const desigMatch = !designation || designation === "all" || (e.designationId === designation || e.designationName === designation);
+      const desigMatch = !designation || designation === "all" || (
+        e.designationId === designation ||
+        e.designationName === designation ||
+        e.displayDesignation === designation ||
+        (typeof e.designation === 'object' && e.designation?.name === designation)
+      );
       const gradeMatch = !grade || grade === "all" || (e.salaryGrade === grade || e.grade === grade);
       return nameMatch && desigMatch && gradeMatch;
     });
@@ -286,6 +339,7 @@ export async function GET(request: Request) {
       const lic = e.securityLicense;
       const gps = e.securityGatePasses || e.gatePasses || [];
       const gp = siteId ? gps.find((g: any) => g.siteId === siteId) : gps[0];
+      const displayDesig = e.displayDesignation || computeDisplayDesignation(e, e.sourceEmployee);
 
       return {
         id: e.sourceEmployeeId,
@@ -297,8 +351,10 @@ export async function GET(request: Request) {
         companyCode: e.companyCode,
         employeeCategory: e.employeeCategory,
         operationType: e.operationType,
-        designation: e.designation ? (typeof e.designation === 'object' ? e.designation.name : e.designation) : "Security Guard",
-        position: e.position || (e.designation ? (typeof e.designation === 'object' ? e.designation.name : e.designation) : "Security Guard"),
+        designation: displayDesig,
+        displayDesignation: displayDesig,
+        position: displayDesig,
+        tradePosition: displayDesig,
         isActive: e.isActive,
         employmentStatus: e.employmentStatus,
         syncStatus: e.syncStatus,
