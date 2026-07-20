@@ -34,25 +34,31 @@ export interface ProcessOutboxResult {
 export async function claimPendingNotificationsBatch(
   batchSize: number = 20,
   workerId: string = `worker-${process.pid}`,
-  ttlSeconds: number = 300
+  ttlSeconds: number = 300,
+  opType: OperationType = "SECURITY_GUARDING",
+  channelFilter: AlertNotificationChannel = "IN_APP"
 ): Promise<{ claimToken: string; notifications: SecFacAlertNotification[] }> {
   const now = new Date();
   const claimExpiresAt = new Date(now.getTime() + ttlSeconds * 1000);
   const claimToken = `claim-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
 
+  const whereClause: any = {
+    scheduledAt: { lte: now },
+    operationType: opType,
+    channel: channelFilter,
+    OR: [
+      { status: "PENDING" },
+      { status: "RETRY_SCHEDULED" },
+      {
+        status: { in: ["CLAIMED", "PROCESSING"] },
+        claimExpiresAt: { lte: now } // Recover stale expired claim
+      }
+    ]
+  };
+
   // Find candidate IDs ready for claim
   const candidates = await prisma.secFacAlertNotification.findMany({
-    where: {
-      scheduledAt: { lte: now },
-      OR: [
-        { status: "PENDING" },
-        { status: "RETRY_SCHEDULED" },
-        {
-          status: { in: ["CLAIMED", "PROCESSING"] },
-          claimExpiresAt: { lte: now } // Recover stale expired claim
-        }
-      ]
-    },
+    where: whereClause,
     take: batchSize,
     orderBy: { scheduledAt: "asc" },
     select: { id: true }
@@ -68,6 +74,8 @@ export async function claimPendingNotificationsBatch(
   const updatedCount = await prisma.secFacAlertNotification.updateMany({
     where: {
       id: { in: candidateIds },
+      operationType: opType,
+      channel: channelFilter,
       OR: [
         { status: "PENDING" },
         { status: "RETRY_SCHEDULED" },
@@ -94,7 +102,9 @@ export async function claimPendingNotificationsBatch(
   const claimedNotifications = await prisma.secFacAlertNotification.findMany({
     where: {
       claimToken,
-      status: "CLAIMED"
+      status: "CLAIMED",
+      operationType: opType,
+      channel: channelFilter
     },
     include: {
       alert: true
@@ -365,9 +375,11 @@ export async function processClaimedNotification(
  */
 export async function processOutboxBatch(
   batchSize: number = 20,
-  workerId: string = `worker-${process.pid}`
+  workerId: string = `worker-${process.pid}`,
+  opType: OperationType = "SECURITY_GUARDING",
+  channelFilter: AlertNotificationChannel = "IN_APP"
 ): Promise<ProcessOutboxResult> {
-  const { claimToken, notifications } = await claimPendingNotificationsBatch(batchSize, workerId);
+  const { claimToken, notifications } = await claimPendingNotificationsBatch(batchSize, workerId, 300, opType, channelFilter);
 
   let sentCount = 0;
   let retryScheduledCount = 0;

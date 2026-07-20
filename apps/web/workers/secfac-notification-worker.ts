@@ -3,7 +3,7 @@ import { acquireWorkerLock, renewWorkerLock, releaseWorkerLock } from "../lib/se
 import { prisma } from "@ahh-wfm/database";
 
 const WORKER_ID = `secfac-notification-worker-${process.pid}`;
-const LOCK_KEY = "secfac:worker:notification-scheduler";
+const LOCK_KEY = "secfac:worker:notification:security_guarding";
 const POLL_INTERVAL_MS = Number(process.env.SECFAC_NOTIFICATION_POLL_INTERVAL_MS) || 10000;
 const BATCH_SIZE = Number(process.env.SECFAC_NOTIFICATION_BATCH_SIZE) || 20;
 
@@ -27,6 +27,7 @@ async function runWorkerCycle(): Promise<void> {
   const job = await prisma.secFacWorkerJob.create({
     data: {
       jobType: "NOTIFICATION_OUTBOX_CYCLE",
+      operationType: "SECURITY_GUARDING",
       status: "RUNNING",
       lockKey: LOCK_KEY,
       startedAt: new Date(),
@@ -35,7 +36,7 @@ async function runWorkerCycle(): Promise<void> {
   });
 
   try {
-    const result = await processOutboxBatch(BATCH_SIZE, WORKER_ID);
+    const result = await processOutboxBatch(BATCH_SIZE, WORKER_ID, "SECURITY_GUARDING", "IN_APP");
 
     await prisma.secFacWorkerJob.update({
       where: { id: job.id },
