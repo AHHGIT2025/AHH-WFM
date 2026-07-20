@@ -11,4 +11,22 @@ if (process.env.NODE_ENV !== "production") {
 }
 
 export * from "./generated/client2";
-export type { Employee, AttendanceRecord, Shift, LeaveRequest, SapMapping, SyncLog, Announcement, SecurityOperationalEmployee, SecFacAlertRule, SecFacOperationalAlert, SecFacAlertEvent, SecFacAlertNotification } from "./generated/client2";
+export type {
+  Employee,
+  AttendanceRecord,
+  Shift,
+  LeaveRequest,
+  SapMapping,
+  SyncLog,
+  Announcement,
+  SecurityOperationalEmployee,
+  SecFacAlertRule,
+  SecFacOperationalAlert,
+  SecFacAlertEvent,
+  SecFacAlertNotification,
+  SecFacNotificationPreference,
+  SecFacNotificationAttempt,
+  SecFacWorkerJob,
+  SecFacWorkerLock,
+  SecFacChannelConfiguration
+} from "./generated/client2";

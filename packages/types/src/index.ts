@@ -2031,6 +2031,154 @@ export interface AlertCountSummary {
   overdue: number;
 }
 
+export type NotificationStatus =
+  | "PENDING"
+  | "CLAIMED"
+  | "PROCESSING"
+  | "RETRY_SCHEDULED"
+  | "SENT"
+  | "FAILED"
+  | "DEAD_LETTER"
+  | "CANCELLED"
+  | "SUPPRESSED";
+
+export interface SecFacNotificationPreference {
+  id: string;
+  operationType: OperationType;
+  userId?: string | null;
+  roleCode?: string | null;
+  alertCode?: string | null;
+  inAppEnabled: boolean;
+  emailEnabled: boolean;
+  pushEnabled: boolean;
+  smsEnabled: boolean;
+  whatsappEnabled: boolean;
+  quietHoursEnabled: boolean;
+  quietHoursStart?: string | null;
+  quietHoursEnd?: string | null;
+  timezone: string;
+  minimumSeverity: AlertSeverity;
+  allowCriticalOverride: boolean;
+  isActive: boolean;
+  settings?: Record<string, any> | null;
+  createdById?: string | null;
+  updatedById?: string | null;
+  createdAt: string | Date;
+  updatedAt: string | Date;
+}
+
+export interface SecFacNotificationAttempt {
+  id: string;
+  notificationId: string;
+  operationType: OperationType;
+  channel: AlertNotificationChannel | string;
+  provider?: string | null;
+  providerMessageId?: string | null;
+  attemptNumber: number;
+  status: string;
+  attemptedAt: string | Date;
+  completedAt?: string | Date | null;
+  responseCode?: string | null;
+  responseMessage?: string | null;
+  errorCode?: string | null;
+  errorMessage?: string | null;
+  retryable: boolean;
+  nextRetryAt?: string | Date | null;
+  requestMetadata?: Record<string, any> | null;
+  responseMetadata?: Record<string, any> | null;
+  createdAt: string | Date;
+}
+
+export interface SecFacWorkerJob {
+  id: string;
+  jobType: string;
+  operationType?: OperationType | null;
+  status: "RUNNING" | "COMPLETED" | "FAILED" | "CANCELLED" | string;
+  lockKey?: string | null;
+  startedAt: string | Date;
+  completedAt?: string | Date | null;
+  heartbeatAt?: string | Date | null;
+  processedCount: number;
+  successCount: number;
+  retryCount: number;
+  failureCount: number;
+  skippedCount: number;
+  errorSummary?: string | null;
+  metadata?: Record<string, any> | null;
+  createdAt: string | Date;
+}
+
+export interface SecFacWorkerLock {
+  id: string;
+  lockKey: string;
+  ownerId: string;
+  acquiredAt: string | Date;
+  expiresAt: string | Date;
+  heartbeatAt?: string | Date | null;
+  metadata?: Record<string, any> | null;
+}
+
+export interface SecFacChannelConfiguration {
+  id: string;
+  operationType: OperationType;
+  channel: AlertNotificationChannel | string;
+  provider: string;
+  isEnabled: boolean;
+  senderName?: string | null;
+  senderAddress?: string | null;
+  templateNamespace?: string | null;
+  maximumAttempts: number;
+  baseRetryDelaySeconds: number;
+  maximumRetryDelaySeconds: number;
+  rateLimitPerMinute?: number | null;
+  settings?: Record<string, any> | null;
+  createdById?: string | null;
+  updatedById?: string | null;
+  createdAt: string | Date;
+  updatedAt: string | Date;
+}
+
+export interface ProviderValidationResult {
+  valid: boolean;
+  provider: string;
+  channel: AlertNotificationChannel;
+  errors: string[];
+  warnings: string[];
+}
+
+export interface ProviderNotificationPayload {
+  notificationId: string;
+  alertId: string;
+  operationType: OperationType;
+  alertCode: string;
+  severity: AlertSeverity;
+  title: string;
+  message: string;
+  recipientUserId?: string | null;
+  recipientRole?: string | null;
+  recipientEmail?: string | null;
+  recipientPhone?: string | null;
+  recipientPushTokens?: string[];
+  channel: AlertNotificationChannel;
+  notificationType: string;
+  attemptNumber: number;
+  metadata?: Record<string, any> | null;
+}
+
+export interface ProviderDeliveryResult {
+  success: boolean;
+  status: "SENT" | "FAILED" | "RETRY_SCHEDULED" | "SUPPRESSED" | "PROVIDER_DISABLED" | "PROVIDER_NOT_CONFIGURED" | "CHANNEL_DISABLED" | "RECIPIENT_NOT_ELIGIBLE";
+  providerMessageId?: string | null;
+  responseCode?: string | null;
+  responseMessage?: string | null;
+  errorCode?: string | null;
+  errorMessage?: string | null;
+  retryable: boolean;
+  requestMetadata?: Record<string, any> | null;
+  responseMetadata?: Record<string, any> | null;
+}
+
+
 
 
 

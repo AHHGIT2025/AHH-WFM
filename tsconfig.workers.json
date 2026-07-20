@@ -1,0 +1,34 @@
+{
+  "compilerOptions": {
+    "target": "es2022",
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "allowJs": true,
+    "skipLibCheck": true,
+    "strict": false,
+    "noEmit": false,
+    "outDir": "dist/workers",
+    "esModuleInterop": true,
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "resolveJsonModule": true,
+    "isolatedModules": false,
+    "incremental": false,
+    "baseUrl": ".",
+    "paths": {
+      "@ahh-wfm/types": ["packages/types/src"],
+      "@ahh-wfm/database": ["packages/database/src"],
+      "@ahh-wfm/mock-data": ["packages/mock-data/src"],
+      "@ahh-wfm/ui/*": ["packages/ui/src/*"],
+      "@/*": ["apps/web/*"]
+    }
+  },
+  "include": [
+    "apps/web/workers/**/*",
+    "apps/web/lib/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "apps/web/.next",
+    "apps/mobile/.next"
+  ]
+}

@@ -2667,9 +2667,14 @@ model SecFacAlertNotification {
 
   channel          String @default("IN_APP") // IN_APP | EMAIL | PUSH | SMS | WHATSAPP
   notificationType String
-  status           String @default("PENDING") // PENDING | SENT | FAILED | CANCELLED
+  status           String @default("PENDING") // PENDING | CLAIMED | PROCESSING | RETRY_SCHEDULED | SENT | FAILED | DEAD_LETTER | CANCELLED | SUPPRESSED
 
   notificationKey String @unique
+
+  claimToken     String?
+  claimedAt      DateTime?
+  claimedBy      String?
+  claimExpiresAt DateTime?
 
   attemptCount  Int       @default(0)
   scheduledAt   DateTime
@@ -2681,8 +2686,140 @@ model SecFacAlertNotification {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  attempts SecFacNotificationAttempt[]
+
   @@index([status, scheduledAt])
   @@index([recipientUserId, status])
   @@index([alertId])
   @@index([operationType, status])
+  @@index([claimExpiresAt, status])
 }
+
+model SecFacNotificationPreference {
+  id            String @id @default(cuid())
+  operationType String // SECURITY_GUARDING | FACILITY_MANAGEMENT
+  userId        String?
+  roleCode      String?
+  alertCode     String?
+
+  inAppEnabled    Boolean @default(true)
+  emailEnabled    Boolean @default(false)
+  pushEnabled     Boolean @default(false)
+  smsEnabled      Boolean @default(false)
+  whatsappEnabled Boolean @default(false)
+
+  quietHoursEnabled     Boolean @default(false)
+  quietHoursStart       String?
+  quietHoursEnd         String?
+  timezone              String  @default("Asia/Qatar")
+
+  minimumSeverity       String  @default("MEDIUM")
+  allowCriticalOverride Boolean @default(true)
+
+  isActive Boolean @default(true)
+  settings Json?
+
+  createdById String?
+  updatedById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([operationType, userId, isActive])
+  @@index([operationType, roleCode, isActive])
+  @@index([operationType, alertCode, isActive])
+}
+
+model SecFacNotificationAttempt {
+  id             String                 @id @default(cuid())
+  notificationId String
+  notification   SecFacAlertNotification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  operationType  String
+
+  channel           String
+  provider          String?
+  providerMessageId String?
+
+  attemptNumber Int
+  status        String
+  attemptedAt   DateTime
+  completedAt   DateTime?
+
+  responseCode    String?
+  responseMessage String?
+  errorCode       String?
+  errorMessage    String?
+
+  retryable   Boolean   @default(false)
+  nextRetryAt DateTime?
+
+  requestMetadata  Json?
+  responseMetadata Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([notificationId, attemptNumber])
+  @@index([operationType, status])
+  @@index([nextRetryAt, retryable])
+}
+
+model SecFacWorkerJob {
+  id            String    @id @default(cuid())
+  jobType       String
+  operationType String?
+  status        String
+
+  lockKey     String?
+  startedAt   DateTime
+  completedAt DateTime?
+  heartbeatAt DateTime?
+
+  processedCount Int @default(0)
+  successCount   Int @default(0)
+  retryCount     Int @default(0)
+  failureCount   Int @default(0)
+  skippedCount   Int @default(0)
+
+  errorSummary String? @db.Text
+  metadata     Json?
+
+  createdAt DateTime @default(now())
+
+  @@index([jobType, status, startedAt])
+  @@index([operationType, startedAt])
+  @@index([lockKey, status])
+}
+
+model SecFacWorkerLock {
+  id          String    @id @default(cuid())
+  lockKey     String    @unique
+  ownerId     String
+  acquiredAt  DateTime
+  expiresAt   DateTime
+  heartbeatAt DateTime?
+  metadata    Json?
+}
+
+model SecFacChannelConfiguration {
+  id            String @id @default(cuid())
+  operationType String
+  channel       String
+
+  provider                 String
+  isEnabled                Boolean @default(false)
+  senderName               String?
+  senderAddress            String?
+  templateNamespace        String?
+  maximumAttempts          Int     @default(3)
+  baseRetryDelaySeconds    Int     @default(60)
+  maximumRetryDelaySeconds Int     @default(3600)
+  rateLimitPerMinute       Int?
+  settings                 Json?
+
+  createdById String?
+  updatedById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([operationType, channel])
+}
+
