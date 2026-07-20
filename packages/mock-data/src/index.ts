@@ -2020,7 +2020,7 @@ export const mockDb = {
         emp.defaultSite = db.projectSites?.find((s: any) => s.id === emp.defaultSiteId);
         emp.immediateSupervisor = db.employees.find(e => e.id === emp.immediateSupervisorId);
         emp.costCenterRef = db.costCenters?.find((cc: any) => cc.id === emp.costCenterId);
-        emp.defaultLocation = db.locations?.find((l: any) => l.id === emp.defaultLocationId);
+        (emp as any).securityOperationalEmployee = (db.securityOperationalEmployees || []).find((op: any) => op.sourceEmployeeId === emp.id);
 
         if (emp.webAccessEnabled === undefined || emp.webAccessEnabled === null) emp.webAccessEnabled = true;
         if (emp.mobileAccessEnabled === undefined || emp.mobileAccessEnabled === null) emp.mobileAccessEnabled = true;
@@ -2028,6 +2028,15 @@ export const mockDb = {
         if (emp.isLoginEnabled === undefined || emp.isLoginEnabled === null) emp.isLoginEnabled = true;
         if (emp.usernameStrategy === undefined || emp.usernameStrategy === null) emp.usernameStrategy = "MANUAL";
         if (emp.employeeCategory === undefined || emp.employeeCategory === null) emp.employeeCategory = emp.employeeCategory || "WHITE_COLLAR";
+
+        // Auto-correct stale WHITE_COLLAR operationType for HS01/COMP-002 blue collar guards or guards with security snapshot
+        const isSecurityCompany = emp.companyId === "COMP-002" || (emp as any).companyCode === "HS01" || emp.company?.companyCode === "HS01";
+        const hasSecuritySnapshot = (emp as any).securityOperationalEmployee?.operationType === "SECURITY_GUARDING";
+        if ((hasSecuritySnapshot || (isSecurityCompany && emp.employeeCategory === "BLUE_COLLAR")) && emp.operationType !== "SECURITY_GUARDING") {
+          emp.operationType = "SECURITY_GUARDING";
+          modified = true;
+        }
+
         if (!emp.username) {
           emp.username = emp.employeeCategory === "BLUE_COLLAR" ? emp.id : emp.email;
         }

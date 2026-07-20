@@ -46,7 +46,8 @@ export async function POST(request: Request) {
           securityLicense: true,
           securityGatePasses: true,
           designation: true,
-          tradeClassification: true
+          tradeClassification: true,
+          securityOperationalEmployee: true
         }
       });
 
@@ -116,10 +117,12 @@ export async function POST(request: Request) {
       if (emp) {
         const lic = (db.securityLicenses || []).find((l: any) => l.employeeId === employeeId);
         const gps = (db.securityGatePasses || []).filter((g: any) => g.employeeId === employeeId);
+        const op = (db.securityOperationalEmployees || []).find((o: any) => o.sourceEmployeeId === employeeId);
         employee = {
           ...emp,
           securityLicense: lic || null,
-          gatePasses: gps
+          gatePasses: gps,
+          securityOperationalEmployee: op || null
         };
       }
 

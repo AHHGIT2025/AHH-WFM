@@ -108,6 +108,7 @@ export async function GET(request: Request) {
           displayDesignation: displayDesig,
           position: displayDesig,
           sourceEmployee: op.sourceEmployee,
+          securityOperationalEmployee: op,
           securityLicense: op.sourceEmployee?.securityLicense || null,
           gatePasses: op.sourceEmployee?.securityGatePasses || [],
           dutyStatus: op.sourceEmployee?.dutyStatus || "OFF_DUTY"
@@ -177,6 +178,7 @@ export async function GET(request: Request) {
           displayDesignation: displayDesig,
           position: displayDesig,
           sourceEmployee: sourceEmp,
+          securityOperationalEmployee: op,
           securityLicense: lic || null,
           gatePasses: gps,
           dutyStatus: sourceEmp?.dutyStatus || "OFF_DUTY"

@@ -201,10 +201,19 @@ export function validateDeploymentEligibility(
   }
 
   // Rule 2: Operation Type Check
-  if (employee.operationType !== "SECURITY_GUARDING") {
+  const masterOpType = employee.operationType;
+  const snapOpType = employee.securityOperationalEmployee?.operationType || employee.securityOperationalEmployeeScope;
+  const isHs01BlueCollar = (employee.companyCode === "HS01" || employee.company?.companyCode === "HS01" || employee.companyId === "COMP-002") && employee.employeeCategory === "BLUE_COLLAR";
+  const effectiveOperationType = snapOpType || (isHs01BlueCollar ? "SECURITY_GUARDING" : masterOpType);
+
+  if (masterOpType && snapOpType && masterOpType !== snapOpType) {
+    console.warn(`Employee operational scope mismatch: master=${masterOpType}, securitySnapshot=${snapOpType}`);
+  }
+
+  if (effectiveOperationType !== "SECURITY_GUARDING") {
     result.canDeploy = false;
     result.severity = "BLOCKED";
-    result.blockingIssues.push(`Employee operation type is '${employee.operationType}', not 'SECURITY_GUARDING'.`);
+    result.blockingIssues.push(`Employee operation type is '${effectiveOperationType}', not 'SECURITY_GUARDING'.`);
     addChecklist("Operational Scope", "FAIL", "Invalid scope");
     return result;
   } else {

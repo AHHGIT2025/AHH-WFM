@@ -63,7 +63,7 @@ export async function POST(request: Request) {
     if (isDb) {
       employee = await prisma.employee.findUnique({
         where: { id: employeeId },
-        include: { securityLicense: true, securityGatePasses: true, designation: true, tradeClassification: true }
+        include: { securityLicense: true, securityGatePasses: true, designation: true, tradeClassification: true, securityOperationalEmployee: true }
       });
       shiftRequirement = await prisma.manpowerShiftRequirement.findUnique({
         where: { id: shiftRequirementId },
@@ -80,10 +80,12 @@ export async function POST(request: Request) {
       if (employee) {
         const lic = (db.securityLicenses || []).find((l: any) => l.employeeId === employeeId);
         const gps = (db.securityGatePasses || []).filter((g: any) => g.employeeId === employeeId);
+        const op = (db.securityOperationalEmployees || []).find((o: any) => o.sourceEmployeeId === employeeId);
         employee = {
           ...employee,
           securityLicense: lic || null,
-          gatePasses: gps
+          gatePasses: gps,
+          securityOperationalEmployee: op || null
         };
       }
       shiftRequirement = (db.shiftRequirements || []).find((r: any) => r.id === shiftRequirementId);
