@@ -2003,10 +2003,14 @@ export interface AlertListFilters {
   siteId?: string;
   projectId?: string;
   assignedUserId?: string;
+  assignmentSource?: string;
   fromDate?: string;
   toDate?: string;
   escalatedOnly?: boolean;
   unassignedOnly?: boolean;
+  slaBreachedOnly?: boolean;
+  acknowledgementOverdue?: boolean;
+  resolutionOverdue?: boolean;
   search?: string;
   page?: number;
   pageSize?: number;

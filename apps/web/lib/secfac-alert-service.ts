@@ -9,6 +9,7 @@ import {
   SecFacOperationalAlert
 } from "@ahh-wfm/types";
 import { resolveAlertSupervisor } from "./secfac-alert-resolver";
+import { calculateAlertSlaStatus } from "./secfac-alert-sla";
 
 /**
  * Gets Qatar operational business date string (YYYY-MM-DD) in UTC+3 timezone.
@@ -309,10 +310,14 @@ export async function listOperationalAlerts(filters: AlertListFilters) {
     siteId,
     projectId,
     assignedUserId,
+    assignmentSource,
     fromDate,
     toDate,
     escalatedOnly,
     unassignedOnly,
+    slaBreachedOnly,
+    acknowledgementOverdue,
+    resolutionOverdue,
     search,
     page = 1,
     pageSize = 20,
@@ -332,6 +337,7 @@ export async function listOperationalAlerts(filters: AlertListFilters) {
   if (siteId) where.siteId = siteId;
   if (projectId) where.projectId = projectId;
   if (assignedUserId) where.assignedUserId = assignedUserId;
+  if (assignmentSource) where.assignmentSource = assignmentSource;
   if (escalatedOnly) where.escalationLevel = { gt: 0 };
   if (unassignedOnly) where.assignedUserId = null;
 
@@ -364,12 +370,15 @@ export async function listOperationalAlerts(filters: AlertListFilters) {
   const safePageSize = Math.min(Math.max(pageSize, 1), 100);
   const skip = (Math.max(page, 1) - 1) * safePageSize;
 
-  const [total, alerts] = await Promise.all([
+  // Fetch raw alerts for SLA post-filtering if SLA filters are specified
+  const needsSlaFilter = slaBreachedOnly || acknowledgementOverdue || resolutionOverdue;
+
+  const [totalRaw, alertsRaw] = await Promise.all([
     prisma.secFacOperationalAlert.count({ where }),
     prisma.secFacOperationalAlert.findMany({
       where,
-      skip,
-      take: safePageSize,
+      skip: needsSlaFilter ? undefined : skip,
+      take: needsSlaFilter ? undefined : safePageSize,
       orderBy: { [activeSortBy]: sortOrder },
       include: {
         rule: true,
@@ -378,13 +387,36 @@ export async function listOperationalAlerts(filters: AlertListFilters) {
     })
   ]);
 
+  let processedAlerts = alertsRaw.map(a => {
+    const sla = calculateAlertSlaStatus(a as unknown as SecFacOperationalAlert, a.rule as unknown as SecFacAlertRule);
+    return {
+      ...a,
+      slaStatus: sla
+    };
+  });
+
+  if (needsSlaFilter) {
+    if (acknowledgementOverdue) {
+      processedAlerts = processedAlerts.filter(a => a.slaStatus.acknowledgementOverdue);
+    }
+    if (resolutionOverdue) {
+      processedAlerts = processedAlerts.filter(a => a.slaStatus.resolutionOverdue);
+    }
+    if (slaBreachedOnly) {
+      processedAlerts = processedAlerts.filter(a => a.slaStatus.breachedSlaType !== null);
+    }
+  }
+
+  const finalTotal = needsSlaFilter ? processedAlerts.length : totalRaw;
+  const finalAlerts = needsSlaFilter ? processedAlerts.slice(skip, skip + safePageSize) : processedAlerts;
+
   return {
-    alerts,
+    alerts: finalAlerts,
     pagination: {
-      page: Math.max(page, 1),
+      total: finalTotal,
+      page,
       pageSize: safePageSize,
-      total,
-      totalPages: Math.ceil(total / safePageSize)
+      totalPages: Math.ceil(finalTotal / safePageSize) || 1
     }
   };
 }

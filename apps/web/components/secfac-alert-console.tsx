@@ -18,7 +18,7 @@ export const SecFacAlertConsole: React.FC<SecFacAlertConsoleProps> = ({
   icon
 }) => {
   const [alerts, setAlerts] = useState<SecFacOperationalAlert[]>([]);
-  const [summary, setSummary] = useState<AlertCountSummary | null>(null);
+  const [health, setHealth] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -28,16 +28,22 @@ export const SecFacAlertConsole: React.FC<SecFacAlertConsoleProps> = ({
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [escalatedOnly, setEscalatedOnly] = useState<boolean>(false);
   const [unassignedOnly, setUnassignedOnly] = useState<boolean>(false);
+  const [adminQueueOnly, setAdminQueueOnly] = useState<boolean>(false);
+  const [slaBreachedOnly, setSlaBreachedOnly] = useState<boolean>(false);
+  const [ackOverdueOnly, setAckOverdueOnly] = useState<boolean>(false);
+  const [resOverdueOnly, setResOverdueOnly] = useState<boolean>(false);
+  const [viewMode, setViewMode] = useState<"all" | "daily-review">("all");
   const [page, setPage] = useState<number>(1);
   const [totalPages, setTotalPages] = useState<number>(1);
 
   // Detail drawer & action modal states
   const [selectedAlert, setSelectedAlert] = useState<SecFacOperationalAlert | null>(null);
   const [actionModal, setActionModal] = useState<{
-    type: "RESOLVE" | "DISMISS" | "CANCEL" | "ACKNOWLEDGE" | "START_ACTION" | "ESCALATE" | null;
+    type: "RESOLVE" | "DISMISS" | "CANCEL" | "ACKNOWLEDGE" | "START_ACTION" | "ESCALATE" | "REASSIGN" | null;
     alert: SecFacOperationalAlert | null;
   }>({ type: null, alert: null });
   const [actionInput, setActionInput] = useState<string>("");
+  const [targetUserIdInput, setTargetUserIdInput] = useState<string>("");
   const [actionSubmitting, setActionSubmitting] = useState<boolean>(false);
 
   const fetchAlerts = useCallback(async () => {
@@ -50,15 +56,26 @@ export const SecFacAlertConsole: React.FC<SecFacAlertConsoleProps> = ({
         pageSize: "15"
       });
 
-      if (statusFilter) query.append("status", statusFilter);
+      if (viewMode === "daily-review") {
+        query.append("status", "OPEN");
+        query.append("status", "ACKNOWLEDGED");
+        query.append("status", "IN_PROGRESS");
+      } else {
+        if (statusFilter) query.append("status", statusFilter);
+      }
+
       if (severityFilter) query.append("severity", severityFilter);
       if (searchQuery) query.append("search", searchQuery);
       if (escalatedOnly) query.append("escalatedOnly", "true");
       if (unassignedOnly) query.append("unassignedOnly", "true");
+      if (adminQueueOnly) query.append("assignmentSource", "ADMIN_QUEUE");
+      if (slaBreachedOnly) query.append("slaBreachedOnly", "true");
+      if (ackOverdueOnly) query.append("acknowledgementOverdue", "true");
+      if (resOverdueOnly) query.append("resolutionOverdue", "true");
 
-      const [resAlerts, resCount] = await Promise.all([
+      const [resAlerts, resHealth] = await Promise.all([
         fetch(`/api/v1/secfac/alerts?${query.toString()}`),
-        fetch(`/api/v1/secfac/alerts/count?operationType=${operationType}`)
+        fetch(`/api/v1/secfac/alerts/health?operationType=${operationType}`)
       ]);
 
       if (!resAlerts.ok) {
@@ -70,9 +87,9 @@ export const SecFacAlertConsole: React.FC<SecFacAlertConsoleProps> = ({
       setAlerts(dataAlerts.alerts || []);
       setTotalPages(dataAlerts.pagination?.totalPages || 1);
 
-      if (resCount.ok) {
-        const dataCount = await resCount.json();
-        setSummary(dataCount);
+      if (resHealth.ok) {
+        const dataHealth = await resHealth.json();
+        setHealth(dataHealth);
       }
     } catch (e: any) {
       console.error("Alert console fetch error:", e);
@@ -80,11 +97,23 @@ export const SecFacAlertConsole: React.FC<SecFacAlertConsoleProps> = ({
     } finally {
       setLoading(false);
     }
-  }, [operationType, page, statusFilter, severityFilter, searchQuery, escalatedOnly, unassignedOnly]);
+  }, [
+    operationType, page, statusFilter, severityFilter, searchQuery,
+    escalatedOnly, unassignedOnly, adminQueueOnly, slaBreachedOnly,
+    ackOverdueOnly, resOverdueOnly, viewMode
+  ]);
 
   useEffect(() => {
     fetchAlerts();
   }, [fetchAlerts]);
+
+  const handleExportCsv = () => {
+    const today = new Date();
+    const thirtyDaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const fromStr = thirtyDaysAgo.toISOString().split("T")[0];
+    const toStr = today.toISOString().split("T")[0];
+    window.open(`/api/v1/secfac/alerts/export?operationType=${operationType}&fromDate=${fromStr}&toDate=${toStr}`, "_blank");
+  };
 
   const handleActionSubmit = async () => {
     if (!actionModal.type || !actionModal.alert) return;
@@ -112,6 +141,9 @@ export const SecFacAlertConsole: React.FC<SecFacAlertConsoleProps> = ({
       } else if (actionModal.type === "ESCALATE") {
         endpoint += "escalate";
         body = { force: true, reason: actionInput };
+      } else if (actionModal.type === "REASSIGN") {
+        endpoint += "reassign";
+        body = { targetUserId: targetUserIdInput, note: actionInput };
       }
 
       const res = await fetch(endpoint, {
@@ -127,6 +159,7 @@ export const SecFacAlertConsole: React.FC<SecFacAlertConsoleProps> = ({
 
       setActionModal({ type: null, alert: null });
       setActionInput("");
+      setTargetUserIdInput("");
       if (selectedAlert && selectedAlert.id === alertId) {
         const detailRes = await fetch(`/api/v1/secfac/alerts/${alertId}`);
         if (detailRes.ok) {
@@ -145,7 +178,7 @@ export const SecFacAlertConsole: React.FC<SecFacAlertConsoleProps> = ({
   const getSeverityBadge = (sev: string) => {
     switch (sev) {
       case "CRITICAL":
-        return <span className="px-2.5 py-1 text-xs font-bold rounded-full bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300 border border-red-300">CRITICAL</span>;
+        return <span className="px-2.5 py-1 text-xs font-bold rounded-full bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300 border border-red-300 animate-pulse">CRITICAL</span>;
       case "HIGH":
         return <span className="px-2.5 py-1 text-xs font-bold rounded-full bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border border-amber-300">HIGH</span>;
       case "MEDIUM":
@@ -185,7 +218,36 @@ export const SecFacAlertConsole: React.FC<SecFacAlertConsoleProps> = ({
           </h1>
           <p className="text-xs text-on-surface-variant mt-1">{subtitle}</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex bg-surface-container-low border border-outline-variant rounded-lg p-0.5">
+            <button
+              onClick={() => setViewMode("all")}
+              className={`px-3 py-1.5 text-xs font-bold rounded-md transition-colors ${
+                viewMode === "all" ? "bg-surface text-primary shadow-xs" : "text-on-surface-variant hover:text-primary"
+              }`}
+            >
+              All Alerts
+            </button>
+            <button
+              onClick={() => setViewMode("daily-review")}
+              className={`px-3 py-1.5 text-xs font-bold rounded-md transition-colors flex items-center gap-1 ${
+                viewMode === "daily-review" ? "bg-surface text-primary shadow-xs" : "text-on-surface-variant hover:text-primary"
+              }`}
+            >
+              <span className="material-symbols-outlined text-[14px]">supervisor_account</span>
+              Daily Review
+            </button>
+          </div>
+
+          <button
+            onClick={handleExportCsv}
+            className="px-3 py-2 text-xs font-bold border border-outline-variant hover:bg-surface-container-low rounded-lg transition-colors flex items-center gap-1"
+            title="Export 30-Day CSV Report"
+          >
+            <span className="material-symbols-outlined text-[16px]">download</span>
+            CSV Export
+          </button>
+
           <button
             onClick={() => fetchAlerts()}
             className="px-3 py-2 text-xs font-bold border border-outline-variant hover:bg-surface-container-low rounded-lg transition-colors flex items-center gap-1"
@@ -204,56 +266,84 @@ export const SecFacAlertConsole: React.FC<SecFacAlertConsoleProps> = ({
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-8 gap-3">
         <div className="bg-surface border border-outline-variant rounded-xl p-3 shadow-xs">
           <p className="text-[10px] uppercase font-bold text-on-surface-variant tracking-wider">Open</p>
-          <p className="text-xl font-extrabold text-status-error mt-1">{summary?.open ?? 0}</p>
+          <p className="text-xl font-extrabold text-status-error mt-1">{health?.open ?? 0}</p>
         </div>
         <div className="bg-surface border border-outline-variant rounded-xl p-3 shadow-xs">
-          <p className="text-[10px] uppercase font-bold text-on-surface-variant tracking-wider">Acknowledged</p>
-          <p className="text-xl font-extrabold text-amber-600 mt-1">{summary?.acknowledged ?? 0}</p>
+          <p className="text-[10px] uppercase font-bold text-on-surface-variant tracking-wider">Unassigned</p>
+          <p className="text-xl font-extrabold text-amber-700 mt-1">{health?.unassigned ?? 0}</p>
         </div>
-        <div className="bg-surface border border-outline-variant rounded-xl p-3 shadow-xs">
-          <p className="text-[10px] uppercase font-bold text-on-surface-variant tracking-wider">In Progress</p>
-          <p className="text-xl font-extrabold text-primary mt-1">{summary?.inProgress ?? 0}</p>
+        <div
+          onClick={() => { setAdminQueueOnly(!adminQueueOnly); setPage(1); }}
+          className={`bg-surface border rounded-xl p-3 shadow-xs cursor-pointer transition-colors ${
+            adminQueueOnly ? "border-purple-600 ring-2 ring-purple-400" : "border-outline-variant hover:border-purple-300"
+          }`}
+        >
+          <p className="text-[10px] uppercase font-bold text-purple-700 dark:text-purple-400 tracking-wider flex items-center gap-1">
+            <span className="material-symbols-outlined text-[12px]">admin_panel_settings</span>
+            Admin Queue
+          </p>
+          <p className="text-xl font-extrabold text-purple-800 dark:text-purple-300 mt-1">{health?.adminQueue ?? 0}</p>
+        </div>
+        <div
+          onClick={() => { setAckOverdueOnly(!ackOverdueOnly); setPage(1); }}
+          className={`bg-surface border rounded-xl p-3 shadow-xs cursor-pointer transition-colors ${
+            ackOverdueOnly ? "border-red-600 ring-2 ring-red-400" : "border-outline-variant hover:border-red-300"
+          }`}
+        >
+          <p className="text-[10px] uppercase font-bold text-red-700 tracking-wider">Ack Overdue</p>
+          <p className="text-xl font-extrabold text-red-600 mt-1">{health?.acknowledgementOverdue ?? 0}</p>
+        </div>
+        <div
+          onClick={() => { setResOverdueOnly(!resOverdueOnly); setPage(1); }}
+          className={`bg-surface border rounded-xl p-3 shadow-xs cursor-pointer transition-colors ${
+            resOverdueOnly ? "border-red-600 ring-2 ring-red-400" : "border-outline-variant hover:border-red-300"
+          }`}
+        >
+          <p className="text-[10px] uppercase font-bold text-red-700 tracking-wider">Res Overdue</p>
+          <p className="text-xl font-extrabold text-red-600 mt-1">{health?.resolutionOverdue ?? 0}</p>
         </div>
         <div className="bg-surface border border-outline-variant rounded-xl p-3 shadow-xs">
           <p className="text-[10px] uppercase font-bold text-on-surface-variant tracking-wider">Escalated</p>
-          <p className="text-xl font-extrabold text-purple-600 mt-1">{summary?.escalated ?? 0}</p>
+          <p className="text-xl font-extrabold text-purple-600 mt-1">{health?.escalated ?? 0}</p>
         </div>
         <div className="bg-surface border border-outline-variant rounded-xl p-3 shadow-xs">
           <p className="text-[10px] uppercase font-bold text-on-surface-variant tracking-wider">Critical</p>
-          <p className="text-xl font-extrabold text-red-600 mt-1">{summary?.critical ?? 0}</p>
+          <p className="text-xl font-extrabold text-red-600 mt-1">{health?.criticalOpen ?? 0}</p>
         </div>
         <div className="bg-surface border border-outline-variant rounded-xl p-3 shadow-xs">
-          <p className="text-[10px] uppercase font-bold text-on-surface-variant tracking-wider">Resolved</p>
-          <p className="text-xl font-extrabold text-green-600 mt-1">{summary?.resolved ?? 0}</p>
+          <p className="text-[10px] uppercase font-bold text-on-surface-variant tracking-wider">Active Rules</p>
+          <p className="text-xl font-extrabold text-green-600 mt-1">{health?.rulesActive ?? 0}</p>
         </div>
       </div>
 
       {/* Filter Toolbar */}
       <div className="bg-surface border border-outline-variant rounded-xl p-4 shadow-xs space-y-3">
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-6 gap-3">
           <input
             type="text"
-            placeholder="Search alerts or reference..."
+            placeholder="Search title, code, reference..."
             value={searchQuery}
             onChange={(e) => { setSearchQuery(e.target.value); setPage(1); }}
             className="px-3 py-2 text-xs border border-outline-variant rounded-lg bg-surface-container-lowest focus:outline-none focus:border-primary"
           />
-          <select
-            value={statusFilter}
-            onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
-            className="px-3 py-2 text-xs border border-outline-variant rounded-lg bg-surface-container-lowest focus:outline-none"
-          >
-            <option value="">All Statuses</option>
-            <option value="OPEN">OPEN</option>
-            <option value="ACKNOWLEDGED">ACKNOWLEDGED</option>
-            <option value="IN_PROGRESS">IN_PROGRESS</option>
-            <option value="RESOLVED">RESOLVED</option>
-            <option value="DISMISSED">DISMISSED</option>
-            <option value="CANCELLED">CANCELLED</option>
-          </select>
+          {viewMode !== "daily-review" && (
+            <select
+              value={statusFilter}
+              onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
+              className="px-3 py-2 text-xs border border-outline-variant rounded-lg bg-surface-container-lowest focus:outline-none"
+            >
+              <option value="">All Statuses</option>
+              <option value="OPEN">OPEN</option>
+              <option value="ACKNOWLEDGED">ACKNOWLEDGED</option>
+              <option value="IN_PROGRESS">IN_PROGRESS</option>
+              <option value="RESOLVED">RESOLVED</option>
+              <option value="DISMISSED">DISMISSED</option>
+              <option value="CANCELLED">CANCELLED</option>
+            </select>
+          )}
           <select
             value={severityFilter}
             onChange={(e) => { setSeverityFilter(e.target.value); setPage(1); }}
@@ -268,20 +358,29 @@ export const SecFacAlertConsole: React.FC<SecFacAlertConsoleProps> = ({
           <label className="flex items-center gap-2 text-xs font-medium cursor-pointer">
             <input
               type="checkbox"
+              checked={adminQueueOnly}
+              onChange={(e) => { setAdminQueueOnly(e.target.checked); setPage(1); }}
+              className="rounded text-purple-600"
+            />
+            Admin Queue
+          </label>
+          <label className="flex items-center gap-2 text-xs font-medium cursor-pointer">
+            <input
+              type="checkbox"
+              checked={slaBreachedOnly}
+              onChange={(e) => { setSlaBreachedOnly(e.target.checked); setPage(1); }}
+              className="rounded text-red-600"
+            />
+            SLA Breached
+          </label>
+          <label className="flex items-center gap-2 text-xs font-medium cursor-pointer">
+            <input
+              type="checkbox"
               checked={escalatedOnly}
               onChange={(e) => { setEscalatedOnly(e.target.checked); setPage(1); }}
               className="rounded text-primary"
             />
             Escalated Only
-          </label>
-          <label className="flex items-center gap-2 text-xs font-medium cursor-pointer">
-            <input
-              type="checkbox"
-              checked={unassignedOnly}
-              onChange={(e) => { setUnassignedOnly(e.target.checked); setPage(1); }}
-              className="rounded text-primary"
-            />
-            Unassigned Only
           </label>
         </div>
       </div>
@@ -302,8 +401,8 @@ export const SecFacAlertConsole: React.FC<SecFacAlertConsoleProps> = ({
                 <th className="py-3 px-4">Alert Code / Title</th>
                 <th className="py-3 px-4">Detected</th>
                 <th className="py-3 px-4">Assigned To</th>
+                <th className="py-3 px-4">SLA Status</th>
                 <th className="py-3 px-4">Status</th>
-                <th className="py-3 px-4">Escalation</th>
                 <th className="py-3 px-4 text-right">Actions</th>
               </tr>
             </thead>
@@ -322,7 +421,7 @@ export const SecFacAlertConsole: React.FC<SecFacAlertConsoleProps> = ({
                   </td>
                 </tr>
               ) : (
-                alerts.map((a) => (
+                alerts.map((a: any) => (
                   <tr key={a.id} className="hover:bg-surface-container-lowest transition-colors">
                     <td className="py-3 px-4 whitespace-nowrap">
                       {getSeverityBadge(a.severity)}
@@ -335,22 +434,39 @@ export const SecFacAlertConsole: React.FC<SecFacAlertConsoleProps> = ({
                       {new Date(a.firstDetectedAt).toLocaleString([], { dateStyle: "short", timeStyle: "short" })}
                     </td>
                     <td className="py-3 px-4 whitespace-nowrap">
-                      <span className="font-medium text-on-surface">
-                        {a.assignedUserId ? `User: ${a.assignedUserId.slice(0, 8)}...` : a.assignedRole ? `${a.assignedRole} Queue` : "Unassigned"}
-                      </span>
+                      {a.assignmentSource === "ADMIN_QUEUE" ? (
+                        <span className="px-2 py-0.5 text-[10px] font-bold rounded bg-purple-100 text-purple-800 border border-purple-300 flex items-center gap-1 w-fit">
+                          <span className="material-symbols-outlined text-[12px]">admin_panel_settings</span>
+                          Admin Queue
+                        </span>
+                      ) : (
+                        <span className="font-medium text-on-surface">
+                          {a.assignedUserId ? `User: ${a.assignedUserId.slice(0, 8)}...` : a.assignedRole ? `${a.assignedRole} Queue` : "Unassigned"}
+                        </span>
+                      )}
                       {a.assignmentSource && (
                         <div className="text-[10px] text-on-surface-variant opacity-75">{a.assignmentSource}</div>
                       )}
                     </td>
                     <td className="py-3 px-4 whitespace-nowrap">
-                      {getStatusBadge(a.status)}
-                    </td>
-                    <td className="py-3 px-4 whitespace-nowrap font-semibold">
-                      {a.escalationLevel > 0 ? (
-                        <span className="text-purple-700 dark:text-purple-400 font-bold">L{a.escalationLevel}</span>
+                      {a.slaStatus ? (
+                        <div className="space-y-0.5 text-[10px]">
+                          {a.slaStatus.acknowledgementOverdue && (
+                            <span className="px-1.5 py-0.5 bg-red-100 text-red-800 font-bold rounded block w-fit">Ack Overdue</span>
+                          )}
+                          {a.slaStatus.resolutionOverdue && (
+                            <span className="px-1.5 py-0.5 bg-red-100 text-red-800 font-bold rounded block w-fit">Res Overdue</span>
+                          )}
+                          {!a.slaStatus.acknowledgementOverdue && !a.slaStatus.resolutionOverdue && (
+                            <span className="text-green-700 font-medium">On Track</span>
+                          )}
+                        </div>
                       ) : (
-                        <span className="text-on-surface-variant text-[11px]">L0</span>
+                        <span className="text-on-surface-variant text-[10px]">N/A</span>
                       )}
+                    </td>
+                    <td className="py-3 px-4 whitespace-nowrap">
+                      {getStatusBadge(a.status)}
                     </td>
                     <td className="py-3 px-4 whitespace-nowrap text-right space-x-1">
                       <button
@@ -360,21 +476,21 @@ export const SecFacAlertConsole: React.FC<SecFacAlertConsoleProps> = ({
                         Details
                       </button>
 
+                      {a.assignmentSource === "ADMIN_QUEUE" && (
+                        <button
+                          onClick={() => setActionModal({ type: "REASSIGN", alert: a })}
+                          className="px-2 py-1 text-[11px] font-bold bg-purple-700 text-white rounded hover:opacity-90"
+                        >
+                          Assign User
+                        </button>
+                      )}
+
                       {a.status === "OPEN" && (
                         <button
                           onClick={() => setActionModal({ type: "ACKNOWLEDGE", alert: a })}
                           className="px-2.5 py-1 text-[11px] font-bold bg-amber-600 text-white hover:opacity-90 rounded transition-opacity"
                         >
                           Ack
-                        </button>
-                      )}
-
-                      {["OPEN", "ACKNOWLEDGED"].includes(a.status) && (
-                        <button
-                          onClick={() => setActionModal({ type: "START_ACTION", alert: a })}
-                          className="px-2.5 py-1 text-[11px] font-bold bg-primary text-white hover:opacity-90 rounded transition-opacity"
-                        >
-                          Start
                         </button>
                       )}
 
@@ -457,72 +573,9 @@ export const SecFacAlertConsole: React.FC<SecFacAlertConsoleProps> = ({
                   <p className="font-medium">{selectedAlert.assignedUserId || selectedAlert.assignedRole || "Unassigned"}</p>
                 </div>
                 <div>
-                  <p className="text-[10px] text-on-surface-variant font-bold">Escalation Level</p>
-                  <p className="font-medium">Level {selectedAlert.escalationLevel}</p>
+                  <p className="text-[10px] text-on-surface-variant font-bold">Assignment Source</p>
+                  <p className="font-medium text-purple-700 font-bold">{selectedAlert.assignmentSource || "Default"}</p>
                 </div>
-              </div>
-
-              {selectedAlert.resolutionNote && (
-                <div className="bg-green-50 text-green-800 p-3 rounded-lg border border-green-200">
-                  <p className="font-bold text-[10px] uppercase">Resolution Note</p>
-                  <p className="mt-0.5">{selectedAlert.resolutionNote}</p>
-                </div>
-              )}
-
-              {selectedAlert.dismissalReason && (
-                <div className="bg-gray-50 text-gray-800 p-3 rounded-lg border border-gray-200">
-                  <p className="font-bold text-[10px] uppercase">Dismissal Reason</p>
-                  <p className="mt-0.5">{selectedAlert.dismissalReason}</p>
-                </div>
-              )}
-
-              {selectedAlert.cancellationReason && (
-                <div className="bg-purple-50 text-purple-800 p-3 rounded-lg border border-purple-200">
-                  <p className="font-bold text-[10px] uppercase">Cancellation Reason</p>
-                  <p className="mt-0.5">{selectedAlert.cancellationReason}</p>
-                </div>
-              )}
-
-              {/* Action Buttons inside Drawer */}
-              <div className="border-t border-outline-variant pt-4 flex flex-wrap gap-2">
-                {selectedAlert.status === "OPEN" && (
-                  <button
-                    onClick={() => setActionModal({ type: "ACKNOWLEDGE", alert: selectedAlert })}
-                    className="px-3 py-1.5 text-xs font-bold bg-amber-600 text-white rounded"
-                  >
-                    Acknowledge
-                  </button>
-                )}
-                {["OPEN", "ACKNOWLEDGED"].includes(selectedAlert.status) && (
-                  <button
-                    onClick={() => setActionModal({ type: "START_ACTION", alert: selectedAlert })}
-                    className="px-3 py-1.5 text-xs font-bold bg-primary text-white rounded"
-                  >
-                    Start Action
-                  </button>
-                )}
-                {["OPEN", "ACKNOWLEDGED", "IN_PROGRESS"].includes(selectedAlert.status) && (
-                  <>
-                    <button
-                      onClick={() => setActionModal({ type: "RESOLVE", alert: selectedAlert })}
-                      className="px-3 py-1.5 text-xs font-bold bg-green-600 text-white rounded"
-                    >
-                      Resolve
-                    </button>
-                    <button
-                      onClick={() => setActionModal({ type: "DISMISS", alert: selectedAlert })}
-                      className="px-3 py-1.5 text-xs font-bold bg-gray-600 text-white rounded"
-                    >
-                      Dismiss
-                    </button>
-                    <button
-                      onClick={() => setActionModal({ type: "ESCALATE", alert: selectedAlert })}
-                      className="px-3 py-1.5 text-xs font-bold bg-purple-600 text-white rounded"
-                    >
-                      Escalate Now
-                    </button>
-                  </>
-                )}
               </div>
             </div>
           </div>
@@ -540,24 +593,32 @@ export const SecFacAlertConsole: React.FC<SecFacAlertConsoleProps> = ({
               {actionModal.type === "ACKNOWLEDGE" && "Acknowledge Alert"}
               {actionModal.type === "START_ACTION" && "Start Action on Alert"}
               {actionModal.type === "ESCALATE" && "Escalate Alert"}
+              {actionModal.type === "REASSIGN" && "Reassign Admin Queue Alert"}
             </h3>
             <p className="text-xs text-on-surface-variant">
               Alert: <span className="font-bold">{actionModal.alert.title}</span>
             </p>
 
-            {(actionModal.type === "RESOLVE" || actionModal.type === "DISMISS" || actionModal.type === "CANCEL" || actionModal.type === "ESCALATE") && (
-              <textarea
-                rows={3}
-                placeholder={
-                  actionModal.type === "RESOLVE" ? "Enter mandatory resolution note..." :
-                  actionModal.type === "DISMISS" ? "Enter mandatory dismissal reason..." :
-                  actionModal.type === "CANCEL" ? "Enter cancellation reason..." : "Enter escalation reason..."
-                }
-                value={actionInput}
-                onChange={(e) => setActionInput(e.target.value)}
-                className="w-full text-xs p-3 border border-outline-variant rounded-lg focus:outline-none focus:border-primary"
-              />
+            {actionModal.type === "REASSIGN" && (
+              <div>
+                <label className="text-xs font-bold text-on-surface-variant">Target User ID</label>
+                <input
+                  type="text"
+                  placeholder="Enter User ID..."
+                  value={targetUserIdInput}
+                  onChange={(e) => setTargetUserIdInput(e.target.value)}
+                  className="w-full mt-1 text-xs p-2 border border-outline-variant rounded bg-surface-container-lowest"
+                />
+              </div>
             )}
+
+            <textarea
+              rows={3}
+              placeholder="Enter action note / reason..."
+              value={actionInput}
+              onChange={(e) => setActionInput(e.target.value)}
+              className="w-full text-xs p-3 border border-outline-variant rounded-lg focus:outline-none focus:border-primary"
+            />
 
             <div className="flex justify-end gap-2 pt-2">
               <button

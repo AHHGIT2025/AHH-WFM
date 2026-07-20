@@ -72,6 +72,17 @@ export async function PUT(
       return NextResponse.json({ error: "Security Guarding roles cannot be assigned to Facility Management rules." }, { status: 400 });
     }
 
+    if (isActive === true && existing.isActive === false) {
+      const { validateRuleActivation } = await import("@/lib/secfac-alert-rollout");
+      const validation = await validateRuleActivation(params.id);
+      if (!validation.valid) {
+        return NextResponse.json(
+          { error: `Pilot Activation Safeguard Rejected: ${validation.errors.join(" ")}` },
+          { status: 400 }
+        );
+      }
+    }
+
     const updated = await prisma.secFacAlertRule.update({
       where: { id: params.id },
       data: {
@@ -90,6 +101,18 @@ export async function PUT(
         updatedById: (auth.session.user as any).id
       }
     });
+
+    if (isActive !== undefined && isActive !== existing.isActive) {
+      await prisma.secFacAlertEvent.create({
+        data: {
+          alertId: `RULE_${updated.id}`,
+          operationType: updated.operationType,
+          eventType: isActive ? "ALERT_RULE_PILOT_ENABLED" : "ALERT_RULE_PILOT_DISABLED",
+          performedById: (auth.session.user as any).id,
+          note: `Rule '${updated.code}' (${updated.name}) ${isActive ? "ENABLED" : "DISABLED"} for pilot scope`
+        }
+      });
+    }
 
     return NextResponse.json({ rule: updated });
   } catch (e: any) {

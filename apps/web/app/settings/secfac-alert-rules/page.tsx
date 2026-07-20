@@ -7,7 +7,9 @@ import { OperationType, SecFacAlertRule } from "@ahh-wfm/types";
 export default function SecFacAlertRulesSettingsPage() {
   const [operationType, setOperationType] = useState<"SECURITY_GUARDING" | "FACILITY_MANAGEMENT">("SECURITY_GUARDING");
   const [rules, setRules] = useState<SecFacAlertRule[]>([]);
+  const [readiness, setReadiness] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [seeding, setSeeding] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
 
@@ -20,31 +22,40 @@ export default function SecFacAlertRulesSettingsPage() {
     description: "",
     sourceType: "ATTENDANCE_SCHEDULING",
     severity: "HIGH",
-    isActive: true,
+    isActive: false,
     triggerAfterMinutes: "15",
     reminderIntervalMinutes: "30",
     maximumReminders: "3",
     targetRole: "SECURITY_SUPERVISOR",
-    fallbackRole: "OPERATIONS_COORDINATOR",
+    fallbackRole: "SECURITY_OPERATIONS_MANAGER",
     projectId: "",
     siteId: ""
   });
   const [saving, setSaving] = useState(false);
 
-  const fetchRules = useCallback(async () => {
+  const fetchRulesAndReadiness = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const q = new URLSearchParams({ operationType });
       if (search) q.append("search", search);
 
-      const res = await fetch(`/api/v1/secfac/alert-rules?${q.toString()}`);
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
+      const [resRules, resReadiness] = await Promise.all([
+        fetch(`/api/v1/secfac/alert-rules?${q.toString()}`),
+        fetch(`/api/v1/secfac/alert-rules/readiness?operationType=${operationType}`)
+      ]);
+
+      if (!resRules.ok) {
+        const errData = await resRules.json().catch(() => ({}));
         throw new Error(errData.error || "Failed to load alert rules");
       }
-      const data = await res.json();
-      setRules(data.rules || []);
+      const dataRules = await resRules.json();
+      setRules(dataRules.rules || []);
+
+      if (resReadiness.ok) {
+        const dataReadiness = await resReadiness.json();
+        setReadiness(dataReadiness);
+      }
     } catch (e: any) {
       setError(e?.message || "Failed to load alert rules");
     } finally {
@@ -53,8 +64,30 @@ export default function SecFacAlertRulesSettingsPage() {
   }, [operationType, search]);
 
   useEffect(() => {
-    fetchRules();
-  }, [fetchRules]);
+    fetchRulesAndReadiness();
+  }, [fetchRulesAndReadiness]);
+
+  const handleSeedTemplates = async () => {
+    setSeeding(true);
+    try {
+      const res = await fetch("/api/v1/secfac/alert-rules/seed", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ operationType })
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || "Seeding failed");
+      }
+      const data = await res.json();
+      alert(data.message);
+      fetchRulesAndReadiness();
+    } catch (e: any) {
+      alert(`Seeding failed: ${e?.message || e}`);
+    } finally {
+      setSeeding(false);
+    }
+  };
 
   const openCreateModal = () => {
     setEditingRule(null);
@@ -132,7 +165,7 @@ export default function SecFacAlertRulesSettingsPage() {
       }
 
       setModalOpen(false);
-      fetchRules();
+      fetchRulesAndReadiness();
     } catch (e: any) {
       alert(`Save failed: ${e?.message || e}`);
     } finally {
@@ -143,9 +176,7 @@ export default function SecFacAlertRulesSettingsPage() {
   const securityCodes = [
     "GUARD_NO_SHOW",
     "LATE_ARRIVAL",
-    "EARLY_DEPARTURE",
     "WRONG_SITE_CLOCK_IN",
-    "OFF_SITE_CLOCK_IN",
     "PATROL_MISSED",
     "PATROL_CHECKPOINT_OVERDUE",
     "INCIDENT_UNRESOLVED",
@@ -180,10 +211,10 @@ export default function SecFacAlertRulesSettingsPage() {
             SECFAC Alert Rule Settings
           </h1>
           <p className="text-xs text-on-surface-variant mt-1">
-            Configure central operational alert rules, trigger delays, reminder limits, and initial target roles
+            Configure central operational alert rules, SLA targets, trigger delays, and pilot rollout safeguards
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <Link
             href={operationType === "SECURITY_GUARDING" ? "/manpower/security-guarding/alerts" : "/manpower/facility-management/alerts"}
             className="px-3 py-2 text-xs font-bold border border-outline-variant hover:bg-surface-container-low rounded-lg transition-colors flex items-center gap-1"
@@ -191,12 +222,22 @@ export default function SecFacAlertRulesSettingsPage() {
             <span className="material-symbols-outlined text-[16px]">arrow_back</span>
             Back to Console
           </Link>
+
+          <button
+            disabled={seeding}
+            onClick={handleSeedTemplates}
+            className="px-3 py-2 text-xs font-bold border border-primary text-primary hover:bg-primary/10 rounded-lg transition-colors flex items-center gap-1 disabled:opacity-50"
+          >
+            <span className="material-symbols-outlined text-[16px]">model_training</span>
+            {seeding ? "Seeding..." : "Seed Pilot Rule Templates"}
+          </button>
+
           <button
             onClick={openCreateModal}
             className="px-3 py-2 text-xs font-bold bg-primary text-white hover:opacity-90 rounded-lg shadow-sm transition-opacity flex items-center gap-1"
           >
             <span className="material-symbols-outlined text-[16px]">add</span>
-            Add Alert Rule
+            Add Custom Rule
           </button>
         </div>
       </div>
@@ -226,6 +267,51 @@ export default function SecFacAlertRulesSettingsPage() {
           Facility Management Rules
         </button>
       </div>
+
+      {/* Pilot Readiness Panel */}
+      {readiness && (
+        <div className="bg-surface border border-outline-variant rounded-xl p-4 shadow-xs space-y-3">
+          <div className="flex justify-between items-center border-b border-outline-variant pb-3">
+            <h2 className="text-sm font-bold text-primary flex items-center gap-2">
+              <span className="material-symbols-outlined text-[20px]">checklist</span>
+              Pilot Readiness Checklist
+            </h2>
+            <div className="flex items-center gap-2">
+              {readiness.overallStatus === "READY" && (
+                <span className="px-3 py-1 text-xs font-extrabold rounded-full bg-green-100 text-green-800 border border-green-300">
+                  READY FOR PILOT
+                </span>
+              )}
+              {readiness.overallStatus === "READY_WITH_WARNINGS" && (
+                <span className="px-3 py-1 text-xs font-extrabold rounded-full bg-amber-100 text-amber-800 border border-amber-300">
+                  READY WITH WARNINGS
+                </span>
+              )}
+              {readiness.overallStatus === "NOT_READY" && (
+                <span className="px-3 py-1 text-xs font-extrabold rounded-full bg-red-100 text-red-800 border border-red-300">
+                  NOT READY FOR PILOT
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+            {readiness.checks?.map((c: any) => (
+              <div key={c.id} className="flex items-start gap-2 bg-surface-container-low p-2.5 rounded-lg">
+                <span className={`material-symbols-outlined text-[18px] shrink-0 mt-0.5 ${
+                  c.passed ? "text-green-600" : c.severity === "CRITICAL" ? "text-red-600" : "text-amber-600"
+                }`}>
+                  {c.passed ? "check_circle" : c.severity === "CRITICAL" ? "cancel" : "warning"}
+                </span>
+                <div>
+                  <p className="font-bold text-on-surface">{c.name}</p>
+                  <p className="text-[11px] text-on-surface-variant leading-tight mt-0.5">{c.details}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Search Filter */}
       <div className="bg-surface border border-outline-variant rounded-xl p-3 shadow-xs">
@@ -270,7 +356,7 @@ export default function SecFacAlertRulesSettingsPage() {
               ) : rules.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="py-8 text-center text-on-surface-variant font-medium">
-                    No alert rules found for this operation scope.
+                    No alert rules found. Click &quot;Seed Pilot Rule Templates&quot; to load default recommended rules.
                   </td>
                 </tr>
               ) : (
@@ -278,9 +364,9 @@ export default function SecFacAlertRulesSettingsPage() {
                   <tr key={r.id} className="hover:bg-surface-container-lowest transition-colors">
                     <td className="py-3 px-4 whitespace-nowrap">
                       {r.isActive ? (
-                        <span className="px-2 py-0.5 text-[10px] font-bold rounded bg-green-100 text-green-800">ACTIVE</span>
+                        <span className="px-2 py-0.5 text-[10px] font-bold rounded bg-green-100 text-green-800 border border-green-300">ACTIVE</span>
                       ) : (
-                        <span className="px-2 py-0.5 text-[10px] font-bold rounded bg-gray-100 text-gray-600">INACTIVE</span>
+                        <span className="px-2 py-0.5 text-[10px] font-bold rounded bg-gray-100 text-gray-600 border border-gray-300">INACTIVE</span>
                       )}
                     </td>
                     <td className="py-3 px-4">
@@ -425,7 +511,7 @@ export default function SecFacAlertRulesSettingsPage() {
                 <label className="font-bold text-on-surface-variant">Fallback Role</label>
                 <input
                   type="text"
-                  placeholder="e.g. OPERATIONS_COORDINATOR"
+                  placeholder="e.g. SECURITY_OPERATIONS_MANAGER"
                   value={formData.fallbackRole}
                   onChange={(e) => setFormData({ ...formData, fallbackRole: e.target.value })}
                   className="w-full mt-1 p-2 border border-outline-variant rounded bg-surface-container-lowest"
@@ -440,7 +526,7 @@ export default function SecFacAlertRulesSettingsPage() {
                 onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
                 className="rounded text-primary"
               />
-              Rule Active
+              Rule Active (Requires Pilot Readiness Checks)
             </div>
 
             <div className="flex justify-end gap-2 pt-4 border-t border-outline-variant">
