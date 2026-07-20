@@ -2696,7 +2696,7 @@ model SecFacAlertNotification {
 }
 
 model SecFacNotificationPreference {
-  id            String @id @default(cuid())
+  id            String  @id @default(cuid())
   operationType String // SECURITY_GUARDING | FACILITY_MANAGEMENT
   userId        String?
   roleCode      String?
@@ -2708,10 +2708,10 @@ model SecFacNotificationPreference {
   smsEnabled      Boolean @default(false)
   whatsappEnabled Boolean @default(false)
 
-  quietHoursEnabled     Boolean @default(false)
-  quietHoursStart       String?
-  quietHoursEnd         String?
-  timezone              String  @default("Asia/Qatar")
+  quietHoursEnabled Boolean @default(false)
+  quietHoursStart   String?
+  quietHoursEnd     String?
+  timezone          String  @default("Asia/Qatar")
 
   minimumSeverity       String  @default("MEDIUM")
   allowCriticalOverride Boolean @default(true)
@@ -2730,7 +2730,7 @@ model SecFacNotificationPreference {
 }
 
 model SecFacNotificationAttempt {
-  id             String                 @id @default(cuid())
+  id             String                  @id @default(cuid())
   notificationId String
   notification   SecFacAlertNotification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
   operationType  String
@@ -2763,7 +2763,7 @@ model SecFacNotificationAttempt {
 }
 
 model SecFacWorkerJob {
-  id            String    @id @default(cuid())
+  id            String  @id @default(cuid())
   jobType       String
   operationType String?
   status        String
@@ -2822,4 +2822,3 @@ model SecFacChannelConfiguration {
 
   @@unique([operationType, channel])
 }
-

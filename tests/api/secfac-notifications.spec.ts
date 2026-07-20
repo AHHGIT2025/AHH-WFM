@@ -147,6 +147,15 @@ describe("SECFAC Phase 5C — Outbox Processing, Preferences & Channel Adapters"
 
   describe("Outbox Processing & Dead-Letter Queueing", () => {
     it("processes IN_APP notification and updates status to SENT", async () => {
+      await prisma.secFacAlertNotification.updateMany({
+        data: {
+          status: "PENDING",
+          claimToken: null,
+          claimedAt: null,
+          claimedBy: null,
+          claimExpiresAt: null
+        }
+      });
       const res = await processOutboxBatch(10, "worker-test");
       expect(res.processedCount).toBeGreaterThan(0);
       expect(res.sentCount).toBeGreaterThan(0);
