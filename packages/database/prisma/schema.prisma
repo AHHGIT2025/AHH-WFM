@@ -2616,6 +2616,11 @@ model SecFacOperationalAlert {
   escalatedAt    DateTime?
   reminderCount  Int       @default(0)
 
+  reviewStatus  String?
+  reviewedAt    DateTime?
+  reviewedById  String?
+  reviewComment String?   @db.Text
+
   metadata  Json?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -2625,6 +2630,7 @@ model SecFacOperationalAlert {
 
   @@unique([operationType, deduplicationKey])
   @@index([operationType, status, severity])
+  @@index([operationType, reviewStatus], map: "sf_oa_op_review_idx")
   @@index([assignedUserId, status])
   @@index([siteId, status])
   @@index([projectId, status])
@@ -2821,4 +2827,29 @@ model SecFacChannelConfiguration {
   updatedAt   DateTime @updatedAt
 
   @@unique([operationType, channel], map: "sf_cc_op_channel_key")
+}
+
+model SecFacMonitoringSnapshot {
+  id                      String   @id @default(cuid())
+  operationType           String
+  snapshotType            String
+  workerName              String?
+  healthStatus            String
+  severity                String
+  queueDepth              Int      @default(0)
+  oldestPendingAgeSeconds Int      @default(0)
+  retryCount              Int      @default(0)
+  deadLetterCount         Int      @default(0)
+  expiredClaimCount       Int      @default(0)
+  staleLockCount          Int      @default(0)
+  processedCount          Int      @default(0)
+  failureCount            Int      @default(0)
+  heartbeatAgeSeconds     Int      @default(0)
+  detailsJson             Json?
+  capturedAt              DateTime @default(now())
+  createdAt               DateTime @default(now())
+
+  @@index([operationType, snapshotType, capturedAt], map: "sf_ms_op_type_cap_idx")
+  @@index([healthStatus, capturedAt], map: "sf_ms_status_cap_idx")
+  @@index([severity, capturedAt], map: "sf_ms_sev_cap_idx")
 }

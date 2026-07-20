@@ -36,6 +36,21 @@ module.exports = {
         SECFAC_EVALUATION_WORKER_ENABLED: "true",
         SECFAC_EVALUATION_INTERVAL_MS: "300000"
       }
+    },
+    {
+      name: "ahh-wfm-secfac-monitoring-worker-dev",
+      script: "dist/workers/apps/web/workers/secfac-monitoring-worker.js",
+      cwd: "D:\\Apps\\AHH-WFM\\dev",
+      instances: 1,
+      exec_mode: "fork",
+      autorestart: true,
+      watch: false,
+      max_memory_restart: "500M",
+      env: {
+        NODE_ENV: "development",
+        SECFAC_MONITORING_WORKER_ENABLED: "true",
+        SECFAC_MONITORING_INTERVAL_MS: "300000"
+      }
     }
   ]
 };

@@ -28,5 +28,6 @@ export type {
   SecFacNotificationAttempt,
   SecFacWorkerJob,
   SecFacWorkerLock,
-  SecFacChannelConfiguration
+  SecFacChannelConfiguration,
+  SecFacMonitoringSnapshot
 } from "./generated/client2/index.js";
