@@ -1,6 +1,18 @@
 import { prisma } from "@ahh-wfm/database";
-import { acquireWorkerLock, renewWorkerLock, releaseWorkerLock } from "../lib/secfac-worker-lock";
+import { acquireWorkerLock, renewWorkerLock, releaseWorkerLock, WorkerDatabaseError } from "../lib/secfac-worker-lock";
 import { captureMonitoringSnapshot, getQueueHealth, getWorkerHealth, createMonitoringAlertIfBreached } from "../lib/secfac-monitoring";
+
+/**
+ * Startup assertion — fails fast if Prisma client is broken.
+ */
+function assertPrismaClient(): void {
+  if (!prisma || typeof prisma.$transaction !== "function") {
+    throw new Error(
+      "[SecFac Monitoring Worker] FATAL: Prisma client is undefined or $transaction is not callable. " +
+      "Check that the database package was compiled correctly and the generated client is present."
+    );
+  }
+}
 
 export interface MonitoringWorkerResult {
   startedAt: Date;
@@ -25,7 +37,18 @@ export async function runMonitoringWorkerCycle(
   const lockKey = `secfac:worker:monitoring:${operationType.toLowerCase()}`;
   const startedAt = new Date();
 
-  const lockAcquired = await acquireWorkerLock(lockKey, ownerId, 300);
+  // WorkerDatabaseError must not be treated as lock contention.
+  let lockAcquired;
+  try {
+    lockAcquired = await acquireWorkerLock(lockKey, ownerId, 300);
+  } catch (e: any) {
+    if (e instanceof WorkerDatabaseError) {
+      throw new Error(
+        `[SecFac Monitoring Worker] DATABASE ERROR — cannot acquire lock '${lockKey}': ${e.message}`
+      );
+    }
+    throw e;
+  }
 
   if (!lockAcquired.acquired) {
     throw new Error(`Failed to acquire lock ${lockKey}: lock is currently held by another monitoring instance.`);
@@ -119,6 +142,8 @@ export async function runMonitoringWorkerCycle(
 }
 
 if (require.main === module) {
+  // Fail fast on a broken Prisma client before entering the cycle.
+  assertPrismaClient();
   runMonitoringWorkerCycle()
     .then((res) => {
       console.log("[secfac-monitoring-worker] Cycle completed:", res);
@@ -129,3 +154,4 @@ if (require.main === module) {
       process.exit(1);
     });
 }
+

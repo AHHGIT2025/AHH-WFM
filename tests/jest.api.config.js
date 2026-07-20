@@ -11,5 +11,10 @@ module.exports = {
     '^@ahh-wfm/mock-data$': '<rootDir>/packages/mock-data/src'
   },
   rootDir: '../',
-  setupFiles: ['<rootDir>/tests/api/setup.ts']
+  setupFiles: ['<rootDir>/tests/api/setup.ts'],
+  // Exclude compiled output so Jest does not pick up generated package.json files
+  // from dist/ which would collide with source package.json haste names.
+  modulePathIgnorePatterns: ['<rootDir>/dist/'],
+  watchPathIgnorePatterns: ['<rootDir>/dist/']
 };
+

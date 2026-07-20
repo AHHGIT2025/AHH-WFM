@@ -1,6 +1,18 @@
 import { processOutboxBatch } from "../lib/secfac-notification-outbox";
-import { acquireWorkerLock, renewWorkerLock, releaseWorkerLock } from "../lib/secfac-worker-lock";
+import { acquireWorkerLock, renewWorkerLock, releaseWorkerLock, WorkerDatabaseError } from "../lib/secfac-worker-lock";
 import { prisma } from "@ahh-wfm/database";
+
+/**
+ * Startup assertion — fails fast if Prisma client is broken.
+ */
+function assertPrismaClient(): void {
+  if (!prisma || typeof prisma.$transaction !== "function") {
+    throw new Error(
+      "[SecFac Notification Worker] FATAL: Prisma client is undefined or $transaction is not callable. " +
+      "Check that the database package was compiled correctly and the generated client is present."
+    );
+  }
+}
 
 const WORKER_ID = `secfac-notification-worker-${process.pid}`;
 const LOCK_KEY = "secfac:worker:notification:security_guarding";
@@ -18,9 +30,21 @@ async function runWorkerCycle(): Promise<void> {
     return;
   }
 
-  // Acquire worker lock to prevent multi-instance queue contention
-  const lock = await acquireWorkerLock(LOCK_KEY, WORKER_ID, 60);
+  // Acquire worker lock to prevent multi-instance queue contention.
+  // WorkerDatabaseError must not be swallowed as lock contention.
+  let lock;
+  try {
+    lock = await acquireWorkerLock(LOCK_KEY, WORKER_ID, 60);
+  } catch (e: any) {
+    if (e instanceof WorkerDatabaseError) {
+      console.error(`[SecFac Notification Worker] DATABASE ERROR acquiring lock:`, e.message);
+      throw e;
+    }
+    throw e;
+  }
+
   if (!lock.acquired) {
+    console.log(`[SecFac Notification Worker] Lock '${LOCK_KEY}' is held — skipping cycle.`);
     return;
   }
 
@@ -69,7 +93,15 @@ async function runWorkerCycle(): Promise<void> {
 }
 
 async function startWorkerLoop(): Promise<void> {
-  console.log(`[SecFac Notification Worker] Started (ID: ${WORKER_ID}, Poll Interval: ${POLL_INTERVAL_MS}ms, Enabled: ${process.env.SECFAC_NOTIFICATION_WORKER_ENABLED === "true"})`);
+  // Fail fast on a broken Prisma client.
+  assertPrismaClient();
+
+  console.log(
+    `[SecFac Notification Worker] Started — ` +
+    `ID: ${WORKER_ID} | Scope: SECURITY_GUARDING/IN_APP | ` +
+    `Poll: ${POLL_INTERVAL_MS}ms | ` +
+    `Enabled: ${process.env.SECFAC_NOTIFICATION_WORKER_ENABLED === "true"}`
+  );
 
   while (!isShuttingDown) {
     await runWorkerCycle();
