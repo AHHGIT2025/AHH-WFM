@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import { filterNavigationByPermissions } from "@/lib/permissions";
+
 
 // Class merging helper
 const cn = (...classes: (string | undefined | boolean)[]) => classes.filter(Boolean).join(" ");
@@ -45,6 +46,7 @@ export const LayoutShell: React.FC<{ children: React.ReactNode }> = ({ children 
     currentNavItems = [
       { label: "← Back to Main Menu", path: "/", icon: "arrow_back" },
       { label: "Security Dashboard", path: "/manpower/security-guarding/dashboard", icon: "dashboard" },
+      { label: "Alerts & Escalations", path: "/manpower/security-guarding/alerts", icon: "notification_important" },
       { label: "Clients", path: "/manpower/security-guarding/clients", icon: "handshake" },
       { label: "Contracts", path: "/manpower/security-guarding/contracts", icon: "description" },
       { label: "Projects", path: "/manpower/security-guarding/projects", icon: "business_center" },
@@ -63,6 +65,7 @@ export const LayoutShell: React.FC<{ children: React.ReactNode }> = ({ children 
     currentNavItems = [
       { label: "← Back to Main Menu", path: "/", icon: "arrow_back" },
       { label: "FM Dashboard", path: "/manpower/facility-management/dashboard", icon: "dashboard" },
+      { label: "Alerts & Escalations", path: "/manpower/facility-management/alerts", icon: "notification_important" },
       { label: "Clients", path: "/manpower/facility-management/clients", icon: "handshake" },
       { label: "Contracts", path: "/manpower/facility-management/contracts", icon: "description" },
       { label: "Projects", path: "/manpower/facility-management/projects", icon: "business_center" },
@@ -96,6 +99,7 @@ export const LayoutShell: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const activeNavItems = filterNavigationByPermissions(session?.user as any, currentNavItems);
   const [profile, setProfile] = useState<any>(null);
+  const [alertSummary, setAlertSummary] = useState<{ open: number; critical: number } | null>(null);
 
   const fetchProfile = async () => {
     try {
@@ -109,11 +113,32 @@ export const LayoutShell: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const fetchAlertCount = useCallback(async () => {
+    try {
+      const opAccess = (session?.user as any)?.operationAccess;
+      let targetOp = "SECURITY_GUARDING";
+      if (isFacilityManagement) {
+        targetOp = "FACILITY_MANAGEMENT";
+      } else if (!isSecurityGuarding && opAccess?.allowedFacilityManagement && !opAccess?.allowedSecurityGuarding) {
+        targetOp = "FACILITY_MANAGEMENT";
+      }
+
+      const res = await fetch(`/api/v1/secfac/alerts/count?operationType=${targetOp}`);
+      if (res.ok) {
+        const data = await res.json();
+        setAlertSummary({ open: data.open || 0, critical: data.critical || 0 });
+      }
+    } catch (e) {
+      // Quiet fail for header indicator
+    }
+  }, [session, isSecurityGuarding, isFacilityManagement]);
+
   useEffect(() => {
     if (session) {
       fetchProfile();
+      fetchAlertCount();
     }
-  }, [session]);
+  }, [session, fetchAlertCount]);
 
   useEffect(() => {
     const handleProfileUpdate = () => {
@@ -124,6 +149,10 @@ export const LayoutShell: React.FC<{ children: React.ReactNode }> = ({ children 
       window.removeEventListener("profile-updated", handleProfileUpdate);
     };
   }, []);
+
+  const alertConsoleTarget = isFacilityManagement
+    ? "/manpower/facility-management/alerts"
+    : "/manpower/security-guarding/alerts";
 
   const isActive = (path: string) => {
     if (path === "/") {
@@ -195,11 +224,20 @@ export const LayoutShell: React.FC<{ children: React.ReactNode }> = ({ children 
         </div>
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2 text-on-surface-variant">
-            <button className="p-2 hover:bg-surface-container-low rounded-full transition-colors relative">
+            <Link
+              href={alertConsoleTarget}
+              title="Operational Alerts Console"
+              className="p-2 hover:bg-surface-container-low rounded-full transition-colors relative flex items-center justify-center"
+            >
               <span className="material-symbols-outlined text-[22px]">notifications</span>
-              <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-status-error rounded-full border-2 border-white"></span>
-            </button>
+              {(alertSummary && alertSummary.open > 0) ? (
+                <span className="absolute top-1 right-1 px-1.5 py-0.2 min-w-[18px] text-[10px] font-extrabold bg-status-error text-white rounded-full border border-white flex items-center justify-center leading-none">
+                  {alertSummary.open > 99 ? "99+" : alertSummary.open}
+                </span>
+              ) : null}
+            </Link>
           </div>
+
           <div className="h-8 w-px bg-outline-variant hidden sm:block"></div>
           <div className="flex items-center gap-3">
             <div className="h-9 w-9 rounded-full bg-secondary-container/20 overflow-hidden border border-outline-variant hidden sm:flex items-center justify-center shrink-0">

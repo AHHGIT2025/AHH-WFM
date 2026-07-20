@@ -19,7 +19,8 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "security.patrols.view", "security.patrols.create", "security.patrols.manage",
     "self.profile.view", "self.attendance.view", "self.attendance.punch", "self.leave.view", "self.leave.apply", "self.announcements.view", "self.password.change",
     "settings.manage", "system.config.view", "system.config.manage", "masterdata.view", "masterdata.manage", "audit.export", "integration.view", "integration.manage",
-    "settings.audit.view", "settings.backup.view", "settings.backup.manage", "settings.productionReadiness.view", "settings.integration.view", "settings.integration.manage"
+    "settings.audit.view", "settings.backup.view", "settings.backup.manage", "settings.productionReadiness.view", "settings.integration.view", "settings.integration.manage",
+    "secfac.alerts.view", "secfac.alerts.manage", "secfac.alerts.acknowledge", "secfac.alerts.resolve", "secfac.alerts.escalate", "secfac.alert.rules.view", "secfac.alert.rules.manage"
   ],
   ADMIN: [
     "dashboard.view", "employees.view", "employees.create", "employees.edit", "employees.bulkUpload", "employees.manage",
@@ -41,7 +42,8 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "security.patrols.view", "security.patrols.create", "security.patrols.manage",
     "self.profile.view", "self.attendance.view", "self.attendance.punch", "self.leave.view", "self.leave.apply", "self.announcements.view", "self.password.change",
     "settings.manage", "system.config.view", "system.config.manage", "masterdata.view", "masterdata.manage", "audit.export", "integration.view", "integration.manage",
-    "settings.audit.view", "settings.backup.view", "settings.backup.manage", "settings.productionReadiness.view", "settings.integration.view", "settings.integration.manage"
+    "settings.audit.view", "settings.backup.view", "settings.backup.manage", "settings.productionReadiness.view", "settings.integration.view", "settings.integration.manage",
+    "secfac.alerts.view", "secfac.alerts.manage", "secfac.alerts.acknowledge", "secfac.alerts.resolve", "secfac.alerts.escalate", "secfac.alert.rules.view", "secfac.alert.rules.manage"
   ],
   SYSTEM_ADMIN: [
     "settings.view", "settings.manage", "users.view", "users.manage", "roles.view", "roles.manage",
@@ -123,14 +125,16 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "manpower.security.sites.view", "manpower.security.sites.manage", "manpower.security.zones.view", "manpower.security.zones.manage",
     "manpower.security.manpower.view", "manpower.security.manpower.manage", "manpower.security.shifts.view", "manpower.security.shifts.manage",
     "manpower.security.deployments.view", "manpower.security.deployments.manage", "manpower.security.relievers.view", "manpower.security.relievers.manage",
-    "manpower.security.reports.view", "manpower.security.reports.export"
+    "manpower.security.reports.view", "manpower.security.reports.export",
+    "secfac.alerts.view", "secfac.alerts.manage", "secfac.alerts.acknowledge", "secfac.alerts.resolve", "secfac.alerts.escalate", "secfac.alert.rules.view", "secfac.alert.rules.manage"
   ],
   SECURITY_OPERATIONS_MANAGER: [
     "dashboard.view", "manpower.security.view", "manpower.security.manage", "manpower.security.clients.view",
     "manpower.security.contracts.view", "manpower.security.projects.view", "manpower.security.sites.view", "manpower.security.zones.view",
     "manpower.security.manpower.view", "manpower.security.manpower.manage", "manpower.security.shifts.view", "manpower.security.shifts.manage",
     "manpower.security.deployments.view", "manpower.security.deployments.manage", "manpower.security.relievers.view", "manpower.security.relievers.manage",
-    "manpower.security.reports.view", "manpower.security.reports.export"
+    "manpower.security.reports.view", "manpower.security.reports.export",
+    "secfac.alerts.view", "secfac.alerts.manage", "secfac.alerts.acknowledge", "secfac.alerts.resolve", "secfac.alerts.escalate", "secfac.alert.rules.view"
   ],
   SECURITY_PROJECT_MANAGER: [
     "dashboard.view", "manpower.security.view", "manpower.security.projects.view", "manpower.security.sites.view",
@@ -138,7 +142,8 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
   ],
   SECURITY_SUPERVISOR: [
     "dashboard.view", "manpower.security.view", "manpower.security.manpower.view", "manpower.security.shifts.view",
-    "manpower.security.deployments.manage"
+    "manpower.security.deployments.manage",
+    "secfac.alerts.view", "secfac.alerts.acknowledge", "secfac.alerts.resolve"
   ],
   SECURITY_HR_PAYROLL_VIEWER: [
     "dashboard.view", "manpower.security.view", "manpower.security.reports.view", "manpower.security.manpower.view"
@@ -160,14 +165,16 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "manpower.fm.sites.view", "manpower.fm.sites.manage", "manpower.fm.areas.view", "manpower.fm.areas.manage",
     "manpower.fm.manpower.view", "manpower.fm.manpower.manage", "manpower.fm.shifts.view", "manpower.fm.shifts.manage",
     "manpower.fm.deployments.view", "manpower.fm.deployments.manage", "manpower.fm.relievers.view", "manpower.fm.relievers.manage",
-    "manpower.fm.reports.view", "manpower.fm.reports.export"
+    "manpower.fm.reports.view", "manpower.fm.reports.export",
+    "secfac.alerts.view", "secfac.alerts.manage", "secfac.alerts.acknowledge", "secfac.alerts.resolve", "secfac.alerts.escalate", "secfac.alert.rules.view", "secfac.alert.rules.manage"
   ],
   FM_OPERATIONS_MANAGER: [
     "dashboard.view", "manpower.fm.view", "manpower.fm.manage", "manpower.fm.clients.view",
     "manpower.fm.contracts.view", "manpower.fm.projects.view", "manpower.fm.sites.view", "manpower.fm.areas.view",
     "manpower.fm.manpower.view", "manpower.fm.manpower.manage", "manpower.fm.shifts.view", "manpower.fm.shifts.manage",
     "manpower.fm.deployments.view", "manpower.fm.deployments.manage", "manpower.fm.relievers.view", "manpower.fm.relievers.manage",
-    "manpower.fm.reports.view", "manpower.fm.reports.export"
+    "manpower.fm.reports.view", "manpower.fm.reports.export",
+    "secfac.alerts.view", "secfac.alerts.manage", "secfac.alerts.acknowledge", "secfac.alerts.resolve", "secfac.alerts.escalate", "secfac.alert.rules.view"
   ],
   FM_PROJECT_MANAGER: [
     "dashboard.view", "manpower.fm.view", "manpower.fm.projects.view", "manpower.fm.sites.view",
@@ -175,7 +182,8 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
   ],
   FM_SUPERVISOR: [
     "dashboard.view", "manpower.fm.view", "manpower.fm.manpower.view", "manpower.fm.shifts.view",
-    "manpower.fm.deployments.manage"
+    "manpower.fm.deployments.manage",
+    "secfac.alerts.view", "secfac.alerts.acknowledge", "secfac.alerts.resolve"
   ],
   FM_HR_PAYROLL_VIEWER: [
     "dashboard.view", "manpower.fm.view", "manpower.fm.reports.view", "manpower.fm.manpower.view"

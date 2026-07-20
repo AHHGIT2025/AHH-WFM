@@ -1779,6 +1779,255 @@ export interface SecfacPatrolExecutionCheckpoint {
   updatedAt?: string;
 }
 
+// ==========================================
+// --- SECFAC Phase 5B Alerting & Escalation ---
+// ==========================================
+
+export type AlertSeverity = "LOW" | "MEDIUM" | "HIGH" | "CRITICAL" | string;
+export type AlertStatus = "OPEN" | "ACKNOWLEDGED" | "IN_PROGRESS" | "RESOLVED" | "DISMISSED" | "CANCELLED" | string;
+export type AlertNotificationChannel = "IN_APP" | "EMAIL" | "PUSH" | "SMS" | "WHATSAPP" | string;
+export type AlertNotificationStatus = "PENDING" | "SENT" | "FAILED" | "CANCELLED" | string;
+export type AlertEventType =
+  | "ALERT_CREATED"
+  | "ALERT_REDETECTED"
+  | "ALERT_REOPENED"
+  | "ALERT_ASSIGNED"
+  | "ALERT_REASSIGNED"
+  | "ALERT_ACKNOWLEDGED"
+  | "ALERT_ACTION_STARTED"
+  | "ALERT_REMINDER_QUEUED"
+  | "ALERT_ESCALATED"
+  | "ALERT_RESOLVED"
+  | "ALERT_DISMISSED"
+  | "ALERT_CANCELLED"
+  | "ALERT_RULE_CREATED"
+  | "ALERT_RULE_UPDATED"
+  | "ALERT_RULE_ACTIVATED"
+  | "ALERT_RULE_DEACTIVATED"
+  | string;
+
+export interface SecFacAlertRuleEscalationLevel {
+  level: number;
+  afterMinutes: number;
+  targetRole: string;
+}
+
+export interface SecFacAlertRuleEscalationConfig {
+  levels: SecFacAlertRuleEscalationLevel[];
+}
+
+export interface SecFacAlertRule {
+  id: string;
+  operationType: OperationType;
+  code: string;
+  name: string;
+  description?: string | null;
+  sourceType: string;
+  severity: AlertSeverity;
+  isActive: boolean;
+  triggerAfterMinutes?: number | null;
+  reminderIntervalMinutes?: number | null;
+  maximumReminders: number;
+  targetRole?: string | null;
+  fallbackRole?: string | null;
+  contractId?: string | null;
+  projectId?: string | null;
+  siteId?: string | null;
+  escalationConfig?: SecFacAlertRuleEscalationConfig | any | null;
+  conditions?: Record<string, any> | null;
+  settings?: Record<string, any> | null;
+  createdById?: string | null;
+  updatedById?: string | null;
+  createdAt?: string | Date;
+  updatedAt?: string | Date;
+}
+
+export interface SecFacOperationalAlert {
+  id: string;
+  operationType: OperationType;
+  ruleId?: string | null;
+  rule?: SecFacAlertRule | null;
+  alertCode: string;
+  sourceType: string;
+  sourceId?: string | null;
+  sourceReference?: string | null;
+  contractId?: string | null;
+  projectId?: string | null;
+  siteId?: string | null;
+  employeeId?: string | null;
+  assignmentId?: string | null;
+  patrolId?: string | null;
+  checklistId?: string | null;
+  incidentId?: string | null;
+  severity: AlertSeverity;
+  status: AlertStatus;
+  title: string;
+  message: string;
+  businessDate: string | Date;
+  deduplicationKey: string;
+  assignedUserId?: string | null;
+  assignedRole?: string | null;
+  assignmentSource?: string | null;
+  escalationLevel: number;
+  firstDetectedAt: string | Date;
+  lastDetectedAt: string | Date;
+  acknowledgedAt?: string | Date | null;
+  acknowledgedById?: string | null;
+  actionStartedAt?: string | Date | null;
+  actionStartedById?: string | null;
+  resolvedAt?: string | Date | null;
+  resolvedById?: string | null;
+  resolutionNote?: string | null;
+  dismissedAt?: string | Date | null;
+  dismissedById?: string | null;
+  dismissalReason?: string | null;
+  cancelledAt?: string | Date | null;
+  cancelledById?: string | null;
+  cancellationReason?: string | null;
+  nextReminderAt?: string | Date | null;
+  escalatedAt?: string | Date | null;
+  reminderCount: number;
+  metadata?: Record<string, any> | null;
+  createdAt?: string | Date;
+  updatedAt?: string | Date;
+  events?: SecFacAlertEvent[];
+  notifications?: SecFacAlertNotification[];
+}
+
+export interface SecFacAlertEvent {
+  id: string;
+  alertId: string;
+  operationType: OperationType;
+  eventType: AlertEventType;
+  previousStatus?: AlertStatus | null;
+  newStatus?: AlertStatus | null;
+  previousAssignedUserId?: string | null;
+  newAssignedUserId?: string | null;
+  escalationLevel?: number | null;
+  performedById?: string | null;
+  note?: string | null;
+  metadata?: Record<string, any> | null;
+  createdAt?: string | Date;
+}
+
+export interface SecFacAlertNotification {
+  id: string;
+  alertId: string;
+  operationType: OperationType;
+  recipientUserId?: string | null;
+  recipientRole?: string | null;
+  channel: AlertNotificationChannel;
+  notificationType: string;
+  status: AlertNotificationStatus;
+  notificationKey: string;
+  attemptCount: number;
+  scheduledAt: string | Date;
+  sentAt?: string | Date | null;
+  failedAt?: string | Date | null;
+  failureReason?: string | null;
+  payload?: Record<string, any> | null;
+  createdAt?: string | Date;
+  updatedAt?: string | Date;
+}
+
+export type AlertResponsibilityResolution = {
+  assignedUserId: string | null;
+  assignedRole: string | null;
+  source:
+    | "SITE_SUPERVISOR"
+    | "SHIFT_SUPERVISOR"
+    | "PROJECT_COORDINATOR"
+    | "OPERATION_COORDINATOR"
+    | "FALLBACK_ROLE"
+    | "ADMIN_QUEUE";
+  warnings: string[];
+};
+
+export interface CreateOperationalAlertInput {
+  operationType: OperationType;
+  alertCode: string;
+  sourceType: string;
+  sourceId?: string;
+  sourceReference?: string;
+  contractId?: string;
+  projectId?: string;
+  siteId?: string;
+  employeeId?: string;
+  assignmentId?: string;
+  patrolId?: string;
+  checklistId?: string;
+  incidentId?: string;
+  title: string;
+  message: string;
+  businessDate?: Date | string;
+  severityOverride?: AlertSeverity;
+  metadata?: Record<string, any>;
+  actorUserId?: string;
+}
+
+export interface AlertLifecycleActionInput {
+  userId: string;
+  note?: string;
+  reason?: string;
+  targetUserId?: string;
+  targetRole?: string;
+  metadata?: Record<string, any>;
+}
+
+export interface AlertRuleResolutionResult {
+  rule: SecFacAlertRule | null;
+  scopeLevel: "SITE" | "PROJECT" | "GLOBAL" | "NONE";
+}
+
+export interface AlertEscalationResult {
+  escalatedCount: number;
+  alertsEvaluated: number;
+  warnings: string[];
+}
+
+export interface AlertNotificationQueueInput {
+  alertId: string;
+  operationType: OperationType;
+  recipientUserId?: string;
+  recipientRole?: string;
+  notificationType: "INITIAL" | "REMINDER" | "ESCALATION" | string;
+  scheduledAt?: Date;
+  payload?: Record<string, any>;
+}
+
+export interface AlertListFilters {
+  operationType: OperationType;
+  status?: AlertStatus | AlertStatus[];
+  severity?: AlertSeverity | AlertSeverity[];
+  alertCode?: string;
+  siteId?: string;
+  projectId?: string;
+  assignedUserId?: string;
+  fromDate?: string;
+  toDate?: string;
+  escalatedOnly?: boolean;
+  unassignedOnly?: boolean;
+  search?: string;
+  page?: number;
+  pageSize?: number;
+  sortBy?: string;
+  sortOrder?: "asc" | "desc";
+}
+
+export interface AlertCountSummary {
+  total: number;
+  open: number;
+  acknowledged: number;
+  inProgress: number;
+  resolved: number;
+  dismissed: number;
+  cancelled: number;
+  critical: number;
+  escalated: number;
+  overdue: number;
+}
+
+
 
 
 

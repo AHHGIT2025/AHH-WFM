@@ -9,61 +9,61 @@ generator client {
 }
 
 model Employee {
-  id            String               @id
-  name          String
-  department    String               // Keeps compatibility name
-  companyId     String?
-  company       Company?             @relation(fields: [companyId], references: [id])
-  departmentId  String?
-  departmentRef Department?          @relation(fields: [departmentId], references: [id])
-  role          String               // "ADMIN" | "SUPERVISOR" | "EMPLOYEE"
-  status        String               // "On Duty" | "On Break" | "Offline" | "On Leave"
-  email         String               @unique
-  phone         String?
-  shiftId       String?
-  passwordHash  String?
-  profilePhotoUrl       String?
-  profilePhotoUpdatedAt DateTime?
-  isActive      Boolean              @default(true)
-  employmentStatus String            @default("ACTIVE")
-  dutyStatus    String               @default("OFF_DUTY")
-  employeeCategory String            @default("WHITE_COLLAR")
-  workAssignmentType String          @default("OFFICE_BASED")
-  dateOfJoining      DateTime?
-  qidNumber          String?
-  qidExpiryDate      DateTime?
-  passportNumber     String?
-  passportExpiryDate DateTime?
-  passportIssueDate  DateTime?
+  id                     String                      @id
+  name                   String
+  department             String // Keeps compatibility name
+  companyId              String?
+  company                Company?                    @relation(fields: [companyId], references: [id])
+  departmentId           String?
+  departmentRef          Department?                 @relation(fields: [departmentId], references: [id])
+  role                   String // "ADMIN" | "SUPERVISOR" | "EMPLOYEE"
+  status                 String // "On Duty" | "On Break" | "Offline" | "On Leave"
+  email                  String                      @unique
+  phone                  String?
+  shiftId                String?
+  passwordHash           String?
+  profilePhotoUrl        String?
+  profilePhotoUpdatedAt  DateTime?
+  isActive               Boolean                     @default(true)
+  employmentStatus       String                      @default("ACTIVE")
+  dutyStatus             String                      @default("OFF_DUTY")
+  employeeCategory       String                      @default("WHITE_COLLAR")
+  workAssignmentType     String                      @default("OFFICE_BASED")
+  dateOfJoining          DateTime?
+  qidNumber              String?
+  qidExpiryDate          DateTime?
+  passportNumber         String?
+  passportExpiryDate     DateTime?
+  passportIssueDate      DateTime?
   passportIssuingCountry String?
-  sponsor            String?
-  hasAccommodation   Boolean         @default(false)
-  hasItAssets        Boolean         @default(false)
-  attendance    AttendanceRecord[]
-  leaves        LeaveRequest[]
-  leaveBalances LeaveBalance[]
-  ledgers       LeaveBalanceLedger[]
-  shiftAssignments ShiftAssignment[]
-  positionCategoryId String?
-  positionCategory   BlueCollarPositionCategory? @relation(fields: [positionCategoryId], references: [id])
-  defaultProjectId   String?
-  defaultProject     Project?                    @relation("DefaultProject", fields: [defaultProjectId], references: [id])
-  defaultSiteId      String?
-  defaultSite        ProjectSite?                @relation("DefaultSite", fields: [defaultSiteId], references: [id])
-  deployments        EmployeeDeployment[]
-  designationId      String?
-  designation        Designation?                @relation(fields: [designationId], references: [id])
-  tradeClassificationId String?
-  tradeClassification   TradeClassification?      @relation(fields: [tradeClassificationId], references: [id])
-  grade              String?
-  costCenterId       String?
-  costCenterRef      CostCenter?                 @relation(fields: [costCenterId], references: [id])
-  defaultLocationId  String?
-  defaultLocation    LocationMaster?             @relation("DefaultLocation", fields: [defaultLocationId], references: [id])
-  officeLocationId   String?
-  officeLocation     LocationMaster?             @relation("OfficeLocation", fields: [officeLocationId], references: [id])
-  isRelieverEligible Boolean                     @default(false)
-  isStandbyEligible  Boolean                     @default(false)
+  sponsor                String?
+  hasAccommodation       Boolean                     @default(false)
+  hasItAssets            Boolean                     @default(false)
+  attendance             AttendanceRecord[]
+  leaves                 LeaveRequest[]
+  leaveBalances          LeaveBalance[]
+  ledgers                LeaveBalanceLedger[]
+  shiftAssignments       ShiftAssignment[]
+  positionCategoryId     String?
+  positionCategory       BlueCollarPositionCategory? @relation(fields: [positionCategoryId], references: [id])
+  defaultProjectId       String?
+  defaultProject         Project?                    @relation("DefaultProject", fields: [defaultProjectId], references: [id])
+  defaultSiteId          String?
+  defaultSite            ProjectSite?                @relation("DefaultSite", fields: [defaultSiteId], references: [id])
+  deployments            EmployeeDeployment[]
+  designationId          String?
+  designation            Designation?                @relation(fields: [designationId], references: [id])
+  tradeClassificationId  String?
+  tradeClassification    TradeClassification?        @relation(fields: [tradeClassificationId], references: [id])
+  grade                  String?
+  costCenterId           String?
+  costCenterRef          CostCenter?                 @relation(fields: [costCenterId], references: [id])
+  defaultLocationId      String?
+  defaultLocation        LocationMaster?             @relation("DefaultLocation", fields: [defaultLocationId], references: [id])
+  officeLocationId       String?
+  officeLocation         LocationMaster?             @relation("OfficeLocation", fields: [officeLocationId], references: [id])
+  isRelieverEligible     Boolean                     @default(false)
+  isStandbyEligible      Boolean                     @default(false)
 
   defaultPunchLocationId       String?
   defaultPunchLocation         AllowedPunchLocation? @relation("EmployeeDefaultPunchLocation", fields: [defaultPunchLocationId], references: [id])
@@ -82,61 +82,60 @@ model Employee {
   immediateSupervisorId String?
   immediateSupervisor   Employee?  @relation("ImmediateSupervisor", fields: [immediateSupervisorId], references: [id])
   subordinates          Employee[] @relation("ImmediateSupervisor")
-  
-  reportingManagerId    String?
-  projectSupervisorId   String?
-  siteSupervisorId      String?
-  isSupervisor          Boolean    @default(false)
-  supervisorScopeType   String     @default("DIRECT_REPORTS") // DIRECT_REPORTS, DEPARTMENT, COMPANY, PROJECT, SITE, CUSTOM
-  
+
+  reportingManagerId  String?
+  projectSupervisorId String?
+  siteSupervisorId    String?
+  isSupervisor        Boolean @default(false)
+  supervisorScopeType String  @default("DIRECT_REPORTS") // DIRECT_REPORTS, DEPARTMENT, COMPANY, PROJECT, SITE, CUSTOM
+
   // --- User Account & Auth (Instead of separate UserAccount table) ---
   // TODO: Consider migrating these fields to a dedicated UserAccount table in the future
-  username              String?    @unique
-  authMode              String     @default("LOCAL") // LOCAL, SSO, LOCAL_AND_SSO
-  ssoProvider           String?
-  ssoSubject            String?
-  isLoginEnabled        Boolean    @default(true)
-  mustChangePassword    Boolean    @default(false)
-  isLocked              Boolean    @default(false)
-  failedLoginAttempts   Int        @default(0)
-  selfServiceEnabled    Boolean    @default(true)
-  lastLoginAt           DateTime?
-  passwordUpdatedAt     DateTime?
+  username            String?   @unique
+  authMode            String    @default("LOCAL") // LOCAL, SSO, LOCAL_AND_SSO
+  ssoProvider         String?
+  ssoSubject          String?
+  isLoginEnabled      Boolean   @default(true)
+  mustChangePassword  Boolean   @default(false)
+  isLocked            Boolean   @default(false)
+  failedLoginAttempts Int       @default(0)
+  selfServiceEnabled  Boolean   @default(true)
+  lastLoginAt         DateTime?
+  passwordUpdatedAt   DateTime?
 
+  webAccessEnabled    Boolean   @default(true)
+  mobileAccessEnabled Boolean   @default(true)
+  usernameStrategy    String    @default("MANUAL")
+  deactivatedAt       DateTime?
 
-  webAccessEnabled      Boolean    @default(true)
-  mobileAccessEnabled   Boolean    @default(true)
-  usernameStrategy      String     @default("MANUAL")
-  deactivatedAt         DateTime?
-
-  clearanceRequests     ClearanceRequest[] @relation("EmployeeClearance")
-  clearanceApprovals    ClearanceApprovalStep[] @relation("Approver")
+  clearanceRequests  ClearanceRequest[]      @relation("EmployeeClearance")
+  clearanceApprovals ClearanceApprovalStep[] @relation("Approver")
 
   // --- Manpower Operations Additions ---
-  operationType         String                     @default("WHITE_COLLAR") // "WHITE_COLLAR" | "SECURITY_GUARDING" | "FACILITY_MANAGEMENT"
-  manpowerCategoryId    String?
-  manpowerCategory      ManpowerCategory?          @relation(fields: [manpowerCategoryId], references: [id], onDelete: SetNull)
-  userOperationAccess   UserOperationAccess?
-  manpowerAssignments   ManpowerDeploymentAssignment[]
-  manpowerRelievers     ManpowerRelieverAssignment[]
-  securityLicense       SecurityLicense?
-  securityGatePasses    SecurityGatePass[]
-  relieverAssignments   SecurityProjectRelieverAssignment[]
-  coordinatorAssignments SecurityProjectCoordinatorAssignment[]
-  siteInspections       SecuritySiteInspection[]
+  operationType               String                                 @default("WHITE_COLLAR") // "WHITE_COLLAR" | "SECURITY_GUARDING" | "FACILITY_MANAGEMENT"
+  manpowerCategoryId          String?
+  manpowerCategory            ManpowerCategory?                      @relation(fields: [manpowerCategoryId], references: [id], onDelete: SetNull)
+  userOperationAccess         UserOperationAccess?
+  manpowerAssignments         ManpowerDeploymentAssignment[]
+  manpowerRelievers           ManpowerRelieverAssignment[]
+  securityLicense             SecurityLicense?
+  securityGatePasses          SecurityGatePass[]
+  relieverAssignments         SecurityProjectRelieverAssignment[]
+  coordinatorAssignments      SecurityProjectCoordinatorAssignment[]
+  siteInspections             SecuritySiteInspection[]
   securityOperationalEmployee SecurityOperationalEmployee?
-  secfacEmployeeAssignments   SecfacAssignment[]         @relation("SecfacEmployeeAssignments")
-  secfacSupervisorAssignments SecfacAssignment[]         @relation("SecfacSupervisorAssignments")
-  secfacChecklistExecutions   SecfacChecklistExecution[] @relation("SecfacEmployeeExecutions")
-  secfacExecutionReviews      SecfacChecklistExecution[] @relation("SecfacExecutionReviewer")
-  secfacExecutionHistories    SecfacChecklistExecutionHistory[] @relation("SecfacExecutionHistoryPerformer")
-  secfacEvidenceAttachments   SecfacEvidenceAttachment[] @relation("SecfacEmployeeEvidence")
-  secfacEvidenceUploadedBy    SecfacEvidenceAttachment[] @relation("SecfacEvidenceUploadedBy")
-  secfacScanProofs            SecfacScanProof[]          @relation("SecfacEmployeeScanProofs")
-  secfacReviewedScanProofs    SecfacScanProof[]          @relation("SecfacScanProofReviewedBy")
-  secfacPatrolExecutions      SecfacPatrolExecution[]    @relation("SecfacPatrolExecutionEmployee")
-  secfacSyncConflicts         SecfacSyncConflict[]       @relation("SecfacEmployeeSyncConflicts")
-  secfacFieldAudits           SecfacFieldExecutionAudit[] @relation("SecfacFieldAuditEmployee")
+  secfacEmployeeAssignments   SecfacAssignment[]                     @relation("SecfacEmployeeAssignments")
+  secfacSupervisorAssignments SecfacAssignment[]                     @relation("SecfacSupervisorAssignments")
+  secfacChecklistExecutions   SecfacChecklistExecution[]             @relation("SecfacEmployeeExecutions")
+  secfacExecutionReviews      SecfacChecklistExecution[]             @relation("SecfacExecutionReviewer")
+  secfacExecutionHistories    SecfacChecklistExecutionHistory[]      @relation("SecfacExecutionHistoryPerformer")
+  secfacEvidenceAttachments   SecfacEvidenceAttachment[]             @relation("SecfacEmployeeEvidence")
+  secfacEvidenceUploadedBy    SecfacEvidenceAttachment[]             @relation("SecfacEvidenceUploadedBy")
+  secfacScanProofs            SecfacScanProof[]                      @relation("SecfacEmployeeScanProofs")
+  secfacReviewedScanProofs    SecfacScanProof[]                      @relation("SecfacScanProofReviewedBy")
+  secfacPatrolExecutions      SecfacPatrolExecution[]                @relation("SecfacPatrolExecutionEmployee")
+  secfacSyncConflicts         SecfacSyncConflict[]                   @relation("SecfacEmployeeSyncConflicts")
+  secfacFieldAudits           SecfacFieldExecutionAudit[]            @relation("SecfacFieldAuditEmployee")
 }
 
 model Department {
@@ -150,46 +149,46 @@ model Department {
 }
 
 model AttendanceRecord {
-  id                 String                 @id @default(uuid())
-  employeeId         String
-  employeeName       String
-  companyId          String?
-  company            Company?               @relation("CompanyAttendance", fields: [companyId], references: [id])
-  checkIn            DateTime               @default(now())
-  checkOut           DateTime?
-  originalCheckIn    DateTime               @default(now())
-  originalCheckOut   DateTime?
-  lat                Float
-  lng                Float
-  device             String
-  status             String                 // "ON_TIME" | "LATE" | "OUT_OF_ZONE" | "ABSENT" | "PENDING_CORRECTION" | "CORRECTED"
-  locationName       String
-  worksiteId         String?
-  worksite           Worksite?              @relation(fields: [worksiteId], references: [id], onDelete: SetNull)
-  shiftId            String?
-  shiftStartSnapshot String?
-  shiftEndSnapshot   String?
-  lateMinutes        Int                    @default(0)
-  standardOtMinutes  Int                    @default(0)
-  weekendOtMinutes   Int                    @default(0)
-  holidayOtMinutes   Int                    @default(0)
-  nightOtMinutes     Int                    @default(0)
-  specialEventOtMinutes Int                 @default(0)
-  otApprovedMinutes  Int                    @default(0)
-  overtimePayAmount  Float                  @default(0.0)
-  otStatus           String                 @default("PENDING") // "PENDING" | "APPROVED" | "REJECTED"
-  employee           Employee               @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  corrections        AttendanceCorrection[]
-  projectId          String?
-  siteId             String?
-  deploymentId       String?
-  projectStatusFlag  String?
-  officeLocationId   String?
-  onCallAssignmentId String?
-  onCallAssignment   OnCallAssignment?      @relation("OnCallAttendance", fields: [onCallAssignmentId], references: [id], onDelete: SetNull)
+  id                     String                 @id @default(uuid())
+  employeeId             String
+  employeeName           String
+  companyId              String?
+  company                Company?               @relation("CompanyAttendance", fields: [companyId], references: [id])
+  checkIn                DateTime               @default(now())
+  checkOut               DateTime?
+  originalCheckIn        DateTime               @default(now())
+  originalCheckOut       DateTime?
+  lat                    Float
+  lng                    Float
+  device                 String
+  status                 String // "ON_TIME" | "LATE" | "OUT_OF_ZONE" | "ABSENT" | "PENDING_CORRECTION" | "CORRECTED"
+  locationName           String
+  worksiteId             String?
+  worksite               Worksite?              @relation(fields: [worksiteId], references: [id], onDelete: SetNull)
+  shiftId                String?
+  shiftStartSnapshot     String?
+  shiftEndSnapshot       String?
+  lateMinutes            Int                    @default(0)
+  standardOtMinutes      Int                    @default(0)
+  weekendOtMinutes       Int                    @default(0)
+  holidayOtMinutes       Int                    @default(0)
+  nightOtMinutes         Int                    @default(0)
+  specialEventOtMinutes  Int                    @default(0)
+  otApprovedMinutes      Int                    @default(0)
+  overtimePayAmount      Float                  @default(0.0)
+  otStatus               String                 @default("PENDING") // "PENDING" | "APPROVED" | "REJECTED"
+  employee               Employee               @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  corrections            AttendanceCorrection[]
+  projectId              String?
+  siteId                 String?
+  deploymentId           String?
+  projectStatusFlag      String?
+  officeLocationId       String?
+  onCallAssignmentId     String?
+  onCallAssignment       OnCallAssignment?      @relation("OnCallAttendance", fields: [onCallAssignmentId], references: [id], onDelete: SetNull)
   allowedPunchLocationId String?
-  allowedPunchLocation AllowedPunchLocation? @relation("AllowedLocationAttendance", fields: [allowedPunchLocationId], references: [id], onDelete: SetNull)
-  punchLocationType  String?
+  allowedPunchLocation   AllowedPunchLocation?  @relation("AllowedLocationAttendance", fields: [allowedPunchLocationId], references: [id], onDelete: SetNull)
+  punchLocationType      String?
 }
 
 model Worksite {
@@ -211,7 +210,7 @@ model AttendanceCorrection {
   requestedCheckIn   DateTime?
   requestedCheckOut  DateTime?
   reason             String           @db.Text
-  status             String           // "Pending" | "Approved" | "Rejected"
+  status             String // "Pending" | "Approved" | "Rejected"
   reviewedById       String?
   reviewNotes        String?          @db.Text
   createdAt          DateTime         @default(now())
@@ -228,54 +227,54 @@ model Shift {
 }
 
 model LeaveType {
-  id                      String         @id @default(uuid())
-  name                    String         @unique // e.g. "Annual Leave"
-  code                    String         @unique // e.g. "ANNUAL"
-  isActive                Boolean        @default(true)
-  accruable               Boolean        @default(true)
-  carryForward            Boolean        @default(true)
-  maxCarryOver            Float          @default(0.0)
-  expiryMonths            Int            @default(12)
-  colorCode               String         @default("#0058be")
-  sapExternalId           String?        @unique
-  createdAt               DateTime       @default(now())
-  updatedAt               DateTime       @updatedAt
-  balances                LeaveBalance[]
-  requests                LeaveRequest[]
-  ledgers                 LeaveBalanceLedger[]
+  id            String               @id @default(uuid())
+  name          String               @unique // e.g. "Annual Leave"
+  code          String               @unique // e.g. "ANNUAL"
+  isActive      Boolean              @default(true)
+  accruable     Boolean              @default(true)
+  carryForward  Boolean              @default(true)
+  maxCarryOver  Float                @default(0.0)
+  expiryMonths  Int                  @default(12)
+  colorCode     String               @default("#0058be")
+  sapExternalId String?              @unique
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  balances      LeaveBalance[]
+  requests      LeaveRequest[]
+  ledgers       LeaveBalanceLedger[]
 
   // v0.18.4 fields
-  description             String?
-  isPaid                  Boolean        @default(true)
-  requiresDocument        Boolean        @default(false)
-  workflowCode            String?
-  defaultAnnualAllocation Float?
-  maxDaysPerRequest       Float?
-  allowHalfDay            Boolean        @default(true)
-  allowCarryForward       Boolean        @default(true)
-  carryForwardLimit       Float?
-  genderRestriction       String         @default("ALL")
-  applicableAfterProbation Boolean       @default(true)
+  description              String?
+  isPaid                   Boolean @default(true)
+  requiresDocument         Boolean @default(false)
+  workflowCode             String?
+  defaultAnnualAllocation  Float?
+  maxDaysPerRequest        Float?
+  allowHalfDay             Boolean @default(true)
+  allowCarryForward        Boolean @default(true)
+  carryForwardLimit        Float?
+  genderRestriction        String  @default("ALL")
+  applicableAfterProbation Boolean @default(true)
 }
 
 model LeaveBalance {
-  id                 String       @id @default(uuid())
-  employeeId         String
-  employee           Employee     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  leaveTypeId        String
-  leaveType          LeaveType    @relation(fields: [leaveTypeId], references: [id], onDelete: Restrict)
-  allocatedDays      Float        @default(0.0)
-  usedDays           Float        @default(0.0)
-  pendingDays        Float        @default(0.0)
-  carriedOver        Float        @default(0.0)
-  sapExternalId      String?      @unique
-  createdAt          DateTime     @default(now())
-  updatedAt          DateTime     @updatedAt
+  id            String    @id @default(uuid())
+  employeeId    String
+  employee      Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  leaveTypeId   String
+  leaveType     LeaveType @relation(fields: [leaveTypeId], references: [id], onDelete: Restrict)
+  allocatedDays Float     @default(0.0)
+  usedDays      Float     @default(0.0)
+  pendingDays   Float     @default(0.0)
+  carriedOver   Float     @default(0.0)
+  sapExternalId String?   @unique
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   // v0.18.4 fields
-  year               Int          @default(2026) // Runtime uses new Date().getFullYear(); default is for DDL safety
-  carriedForwardDays Float        @default(0.0)
-  adjustmentDays     Float        @default(0.0)
+  year               Int     @default(2026) // Runtime uses new Date().getFullYear(); default is for DDL safety
+  carriedForwardDays Float   @default(0.0)
+  adjustmentDays     Float   @default(0.0)
   remarks            String?
 
   @@unique([employeeId, leaveTypeId, year])
@@ -287,7 +286,7 @@ model LeaveBalanceLedger {
   employee      Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
   leaveTypeId   String
   leaveType     LeaveType @relation(fields: [leaveTypeId], references: [id], onDelete: Restrict)
-  actionType    String    // "INITIAL" | "ACCRUAL" | "LEAVE_TAKEN" | "CARRY_FORWARD" | "EXPIRY" | "MANUAL_ADJUSTMENT"
+  actionType    String // "INITIAL" | "ACCRUAL" | "LEAVE_TAKEN" | "CARRY_FORWARD" | "EXPIRY" | "MANUAL_ADJUSTMENT"
   amount        Float
   balanceBefore Float
   balanceAfter  Float
@@ -303,7 +302,7 @@ model LeaveRequest {
   type                  String
   dateRange             String
   reason                String
-  status                String                 // "Approved" | "Rejected" | "Pending Approval"
+  status                String // "Approved" | "Rejected" | "Pending Approval"
   startDate             DateTime?
   endDate               DateTime?
   totalDays             Float?
@@ -339,7 +338,7 @@ model LeaveApprovalStep {
   workflowId          String
   workflow            LeaveApprovalWorkflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
   stepNumber          Int
-  roleRequired        String                // "SUPERVISOR" | "MANAGER" | "HR"
+  roleRequired        String // "SUPERVISOR" | "MANAGER" | "HR"
   autoApprove         Boolean               @default(false)
   departmentFilter    String?
   gradeFilter         String?
@@ -354,8 +353,8 @@ model LeaveApprovalHistory {
   id             String       @id @default(uuid())
   leaveRequestId String
   leaveRequest   LeaveRequest @relation(fields: [leaveRequestId], references: [id], onDelete: Cascade)
-  approverId     String?      // Email or User ID, null if SYSTEM auto-approved
-  action         String       // "SUBMIT" | "APPROVE" | "REJECT" | "ESCALATE" | "REMIND" | "AUTO_APPROVE"
+  approverId     String? // Email or User ID, null if SYSTEM auto-approved
+  action         String // "SUBMIT" | "APPROVE" | "REJECT" | "ESCALATE" | "REMIND" | "AUTO_APPROVE"
   remarks        String?      @db.Text
   previousStatus String
   newStatus      String
@@ -364,8 +363,8 @@ model LeaveApprovalHistory {
 
 model LeaveApprovalDelegation {
   id                 String   @id @default(uuid())
-  employeeId         String   // Original approver employeeId
-  delegateApproverId String   // Delegate employeeId
+  employeeId         String // Original approver employeeId
+  delegateApproverId String // Delegate employeeId
   validFrom          DateTime
   validTo            DateTime
   reason             String   @db.Text
@@ -377,7 +376,7 @@ model Holiday {
   name        String
   date        DateTime @unique
   isRecurring Boolean  @default(false)
-  scope       String   // "NATIONAL" | "COMPANY" | "SITE"
+  scope       String // "NATIONAL" | "COMPANY" | "SITE"
   siteId      String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -396,7 +395,7 @@ model SyncLog {
   timestamp DateTime @default(now())
   operation String
   subject   String
-  status    String   // "Success" | "Failed" | "Warning"
+  status    String // "Success" | "Failed" | "Warning"
   details   String
 }
 
@@ -406,19 +405,19 @@ model Announcement {
   content   String   @db.Text
   timestamp DateTime @default(now())
   author    String
-  category  String   // "General" | "Urgent" | "System Update"
+  category  String // "General" | "Urgent" | "System Update"
 }
 
 model ShiftTemplate {
   id          String            @id @default(uuid())
   name        String
-  startTime   String            // "08:00"
-  endTime     String            // "17:00"
+  startTime   String // "08:00"
+  endTime     String // "17:00"
   isSplit     Boolean           @default(false)
-  splitStart  String?           // "16:00"
-  splitEnd    String?           // "20:00"
+  splitStart  String? // "16:00"
+  splitEnd    String? // "20:00"
   isFlexible  Boolean           @default(false)
-  coreHours   Float?            // 8.0
+  coreHours   Float? // 8.0
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
   assignments ShiftAssignment[]
@@ -434,196 +433,195 @@ model RotationTemplate {
 }
 
 model ShiftAssignment {
-  id              String        @id @default(uuid())
-  companyId       String?
-  company         Company?      @relation(fields: [companyId], references: [id])
-  employeeId      String
-  employee        Employee      @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  shiftTemplateId String
-  shiftTemplate   ShiftTemplate @relation(fields: [shiftTemplateId], references: [id])
-  date            DateTime
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-  projectId       String?
-  siteId          String?
-  officeLocationId String?
-  isSplitShift    Boolean       @default(false)
-  parentAssignmentId String?
-  relieverRequired   Boolean    @default(false)
+  id                   String        @id @default(uuid())
+  companyId            String?
+  company              Company?      @relation(fields: [companyId], references: [id])
+  employeeId           String
+  employee             Employee      @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  shiftTemplateId      String
+  shiftTemplate        ShiftTemplate @relation(fields: [shiftTemplateId], references: [id])
+  date                 DateTime
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+  projectId            String?
+  siteId               String?
+  officeLocationId     String?
+  isSplitShift         Boolean       @default(false)
+  parentAssignmentId   String?
+  relieverRequired     Boolean       @default(false)
   relieverAssignmentId String?
-  assignmentStatus   String     @default("ACTIVE") // "ACTIVE", "INACTIVE", "CANCELLED"
+  assignmentStatus     String        @default("ACTIVE") // "ACTIVE", "INACTIVE", "CANCELLED"
 
   @@index([employeeId])
 }
 
 model ShiftSwapRequest {
-  id                String          @id @default(uuid())
-  requestorId       String
-  targetEmployeeId  String
-  requestorShiftId  String
-  targetShiftId     String
-  status            String          // "PENDING", "APPROVED", "REJECTED"
-  reason            String?
-  reviewNotes       String?
-  approvedById      String?
-  createdAt         DateTime        @default(now())
-  updatedAt         DateTime        @updatedAt
+  id               String   @id @default(uuid())
+  requestorId      String
+  targetEmployeeId String
+  requestorShiftId String
+  targetShiftId    String
+  status           String // "PENDING", "APPROVED", "REJECTED"
+  reason           String?
+  reviewNotes      String?
+  approvedById     String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 }
 
 model OvertimeRate {
-  id                 String          @id @default(uuid())
-  name               String
-  overtimeType       String          // "STANDARD_OT" | "WEEKEND_OT" | "HOLIDAY_OT" | "NIGHT_OT" | "SPECIAL_EVENT_OT"
-  multiplier         Float
-  fixedRateAmount    Float?
-  currency           String          @default("QAR")
-  appliesOnWeekend   Boolean         @default(false)
-  appliesOnHoliday   Boolean         @default(false)
-  appliesAfterMinutes Int            @default(0)
-  isActive           Boolean         @default(true)
-  createdAt          DateTime        @default(now())
-  updatedAt          DateTime        @updatedAt
+  id                  String   @id @default(uuid())
+  name                String
+  overtimeType        String // "STANDARD_OT" | "WEEKEND_OT" | "HOLIDAY_OT" | "NIGHT_OT" | "SPECIAL_EVENT_OT"
+  multiplier          Float
+  fixedRateAmount     Float?
+  currency            String   @default("QAR")
+  appliesOnWeekend    Boolean  @default(false)
+  appliesOnHoliday    Boolean  @default(false)
+  appliesAfterMinutes Int      @default(0)
+  isActive            Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 }
 
 model SapConnection {
-  id                String    @id @default(uuid())
-  systemName        String    @unique
+  id                String       @id @default(uuid())
+  systemName        String       @unique
   odataUrl          String
   clientId          String
   companyId         String
   userId            String
   privateKeyVaultId String
-  isActive          Boolean   @default(true)
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  isActive          Boolean      @default(true)
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
   syncJobs          SapSyncJob[]
 }
 
 model SapSyncJob {
-  id              String       @id @default(uuid())
-  connectionId    String
-  connection      SapConnection @relation(fields: [connectionId], references: [id])
-  module          String       // "EMPLOYEE" | "LEAVE" | "ATTENDANCE" | "OVERTIME" | "ROSTER"
-  syncType        String       // "FULL" | "INCREMENTAL" | "MANUAL"
-  status          String       // "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED"
-  recordsProcessed Int         @default(0)
-  recordsSucceeded Int         @default(0)
-  recordsFailed    Int         @default(0)
-  startedAt       DateTime     @default(now())
-  completedAt     DateTime?
-  errorMessage    String?      @db.Text
-  deltaToken      String?
-  logs            SapSyncLog[]
+  id               String        @id @default(uuid())
+  connectionId     String
+  connection       SapConnection @relation(fields: [connectionId], references: [id])
+  module           String // "EMPLOYEE" | "LEAVE" | "ATTENDANCE" | "OVERTIME" | "ROSTER"
+  syncType         String // "FULL" | "INCREMENTAL" | "MANUAL"
+  status           String // "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED"
+  recordsProcessed Int           @default(0)
+  recordsSucceeded Int           @default(0)
+  recordsFailed    Int           @default(0)
+  startedAt        DateTime      @default(now())
+  completedAt      DateTime?
+  errorMessage     String?       @db.Text
+  deltaToken       String?
+  logs             SapSyncLog[]
 }
 
 model SapSyncLog {
-  id            String      @id @default(uuid())
-  jobId         String
-  job           SapSyncJob  @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  severity      String      // "INFO" | "WARN" | "ERROR"
-  entityName    String?     // e.g. "Employee", "Department"
-  entityId      String?
-  message       String      @db.Text
-  createdAt     DateTime    @default(now())
+  id         String     @id @default(uuid())
+  jobId      String
+  job        SapSyncJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  severity   String // "INFO" | "WARN" | "ERROR"
+  entityName String? // e.g. "Employee", "Department"
+  entityId   String?
+  message    String     @db.Text
+  createdAt  DateTime   @default(now())
 }
 
 model SapFieldMapping {
-  id            String      @id @default(uuid())
-  module        String      // "EMPLOYEE" | "LEAVE" | "ATTENDANCE"
-  sourceField   String
-  targetField   String
-  transformRule String?
+  id              String   @id @default(uuid())
+  module          String // "EMPLOYEE" | "LEAVE" | "ATTENDANCE"
+  sourceField     String
+  targetField     String
+  transformRule   String?
   validationRules String?
-  isRequired    Boolean     @default(false)
-  isActive      Boolean     @default(true)
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
+  isRequired      Boolean  @default(false)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }
 
 model SapRetryQueue {
-  id            String      @id @default(uuid())
-  module        String      // "EMPLOYEE" | "LEAVE" | "ATTENDANCE"
+  id            String   @id @default(uuid())
+  module        String // "EMPLOYEE" | "LEAVE" | "ATTENDANCE"
   entityId      String
-  payload       String      @db.Text
-  retryCount    Int         @default(0)
+  payload       String   @db.Text
+  retryCount    Int      @default(0)
   nextAttemptAt DateTime
-  lastError     String?     @db.Text
-  status        String      @default("PENDING") // "PENDING" | "FAILED_DLQ" | "RESOLVED"
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
+  lastError     String?  @db.Text
+  status        String   @default("PENDING") // "PENDING" | "FAILED_DLQ" | "RESOLVED"
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }
 
 model SapExportQueue {
-  id              String      @id @default(uuid())
-  module          String      // "LEAVE" | "ATTENDANCE" | "OVERTIME" | "ROSTER"
+  id              String    @id @default(uuid())
+  module          String // "LEAVE" | "ATTENDANCE" | "OVERTIME" | "ROSTER"
   recordId        String
-  payload         String      @db.Text
-  status          String      @default("PENDING") // "PENDING" | "PROCESSING" | "SENT" | "FAILED"
-  idempotencyKey  String      @unique
+  payload         String    @db.Text
+  status          String    @default("PENDING") // "PENDING" | "PROCESSING" | "SENT" | "FAILED"
+  idempotencyKey  String    @unique
   sapAckId        String?
   sapAckStatus    String?
   sapAckTimestamp DateTime?
-  retryCount      Int         @default(0)
-  lastError       String?     @db.Text
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
+  retryCount      Int       @default(0)
+  lastError       String?   @db.Text
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 }
 
 model SapPayrollStage {
-  id              String      @id @default(uuid())
+  id              String   @id @default(uuid())
   employeeId      String
-  payrollPeriod   String      // e.g. "2026-06"
-  wageType        String      // e.g. "WT_OT_STD", "WT_OT_WKD"
+  payrollPeriod   String // e.g. "2026-06"
+  wageType        String // e.g. "WT_OT_STD", "WT_OT_WKD"
   calculatedHours Float
-  calculatedPay   Float       // Base currency QAR
-  isApproved      Boolean     @default(false)
-  isExported      Boolean     @default(false)
+  calculatedPay   Float // Base currency QAR
+  isApproved      Boolean  @default(false)
+  isExported      Boolean  @default(false)
   exportedJobId   String?
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
-  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
   @@unique([employeeId, payrollPeriod, wageType])
 }
 
 model SapReconciliationLog {
-  id            String      @id @default(uuid())
-  employeeId    String
-  period        String      // e.g. "2026-06"
-  module        String      // "LEAVE" | "ATTENDANCE" | "OVERTIME"
-  wfmHours      Float       // Local WFM record sum
-  sapHours      Float       // Queried SAP OData sum
-  discrepancy   Float       // Math difference (WFM - SAP)
-  status        String      @default("MATCHED") // "MATCHED" | "DISCREPANCY" | "RESOLVED"
-  comments      String?     @db.Text
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
+  id          String   @id @default(uuid())
+  employeeId  String
+  period      String // e.g. "2026-06"
+  module      String // "LEAVE" | "ATTENDANCE" | "OVERTIME"
+  wfmHours    Float // Local WFM record sum
+  sapHours    Float // Queried SAP OData sum
+  discrepancy Float // Math difference (WFM - SAP)
+  status      String   @default("MATCHED") // "MATCHED" | "DISCREPANCY" | "RESOLVED"
+  comments    String?  @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 model SapPayrollPeriodLock {
-  id            String      @id @default(uuid())
-  period        String      @unique // e.g. "2026-06"
-  locked        Boolean     @default(false)
-  lockedById    String?
-  lockedAt      DateTime?
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
+  id         String    @id @default(uuid())
+  period     String    @unique // e.g. "2026-06"
+  locked     Boolean   @default(false)
+  lockedById String?
+  lockedAt   DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
 }
 
 model SecurityOperationsPeriodLock {
-  id            String      @id @default(uuid())
-  operationType String      @default("SECURITY_GUARDING")
+  id            String    @id @default(uuid())
+  operationType String    @default("SECURITY_GUARDING")
   period        String
-  locked        Boolean     @default(false)
+  locked        Boolean   @default(false)
   lockedById    String?
   lockedAt      DateTime?
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   @@unique([operationType, period])
   @@index([operationType])
   @@index([period])
 }
-
 
 model SavedReport {
   id          String   @id @default(uuid())
@@ -662,21 +660,21 @@ model UserActivityLog {
 }
 
 model ProductionCheckLog {
-  id           String   @id @default(uuid())
-  checkName    String
-  category     String
-  status       String
-  resultJson   String   @db.Text
-  checkedById  String?
-  checkedAt    DateTime @default(now())
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id          String   @id @default(uuid())
+  checkName   String
+  category    String
+  status      String
+  resultJson  String   @db.Text
+  checkedById String?
+  checkedAt   DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 model BackupJob {
   id           String    @id @default(uuid())
   backupType   String
-  status       String    // PENDING, PROCESSING, COMPLETED, FAILED
+  status       String // PENDING, PROCESSING, COMPLETED, FAILED
   fileName     String
   filePath     String
   fileSize     Int
@@ -690,20 +688,20 @@ model BackupJob {
 }
 
 model BackupAuditLog {
-  id           String   @id @default(uuid())
-  backupJobId  String
-  action       String   // BACKUP_CREATED, BACKUP_DOWNLOADED, BACKUP_FAILED, BACKUP_DELETED, RESTORE_REQUESTED
+  id            String   @id @default(uuid())
+  backupJobId   String
+  action        String // BACKUP_CREATED, BACKUP_DOWNLOADED, BACKUP_FAILED, BACKUP_DELETED, RESTORE_REQUESTED
   performedById String
-  ipAddress    String?
-  userAgent    String?
-  details      String   @db.Text
-  createdAt    DateTime @default(now())
+  ipAddress     String?
+  userAgent     String?
+  details       String   @db.Text
+  createdAt     DateTime @default(now())
 }
 
 model EmployeeBulkUploadJob {
   id              String    @id @default(uuid())
   fileName        String
-  status          String    // PENDING, PROCESSING, COMPLETED, FAILED
+  status          String // PENDING, PROCESSING, COMPLETED, FAILED
   totalRows       Int
   validRows       Int
   invalidRows     Int
@@ -717,16 +715,16 @@ model EmployeeBulkUploadJob {
 }
 
 model SystemRole {
-  id              String    @id @default(uuid())
-  name            String    @unique
+  id              String   @id @default(uuid())
+  name            String   @unique
   description     String?
-  isSystemDefault Boolean   @default(false)
-  isActive        Boolean   @default(true)
-  isEditable      Boolean   @default(true)
-  scope           String?   @default("Global")
-  roleType        String    @default("White Collar Operations")
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  isSystemDefault Boolean  @default(false)
+  isActive        Boolean  @default(true)
+  isEditable      Boolean  @default(true)
+  scope           String?  @default("Global")
+  roleType        String   @default("White Collar Operations")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }
 
 model SystemPermission {
@@ -763,42 +761,42 @@ model UserRoleAssignment {
 }
 
 model BlueCollarPositionCategory {
-  id          String   @id @default(uuid())
-  code        String   @unique
+  id          String               @id @default(uuid())
+  code        String               @unique
   name        String
-  description String?  @db.Text
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  description String?              @db.Text
+  isActive    Boolean              @default(true)
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
   employees   Employee[]
   deployments EmployeeDeployment[]
 }
 
 model Project {
-  id                 String               @id @default(uuid())
-  companyId          String?
-  company            Company?             @relation(fields: [companyId], references: [id])
-  projectCode        String               @unique
-  projectName        String
-  projectType        String               @default("NORMAL")
-  isOnCallProject    Boolean              @default(false)
-  clientName         String?
-  clientCode         String?
-  contractNumber     String?
-  costCenter         String
-  sapProjectCode     String?
-  sapCostCenterCode  String?
-  startDate          DateTime?
-  endDate            DateTime?
-  status             String               @default("ACTIVE") // "ACTIVE", "ON_HOLD", "COMPLETED", "CANCELLED"
-  createdAt          DateTime             @default(now())
-  updatedAt          DateTime             @updatedAt
-  sites              ProjectSite[]
-  deployments        EmployeeDeployment[]
-  employees          Employee[]           @relation("DefaultProject")
-  locationId         String?
-  location           LocationMaster?      @relation(fields: [locationId], references: [id])
-  onCallAssignments  OnCallAssignment[]
+  id                String               @id @default(uuid())
+  companyId         String?
+  company           Company?             @relation(fields: [companyId], references: [id])
+  projectCode       String               @unique
+  projectName       String
+  projectType       String               @default("NORMAL")
+  isOnCallProject   Boolean              @default(false)
+  clientName        String?
+  clientCode        String?
+  contractNumber    String?
+  costCenter        String
+  sapProjectCode    String?
+  sapCostCenterCode String?
+  startDate         DateTime?
+  endDate           DateTime?
+  status            String               @default("ACTIVE") // "ACTIVE", "ON_HOLD", "COMPLETED", "CANCELLED"
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+  sites             ProjectSite[]
+  deployments       EmployeeDeployment[]
+  employees         Employee[]           @relation("DefaultProject")
+  locationId        String?
+  location          LocationMaster?      @relation(fields: [locationId], references: [id])
+  onCallAssignments OnCallAssignment[]
 }
 
 model ProjectSite {
@@ -835,8 +833,8 @@ model EmployeeDeployment {
   positionCategoryId String
   positionCategory   BlueCollarPositionCategory @relation(fields: [positionCategoryId], references: [id])
   deploymentDate     DateTime
-  startTime          String                     // Format: "HH:MM"
-  endTime            String                     // Format: "HH:MM"
+  startTime          String // Format: "HH:MM"
+  endTime            String // Format: "HH:MM"
   plannedHours       Float
   actualHours        Float?
   shiftAssignmentId  String?
@@ -874,22 +872,22 @@ model TradeClassification {
 }
 
 model LocationMaster {
-  id                         String        @id @default(uuid())
-  companyId                  String?
-  company                    Company?      @relation(fields: [companyId], references: [id])
-  locationCode               String        @unique
-  locationName               String
-  address                    String?       @db.Text
-  latitude                   Float?
-  longitude                  Float?
+  id                          String        @id @default(uuid())
+  companyId                   String?
+  company                     Company?      @relation(fields: [companyId], references: [id])
+  locationCode                String        @unique
+  locationName                String
+  address                     String?       @db.Text
+  latitude                    Float?
+  longitude                   Float?
   defaultGeofenceRadiusMeters Float         @default(150.0)
-  isActive                   Boolean       @default(true)
-  createdAt                  DateTime      @default(now())
-  updatedAt                  DateTime      @updatedAt
-  projects                   Project[]
-  projectSites               ProjectSite[]
-  employees                  Employee[]    @relation("DefaultLocation")
-  officeEmployees            Employee[]    @relation("OfficeLocation")
+  isActive                    Boolean       @default(true)
+  createdAt                   DateTime      @default(now())
+  updatedAt                   DateTime      @updatedAt
+  projects                    Project[]
+  projectSites                ProjectSite[]
+  employees                   Employee[]    @relation("DefaultLocation")
+  officeEmployees             Employee[]    @relation("OfficeLocation")
 }
 
 model CostCenter {
@@ -907,53 +905,47 @@ model CostCenter {
 }
 
 model ShiftRelieverAssignment {
-  id                 String           @id @default(uuid())
+  id                 String   @id @default(uuid())
   originalEmployeeId String
   relieverEmployeeId String
   shiftAssignmentId  String?
   deploymentId       String?
   leaveRequestId     String?
-  date               String           // Format: "YYYY-MM-DD"
-  startTime          String           // Format: "HH:MM"
-  endTime            String           // Format: "HH:MM"
+  date               String // Format: "YYYY-MM-DD"
+  startTime          String // Format: "HH:MM"
+  endTime            String // Format: "HH:MM"
   projectId          String?
   siteId             String?
-  reason             String?          @db.Text
-  status             String           @default("PLANNED") // "PLANNED", "ACTIVE", "COMPLETED", "CANCELLED"
+  reason             String?  @db.Text
+  status             String   @default("PLANNED") // "PLANNED", "ACTIVE", "COMPLETED", "CANCELLED"
   createdById        String
-  createdAt          DateTime         @default(now())
-  updatedAt          DateTime         @updatedAt
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 }
 
 model RelieverStandbyRule {
-  id                           String   @id @default(uuid())
-  ruleName                     String
-  designationId                String?
-  tradeClassificationId        String?
-  projectId                    String?
-  siteId                       String?
-  standbyRequired              Boolean  @default(false)
-  relieverRequiredForLeave     Boolean  @default(false)
-  relieverRequiredForOff       Boolean  @default(false)
-  relieverRequiredForVacation  Boolean  @default(false)
-  isActive                     Boolean  @default(true)
-  createdAt                    DateTime @default(now())
-  updatedAt                    DateTime @updatedAt
+  id                          String   @id @default(uuid())
+  ruleName                    String
+  designationId               String?
+  tradeClassificationId       String?
+  projectId                   String?
+  siteId                      String?
+  standbyRequired             Boolean  @default(false)
+  relieverRequiredForLeave    Boolean  @default(false)
+  relieverRequiredForOff      Boolean  @default(false)
+  relieverRequiredForVacation Boolean  @default(false)
+  isActive                    Boolean  @default(true)
+  createdAt                   DateTime @default(now())
+  updatedAt                   DateTime @updatedAt
 }
 
-
-
-
-
-
-
 model Company {
-  id              String   @id @default(uuid())
-  companyCode     String   @unique
-  companyName     String
-  isActive        Boolean  @default(true)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id          String   @id @default(uuid())
+  companyCode String   @unique
+  companyName String
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   employees             Employee[]
   departments           Department[]
@@ -964,7 +956,7 @@ model Company {
   attendancePolicies    CompanyAttendancePolicy[]
   allowedPunchLocations AllowedPunchLocation[]
   shiftAssignments      ShiftAssignment[]
-  attendanceRecords     AttendanceRecord[] @relation("CompanyAttendance")
+  attendanceRecords     AttendanceRecord[]        @relation("CompanyAttendance")
   onCallAssignments     OnCallAssignment[]
   clearanceRequests     ClearanceRequest[]
 }
@@ -983,26 +975,26 @@ model CompanyAttendancePolicy {
 }
 
 model AllowedPunchLocation {
-  id                          String   @id @default(uuid())
-  companyId                   String
-  company                     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  name                        String
-  locationType                String   // OFFICE, PROJECT_SITE, CUSTOM, ON_CALL, CLIENT_SITE
-  locationId                  String?
-  projectId                   String?
-  siteId                      String?
-  latitude                    Float
-  longitude                   Float
-  radiusMeters                Float    @default(150.0)
-  address                     String?  @db.Text
-  isActive                    Boolean  @default(true)
-  createdAt                   DateTime @default(now())
-  updatedAt                   DateTime @updatedAt
+  id           String   @id @default(uuid())
+  companyId    String
+  company      Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name         String
+  locationType String // OFFICE, PROJECT_SITE, CUSTOM, ON_CALL, CLIENT_SITE
+  locationId   String?
+  projectId    String?
+  siteId       String?
+  latitude     Float
+  longitude    Float
+  radiusMeters Float    @default(150.0)
+  address      String?  @db.Text
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
-  employeeAssignments         EmployeeAllowedPunchLocation[]
-  attendanceRecords           AttendanceRecord[] @relation("AllowedLocationAttendance")
-  onCallAssignments           OnCallAssignment[]
-  defaultForEmployees         Employee[] @relation("EmployeeDefaultPunchLocation")
+  employeeAssignments EmployeeAllowedPunchLocation[]
+  attendanceRecords   AttendanceRecord[]             @relation("AllowedLocationAttendance")
+  onCallAssignments   OnCallAssignment[]
+  defaultForEmployees Employee[]                     @relation("EmployeeDefaultPunchLocation")
 }
 
 model EmployeeAllowedPunchLocation {
@@ -1022,167 +1014,167 @@ model EmployeeAllowedPunchLocation {
 }
 
 model OnCallAssignment {
-  id                     String               @id @default(uuid())
+  id                     String                @id @default(uuid())
   companyId              String
-  company                Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company                Company               @relation(fields: [companyId], references: [id], onDelete: Cascade)
   employeeId             String
-  employee               Employee             @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  employee               Employee              @relation(fields: [employeeId], references: [id], onDelete: Cascade)
   projectId              String?
-  project                Project?             @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  project                Project?              @relation(fields: [projectId], references: [id], onDelete: SetNull)
   siteId                 String?
-  site                   ProjectSite?         @relation(fields: [siteId], references: [id], onDelete: SetNull)
+  site                   ProjectSite?          @relation(fields: [siteId], references: [id], onDelete: SetNull)
   allowedPunchLocationId String?
   allowedPunchLocation   AllowedPunchLocation? @relation(fields: [allowedPunchLocationId], references: [id], onDelete: SetNull)
   assignmentDate         DateTime
-  startTime              String               // "HH:MM"
-  endTime                String               // "HH:MM"
-  status                 String               @default("STANDBY") // "STANDBY" | "CALLED_OUT" | "COMPLETED" | "CANCELLED"
-  description            String?              @db.Text
+  startTime              String // "HH:MM"
+  endTime                String // "HH:MM"
+  status                 String                @default("STANDBY") // "STANDBY" | "CALLED_OUT" | "COMPLETED" | "CANCELLED"
+  description            String?               @db.Text
   createdById            String
-  createdAt              DateTime             @default(now())
-  updatedAt              DateTime             @updatedAt
+  createdAt              DateTime              @default(now())
+  updatedAt              DateTime              @updatedAt
 
-  attendanceRecords      AttendanceRecord[] @relation("OnCallAttendance")
+  attendanceRecords AttendanceRecord[] @relation("OnCallAttendance")
 }
 
 model ClearanceRequest {
-  id                    String                  @id @default(uuid())
-  clearanceNumber       String                  @unique
-  formCode              String?                 // e.g. "26-12-2020"
-  issueRef              String?                 // e.g. "FM-14-04-02"
-  issueDate             String?                 // e.g. "26th DEC, 2020"
-  companyId             String?
-  company               Company?                @relation(fields: [companyId], references: [id])
-  employeeId            String
-  employee              Employee                @relation("EmployeeClearance", fields: [employeeId], references: [id], onDelete: Cascade)
-  clearanceType         String                  // "LEAVE_VACATION" | "SEPARATION"
-  separationType        String?                 // "RESIGNATION" | "TERMINATION" | "END_OF_CONTRACT" | "FINAL_EXIT" | "OTHER"
-  linkedLeaveRequestId  String?                 // Reference to LeaveRequest if spawned from leave
-  requestedById         String                  // User ID who created it (HR/Admin)
-  requestDate           DateTime                @default(now())
-  
+  id                   String   @id @default(uuid())
+  clearanceNumber      String   @unique
+  formCode             String? // e.g. "26-12-2020"
+  issueRef             String? // e.g. "FM-14-04-02"
+  issueDate            String? // e.g. "26th DEC, 2020"
+  companyId            String?
+  company              Company? @relation(fields: [companyId], references: [id])
+  employeeId           String
+  employee             Employee @relation("EmployeeClearance", fields: [employeeId], references: [id], onDelete: Cascade)
+  clearanceType        String // "LEAVE_VACATION" | "SEPARATION"
+  separationType       String? // "RESIGNATION" | "TERMINATION" | "END_OF_CONTRACT" | "FINAL_EXIT" | "OTHER"
+  linkedLeaveRequestId String? // Reference to LeaveRequest if spawned from leave
+  requestedById        String // User ID who created it (HR/Admin)
+  requestDate          DateTime @default(now())
+
   // Snapshots
-  dateOfJoiningSnapshot String?
-  employeeCodeSnapshot  String?
-  employeeNameSnapshot  String?
-  designationSnapshot   String?
-  workingForSnapshot    String?
-  qidNumberSnapshot     String?
-  qidExpiryDateSnapshot String?
+  dateOfJoiningSnapshot      String?
+  employeeCodeSnapshot       String?
+  employeeNameSnapshot       String?
+  designationSnapshot        String?
+  workingForSnapshot         String?
+  qidNumberSnapshot          String?
+  qidExpiryDateSnapshot      String?
   passportNumberSnapshot     String?
   passportExpiryDateSnapshot String?
-  
+
   // Dates
-  departureDate         DateTime?
-  returningDate         DateTime?
-  lastWorkingDate       DateTime?
-  expectedReturnDate    DateTime?
-  
-  typeOfProcess         String?                 // Copied from form field
-  employeeRemarks       String?                 @db.Text
-  
+  departureDate      DateTime?
+  returningDate      DateTime?
+  lastWorkingDate    DateTime?
+  expectedReturnDate DateTime?
+
+  typeOfProcess   String? // Copied from form field
+  employeeRemarks String? @db.Text
+
   // Employee Signature
   employeeSignedAt      DateTime?
   employeeSignatureName String?
-  employeeSignatureData String?                 @db.Text // Optional drawn signature base64
-  
-  status                String                  @default("DRAFT") // DRAFT, SUBMITTED, PENDING_EMPLOYEE_SIGNATURE, IN_PROGRESS, PENDING_APPROVAL, APPROVED, REJECTED, RETURNED_FOR_CORRECTION, CANCELLED, COMPLETED
-  currentStepOrder      Int                     @default(0)
-  finalApprovedAt       DateTime?
-  completedAt           DateTime?
-  createdAt             DateTime                @default(now())
-  updatedAt             DateTime                @updatedAt
+  employeeSignatureData String?   @db.Text // Optional drawn signature base64
 
-  approvalSteps         ClearanceApprovalStep[]
-  history               ClearanceHistory[]
+  status           String    @default("DRAFT") // DRAFT, SUBMITTED, PENDING_EMPLOYEE_SIGNATURE, IN_PROGRESS, PENDING_APPROVAL, APPROVED, REJECTED, RETURNED_FOR_CORRECTION, CANCELLED, COMPLETED
+  currentStepOrder Int       @default(0)
+  finalApprovedAt  DateTime?
+  completedAt      DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  approvalSteps ClearanceApprovalStep[]
+  history       ClearanceHistory[]
 }
 
 model ClearanceTemplate {
-  id                    String                     @id @default(uuid())
-  name                  String                     @unique // e.g., "Leave / Vacation Clearance", "Separation Clearance"
-  clearanceType         String                     // "LEAVE_VACATION" | "SEPARATION"
-  description           String?                    @db.Text
-  isActive              Boolean                    @default(true)
-  createdAt             DateTime                   @default(now())
-  updatedAt             DateTime                   @updatedAt
-  
-  sections              ClearanceTemplateSection[]
+  id            String   @id @default(uuid())
+  name          String   @unique // e.g., "Leave / Vacation Clearance", "Separation Clearance"
+  clearanceType String // "LEAVE_VACATION" | "SEPARATION"
+  description   String?  @db.Text
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  sections ClearanceTemplateSection[]
 }
 
 model ClearanceTemplateSection {
-  id                    String                     @id @default(uuid())
-  templateId            String
-  template              ClearanceTemplate          @relation(fields: [templateId], references: [id], onDelete: Cascade)
-  sectionName           String                     // e.g. "Direct Supervisor", "Finance Department"
-  stepOrder             Int
-  defaultApproverId     String?                    // Optional specific user ID
-  defaultApproverRole   String?                    // Optional specific role string fallback
-  isExecutive           Boolean                    @default(false)
-  isRequiredByDefault   Boolean                    @default(true)
-  conditionalRule       String?                    // e.g. "HAS_IT_ASSETS", "HAS_ACCOMMODATION"
-  createdAt             DateTime                   @default(now())
-  updatedAt             DateTime                   @updatedAt
+  id                  String            @id @default(uuid())
+  templateId          String
+  template            ClearanceTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  sectionName         String // e.g. "Direct Supervisor", "Finance Department"
+  stepOrder           Int
+  defaultApproverId   String? // Optional specific user ID
+  defaultApproverRole String? // Optional specific role string fallback
+  isExecutive         Boolean           @default(false)
+  isRequiredByDefault Boolean           @default(true)
+  conditionalRule     String? // e.g. "HAS_IT_ASSETS", "HAS_ACCOMMODATION"
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
 
-  checklistItems        ClearanceChecklistItem[]
+  checklistItems ClearanceChecklistItem[]
 }
 
 model ClearanceChecklistItem {
-  id                    String                     @id @default(uuid())
-  sectionId             String
-  section               ClearanceTemplateSection   @relation(fields: [sectionId], references: [id], onDelete: Cascade)
-  itemText              String                     @db.Text
-  isRequired            Boolean                    @default(true)
-  createdAt             DateTime                   @default(now())
-  updatedAt             DateTime                   @updatedAt
+  id         String                   @id @default(uuid())
+  sectionId  String
+  section    ClearanceTemplateSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  itemText   String                   @db.Text
+  isRequired Boolean                  @default(true)
+  createdAt  DateTime                 @default(now())
+  updatedAt  DateTime                 @updatedAt
 }
 
 model ClearanceApprovalStep {
-  id                    String                     @id @default(uuid())
-  clearanceRequestId    String
-  clearanceRequest      ClearanceRequest           @relation(fields: [clearanceRequestId], references: [id], onDelete: Cascade)
-  stepOrder             Int
-  sectionName           String                     // e.g. "Finance Department"
-  isApplicable          Boolean                    @default(true)
-  notApplicableReason   String?                    @db.Text
-  status                String                     @default("PENDING") // PENDING, APPROVED, REJECTED, RETURNED, SKIPPED, NOT_APPLICABLE
-  
-  // Routing
-  assignedApproverId    String?                    // HR override or default template approver or dynamically resolved supervisor
-  assignedApprover      Employee?                  @relation("Approver", fields: [assignedApproverId], references: [id])
-  fallbackRole          String?                    // if no explicit approver
-  
-  // Execution
-  notes                 String?                    @db.Text
-  remarks               String?                    @db.Text
-  signatureName         String?
-  signatureDate         DateTime?
-  actedAt               DateTime?
-  actedById             String?                    // The actual user who took the action
-  
-  createdAt             DateTime                   @default(now())
-  updatedAt             DateTime                   @updatedAt
+  id                  String           @id @default(uuid())
+  clearanceRequestId  String
+  clearanceRequest    ClearanceRequest @relation(fields: [clearanceRequestId], references: [id], onDelete: Cascade)
+  stepOrder           Int
+  sectionName         String // e.g. "Finance Department"
+  isApplicable        Boolean          @default(true)
+  notApplicableReason String?          @db.Text
+  status              String           @default("PENDING") // PENDING, APPROVED, REJECTED, RETURNED, SKIPPED, NOT_APPLICABLE
 
-  responses             ClearanceApprovalResponse[]
+  // Routing
+  assignedApproverId String? // HR override or default template approver or dynamically resolved supervisor
+  assignedApprover   Employee? @relation("Approver", fields: [assignedApproverId], references: [id])
+  fallbackRole       String? // if no explicit approver
+
+  // Execution
+  notes         String?   @db.Text
+  remarks       String?   @db.Text
+  signatureName String?
+  signatureDate DateTime?
+  actedAt       DateTime?
+  actedById     String? // The actual user who took the action
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  responses ClearanceApprovalResponse[]
 }
 
 model ClearanceApprovalResponse {
-  id                    String                     @id @default(uuid())
-  stepId                String
-  step                  ClearanceApprovalStep      @relation(fields: [stepId], references: [id], onDelete: Cascade)
-  actionType            String                     // "APPROVE", "REJECT", "RETURN", "MARK_NOT_APPLICABLE", "REASSIGN"
-  actorId               String                     // User ID who performed the action
-  remarks               String?                    @db.Text
-  createdAt             DateTime                   @default(now())
+  id         String                @id @default(uuid())
+  stepId     String
+  step       ClearanceApprovalStep @relation(fields: [stepId], references: [id], onDelete: Cascade)
+  actionType String // "APPROVE", "REJECT", "RETURN", "MARK_NOT_APPLICABLE", "REASSIGN"
+  actorId    String // User ID who performed the action
+  remarks    String?               @db.Text
+  createdAt  DateTime              @default(now())
 }
 
 model ClearanceHistory {
-  id                    String                     @id @default(uuid())
-  clearanceRequestId    String
-  clearanceRequest      ClearanceRequest           @relation(fields: [clearanceRequestId], references: [id], onDelete: Cascade)
-  actorId               String                     // User ID who performed the action
-  actionType            String                     // "CREATED", "SUBMITTED", "SIGNED", "APPROVED", "REJECTED", "RETURNED", "OVERRIDE_APPLICABILITY", "COMPLETED"
-  details               String                     @db.Text
-  createdAt             DateTime                   @default(now())
+  id                 String           @id @default(uuid())
+  clearanceRequestId String
+  clearanceRequest   ClearanceRequest @relation(fields: [clearanceRequestId], references: [id], onDelete: Cascade)
+  actorId            String // User ID who performed the action
+  actionType         String // "CREATED", "SUBMITTED", "SIGNED", "APPROVED", "REJECTED", "RETURNED", "OVERRIDE_APPLICABILITY", "COMPLETED"
+  details            String           @db.Text
+  createdAt          DateTime         @default(now())
 }
 
 // ==========================================
@@ -1203,81 +1195,81 @@ model UserOperationAccess {
 }
 
 model ManpowerClient {
-  id                            String                   @id @default(uuid())
-  name                          String
-  code                          String                   @unique
-  operationType                 String                   // "SECURITY_GUARDING" | "FACILITY_MANAGEMENT"
-  isActive                      Boolean                  @default(true)
-  createdAt                     DateTime                 @default(now())
-  updatedAt                     DateTime                 @updatedAt
-  contracts                     ManpowerContract[]
-  documents                     ManpowerClientDocument[]
-  customerType                  String                   @default("COMPANY")
-  tradingName                   String?
-  businessType                  String?
-  addressLine1                  String?
-  addressLine2                  String?
-  zone                          String?
-  area                          String?
-  city                          String?
-  country                       String?
-  poBox                         String?
-  mapLocation                   String?
-  mainPhone                     String?
-  mainEmail                     String?
-  website                       String?
-  operationContactName          String?
-  operationContactDesignation   String?
-  operationContactMobile        String?
-  operationContactEmail         String?
-  operationContactAltPhone      String?
-  financeContactName            String?
-  financeContactDesignation     String?
-  financeContactMobile          String?
-  financeContactEmail           String?
-  financeContactAltPhone        String?
-  billingEmail                  String?
-  paymentTerms                  String?
-  crNumber                      String?
-  crExpiryDate                  DateTime?
-  taxNumber                     String?
-  establishmentCardNumber       String?
-  establishmentCardExpiryDate   DateTime?
-  authorizedSignatoryName       String?
-  authorizedSignatoryQid        String?
-  qidNumber                     String?
-  qidExpiryDate                 DateTime?
-  passportNumber                String?
-  passportExpiryDate            DateTime?
-  nationality                   String?
-  dateOfBirth                   DateTime?
-  internalSalesPersonId         String?
-  internalSalesPersonName       String?
-  internalSalesPersonMobile     String?
-  internalSalesPersonEmail      String?
-  legalRemarks                  String?
-  remarks                       String?
-  tradeLicenseNumber            String?
-  tradeLicenseIssueDate         DateTime?
-  tradeLicenseExpiryDate        DateTime?
-  tradeLicenseAuthority         String?
-  secfacCheckpoints             SecfacCheckpoint[]
-  secfacChecklistTemplates      SecfacChecklistTemplate[]
-  secfacAssignments             SecfacAssignment[]
+  id                          String                    @id @default(uuid())
+  name                        String
+  code                        String                    @unique
+  operationType               String // "SECURITY_GUARDING" | "FACILITY_MANAGEMENT"
+  isActive                    Boolean                   @default(true)
+  createdAt                   DateTime                  @default(now())
+  updatedAt                   DateTime                  @updatedAt
+  contracts                   ManpowerContract[]
+  documents                   ManpowerClientDocument[]
+  customerType                String                    @default("COMPANY")
+  tradingName                 String?
+  businessType                String?
+  addressLine1                String?
+  addressLine2                String?
+  zone                        String?
+  area                        String?
+  city                        String?
+  country                     String?
+  poBox                       String?
+  mapLocation                 String?
+  mainPhone                   String?
+  mainEmail                   String?
+  website                     String?
+  operationContactName        String?
+  operationContactDesignation String?
+  operationContactMobile      String?
+  operationContactEmail       String?
+  operationContactAltPhone    String?
+  financeContactName          String?
+  financeContactDesignation   String?
+  financeContactMobile        String?
+  financeContactEmail         String?
+  financeContactAltPhone      String?
+  billingEmail                String?
+  paymentTerms                String?
+  crNumber                    String?
+  crExpiryDate                DateTime?
+  taxNumber                   String?
+  establishmentCardNumber     String?
+  establishmentCardExpiryDate DateTime?
+  authorizedSignatoryName     String?
+  authorizedSignatoryQid      String?
+  qidNumber                   String?
+  qidExpiryDate               DateTime?
+  passportNumber              String?
+  passportExpiryDate          DateTime?
+  nationality                 String?
+  dateOfBirth                 DateTime?
+  internalSalesPersonId       String?
+  internalSalesPersonName     String?
+  internalSalesPersonMobile   String?
+  internalSalesPersonEmail    String?
+  legalRemarks                String?
+  remarks                     String?
+  tradeLicenseNumber          String?
+  tradeLicenseIssueDate       DateTime?
+  tradeLicenseExpiryDate      DateTime?
+  tradeLicenseAuthority       String?
+  secfacCheckpoints           SecfacCheckpoint[]
+  secfacChecklistTemplates    SecfacChecklistTemplate[]
+  secfacAssignments           SecfacAssignment[]
 }
 
 model ManpowerContract {
-  id                   String                     @id @default(uuid())
+  id                   String                        @id @default(uuid())
   clientId             String
-  client               ManpowerClient             @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  contractNumber       String                     @unique
+  client               ManpowerClient                @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  contractNumber       String                        @unique
   title                String
   startDate            DateTime
   endDate              DateTime
-  operationType        String                     // "SECURITY_GUARDING" | "FACILITY_MANAGEMENT"
-  status               String                     @default("DRAFT") // "DRAFT" | "ACTIVE" | "EXPIRED" | "TERMINATED"
-  defaultManpowerCount Int                        @default(0)
-  defaultRelieverCount Int                        @default(0)
+  operationType        String // "SECURITY_GUARDING" | "FACILITY_MANAGEMENT"
+  status               String                        @default("DRAFT") // "DRAFT" | "ACTIVE" | "EXPIRED" | "TERMINATED"
+  defaultManpowerCount Int                           @default(0)
+  defaultRelieverCount Int                           @default(0)
   shiftDefinitions     Json?
   durationNumber       Int?
   durationUnit         String?
@@ -1285,8 +1277,8 @@ model ManpowerContract {
   totalManpowerValue   Float?
   totalMaterialValue   Float?
   totalContractValue   Float?
-  createdAt            DateTime                   @default(now())
-  updatedAt            DateTime                   @updatedAt
+  createdAt            DateTime                      @default(now())
+  updatedAt            DateTime                      @updatedAt
   projects             ManpowerProject[]
   materials            ManpowerContractMaterial[]
   manpowerRequirements ContractManpowerRequirement[]
@@ -1297,33 +1289,33 @@ model ManpowerContract {
   documents            ManpowerClientDocument[]
 
   // Payment Terms
-  paymentTerms                 String?
-  paymentCycle                 String?
-  creditDays                   Int?
-  invoiceSubmissionDay         String?
-  paymentRemarks               String?
+  paymentTerms         String?
+  paymentCycle         String?
+  creditDays           Int?
+  invoiceSubmissionDay String?
+  paymentRemarks       String?
 
   // Termination Clause
-  terminationClause            String?
-  noticePeriodDays             Int?
-  terminationPenalty           String?
-  earlyTerminationAllowed      Boolean                    @default(false)
-  terminationRemarks           String?
+  terminationClause       String?
+  noticePeriodDays        Int?
+  terminationPenalty      String?
+  earlyTerminationAllowed Boolean @default(false)
+  terminationRemarks      String?
 
   // Special Conditions
-  specialConditions            String?
-  serviceLevelTerms            String?
-  penaltyClause                String?
-  escalationMatrix             String?
-  otherContractConditions      String?
+  specialConditions       String?
+  serviceLevelTerms       String?
+  penaltyClause           String?
+  escalationMatrix        String?
+  otherContractConditions String?
 
   // Approval status and logs
-  approvalStatus               String                     @default("DRAFT")
-  submittedForApprovalAt       DateTime?
-  approvedAt                   DateTime?
-  activatedAt                  DateTime?
-  activatedBy                  String?
-  rejectionRemarks             String?
+  approvalStatus         String    @default("DRAFT")
+  submittedForApprovalAt DateTime?
+  approvedAt             DateTime?
+  activatedAt            DateTime?
+  activatedBy            String?
+  rejectionRemarks       String?
 
   // Termination details
   terminationRequestedAt DateTime?
@@ -1335,73 +1327,73 @@ model ManpowerContract {
 }
 
 model ManpowerProject {
-  id                     String                                 @id @default(uuid())
-  contractId             String
-  contract               ManpowerContract                       @relation(fields: [contractId], references: [id], onDelete: Cascade)
-  name                   String
-  code                   String                                 @unique
-  operationType          String                                 // "SECURITY_GUARDING" | "FACILITY_MANAGEMENT"
-  isActive               Boolean                                @default(true)
-  createdAt              DateTime                               @default(now())
-  updatedAt              DateTime                               @updatedAt
-  sites                  ManpowerSite[]
-  gatePasses             SecurityGatePass[]
-  relieverPools          SecurityProjectRelieverPool[]
-  coordinatorAssignments SecurityProjectCoordinatorAssignment[]
-  siteInspections        SecuritySiteInspection[]
-  materials              ManpowerProjectMaterialAllocation[]
-  manpowerAllocations   SecurityProjectManpowerAllocation[]
-  secfacCheckpoints      SecfacCheckpoint[]
+  id                       String                                 @id @default(uuid())
+  contractId               String
+  contract                 ManpowerContract                       @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  name                     String
+  code                     String                                 @unique
+  operationType            String // "SECURITY_GUARDING" | "FACILITY_MANAGEMENT"
+  isActive                 Boolean                                @default(true)
+  createdAt                DateTime                               @default(now())
+  updatedAt                DateTime                               @updatedAt
+  sites                    ManpowerSite[]
+  gatePasses               SecurityGatePass[]
+  relieverPools            SecurityProjectRelieverPool[]
+  coordinatorAssignments   SecurityProjectCoordinatorAssignment[]
+  siteInspections          SecuritySiteInspection[]
+  materials                ManpowerProjectMaterialAllocation[]
+  manpowerAllocations      SecurityProjectManpowerAllocation[]
+  secfacCheckpoints        SecfacCheckpoint[]
   secfacChecklistTemplates SecfacChecklistTemplate[]
-  secfacAssignments      SecfacAssignment[]
+  secfacAssignments        SecfacAssignment[]
 }
 
 model ManpowerSite {
-  id                     String                                 @id @default(uuid())
-  code                   String?                                @unique
-  projectId              String
-  project                ManpowerProject                        @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  name                   String
-  lat                    Float?
-  lng                    Float?
-  radiusMeters           Float                                  @default(100)
-  operationType          String                                 // "SECURITY_GUARDING" | "FACILITY_MANAGEMENT"
-  isActive               Boolean                                @default(true)
-  gatePassRequired       Boolean                                @default(false)
-  gatePassValidationMode String                                 @default("WARNING") // WARNING | STRICT
-  clientApprovalRequired Boolean                                @default(false)
-  remarks                String?                                @db.Text
-  createdAt              DateTime                               @default(now())
-  updatedAt              DateTime                               @updatedAt
-  locationUnits          ManpowerLocationUnit[]
-  shiftRequirements      ManpowerShiftRequirement[]
-  gatePasses             SecurityGatePass[]
-  relieverPools          SecurityProjectRelieverPool[]
-  coordinatorAssignments SecurityProjectCoordinatorAssignment[]
-  siteInspections        SecuritySiteInspection[]
-  manpowerAllocations   SecuritySiteManpowerAllocation[]
-  siteAllowances        SecuritySiteAllowance[]
-  secfacCheckpoints      SecfacCheckpoint[]
-  secfacChecklistTemplates SecfacChecklistTemplate[]
-  secfacAssignments      SecfacAssignment[]
+  id                        String                                 @id @default(uuid())
+  code                      String?                                @unique
+  projectId                 String
+  project                   ManpowerProject                        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name                      String
+  lat                       Float?
+  lng                       Float?
+  radiusMeters              Float                                  @default(100)
+  operationType             String // "SECURITY_GUARDING" | "FACILITY_MANAGEMENT"
+  isActive                  Boolean                                @default(true)
+  gatePassRequired          Boolean                                @default(false)
+  gatePassValidationMode    String                                 @default("WARNING") // WARNING | STRICT
+  clientApprovalRequired    Boolean                                @default(false)
+  remarks                   String?                                @db.Text
+  createdAt                 DateTime                               @default(now())
+  updatedAt                 DateTime                               @updatedAt
+  locationUnits             ManpowerLocationUnit[]
+  shiftRequirements         ManpowerShiftRequirement[]
+  gatePasses                SecurityGatePass[]
+  relieverPools             SecurityProjectRelieverPool[]
+  coordinatorAssignments    SecurityProjectCoordinatorAssignment[]
+  siteInspections           SecuritySiteInspection[]
+  manpowerAllocations       SecuritySiteManpowerAllocation[]
+  siteAllowances            SecuritySiteAllowance[]
+  secfacCheckpoints         SecfacCheckpoint[]
+  secfacChecklistTemplates  SecfacChecklistTemplate[]
+  secfacAssignments         SecfacAssignment[]
   secfacChecklistExecutions SecfacChecklistExecution[]
   secfacEvidenceAttachments SecfacEvidenceAttachment[]
   secfacScanProofs          SecfacScanProof[]
-  secfacPatrolRoutes        SecfacPatrolRoute[]        @relation("SecfacPatrolRouteSite")
+  secfacPatrolRoutes        SecfacPatrolRoute[]                    @relation("SecfacPatrolRouteSite")
 }
 
 model SecuritySiteManpowerAllocation {
-  id               String       @id @default(uuid())
-  siteId           String
-  site             ManpowerSite @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  id     String       @id @default(uuid())
+  siteId String
+  site   ManpowerSite @relation(fields: [siteId], references: [id], onDelete: Cascade)
 
   position         String
-  quantity         Int          @default(0)
-  deploymentType   String       @default("PERMANENT")
-  relieverPoolType String       @default("DEDICATED")
+  quantity         Int    @default(0)
+  deploymentType   String @default("PERMANENT")
+  relieverPoolType String @default("DEDICATED")
 
-  createdAt        DateTime     @default(now())
-  updatedAt        DateTime     @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([siteId])
   @@index([position])
@@ -1409,24 +1401,24 @@ model SecuritySiteManpowerAllocation {
 }
 
 model SecuritySiteAllowance {
-  id                     String       @id @default(uuid())
-  siteId                 String
-  site                   ManpowerSite @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  id     String       @id @default(uuid())
+  siteId String
+  site   ManpowerSite @relation(fields: [siteId], references: [id], onDelete: Cascade)
 
-  siteAllowanceEnabled   Boolean      @default(false)
-  siteAllowanceAmount    Float        @default(0)
-  siteAllowanceFrequency String       @default("MONTHLY")
-  allowanceDescription   String?      @db.Text
+  siteAllowanceEnabled   Boolean @default(false)
+  siteAllowanceAmount    Float   @default(0)
+  siteAllowanceFrequency String  @default("MONTHLY")
+  allowanceDescription   String? @db.Text
 
-  appliesToAllPositions  Boolean      @default(true)
-  position               String?
+  appliesToAllPositions Boolean @default(true)
+  position              String?
 
-  effectiveFrom          DateTime?
-  effectiveTo            DateTime?
-  isActive               Boolean      @default(true)
+  effectiveFrom DateTime?
+  effectiveTo   DateTime?
+  isActive      Boolean   @default(true)
 
-  createdAt              DateTime     @default(now())
-  updatedAt              DateTime     @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([siteId])
   @@index([siteId, isActive])
@@ -1434,31 +1426,31 @@ model SecuritySiteAllowance {
 }
 
 model ManpowerLocationUnit {
-  id                 String                     @id @default(uuid())
-  code               String?                    @unique
-  siteId             String
-  site               ManpowerSite               @relation(fields: [siteId], references: [id], onDelete: Cascade)
-  name               String
-  type               String                     // "GATE" | "POST" | "ZONE" | "AREA" | "FLOOR" | "BLOCK" | "CLEANING_ZONE"
-  operationType      String                     // "SECURITY_GUARDING" | "FACILITY_MANAGEMENT"
-  isActive           Boolean                    @default(true)
-  remarks            String?                    @db.Text
-  guardTourRequired  Boolean                    @default(false)
-  checkpointRequired Boolean                    @default(false)
-  checkpointCount    Int                        @default(0)
-  createdAt          DateTime                   @default(now())
-  updatedAt          DateTime                   @updatedAt
-  shiftRequirements  ManpowerShiftRequirement[]
-  secfacCheckpoints  SecfacCheckpoint[]
+  id                       String                     @id @default(uuid())
+  code                     String?                    @unique
+  siteId                   String
+  site                     ManpowerSite               @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  name                     String
+  type                     String // "GATE" | "POST" | "ZONE" | "AREA" | "FLOOR" | "BLOCK" | "CLEANING_ZONE"
+  operationType            String // "SECURITY_GUARDING" | "FACILITY_MANAGEMENT"
+  isActive                 Boolean                    @default(true)
+  remarks                  String?                    @db.Text
+  guardTourRequired        Boolean                    @default(false)
+  checkpointRequired       Boolean                    @default(false)
+  checkpointCount          Int                        @default(0)
+  createdAt                DateTime                   @default(now())
+  updatedAt                DateTime                   @updatedAt
+  shiftRequirements        ManpowerShiftRequirement[]
+  secfacCheckpoints        SecfacCheckpoint[]
   secfacChecklistTemplates SecfacChecklistTemplate[]
-  secfacAssignments  SecfacAssignment[]
+  secfacAssignments        SecfacAssignment[]
 }
 
 model ManpowerCategory {
   id                    String                        @id @default(uuid())
-  name                  String                        // e.g. "Security Guard", "CCTV Operator", "Cleaner"
+  name                  String // e.g. "Security Guard", "CCTV Operator", "Cleaner"
   code                  String                        @unique
-  operationType         String                        // "SECURITY_GUARDING" | "FACILITY_MANAGEMENT"
+  operationType         String // "SECURITY_GUARDING" | "FACILITY_MANAGEMENT"
   isActive              Boolean                       @default(true)
   isBlueCollar          Boolean                       @default(true)
   isDeployableInRoster  Boolean                       @default(true)
@@ -1473,23 +1465,23 @@ model ManpowerCategory {
 }
 
 model ManpowerShiftRequirement {
-  id                    String                 @id @default(uuid())
+  id                    String                @id @default(uuid())
   siteId                String
-  site                  ManpowerSite           @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  site                  ManpowerSite          @relation(fields: [siteId], references: [id], onDelete: Cascade)
   locationUnitId        String?
-  locationUnit          ManpowerLocationUnit?  @relation(fields: [locationUnitId], references: [id], onDelete: SetNull)
+  locationUnit          ManpowerLocationUnit? @relation(fields: [locationUnitId], references: [id], onDelete: SetNull)
   categoryId            String
-  category              ManpowerCategory       @relation(fields: [categoryId], references: [id], onDelete: Cascade)
-  shiftCode             String                 // references Shift.code (e.g. "GEN-001")
+  category              ManpowerCategory      @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  shiftCode             String // references Shift.code (e.g. "GEN-001")
   requiredCount         Int
-  requiredRelieverCount Int                    @default(0)
-  shiftStartTime        String?                // Format: "HH:MM"
-  shiftEndTime          String?                // Format: "HH:MM"
+  requiredRelieverCount Int                   @default(0)
+  shiftStartTime        String? // Format: "HH:MM"
+  shiftEndTime          String? // Format: "HH:MM"
   dutyHours             Float?
-  operationType         String                 // "SECURITY_GUARDING" | "FACILITY_MANAGEMENT"
-  isActive              Boolean                @default(true)
-  createdAt             DateTime               @default(now())
-  updatedAt             DateTime               @updatedAt
+  operationType         String // "SECURITY_GUARDING" | "FACILITY_MANAGEMENT"
+  isActive              Boolean               @default(true)
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
   deployments           ManpowerDeployment[]
 }
 
@@ -1498,7 +1490,7 @@ model ManpowerDeployment {
   date               DateTime
   shiftRequirementId String
   shiftRequirement   ManpowerShiftRequirement       @relation(fields: [shiftRequirementId], references: [id], onDelete: Cascade)
-  operationType      String                         // "SECURITY_GUARDING" | "FACILITY_MANAGEMENT"
+  operationType      String // "SECURITY_GUARDING" | "FACILITY_MANAGEMENT"
   approvalStatus     String                         @default("DRAFT") // "DRAFT" | "SUBMITTED" | "APPROVED" | "REJECTED"
   approvedById       String?
   createdAt          DateTime                       @default(now())
@@ -1537,18 +1529,18 @@ model ManpowerRelieverAssignment {
 }
 
 model SecurityLicense {
-  id             String    @id @default(uuid())
-  employeeId     String    @unique
-  employee       Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  licenseType    String    @default("MOI") // "MOI" or other
-  licenseNumber  String
-  issueDate      DateTime
-  expiryDate     DateTime
-  status         String    @default("VALID") // "VALID" | "EXPIRING_SOON" | "EXPIRED" | "NOT_AVAILABLE"
-  documentUrl    String?
-  remarks        String?   @db.Text
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
+  id            String   @id @default(uuid())
+  employeeId    String   @unique
+  employee      Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  licenseType   String   @default("MOI") // "MOI" or other
+  licenseNumber String
+  issueDate     DateTime
+  expiryDate    DateTime
+  status        String   @default("VALID") // "VALID" | "EXPIRING_SOON" | "EXPIRED" | "NOT_AVAILABLE"
+  documentUrl   String?
+  remarks       String?  @db.Text
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }
 
 model SecurityGatePass {
@@ -1588,16 +1580,16 @@ model SecurityProjectRelieverPool {
 }
 
 model SecurityProjectManpowerAllocation {
-  id                    String          @id @default(uuid())
-  projectId             String
-  project               ManpowerProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  id        String          @id @default(uuid())
+  projectId String
+  project   ManpowerProject @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   contractRequirementId String
   position              String
-  quantity              Int             @default(0)
+  quantity              Int    @default(0)
 
-  createdAt             DateTime        @default(now())
-  updatedAt             DateTime        @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([projectId])
   @@index([contractRequirementId])
@@ -1642,7 +1634,7 @@ model SecuritySiteInspection {
   siteId                String
   site                  ManpowerSite    @relation(fields: [siteId], references: [id], onDelete: Cascade)
   inspectionDate        DateTime
-  status                String          // "COMPLETED" | "PENDING"
+  status                String // "COMPLETED" | "PENDING"
   remarks               String?         @db.Text
   followUpRequired      Boolean         @default(false)
   followUpStatus        String          @default("NONE") // "NONE" | "PENDING" | "RESOLVED"
@@ -1651,55 +1643,55 @@ model SecuritySiteInspection {
 }
 
 model ManpowerContractMaterial {
-  id            String                     @id @default(uuid())
-  contractId    String
-  contract      ManpowerContract           @relation(fields: [contractId], references: [id], onDelete: Cascade)
-  materialId    String?
-  materialMaster ManpowerMaterialMaster?   @relation(fields: [materialId], references: [id], onDelete: SetNull)
-  itemName      String
-  quantity      Int
-  unitPrice     Float?
-  isFoc         Boolean                    @default(false)
-  lineTotal     Float?
-  remarks       String?
-  startDate     DateTime
-  endDate       DateTime
-  operationType String                     // "SECURITY_GUARDING" | "FACILITY_MANAGEMENT"
-  createdAt     DateTime                   @default(now())
-  updatedAt     DateTime                   @updatedAt
-  allocations   ManpowerProjectMaterialAllocation[]
+  id             String                              @id @default(uuid())
+  contractId     String
+  contract       ManpowerContract                    @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  materialId     String?
+  materialMaster ManpowerMaterialMaster?             @relation(fields: [materialId], references: [id], onDelete: SetNull)
+  itemName       String
+  quantity       Int
+  unitPrice      Float?
+  isFoc          Boolean                             @default(false)
+  lineTotal      Float?
+  remarks        String?
+  startDate      DateTime
+  endDate        DateTime
+  operationType  String // "SECURITY_GUARDING" | "FACILITY_MANAGEMENT"
+  createdAt      DateTime                            @default(now())
+  updatedAt      DateTime                            @updatedAt
+  allocations    ManpowerProjectMaterialAllocation[]
 }
 
 model ManpowerProjectMaterialAllocation {
-  id            String                     @id @default(uuid())
-  code          String?                    @unique
+  id            String                   @id @default(uuid())
+  code          String?                  @unique
   materialId    String
-  material      ManpowerContractMaterial   @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  material      ManpowerContractMaterial @relation(fields: [materialId], references: [id], onDelete: Cascade)
   projectId     String
-  project       ManpowerProject            @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project       ManpowerProject          @relation(fields: [projectId], references: [id], onDelete: Cascade)
   quantity      Int
   startDate     DateTime
   endDate       DateTime
-  operationType String                     // "SECURITY_GUARDING" | "FACILITY_MANAGEMENT"
-  createdAt     DateTime                   @default(now())
-  updatedAt     DateTime                   @updatedAt
+  operationType String // "SECURITY_GUARDING" | "FACILITY_MANAGEMENT"
+  createdAt     DateTime                 @default(now())
+  updatedAt     DateTime                 @updatedAt
 }
 
 model ContractManpowerRequirement {
-  id             String           @id @default(uuid())
-  contractId     String
-  contract       ManpowerContract @relation(fields: [contractId], references: [id], onDelete: Cascade)
-  position       String
-  quantity       Int
-  deploymentType String
-  unitPrice      Float?
-  billingFrequency String?
+  id                 String           @id @default(uuid())
+  contractId         String
+  contract           ManpowerContract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  position           String
+  quantity           Int
+  deploymentType     String
+  unitPrice          Float?
+  billingFrequency   String?
   billingPeriodCount Int?
-  isFoc          Boolean          @default(false)
-  lineTotal      Float?
-  remarks        String?
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
+  isFoc              Boolean          @default(false)
+  lineTotal          Float?
+  remarks            String?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
 }
 
 model ContractRelieverRequirement {
@@ -1729,9 +1721,9 @@ model ContractShiftRequirement {
 }
 
 model ManpowerClientDocument {
-  id           String         @id @default(uuid())
+  id           String            @id @default(uuid())
   clientId     String
-  client       ManpowerClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  client       ManpowerClient    @relation(fields: [clientId], references: [id], onDelete: Cascade)
   contractId   String?
   contract     ManpowerContract? @relation(fields: [contractId], references: [id], onDelete: Cascade)
   documentType String
@@ -1741,15 +1733,15 @@ model ManpowerClientDocument {
   expiryDate   DateTime?
   remarks      String?
   uploadedBy   String?
-  uploadedAt   DateTime       @default(now())
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
+  uploadedAt   DateTime          @default(now())
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
 }
 
 model ManpowerContractAddendum {
-  id                         String           @id @default(uuid())
+  id                         String                             @id @default(uuid())
   contractId                 String
-  contract                   ManpowerContract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  contract                   ManpowerContract                   @relation(fields: [contractId], references: [id], onDelete: Cascade)
   addendumNumber             String
   title                      String
   addendumDate               DateTime
@@ -1760,24 +1752,24 @@ model ManpowerContractAddendum {
   commercialImpact           String?
   calculatedCommercialImpact Float?
   attachmentUrl              String?
-  status                     String           @default("DRAFT")
-  createdAt                  DateTime         @default(now())
-  updatedAt                  DateTime         @updatedAt
+  status                     String                             @default("DRAFT")
+  createdAt                  DateTime                           @default(now())
+  updatedAt                  DateTime                           @updatedAt
   lineItems                  ManpowerContractAddendumLineItem[]
 }
 
 model ManpowerMaterialMaster {
-  id               String                     @id @default(uuid())
-  materialCode     String                     @unique
-  materialName     String
-  materialCategory String
-  unitOfMeasure    String
-  defaultUnitPrice Float?
-  operationType    String                     @default("SHARED") // "SECURITY_GUARDING" | "FACILITY_MANAGEMENT" | "SHARED"
-  isActive         Boolean                    @default(true)
-  remarks          String?
-  createdAt        DateTime                   @default(now())
-  updatedAt        DateTime                   @updatedAt
+  id                String                     @id @default(uuid())
+  materialCode      String                     @unique
+  materialName      String
+  materialCategory  String
+  unitOfMeasure     String
+  defaultUnitPrice  Float?
+  operationType     String                     @default("SHARED") // "SECURITY_GUARDING" | "FACILITY_MANAGEMENT" | "SHARED"
+  isActive          Boolean                    @default(true)
+  remarks           String?
+  createdAt         DateTime                   @default(now())
+  updatedAt         DateTime                   @updatedAt
   contractMaterials ManpowerContractMaterial[]
 }
 
@@ -1785,8 +1777,8 @@ model ManpowerContractAddendumLineItem {
   id               String                   @id @default(uuid())
   addendumId       String
   addendum         ManpowerContractAddendum @relation(fields: [addendumId], references: [id], onDelete: Cascade)
-  itemType         String                   // "MANPOWER" | "MATERIAL"
-  changeType       String                   // "ADD" | "REMOVE" | "MODIFY"
+  itemType         String // "MANPOWER" | "MATERIAL"
+  changeType       String // "ADD" | "REMOVE" | "MODIFY"
   itemName         String
   quantity         Float
   unitPrice        Float?
@@ -1850,9 +1842,9 @@ model ContractApprovalApprover {
 model WorkflowTemplate {
   id            String                  @id @default(uuid())
   workflowName  String
-  moduleType    String                  // e.g. "SECURITY_GUARDING_CONTRACT", "FACILITY_MANAGEMENT_CONTRACT", "LEAVE_REQUEST"
-  operationType String?                 // e.g. "SECURITY_GUARDING", "FACILITY_MANAGEMENT", "WHITE_COLLAR", "GLOBAL"
-  appliesTo     String                  // e.g. "ACTIVATION", "TERMINATION"
+  moduleType    String // e.g. "SECURITY_GUARDING_CONTRACT", "FACILITY_MANAGEMENT_CONTRACT", "LEAVE_REQUEST"
+  operationType String? // e.g. "SECURITY_GUARDING", "FACILITY_MANAGEMENT", "WHITE_COLLAR", "GLOBAL"
+  appliesTo     String // e.g. "ACTIVATION", "TERMINATION"
   isDefault     Boolean                 @default(false)
   isActive      Boolean                 @default(true)
   remarks       String?
@@ -1880,7 +1872,7 @@ model WorkflowTemplateApprover {
   id           String                @id @default(uuid())
   levelId      String
   level        WorkflowTemplateLevel @relation(fields: [levelId], references: [id], onDelete: Cascade)
-  approverType String                // "SPECIFIC_EMPLOYEE" | "ROLE_BASED" | "DEPT_HEAD" | "REPORTING_MANAGER" | "CONTRACT_ADMIN"
+  approverType String // "SPECIFIC_EMPLOYEE" | "ROLE_BASED" | "DEPT_HEAD" | "REPORTING_MANAGER" | "CONTRACT_ADMIN"
   employeeId   String?
   employeeName String?
   employeeCode String?
@@ -1908,33 +1900,33 @@ model WorkflowDelegation {
 }
 
 model SecurityOperationalEmployee {
-  id                 String   @id @default(uuid())
-  sourceEmployeeId   String   @unique
-  sourceEmployee     Employee @relation(fields: [sourceEmployeeId], references: [id], onDelete: Restrict)
+  id               String   @id @default(uuid())
+  sourceEmployeeId String   @unique
+  sourceEmployee   Employee @relation(fields: [sourceEmployeeId], references: [id], onDelete: Restrict)
 
-  employeeCode       String?
-  fullName           String
-  companyId          String?
-  companyCode        String?
-  employeeCategory   String   @default("BLUE_COLLAR")
-  operationType      String   @default("SECURITY_GUARDING")
+  employeeCode     String?
+  fullName         String
+  companyId        String?
+  companyCode      String?
+  employeeCategory String  @default("BLUE_COLLAR")
+  operationType    String  @default("SECURITY_GUARDING")
 
-  designation        String?
-  position           String?
-  grade              String?
-  department         String?
-  defaultLocation    String?
+  designation     String?
+  position        String?
+  grade           String?
+  department      String?
+  defaultLocation String?
 
-  mobile             String?
-  email              String?
+  mobile String?
+  email  String?
 
-  isActive           Boolean  @default(true)
-  employmentStatus   String?
-  syncStatus         String   @default("SYNCED")
-  lastSyncedAt       DateTime @default(now())
+  isActive         Boolean  @default(true)
+  employmentStatus String?
+  syncStatus       String   @default("SYNCED")
+  lastSyncedAt     DateTime @default(now())
 
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([companyCode])
   @@index([operationType])
@@ -1943,50 +1935,50 @@ model SecurityOperationalEmployee {
 }
 
 model SecfacCheckpoint {
-  id              String   @id @default(uuid())
+  id String @id @default(uuid())
 
-  operationType   String   // SECURITY_GUARDING | FACILITY_MANAGEMENT
+  operationType String // SECURITY_GUARDING | FACILITY_MANAGEMENT
 
-  clientId        String?
-  client          ManpowerClient? @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  clientId String?
+  client   ManpowerClient? @relation(fields: [clientId], references: [id], onDelete: SetNull)
 
-  projectId       String?
-  project         ManpowerProject? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  projectId String?
+  project   ManpowerProject? @relation(fields: [projectId], references: [id], onDelete: SetNull)
 
-  siteId          String
-  site            ManpowerSite @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  siteId String
+  site   ManpowerSite @relation(fields: [siteId], references: [id], onDelete: Restrict)
 
-  locationUnitId  String?
-  locationUnit    ManpowerLocationUnit? @relation(fields: [locationUnitId], references: [id], onDelete: SetNull)
+  locationUnitId String?
+  locationUnit   ManpowerLocationUnit? @relation(fields: [locationUnitId], references: [id], onDelete: SetNull)
 
-  checkpointName  String
-  checkpointCode  String?
+  checkpointName String
+  checkpointCode String?
 
-  nfcTagId        String?  @unique
-  qrCode          String?  @unique
+  nfcTagId String? @unique
+  qrCode   String? @unique
 
-  checkpointType  String   @default("SECURITY_PATROL")
-  description     String?  @db.Text
+  checkpointType String  @default("SECURITY_PATROL")
+  description    String? @db.Text
 
-  latitude        Float?
-  longitude       Float?
-  radiusMeters    Int?
+  latitude     Float?
+  longitude    Float?
+  radiusMeters Int?
 
   scanRequired      Boolean @default(true)
   photoRequired     Boolean @default(false)
   checklistRequired Boolean @default(false)
 
-  isActive          Boolean @default(true)
+  isActive Boolean @default(true)
 
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  secfacChecklistTemplates SecfacChecklistTemplate[]
-  secfacAssignments        SecfacAssignment[]
-  secfacChecklistExecutions SecfacChecklistExecution[]
-  secfacEvidenceAttachments SecfacEvidenceAttachment[]
-  secfacScanProofs          SecfacScanProof[]
-  secfacPatrolRouteCheckpoints SecfacPatrolRouteCheckpoint[] @relation("CheckpointToRouteCheckpoints")
+  secfacChecklistTemplates         SecfacChecklistTemplate[]
+  secfacAssignments                SecfacAssignment[]
+  secfacChecklistExecutions        SecfacChecklistExecution[]
+  secfacEvidenceAttachments        SecfacEvidenceAttachment[]
+  secfacScanProofs                 SecfacScanProof[]
+  secfacPatrolRouteCheckpoints     SecfacPatrolRouteCheckpoint[]     @relation("CheckpointToRouteCheckpoints")
   secfacPatrolExecutionCheckpoints SecfacPatrolExecutionCheckpoint[] @relation("CheckpointToExecutionCheckpoints")
 
   @@index([operationType])
@@ -1996,43 +1988,43 @@ model SecfacCheckpoint {
 }
 
 model SecfacChecklistTemplate {
-  id              String   @id @default(uuid())
+  id String @id @default(uuid())
 
-  operationType   String   // SECURITY_GUARDING | FACILITY_MANAGEMENT
+  operationType String // SECURITY_GUARDING | FACILITY_MANAGEMENT
 
-  clientId        String?
-  client          ManpowerClient? @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  clientId String?
+  client   ManpowerClient? @relation(fields: [clientId], references: [id], onDelete: SetNull)
 
-  projectId       String?
-  project         ManpowerProject? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  projectId String?
+  project   ManpowerProject? @relation(fields: [projectId], references: [id], onDelete: SetNull)
 
-  siteId          String?
-  site            ManpowerSite? @relation(fields: [siteId], references: [id], onDelete: SetNull)
+  siteId String?
+  site   ManpowerSite? @relation(fields: [siteId], references: [id], onDelete: SetNull)
 
-  locationUnitId  String?
-  locationUnit    ManpowerLocationUnit? @relation(fields: [locationUnitId], references: [id], onDelete: SetNull)
+  locationUnitId String?
+  locationUnit   ManpowerLocationUnit? @relation(fields: [locationUnitId], references: [id], onDelete: SetNull)
 
-  checkpointId    String?
-  checkpoint      SecfacCheckpoint? @relation(fields: [checkpointId], references: [id], onDelete: SetNull)
+  checkpointId String?
+  checkpoint   SecfacCheckpoint? @relation(fields: [checkpointId], references: [id], onDelete: SetNull)
 
-  templateName    String
-  templateCode    String?
-  category        String   @default("GENERAL")
-  description     String?  @db.Text
+  templateName String
+  templateCode String?
+  category     String  @default("GENERAL")
+  description  String? @db.Text
 
-  checklistType   String   @default("STANDARD")
-  version         Int      @default(1)
+  checklistType String @default("STANDARD")
+  version       Int    @default(1)
 
-  requiresNfcScan Boolean  @default(false)
-  requiresPhoto   Boolean  @default(false)
+  requiresNfcScan  Boolean @default(false)
+  requiresPhoto    Boolean @default(false)
   requiresGeoFence Boolean @default(false)
 
-  isActive        Boolean  @default(true)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  items           SecfacChecklistItem[]
-  secfacAssignments SecfacAssignment[]
+  items                     SecfacChecklistItem[]
+  secfacAssignments         SecfacAssignment[]
   secfacChecklistExecutions SecfacChecklistExecution[]
 
   @@index([operationType])
@@ -2045,26 +2037,26 @@ model SecfacChecklistTemplate {
 }
 
 model SecfacChecklistItem {
-  id              String   @id @default(uuid())
+  id String @id @default(uuid())
 
-  templateId      String
-  template        SecfacChecklistTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  templateId String
+  template   SecfacChecklistTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
 
-  itemText        String
-  itemCode        String?
-  itemType        String   @default("YES_NO")
-  sortOrder       Int      @default(0)
+  itemText  String
+  itemCode  String?
+  itemType  String  @default("YES_NO")
+  sortOrder Int     @default(0)
 
-  isRequired      Boolean  @default(true)
-  requiresPhoto   Boolean  @default(false)
-  requiresComment Boolean  @default(false)
+  isRequired      Boolean @default(true)
+  requiresPhoto   Boolean @default(false)
+  requiresComment Boolean @default(false)
 
-  expectedValue   String?
-  helpText        String?  @db.Text
+  expectedValue String?
+  helpText      String? @db.Text
 
-  isActive        Boolean  @default(true)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  isActive                 Boolean                   @default(true)
+  createdAt                DateTime                  @default(now())
+  updatedAt                DateTime                  @updatedAt
   secfacChecklistResponses SecfacChecklistResponse[]
 
   @@index([templateId])
@@ -2073,52 +2065,52 @@ model SecfacChecklistItem {
 }
 
 model SecfacAssignment {
-  id              String   @id @default(uuid())
+  id String @id @default(uuid())
 
-  operationType   String   // SECURITY_GUARDING | FACILITY_MANAGEMENT
+  operationType String // SECURITY_GUARDING | FACILITY_MANAGEMENT
 
-  clientId        String?
-  client          ManpowerClient? @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  clientId String?
+  client   ManpowerClient? @relation(fields: [clientId], references: [id], onDelete: SetNull)
 
-  projectId       String?
-  project         ManpowerProject? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  projectId String?
+  project   ManpowerProject? @relation(fields: [projectId], references: [id], onDelete: SetNull)
 
-  siteId          String
-  site            ManpowerSite @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  siteId String
+  site   ManpowerSite @relation(fields: [siteId], references: [id], onDelete: Restrict)
 
-  locationUnitId  String?
-  locationUnit    ManpowerLocationUnit? @relation(fields: [locationUnitId], references: [id], onDelete: SetNull)
+  locationUnitId String?
+  locationUnit   ManpowerLocationUnit? @relation(fields: [locationUnitId], references: [id], onDelete: SetNull)
 
-  checkpointId    String?
-  checkpoint      SecfacCheckpoint? @relation(fields: [checkpointId], references: [id], onDelete: SetNull)
+  checkpointId String?
+  checkpoint   SecfacCheckpoint? @relation(fields: [checkpointId], references: [id], onDelete: SetNull)
 
-  templateId      String?
-  template        SecfacChecklistTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  templateId String?
+  template   SecfacChecklistTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
 
-  employeeId      String
-  employee        Employee @relation("SecfacEmployeeAssignments", fields: [employeeId], references: [id], onDelete: Cascade)
+  employeeId String
+  employee   Employee @relation("SecfacEmployeeAssignments", fields: [employeeId], references: [id], onDelete: Cascade)
 
-  supervisorId    String?
-  supervisor      Employee? @relation("SecfacSupervisorAssignments", fields: [supervisorId], references: [id], onDelete: SetNull)
+  supervisorId String?
+  supervisor   Employee? @relation("SecfacSupervisorAssignments", fields: [supervisorId], references: [id], onDelete: SetNull)
 
-  assignmentName  String
-  assignmentCode  String?
-  description     String?  @db.Text
+  assignmentName String
+  assignmentCode String?
+  description    String? @db.Text
 
-  scheduledStart  DateTime
-  scheduledEnd    DateTime
+  scheduledStart DateTime
+  scheduledEnd   DateTime
 
-  status          String   @default("PENDING") // PENDING | IN_PROGRESS | COMPLETED | SKIPPED | OVERDUE
+  status String @default("PENDING") // PENDING | IN_PROGRESS | COMPLETED | SKIPPED | OVERDUE
 
-  isActive        Boolean  @default(true)
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  isActive                  Boolean                    @default(true)
+  createdAt                 DateTime                   @default(now())
+  updatedAt                 DateTime                   @updatedAt
   secfacChecklistExecutions SecfacChecklistExecution[]
-  evidenceAttachments SecfacEvidenceAttachment[]
+  evidenceAttachments       SecfacEvidenceAttachment[]
   secfacScanProofs          SecfacScanProof[]
-  patrolRouteId   String?
-  patrolRoute     SecfacPatrolRoute? @relation("SecfacAssignmentPatrolRoute", fields: [patrolRouteId], references: [id], onDelete: SetNull)
-  patrolExecutions SecfacPatrolExecution[] @relation("SecfacPatrolExecutionAssignment")
+  patrolRouteId             String?
+  patrolRoute               SecfacPatrolRoute?         @relation("SecfacAssignmentPatrolRoute", fields: [patrolRouteId], references: [id], onDelete: SetNull)
+  patrolExecutions          SecfacPatrolExecution[]    @relation("SecfacPatrolExecutionAssignment")
 
   @@index([operationType])
   @@index([patrolRouteId])
@@ -2133,42 +2125,42 @@ model SecfacAssignment {
 }
 
 model SecfacChecklistExecution {
-  id                  String   @id @default(uuid())
+  id String @id @default(uuid())
 
-  operationType       String
-  assignmentId        String
-  assignment          SecfacAssignment @relation(fields: [assignmentId], references: [id], onDelete: Restrict)
+  operationType String
+  assignmentId  String
+  assignment    SecfacAssignment @relation(fields: [assignmentId], references: [id], onDelete: Restrict)
 
   checklistTemplateId String
   checklistTemplate   SecfacChecklistTemplate @relation(fields: [checklistTemplateId], references: [id], onDelete: Restrict)
 
-  employeeId          String
-  employee            Employee @relation("SecfacEmployeeExecutions", fields: [employeeId], references: [id], onDelete: Restrict)
+  employeeId String
+  employee   Employee @relation("SecfacEmployeeExecutions", fields: [employeeId], references: [id], onDelete: Restrict)
 
-  siteId              String
-  site                ManpowerSite @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  siteId String
+  site   ManpowerSite @relation(fields: [siteId], references: [id], onDelete: Restrict)
 
-  checkpointId        String?
-  checkpoint          SecfacCheckpoint? @relation(fields: [checkpointId], references: [id], onDelete: SetNull)
+  checkpointId String?
+  checkpoint   SecfacCheckpoint? @relation(fields: [checkpointId], references: [id], onDelete: SetNull)
 
-  status              String   @default("DRAFT") // DRAFT | SUBMITTED | PENDING_REVIEW | APPROVED | REJECTED | CANCELLED
-  startedAt           DateTime?
-  submittedAt         DateTime?
+  status      String    @default("DRAFT") // DRAFT | SUBMITTED | PENDING_REVIEW | APPROVED | REJECTED | CANCELLED
+  startedAt   DateTime?
+  submittedAt DateTime?
 
-  latitude            Float?
-  longitude           Float?
-  gpsAccuracyMeters   Float?
+  latitude          Float?
+  longitude         Float?
+  gpsAccuracyMeters Float?
 
-  deviceInfo          String?
-  remarks             String? @db.Text
+  deviceInfo String?
+  remarks    String? @db.Text
 
-  reviewedById        String?
-  reviewedBy          Employee? @relation("SecfacExecutionReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
-  reviewedAt          DateTime?
-  reviewRemarks       String? @db.Text
+  reviewedById  String?
+  reviewedBy    Employee? @relation("SecfacExecutionReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviewedAt    DateTime?
+  reviewRemarks String?   @db.Text
 
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   responses           SecfacChecklistResponse[]
   history             SecfacChecklistExecutionHistory[]
@@ -2186,10 +2178,10 @@ model SecfacChecklistExecution {
 }
 
 model SecfacChecklistResponse {
-  id              String   @id @default(uuid())
+  id String @id @default(uuid())
 
-  executionId     String
-  execution       SecfacChecklistExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+  executionId String
+  execution   SecfacChecklistExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
 
   checklistItemId String
   checklistItem   SecfacChecklistItem @relation(fields: [checklistItemId], references: [id], onDelete: Restrict)
@@ -2197,15 +2189,15 @@ model SecfacChecklistResponse {
   itemTextSnapshot String
   itemTypeSnapshot String
 
-  answerValue      String?
-  answerText       String? @db.Text
-  comment          String? @db.Text
+  answerValue String?
+  answerText  String? @db.Text
+  comment     String? @db.Text
 
-  isFlagged        Boolean @default(false)
-  flagReason       String?
+  isFlagged  Boolean @default(false)
+  flagReason String?
 
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  createdAt           DateTime                   @default(now())
+  updatedAt           DateTime                   @updatedAt
   evidenceAttachments SecfacEvidenceAttachment[]
 
   @@index([executionId])
@@ -2214,21 +2206,21 @@ model SecfacChecklistResponse {
 }
 
 model SecfacChecklistExecutionHistory {
-  id            String   @id @default(uuid())
+  id String @id @default(uuid())
 
-  executionId   String
-  execution     SecfacChecklistExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+  executionId String
+  execution   SecfacChecklistExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
 
-  fromStatus    String?
-  toStatus      String
+  fromStatus String?
+  toStatus   String
 
-  action        String
-  remarks       String?  @db.Text
+  action  String
+  remarks String? @db.Text
 
-  changedById   String?
-  changedBy     Employee? @relation("SecfacExecutionHistoryPerformer", fields: [changedById], references: [id], onDelete: SetNull)
+  changedById String?
+  changedBy   Employee? @relation("SecfacExecutionHistoryPerformer", fields: [changedById], references: [id], onDelete: SetNull)
 
-  createdAt     DateTime @default(now())
+  createdAt DateTime @default(now())
 
   @@index([executionId])
   @@index([toStatus])
@@ -2237,36 +2229,36 @@ model SecfacChecklistExecutionHistory {
 }
 
 model SecfacEvidenceAttachment {
-  id                 String   @id @default(uuid())
-  operationType      String
-  executionId        String
-  execution          SecfacChecklistExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
-  responseId         String?
-  response           SecfacChecklistResponse? @relation(fields: [responseId], references: [id], onDelete: SetNull)
-  assignmentId       String?
-  assignment         SecfacAssignment? @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
-  employeeId         String
-  employee           Employee @relation("SecfacEmployeeEvidence", fields: [employeeId], references: [id], onDelete: Restrict)
-  siteId             String?
-  site               ManpowerSite? @relation(fields: [siteId], references: [id], onDelete: SetNull)
-  checkpointId       String?
-  checkpoint         SecfacCheckpoint? @relation(fields: [checkpointId], references: [id], onDelete: SetNull)
-  fileName           String
-  originalName       String?
-  mimeType           String
-  fileSizeBytes      Int
-  storagePath        String
-  evidenceType       String   @default("PHOTO")
-  caption            String?
-  capturedAt         DateTime?
-  latitude           Float?
-  longitude          Float?
-  gpsAccuracyMeters  Float?
-  uploadedById       String?
-  uploadedBy         Employee? @relation("SecfacEvidenceUploadedBy", fields: [uploadedById], references: [id], onDelete: SetNull)
-  isActive           Boolean  @default(true)
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+  id                String                   @id @default(uuid())
+  operationType     String
+  executionId       String
+  execution         SecfacChecklistExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+  responseId        String?
+  response          SecfacChecklistResponse? @relation(fields: [responseId], references: [id], onDelete: SetNull)
+  assignmentId      String?
+  assignment        SecfacAssignment?        @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
+  employeeId        String
+  employee          Employee                 @relation("SecfacEmployeeEvidence", fields: [employeeId], references: [id], onDelete: Restrict)
+  siteId            String?
+  site              ManpowerSite?            @relation(fields: [siteId], references: [id], onDelete: SetNull)
+  checkpointId      String?
+  checkpoint        SecfacCheckpoint?        @relation(fields: [checkpointId], references: [id], onDelete: SetNull)
+  fileName          String
+  originalName      String?
+  mimeType          String
+  fileSizeBytes     Int
+  storagePath       String
+  evidenceType      String                   @default("PHOTO")
+  caption           String?
+  capturedAt        DateTime?
+  latitude          Float?
+  longitude         Float?
+  gpsAccuracyMeters Float?
+  uploadedById      String?
+  uploadedBy        Employee?                @relation("SecfacEvidenceUploadedBy", fields: [uploadedById], references: [id], onDelete: SetNull)
+  isActive          Boolean                  @default(true)
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
 
   @@index([operationType])
   @@index([executionId])
@@ -2280,48 +2272,48 @@ model SecfacEvidenceAttachment {
 }
 
 model SecfacScanProof {
-  id                String   @id @default(uuid())
-  operationType     String
+  id            String @id @default(uuid())
+  operationType String
 
-  assignmentId      String
-  assignment        SecfacAssignment @relation(fields: [assignmentId], references: [id], onDelete: Restrict)
+  assignmentId String
+  assignment   SecfacAssignment @relation(fields: [assignmentId], references: [id], onDelete: Restrict)
 
-  executionId       String?
-  execution         SecfacChecklistExecution? @relation(fields: [executionId], references: [id], onDelete: SetNull)
+  executionId String?
+  execution   SecfacChecklistExecution? @relation(fields: [executionId], references: [id], onDelete: SetNull)
 
-  checkpointId      String
-  checkpoint        SecfacCheckpoint @relation(fields: [checkpointId], references: [id], onDelete: Restrict)
+  checkpointId String
+  checkpoint   SecfacCheckpoint @relation(fields: [checkpointId], references: [id], onDelete: Restrict)
 
-  employeeId        String
-  employee          Employee @relation("SecfacEmployeeScanProofs", fields: [employeeId], references: [id], onDelete: Restrict)
+  employeeId String
+  employee   Employee @relation("SecfacEmployeeScanProofs", fields: [employeeId], references: [id], onDelete: Restrict)
 
-  siteId            String
-  site              ManpowerSite @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  siteId String
+  site   ManpowerSite @relation(fields: [siteId], references: [id], onDelete: Restrict)
 
-  scanMode          String   // NFC | QR | MANUAL_ENTRY | MANUAL_EXCEPTION
-  scannedValue      String?
-  expectedValue     String?
-  validationStatus  String   @default("PENDING") // VALID | INVALID | PENDING_REVIEW | REJECTED
+  scanMode         String // NFC | QR | MANUAL_ENTRY | MANUAL_EXCEPTION
+  scannedValue     String?
+  expectedValue    String?
+  validationStatus String  @default("PENDING") // VALID | INVALID | PENDING_REVIEW | REJECTED
 
-  failureReason     String?
-  exceptionReason   String?  @db.Text
+  failureReason   String?
+  exceptionReason String? @db.Text
 
   latitude          Float?
   longitude         Float?
   gpsAccuracyMeters Float?
 
-  deviceInfo        String?
-  scannedAt         DateTime @default(now())
+  deviceInfo String?
+  scannedAt  DateTime @default(now())
 
-  reviewedById      String?
-  reviewedBy        Employee? @relation("SecfacScanProofReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviewedById String?
+  reviewedBy   Employee? @relation("SecfacScanProofReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
 
-  reviewedAt        DateTime?
-  reviewRemarks     String? @db.Text
+  reviewedAt    DateTime?
+  reviewRemarks String?   @db.Text
 
-  isActive          Boolean  @default(true)
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  isActive                  Boolean                          @default(true)
+  createdAt                 DateTime                         @default(now())
+  updatedAt                 DateTime                         @updatedAt
   patrolExecutionCheckpoint SecfacPatrolExecutionCheckpoint? @relation("SecfacScanProofPatrolCheckpoint")
 
   @@index([operationType])
@@ -2336,20 +2328,20 @@ model SecfacScanProof {
 }
 
 model SecfacPatrolRoute {
-  id            String   @id @default(uuid())
-  operationType String   // SECURITY_GUARDING | FACILITY_MANAGEMENT
+  id            String       @id @default(uuid())
+  operationType String // SECURITY_GUARDING | FACILITY_MANAGEMENT
   routeName     String
   routeCode     String?
-  description   String?  @db.Text
+  description   String?      @db.Text
   siteId        String
   site          ManpowerSite @relation("SecfacPatrolRouteSite", fields: [siteId], references: [id], onDelete: Restrict)
-  isActive      Boolean  @default(true)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  isActive      Boolean      @default(true)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
 
-  checkpoints   SecfacPatrolRouteCheckpoint[] @relation("SecfacRouteCheckpoints")
-  assignments   SecfacAssignment[]            @relation("SecfacAssignmentPatrolRoute")
-  executions    SecfacPatrolExecution[]       @relation("SecfacPatrolExecutionRoute")
+  checkpoints SecfacPatrolRouteCheckpoint[] @relation("SecfacRouteCheckpoints")
+  assignments SecfacAssignment[]            @relation("SecfacAssignmentPatrolRoute")
+  executions  SecfacPatrolExecution[]       @relation("SecfacPatrolExecutionRoute")
 
   @@index([operationType])
   @@index([siteId])
@@ -2357,15 +2349,15 @@ model SecfacPatrolRoute {
 }
 
 model SecfacPatrolRouteCheckpoint {
-  id           String   @id @default(uuid())
+  id           String            @id @default(uuid())
   routeId      String
   route        SecfacPatrolRoute @relation("SecfacRouteCheckpoints", fields: [routeId], references: [id], onDelete: Cascade)
   checkpointId String
-  checkpoint   SecfacCheckpoint @relation("CheckpointToRouteCheckpoints", fields: [checkpointId], references: [id], onDelete: Restrict)
+  checkpoint   SecfacCheckpoint  @relation("CheckpointToRouteCheckpoints", fields: [checkpointId], references: [id], onDelete: Restrict)
   sequenceNo   Int
-  required     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  required     Boolean           @default(true)
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
 
   @@unique([routeId, sequenceNo])
   @@index([routeId])
@@ -2373,20 +2365,20 @@ model SecfacPatrolRouteCheckpoint {
 }
 
 model SecfacPatrolExecution {
-  id           String   @id @default(uuid())
+  id           String            @id @default(uuid())
   routeId      String
   route        SecfacPatrolRoute @relation("SecfacPatrolExecutionRoute", fields: [routeId], references: [id], onDelete: Restrict)
   assignmentId String
-  assignment   SecfacAssignment @relation("SecfacPatrolExecutionAssignment", fields: [assignmentId], references: [id], onDelete: Restrict)
+  assignment   SecfacAssignment  @relation("SecfacPatrolExecutionAssignment", fields: [assignmentId], references: [id], onDelete: Restrict)
   employeeId   String
-  employee     Employee @relation("SecfacPatrolExecutionEmployee", fields: [employeeId], references: [id], onDelete: Restrict)
-  status       String   @default("NOT_STARTED") // NOT_STARTED | IN_PROGRESS | PENDING_REVIEW | COMPLETED | INCOMPLETE | CANCELLED
+  employee     Employee          @relation("SecfacPatrolExecutionEmployee", fields: [employeeId], references: [id], onDelete: Restrict)
+  status       String            @default("NOT_STARTED") // NOT_STARTED | IN_PROGRESS | PENDING_REVIEW | COMPLETED | INCOMPLETE | CANCELLED
   startedAt    DateTime?
   completedAt  DateTime?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
 
-  checkpoints  SecfacPatrolExecutionCheckpoint[] @relation("SecfacExecutionCheckpoints")
+  checkpoints SecfacPatrolExecutionCheckpoint[] @relation("SecfacExecutionCheckpoints")
 
   @@index([routeId])
   @@index([assignmentId])
@@ -2395,19 +2387,19 @@ model SecfacPatrolExecution {
 }
 
 model SecfacPatrolExecutionCheckpoint {
-  id           String   @id @default(uuid())
+  id           String                @id @default(uuid())
   executionId  String
   execution    SecfacPatrolExecution @relation("SecfacExecutionCheckpoints", fields: [executionId], references: [id], onDelete: Cascade)
   checkpointId String
-  checkpoint   SecfacCheckpoint @relation("CheckpointToExecutionCheckpoints", fields: [checkpointId], references: [id], onDelete: Restrict)
+  checkpoint   SecfacCheckpoint      @relation("CheckpointToExecutionCheckpoints", fields: [checkpointId], references: [id], onDelete: Restrict)
   sequenceNo   Int
-  required     Boolean  @default(true)
-  status       String   @default("PENDING") // PENDING | VALIDATED | PENDING_REVIEW | INVALID | SKIPPED
-  scanProofId  String?  @unique
-  scanProof    SecfacScanProof? @relation("SecfacScanProofPatrolCheckpoint", fields: [scanProofId], references: [id], onDelete: SetNull)
+  required     Boolean               @default(true)
+  status       String                @default("PENDING") // PENDING | VALIDATED | PENDING_REVIEW | INVALID | SKIPPED
+  scanProofId  String?               @unique
+  scanProof    SecfacScanProof?      @relation("SecfacScanProofPatrolCheckpoint", fields: [scanProofId], references: [id], onDelete: SetNull)
   validatedAt  DateTime?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
 
   @@unique([executionId, sequenceNo])
   @@index([executionId])
@@ -2441,7 +2433,7 @@ model SecfacSyncConflict {
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
-  employee              Employee  @relation("SecfacEmployeeSyncConflicts", fields: [employeeId], references: [id], onDelete: Restrict)
+  employee Employee @relation("SecfacEmployeeSyncConflicts", fields: [employeeId], references: [id], onDelete: Restrict)
 
   @@unique([queueItemId, actionType, idempotencyKey])
   @@index([operationType])
@@ -2455,56 +2447,56 @@ model SecfacSyncConflict {
 }
 
 model SecfacFieldExecutionAudit {
-  id                     String   @id @default(uuid())
+  id String @id @default(uuid())
 
-  operationType          String
+  operationType String
 
-  employeeId             String
-  employeeCode           String?
-  employeeName           String?
-  employee               Employee @relation("SecfacFieldAuditEmployee", fields: [employeeId], references: [id], onDelete: Restrict)
+  employeeId   String
+  employeeCode String?
+  employeeName String?
+  employee     Employee @relation("SecfacFieldAuditEmployee", fields: [employeeId], references: [id], onDelete: Restrict)
 
-  actorUserId            String?
-  actorEmployeeId        String?
-  actorName              String?
-  actorEmail             String?
-  actorRole              String?
+  actorUserId     String?
+  actorEmployeeId String?
+  actorName       String?
+  actorEmail      String?
+  actorRole       String?
 
-  assignmentId           String?
-  checklistExecutionId   String?
-  patrolExecutionId      String?
-  checkpointExecutionId  String?
-  scanProofId            String?
-  evidenceAttachmentId   String?
-  syncConflictId         String?
+  assignmentId          String?
+  checklistExecutionId  String?
+  patrolExecutionId     String?
+  checkpointExecutionId String?
+  scanProofId           String?
+  evidenceAttachmentId  String?
+  syncConflictId        String?
 
-  actionType             String
-  actionSource           String
+  actionType   String
+  actionSource String
 
-  queueItemId            String?
-  idempotencyKey         String?
+  queueItemId    String?
+  idempotencyKey String?
 
-  deviceSessionId        String?
-  deviceLabel            String?
-  devicePlatform         String?
-  userAgent              String?  @db.Text
-  appSource              String?
+  deviceSessionId String?
+  deviceLabel     String?
+  devicePlatform  String?
+  userAgent       String? @db.Text
+  appSource       String?
 
-  clientActionAt         DateTime?
-  serverReceivedAt       DateTime @default(now())
+  clientActionAt   DateTime?
+  serverReceivedAt DateTime  @default(now())
 
-  syncMode               String   @default("ONLINE")
-  networkStatus          String?
+  syncMode      String  @default("ONLINE")
+  networkStatus String?
 
-  latitude               Float?
-  longitude              Float?
-  accuracy               Float?
+  latitude  Float?
+  longitude Float?
+  accuracy  Float?
 
-  resultStatus           String   @default("SUCCESS")
-  resultMessage          String?  @db.Text
+  resultStatus  String  @default("SUCCESS")
+  resultMessage String? @db.Text
 
-  createdAt              DateTime @default(now())
-  updatedAt              DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([operationType])
   @@index([employeeId])
@@ -2522,5 +2514,175 @@ model SecfacFieldExecutionAudit {
   @@index([idempotencyKey])
 }
 
+// ==========================================
+// --- SECFAC Phase 5B Alerting & Escalation ---
+// ==========================================
 
+model SecFacAlertRule {
+  id            String  @id @default(cuid())
+  operationType String // SECURITY_GUARDING | FACILITY_MANAGEMENT
+  code          String
+  name          String
+  description   String? @db.Text
+  sourceType    String
+  severity      String // LOW | MEDIUM | HIGH | CRITICAL
+  isActive      Boolean @default(true)
 
+  triggerAfterMinutes     Int?
+  reminderIntervalMinutes Int?
+  maximumReminders        Int  @default(0)
+
+  targetRole   String?
+  fallbackRole String?
+
+  contractId String?
+  projectId  String?
+  siteId     String?
+
+  escalationConfig Json?
+  conditions       Json?
+  settings         Json?
+
+  createdById String?
+  updatedById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  alerts SecFacOperationalAlert[]
+
+  @@index([operationType, code, isActive])
+  @@index([siteId])
+  @@index([projectId])
+  @@index([contractId])
+}
+
+model SecFacOperationalAlert {
+  id            String           @id @default(cuid())
+  operationType String // SECURITY_GUARDING | FACILITY_MANAGEMENT
+  ruleId        String?
+  rule          SecFacAlertRule? @relation(fields: [ruleId], references: [id], onDelete: SetNull)
+
+  alertCode       String
+  sourceType      String
+  sourceId        String?
+  sourceReference String?
+
+  contractId   String?
+  projectId    String?
+  siteId       String?
+  employeeId   String?
+  assignmentId String?
+  patrolId     String?
+  checklistId  String?
+  incidentId   String?
+
+  severity String // LOW | MEDIUM | HIGH | CRITICAL
+  status   String @default("OPEN") // OPEN | ACKNOWLEDGED | IN_PROGRESS | RESOLVED | DISMISSED | CANCELLED
+
+  title   String
+  message String @db.Text
+
+  businessDate     DateTime
+  deduplicationKey String
+
+  assignedUserId   String?
+  assignedRole     String?
+  assignmentSource String?
+
+  escalationLevel Int @default(0)
+
+  firstDetectedAt DateTime
+  lastDetectedAt  DateTime
+
+  acknowledgedAt   DateTime?
+  acknowledgedById String?
+
+  actionStartedAt   DateTime?
+  actionStartedById String?
+
+  resolvedAt     DateTime?
+  resolvedById   String?
+  resolutionNote String?   @db.Text
+
+  dismissedAt     DateTime?
+  dismissedById   String?
+  dismissalReason String?   @db.Text
+
+  cancelledAt        DateTime?
+  cancelledById      String?
+  cancellationReason String?   @db.Text
+
+  nextReminderAt DateTime?
+  escalatedAt    DateTime?
+  reminderCount  Int       @default(0)
+
+  metadata  Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  events        SecFacAlertEvent[]
+  notifications SecFacAlertNotification[]
+
+  @@unique([operationType, deduplicationKey])
+  @@index([operationType, status, severity])
+  @@index([assignedUserId, status])
+  @@index([siteId, status])
+  @@index([projectId, status])
+  @@index([businessDate])
+  @@index([nextReminderAt, status])
+}
+
+model SecFacAlertEvent {
+  id            String                 @id @default(cuid())
+  alertId       String
+  alert         SecFacOperationalAlert @relation(fields: [alertId], references: [id], onDelete: Cascade)
+  operationType String
+  eventType     String
+
+  previousStatus String?
+  newStatus      String?
+
+  previousAssignedUserId String?
+  newAssignedUserId      String?
+
+  escalationLevel Int?
+  performedById   String?
+
+  note      String?  @db.Text
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  @@index([alertId, createdAt])
+  @@index([operationType, eventType])
+}
+
+model SecFacAlertNotification {
+  id            String                 @id @default(cuid())
+  alertId       String
+  alert         SecFacOperationalAlert @relation(fields: [alertId], references: [id], onDelete: Cascade)
+  operationType String
+
+  recipientUserId String?
+  recipientRole   String?
+
+  channel          String @default("IN_APP") // IN_APP | EMAIL | PUSH | SMS | WHATSAPP
+  notificationType String
+  status           String @default("PENDING") // PENDING | SENT | FAILED | CANCELLED
+
+  notificationKey String @unique
+
+  attemptCount  Int       @default(0)
+  scheduledAt   DateTime
+  sentAt        DateTime?
+  failedAt      DateTime?
+  failureReason String?   @db.Text
+
+  payload   Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, scheduledAt])
+  @@index([recipientUserId, status])
+  @@index([alertId])
+  @@index([operationType, status])
+}
