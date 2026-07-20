@@ -2692,7 +2692,7 @@ model SecFacAlertNotification {
   @@index([recipientUserId, status])
   @@index([alertId])
   @@index([operationType, status])
-  @@index([claimExpiresAt, status])
+  @@index([claimExpiresAt, status], map: "sf_an_claim_exp_status_idx")
 }
 
 model SecFacNotificationPreference {
@@ -2724,15 +2724,15 @@ model SecFacNotificationPreference {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  @@index([operationType, userId, isActive])
-  @@index([operationType, roleCode, isActive])
-  @@index([operationType, alertCode, isActive])
+  @@index([operationType, userId, isActive], map: "sf_np_op_user_active_idx")
+  @@index([operationType, roleCode, isActive], map: "sf_np_op_role_active_idx")
+  @@index([operationType, alertCode, isActive], map: "sf_np_op_alert_active_idx")
 }
 
 model SecFacNotificationAttempt {
   id             String                  @id @default(cuid())
   notificationId String
-  notification   SecFacAlertNotification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  notification   SecFacAlertNotification @relation(fields: [notificationId], references: [id], onDelete: Cascade, map: "sf_na_notif_fkey")
   operationType  String
 
   channel           String
@@ -2757,9 +2757,9 @@ model SecFacNotificationAttempt {
 
   createdAt DateTime @default(now())
 
-  @@index([notificationId, attemptNumber])
-  @@index([operationType, status])
-  @@index([nextRetryAt, retryable])
+  @@index([notificationId, attemptNumber], map: "sf_na_notif_attempt_idx")
+  @@index([operationType, status], map: "sf_na_op_status_idx")
+  @@index([nextRetryAt, retryable], map: "sf_na_retry_retryable_idx")
 }
 
 model SecFacWorkerJob {
@@ -2784,14 +2784,14 @@ model SecFacWorkerJob {
 
   createdAt DateTime @default(now())
 
-  @@index([jobType, status, startedAt])
-  @@index([operationType, startedAt])
-  @@index([lockKey, status])
+  @@index([jobType, status, startedAt], map: "sf_wj_job_status_start_idx")
+  @@index([operationType, startedAt], map: "sf_wj_op_started_idx")
+  @@index([lockKey, status], map: "sf_wj_lock_status_idx")
 }
 
 model SecFacWorkerLock {
   id          String    @id @default(cuid())
-  lockKey     String    @unique
+  lockKey     String    @unique(map: "sf_wl_lockKey_key")
   ownerId     String
   acquiredAt  DateTime
   expiresAt   DateTime
@@ -2820,5 +2820,5 @@ model SecFacChannelConfiguration {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  @@unique([operationType, channel])
+  @@unique([operationType, channel], map: "sf_cc_op_channel_key")
 }

@@ -5,7 +5,7 @@ ALTER TABLE `SecFacAlertNotification` ADD COLUMN `claimToken` VARCHAR(191) NULL,
     ADD COLUMN `claimExpiresAt` DATETIME(3) NULL;
 
 -- CreateIndex
-CREATE INDEX `SecFacAlertNotification_claimExpiresAt_status_idx` ON `SecFacAlertNotification`(`claimExpiresAt`, `status`);
+CREATE INDEX `sf_an_claim_exp_status_idx` ON `SecFacAlertNotification`(`claimExpiresAt`, `status`);
 
 -- CreateTable
 CREATE TABLE `SecFacNotificationPreference` (
@@ -32,9 +32,9 @@ CREATE TABLE `SecFacNotificationPreference` (
     `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     `updatedAt` DATETIME(3) NOT NULL,
 
-    INDEX `SecFacNotificationPreference_operationType_userId_isActive_idx`(`operationType`, `userId`, `isActive`),
-    INDEX `SecFacNotificationPreference_operationType_roleCode_isActive_idx`(`operationType`, `roleCode`, `isActive`),
-    INDEX `SecFacNotificationPreference_operationType_alertCode_isActive_idx`(`operationType`, `alertCode`, `isActive`),
+    INDEX `sf_np_op_user_active_idx`(`operationType`, `userId`, `isActive`),
+    INDEX `sf_np_op_role_active_idx`(`operationType`, `roleCode`, `isActive`),
+    INDEX `sf_np_op_alert_active_idx`(`operationType`, `alertCode`, `isActive`),
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
@@ -60,9 +60,9 @@ CREATE TABLE `SecFacNotificationAttempt` (
     `responseMetadata` JSON NULL,
     `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
 
-    INDEX `SecFacNotificationAttempt_notificationId_attemptNumber_idx`(`notificationId`, `attemptNumber`),
-    INDEX `SecFacNotificationAttempt_operationType_status_idx`(`operationType`, `status`),
-    INDEX `SecFacNotificationAttempt_nextRetryAt_retryable_idx`(`nextRetryAt`, `retryable`),
+    INDEX `sf_na_notif_attempt_idx`(`notificationId`, `attemptNumber`),
+    INDEX `sf_na_op_status_idx`(`operationType`, `status`),
+    INDEX `sf_na_retry_retryable_idx`(`nextRetryAt`, `retryable`),
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
@@ -85,9 +85,9 @@ CREATE TABLE `SecFacWorkerJob` (
     `metadata` JSON NULL,
     `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
 
-    INDEX `SecFacWorkerJob_jobType_status_startedAt_idx`(`jobType`, `status`, `startedAt`),
-    INDEX `SecFacWorkerJob_operationType_startedAt_idx`(`operationType`, `startedAt`),
-    INDEX `SecFacWorkerJob_lockKey_status_idx`(`lockKey`, `status`),
+    INDEX `sf_wj_job_status_start_idx`(`jobType`, `status`, `startedAt`),
+    INDEX `sf_wj_op_started_idx`(`operationType`, `startedAt`),
+    INDEX `sf_wj_lock_status_idx`(`lockKey`, `status`),
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
@@ -101,7 +101,7 @@ CREATE TABLE `SecFacWorkerLock` (
     `heartbeatAt` DATETIME(3) NULL,
     `metadata` JSON NULL,
 
-    UNIQUE INDEX `SecFacWorkerLock_lockKey_key`(`lockKey`),
+    UNIQUE INDEX `sf_wl_lockKey_key`(`lockKey`),
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
@@ -125,9 +125,9 @@ CREATE TABLE `SecFacChannelConfiguration` (
     `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     `updatedAt` DATETIME(3) NOT NULL,
 
-    UNIQUE INDEX `SecFacChannelConfiguration_operationType_channel_key`(`operationType`, `channel`),
+    UNIQUE INDEX `sf_cc_op_channel_key`(`operationType`, `channel`),
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- AddForeignKey
-ALTER TABLE `SecFacNotificationAttempt` ADD CONSTRAINT `SecFacNotificationAttempt_notificationId_fkey` FOREIGN KEY (`notificationId`) REFERENCES `SecFacAlertNotification`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `SecFacNotificationAttempt` ADD CONSTRAINT `sf_na_notif_fkey` FOREIGN KEY (`notificationId`) REFERENCES `SecFacAlertNotification`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
