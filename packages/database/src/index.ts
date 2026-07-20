@@ -1,4 +1,4 @@
-import { PrismaClient } from "./generated/client2";
+import { PrismaClient } from "./generated/client2/index.js";
 
 declare global {
   var prismaGlobal: PrismaClient | undefined;
@@ -10,7 +10,7 @@ if (process.env.NODE_ENV !== "production") {
   globalThis.prismaGlobal = prisma;
 }
 
-export * from "./generated/client2";
+export * from "./generated/client2/index.js";
 export type {
   Employee,
   AttendanceRecord,
@@ -29,4 +29,4 @@ export type {
   SecFacWorkerJob,
   SecFacWorkerLock,
   SecFacChannelConfiguration
-} from "./generated/client2";
+} from "./generated/client2/index.js";
