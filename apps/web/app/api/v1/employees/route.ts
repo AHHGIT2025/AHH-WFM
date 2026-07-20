@@ -151,7 +151,7 @@ export async function POST(request: Request) {
     const { 
       id, name, email, role, departmentId, phone, shiftId, password, defaultPassword,
       employmentStatus, dutyStatus, employeeCategory, positionCategoryId, 
-      defaultProjectId, defaultSiteId, designationId, tradeClassificationId, 
+      defaultProjectId, defaultSiteId, designationId, tradeClassificationId, grade, 
       costCenterId, defaultLocationId, officeLocationId, isRelieverEligible, isStandbyEligible,
       immediateSupervisorId, reportingManagerId, projectSupervisorId, siteSupervisorId,
       isSupervisor, supervisorScopeType,
@@ -211,8 +211,8 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "Designation is required for White Collar employees" }, { status: 400 });
       }
     } else if (employeeCategory === "BLUE_COLLAR") {
-      if (!tradeClassificationId || tradeClassificationId.trim() === "") {
-        return NextResponse.json({ error: "Trade Classification is required for Blue Collar employees" }, { status: 400 });
+      if (!grade || typeof grade !== "string" || grade.trim() === "") {
+        return NextResponse.json({ error: "Grade is required for Blue Collar employees" }, { status: 400 });
       }
     }
 
@@ -295,6 +295,7 @@ export async function POST(request: Request) {
       defaultSiteId: defaultSiteId || null,
       designationId: designationId || null,
       tradeClassificationId: tradeClassificationId || null,
+      grade: grade ? grade.trim() : null,
       costCenterId: costCenterId || null,
       defaultLocationId: defaultLocationId || null,
       officeLocationId: officeLocationId || null,

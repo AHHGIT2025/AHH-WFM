@@ -3,7 +3,7 @@ import { checkApiAuth } from "@/lib/api-guards";
 import { hasPermission } from "@/lib/permissions";
 import { mockDb, isDbConnected, readDb } from "@ahh-wfm/mock-data";
 import { prisma } from "@ahh-wfm/database";
-import { validateDeploymentEligibility, computeDisplayDesignation } from "@/lib/scheduling-validator";
+import { validateDeploymentEligibility, computeDisplayDesignation, resolveEmployeeGrade } from "@/lib/scheduling-validator";
 import { getActiveSiteShiftConfigs } from "@/lib/server-helpers";
 
 function formatDateToYYYYMMDD(d: any): string {
@@ -87,6 +87,7 @@ export async function GET(request: Request) {
 
       employees = operationalGuards.map((op: any) => {
         const displayDesig = computeDisplayDesignation(op, op.sourceEmployee);
+        const empGrade = resolveEmployeeGrade({ ...op.sourceEmployee, securityOperationalEmployee: op }) || null;
         return {
           id: op.sourceEmployeeId,
           sourceEmployeeId: op.sourceEmployeeId,
@@ -107,6 +108,9 @@ export async function GET(request: Request) {
           designation: { name: displayDesig },
           displayDesignation: displayDesig,
           position: displayDesig,
+          grade: empGrade,
+          displayGrade: empGrade,
+          salaryGrade: empGrade,
           sourceEmployee: op.sourceEmployee,
           securityOperationalEmployee: op,
           securityLicense: op.sourceEmployee?.securityLicense || null,
@@ -156,6 +160,7 @@ export async function GET(request: Request) {
         const gps = securityGatePasses.filter((g: any) => g.employeeId === op.sourceEmployeeId);
         const sourceEmp = (db.employees || []).find((e: any) => e.id === op.sourceEmployeeId);
         const displayDesig = computeDisplayDesignation(op, sourceEmp);
+        const empGrade = resolveEmployeeGrade({ ...sourceEmp, securityOperationalEmployee: op }) || null;
 
         return {
           id: op.sourceEmployeeId,
@@ -177,6 +182,9 @@ export async function GET(request: Request) {
           designation: { name: displayDesig },
           displayDesignation: displayDesig,
           position: displayDesig,
+          grade: empGrade,
+          displayGrade: empGrade,
+          salaryGrade: empGrade,
           sourceEmployee: sourceEmp,
           securityOperationalEmployee: op,
           securityLicense: lic || null,

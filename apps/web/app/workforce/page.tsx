@@ -218,6 +218,7 @@ export default function WorkforcePage() {
 
   const [empDesignationId, setEmpDesignationId] = useState("");
   const [empTradeClassificationId, setEmpTradeClassificationId] = useState("");
+  const [empGrade, setEmpGrade] = useState("G1");
   const [empCostCenterId, setEmpCostCenterId] = useState("");
   const [empDefaultLocationId, setEmpDefaultLocationId] = useState("");
   const [empIsRelieverEligible, setEmpIsRelieverEligible] = useState(false);
@@ -628,10 +629,14 @@ export default function WorkforcePage() {
         setValidationError("Designation is required for White Collar employees");
         return false;
       }
+      if (!empDefaultLocationId) {
+        setValidationError("Default Location is required for White Collar employees");
+        return false;
+      }
     }
     if (empEmployeeCategory === "BLUE_COLLAR") {
-      if (!empTradeClassificationId) {
-        setValidationError("Trade Classification is required for Blue Collar employees");
+      if (!empGrade) {
+        setValidationError("Grade is required for Blue Collar employees");
         return false;
       }
     }
@@ -682,6 +687,7 @@ export default function WorkforcePage() {
           defaultSiteId: empEmployeeCategory === "BLUE_COLLAR" ? (empDefaultSiteId || undefined) : undefined,
           designationId: empDesignationId || undefined,
           tradeClassificationId: empTradeClassificationId || undefined,
+          grade: empEmployeeCategory === "BLUE_COLLAR" ? (empGrade || undefined) : undefined,
           costCenterId: empCostCenterId || undefined,
           defaultLocationId: empDefaultLocationId || undefined,
           isRelieverEligible: empIsRelieverEligible,
@@ -799,6 +805,7 @@ export default function WorkforcePage() {
           defaultSiteId: empEmployeeCategory === "BLUE_COLLAR" ? (empDefaultSiteId || null) : null,
           designationId: empDesignationId || null,
           tradeClassificationId: empTradeClassificationId || null,
+          grade: empEmployeeCategory === "BLUE_COLLAR" ? (empGrade || null) : null,
           costCenterId: empCostCenterId || null,
           defaultLocationId: empDefaultLocationId || null,
           isRelieverEligible: empIsRelieverEligible,
@@ -1044,6 +1051,7 @@ export default function WorkforcePage() {
     setEmpDefaultSiteId((emp as any).defaultSiteId || "");
     setEmpDesignationId((emp as any).designationId || "");
     setEmpTradeClassificationId((emp as any).tradeClassificationId || "");
+    setEmpGrade((emp as any).grade || (emp as any).displayGrade || "G1");
     setEmpCostCenterId((emp as any).costCenterId || "");
     setEmpDefaultLocationId((emp as any).defaultLocationId || "");
     setEmpIsRelieverEligible(!!(emp as any).isRelieverEligible);
@@ -1973,17 +1981,19 @@ export default function WorkforcePage() {
                       </select>
                     </div>
                     <div className="space-y-1">
-                      <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Trade Classification *</label>
+                      <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Grade *</label>
                       <select
                         className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-2.5 py-2 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                        value={empTradeClassificationId}
-                        onChange={(e) => setEmpTradeClassificationId(e.target.value)}
+                        value={empGrade}
+                        onChange={(e) => setEmpGrade(e.target.value)}
                         required
                       >
-                        <option value="">Select Trade Classification</option>
-                        {trades.map((t) => (
-                          <option key={t.id} value={t.id}>{t.name} ({t.code})</option>
-                        ))}
+                        <option value="">Select Grade</option>
+                        <option value="G1">G1</option>
+                        <option value="G2">G2</option>
+                        <option value="G3">G3</option>
+                        <option value="G4">G4</option>
+                        <option value="G5">G5</option>
                       </select>
                     </div>
                   </div>
@@ -2758,10 +2768,14 @@ export default function WorkforcePage() {
                         </select>
                       </div>
                       <div className="space-y-1">
-                        <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Trade Classification *</label>
-                        <select className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-2.5 py-2 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" value={empTradeClassificationId} onChange={(e) => setEmpTradeClassificationId(e.target.value)} required>
-                          <option value="">Select Trade Classification</option>
-                          {trades.map((t) => <option key={t.id} value={t.id}>{t.name} ({t.code})</option>)}
+                        <label className="block text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Grade *</label>
+                        <select className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-2.5 py-2 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary" value={empGrade} onChange={(e) => setEmpGrade(e.target.value)} required>
+                          <option value="">Select Grade</option>
+                          <option value="G1">G1</option>
+                          <option value="G2">G2</option>
+                          <option value="G3">G3</option>
+                          <option value="G4">G4</option>
+                          <option value="G5">G5</option>
                         </select>
                       </div>
                     </div>

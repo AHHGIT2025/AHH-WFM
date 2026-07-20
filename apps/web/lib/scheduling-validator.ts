@@ -84,6 +84,34 @@ export function areShiftsOverlapping(start1: string, end1: string, start2: strin
   return false;
 }
 
+export function normalizeComparableValue(value: unknown): string {
+  if (value && typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    value =
+      record.name ??
+      record.label ??
+      record.designationName ??
+      record.position ??
+      "";
+  }
+
+  return String(value ?? "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLowerCase();
+}
+
+export function resolveEmployeeGrade(employee: any): string {
+  return String(
+    employee?.displayGrade ??
+    employee?.grade ??
+    employee?.salaryGrade ??
+    employee?.gradeCode ??
+    employee?.securityOperationalEmployee?.grade ??
+    ""
+  ).trim();
+}
+
 export function isGenericOrInvalidDesignation(val: string | undefined | null): boolean {
   if (!val || typeof val !== "string") return true;
   const clean = val.trim();
@@ -342,15 +370,18 @@ export function validateDeploymentEligibility(
   // Rule 7: Designation match / Acting Duty Advisory
   const reqDesig = siteRequirements.requiredDesignation;
   if (reqDesig && reqDesig !== "any" && reqDesig !== "ANY") {
-    const empDesig = employee.displayDesignation || computeDisplayDesignation(employee);
-    if (empDesig !== reqDesig) {
+    const reqNorm = normalizeComparableValue(reqDesig);
+    const empDesigRaw = employee.displayDesignation || computeDisplayDesignation(employee);
+    const empNorm = normalizeComparableValue(empDesigRaw);
+
+    if (reqNorm && empNorm && reqNorm !== empNorm) {
       if (siteRequirements.strictDesignationMatch) {
         result.canDeploy = false;
         result.severity = "BLOCKED";
-        result.blockingIssues.push(`Strict Match failure: Site requires designation '${reqDesig}', but employee has '${empDesig}'.`);
-        addChecklist("Designation Matching", "FAIL", `Required: ${reqDesig}, Got: ${empDesig}`);
+        result.blockingIssues.push(`Strict Match failure: Site requires designation '${reqDesig}', but employee has '${empDesigRaw}'.`);
+        addChecklist("Designation Matching", "FAIL", `Required: ${reqDesig}, Got: ${empDesigRaw}`);
       } else {
-        result.warnings.push(`Designation mismatch: Site requires '${reqDesig}', employee designation is '${empDesig}'.`);
+        result.warnings.push(`Designation mismatch: Site requires '${reqDesig}', employee designation is '${empDesigRaw}'.`);
         result.payrollAdvisories.push("Acting duty advisory may apply. Employee designation differs from required post.");
         addChecklist("Designation Matching", "WARN", "Designation mismatch (Acting Duty)");
       }
@@ -364,11 +395,18 @@ export function validateDeploymentEligibility(
   // Rule 8: Salary Grade mismatch / Grade advisory
   const reqGrade = siteRequirements.requiredGrade;
   if (reqGrade && reqGrade !== "any" && reqGrade !== "ANY") {
-    const empGrade = employee.salaryGrade || employee.grade;
-    if (empGrade !== reqGrade) {
-      result.warnings.push(`Salary Grade mismatch: Post requires '${reqGrade}', employee grade is '${empGrade}'.`);
+    const reqNorm = normalizeComparableValue(reqGrade);
+    const empGradeRaw = resolveEmployeeGrade(employee);
+    const empNorm = normalizeComparableValue(empGradeRaw);
+
+    if (!empNorm) {
+      result.warnings.push(`Salary Grade missing: Post requires '${reqGrade}', but the employee has no grade configured.`);
+      result.payrollAdvisories.push("Salary grade missing. Payroll team should review advisory report.");
+      addChecklist("Salary Grade Matching", "WARN", `Required: ${reqGrade}, Got: Unconfigured`);
+    } else if (reqNorm !== empNorm) {
+      result.warnings.push(`Salary Grade mismatch: Post requires '${reqGrade}', employee grade is '${empGradeRaw}'.`);
       result.payrollAdvisories.push("Salary grade mismatch detected. Payroll team should review advisory report.");
-      addChecklist("Salary Grade Matching", "WARN", `Required: ${reqGrade}, Got: ${empGrade}`);
+      addChecklist("Salary Grade Matching", "WARN", `Required: ${reqGrade}, Got: ${empGradeRaw}`);
     } else {
       addChecklist("Salary Grade Matching", "PASS", "Matched");
     }

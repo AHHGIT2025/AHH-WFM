@@ -188,7 +188,7 @@ export async function POST(request: Request) {
         operationType: "SECURITY_GUARDING",
         designation: designationName,
         position: designationName,
-        grade: null,
+        grade: existing.grade || payload.grade || null,
         department: existing.department || "Operations",
         defaultLocation: existing.defaultLocation?.locationName || null,
         mobile: existing.phone,

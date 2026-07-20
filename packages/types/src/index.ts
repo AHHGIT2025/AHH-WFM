@@ -38,6 +38,7 @@ export interface Employee {
   defaultSiteId?: string;
   designationId?: string;
   tradeClassificationId?: string;
+  grade?: string | null;
   costCenterId?: string;
   defaultLocationId?: string;
   isRelieverEligible?: boolean;

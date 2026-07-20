@@ -158,7 +158,7 @@ export async function PATCH(request: Request, { params }: RouteParams) {
       name, email, role, departmentId, status, phone, shiftId, 
       employmentStatus, dutyStatus, employeeCategory,
       positionCategoryId, defaultProjectId, defaultSiteId,
-      designationId, tradeClassificationId, costCenterId, defaultLocationId, officeLocationId,
+      designationId, tradeClassificationId, grade, costCenterId, defaultLocationId, officeLocationId,
       isRelieverEligible, isStandbyEligible,
       immediateSupervisorId, reportingManagerId, projectSupervisorId, siteSupervisorId,
       isSupervisor, supervisorScopeType,
@@ -236,15 +236,15 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     }
 
     const targetDesignationId = designationId !== undefined ? designationId : currentEmp.designationId;
-    const targetTradeClassificationId = tradeClassificationId !== undefined ? tradeClassificationId : currentEmp.tradeClassificationId;
+    const targetGrade = grade !== undefined ? grade : currentEmp.grade;
 
     if (targetCategory === "WHITE_COLLAR") {
       if (!targetDesignationId || (typeof targetDesignationId === "string" && targetDesignationId.trim() === "")) {
         return NextResponse.json({ error: "Designation is required for White Collar employees." }, { status: 400 });
       }
     } else if (targetCategory === "BLUE_COLLAR") {
-      if (!targetTradeClassificationId || (typeof targetTradeClassificationId === "string" && targetTradeClassificationId.trim() === "")) {
-        return NextResponse.json({ error: "Trade Classification is required for Blue Collar employees." }, { status: 400 });
+      if (!targetGrade || (typeof targetGrade === "string" && targetGrade.trim() === "")) {
+        return NextResponse.json({ error: "Grade is required for Blue Collar employees." }, { status: 400 });
       }
     }
 
@@ -319,6 +319,7 @@ export async function PATCH(request: Request, { params }: RouteParams) {
       ...(profilePhotoUrl !== undefined ? { profilePhotoUrl: profilePhotoUrl ? profilePhotoUrl.trim() : null } : {}),
       
       // New company & identity fields
+      ...(grade !== undefined ? { grade: grade ? grade.trim() : null } : {}),
       ...(companyId !== undefined ? { companyId: companyId || null } : {}),
       ...(qidNumber !== undefined ? { qidNumber: qidNumber ? qidNumber.trim() : null } : {}),
       ...(qidExpiryDate !== undefined ? { qidExpiryDate: qidExpiryDate ? new Date(qidExpiryDate) : null } : {}),
