@@ -1,4 +1,5 @@
 import { prisma } from "@ahh-wfm/database";
+import { isDbConnected } from "@ahh-wfm/mock-data";
 import { OperationType, SecFacDispatchAssignment, SecFacOperationalAlert } from "@ahh-wfm/types";
 import { getQatarBusinessDateString } from "./secfac-alert-service";
 
@@ -528,45 +529,91 @@ export async function completeDispatchAssignment(
   actorUserId: string,
   completionNotes: string
 ): Promise<any> {
-  const dispatch = await prisma.secFacDispatchAssignment.findUnique({
-    where: { id: dispatchId }
-  });
-
-  if (!dispatch) throw new Error("Dispatch assignment not found.");
-
   const now = new Date();
-  const updated = await prisma.$transaction(async (tx) => {
-    const res = await tx.secFacDispatchAssignment.update({
-      where: { id: dispatchId },
-      data: {
-        status: "COMPLETED",
-        completedAt: now,
-        completionNotes
-      }
+
+  if (isDbConnected()) {
+    const dispatch = await prisma.secFacDispatchAssignment.findUnique({
+      where: { id: dispatchId }
     });
 
-    await tx.secFacOperationalAlert.update({
-      where: { id: dispatch.alertId },
-      data: {
-        status: "RESOLVED",
-        resolvedAt: now,
-        resolvedById: actorUserId,
-        resolutionNote: completionNotes,
-        events: {
-          create: {
-            operationType: dispatch.operationType,
-            eventType: "DISPATCH_COMPLETED_ALERT_RESOLVED",
-            performedById: actorUserId,
-            note: `Incident resolved: ${completionNotes}`
-          }
+    if (!dispatch) throw new Error("Dispatch assignment not found.");
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const res = await tx.secFacDispatchAssignment.update({
+        where: { id: dispatchId },
+        data: {
+          status: "COMPLETED",
+          completedAt: now,
+          completionNotes
         }
-      }
+      });
+
+      await tx.secFacAlertEvent.create({
+        data: {
+          alertId: dispatch.alertId,
+          operationType: dispatch.operationType,
+          eventType: "DISPATCH_COMPLETED",
+          performedById: actorUserId,
+          note: `Responder completed dispatch assignment: ${completionNotes}`
+        }
+      });
+
+      return res;
     });
 
-    return res;
-  });
+    return updated;
+  }
 
-  return updated;
+  return {
+    id: dispatchId,
+    status: "COMPLETED",
+    completedAt: now.toISOString(),
+    completionNotes
+  };
+}
+
+/**
+ * Evaluates pending dispatch assignments that have passed acceptanceDeadline and transitions them to TIMED_OUT.
+ */
+export async function timeoutPendingDispatchAssignments(): Promise<{ timedOutCount: number }> {
+  const now = new Date();
+  let timedOutCount = 0;
+
+  if (isDbConnected()) {
+    const pendingOverdue = await prisma.secFacDispatchAssignment.findMany({
+      where: {
+        status: "PENDING_ACCEPTANCE",
+        acceptanceDeadline: { lt: now }
+      },
+      include: { alert: true }
+    });
+
+    for (const assignment of pendingOverdue) {
+      await prisma.$transaction(async (tx) => {
+        await tx.secFacDispatchAssignment.update({
+          where: { id: assignment.id },
+          data: {
+            status: "TIMED_OUT",
+            timedOutAt: now
+          }
+        });
+
+        await tx.secFacAlertEvent.create({
+          data: {
+            alertId: assignment.alertId,
+            operationType: assignment.operationType,
+            eventType: "DISPATCH_TIMED_OUT",
+            performedById: assignment.dispatchedById,
+            note: `Dispatch assignment #${assignment.attemptNumber} timed out after acceptance deadline.`
+          }
+        });
+      });
+
+      timedOutCount++;
+    }
+  }
+
+  return { timedOutCount };
 }
 
 /**

@@ -2255,10 +2255,63 @@ export interface ProviderDeliveryResult {
   retryable: boolean;
   requestMetadata?: Record<string, any> | null;
   responseMetadata?: Record<string, any> | null;
+}export type SecFacWelfareStatus = "PENDING" | "ACKNOWLEDGED" | "MISSED" | "EXEMPTED" | "CANCELLED";
+export type SecFacWelfareAcknowledgementMethod = "MOBILE_APP" | "CONTROL_ROOM" | "OFFLINE_SYNC";
+export type SecFacWelfareExemptionType = "SHIFT_END" | "SUPERVISOR_OVERRIDE" | "SITE_EXEMPTION";
+export type SecFacWelfareSettingSourceType = "POST" | "SITE" | "PROJECT" | "COMPANY" | "SYSTEM_DEFAULT";
+export type SecFacEvidenceIntegrityStatus = "VERIFIED" | "MISMATCH" | "UNVERIFIED";
+export type SecFacPatrolCheckpointAssuranceStatus = "PENDING" | "ON_TIME" | "LATE" | "MISSED" | "SEQUENCE_DEVIATION" | "EXCUSED" | "COMPLETED_LATE";
+export type SecFacPatrolSequenceMode = "MANDATORY" | "ADVISORY" | "ANY_ORDER";
+export type SecFacPatrolEvaluationStatus = "SCHEDULED" | "ON_TIME" | "LATE" | "MISSED" | "DEVIATED" | "COMPLETED_WITH_EXCEPTIONS";
+export type SecFacDispatchRejectionCategory = "UNAVAILABLE" | "TOO_FAR" | "EQUIPMENT_ISSUE" | "SAFETY_HAZARD" | "OTHER";
+
+export interface SecFacWelfareSetting {
+  id: string;
+  operationType: OperationType;
+  companyId: string;
+  projectId?: string | null;
+  siteId?: string | null;
+  postId?: string | null;
+  scopeKey: string;
+  checkFrequencyMins: number;
+  gracePeriodMins: number;
+  isActive: boolean;
+  createdById: string;
+  createdAt: string | Date;
+  updatedAt: string | Date;
 }
 
+export interface SecFacWelfareCheck {
+  id: string;
+  operationType: OperationType;
+  companyId: string;
+  contractId?: string | null;
+  projectId?: string | null;
+  siteId: string;
+  site?: any;
+  postId?: string | null;
+  deploymentId?: string | null;
+  employeeId: string;
+  employee?: any;
+  scheduledAt: string | Date;
+  dueAt: string | Date;
+  graceExpiresAt: string | Date;
+  status: SecFacWelfareStatus;
+  acknowledgedAt?: string | Date | null;
+  acknowledgementMethod?: SecFacWelfareAcknowledgementMethod | null;
+  exemptionType?: SecFacWelfareExemptionType | null;
+  exemptionReason?: string | null;
+  alertId?: string | null;
+  idempotencyKey: string;
+  settingSourceType: SecFacWelfareSettingSourceType;
+  settingSourceId?: string | null;
+  createdAt: string | Date;
+  updatedAt: string | Date;
+}
 
-
-
-
-
+export interface EffectiveWelfareSetting {
+  settingSourceType: SecFacWelfareSettingSourceType;
+  settingSourceId?: string | null;
+  effectiveFrequencyMins: number;
+  effectiveGracePeriodMins: number;
+}

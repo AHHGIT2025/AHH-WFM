@@ -135,9 +135,11 @@ model Employee {
   secfacReviewedScanProofs      SecfacScanProof[]                      @relation("SecfacScanProofReviewedBy")
   secfacPatrolExecutions        SecfacPatrolExecution[]                @relation("SecfacPatrolExecutionEmployee")
   secfacSyncConflicts           SecfacSyncConflict[]                   @relation("SecfacEmployeeSyncConflicts")
-  secfacFieldAudits             SecfacFieldExecutionAudit[]            @relation("SecfacFieldAuditEmployee")
   secfacDispatchResponders      SecFacDispatchAssignment[]             @relation("SecFacDispatchResponder")
   secfacDispatchedByAssignments SecFacDispatchAssignment[]             @relation("SecFacDispatcherUser")
+  welfareSettingsCreated        SecFacWelfareSetting[]                 @relation("WelfareSettingCreatedBy")
+  secfacWelfareChecks           SecFacWelfareCheck[]                   @relation("SecFacWelfareCheckEmployee")
+  secfacFieldAudits             SecfacFieldExecutionAudit[]            @relation("SecfacFieldAuditEmployee")
 }
 
 model Department {
@@ -1382,6 +1384,7 @@ model ManpowerSite {
   secfacEvidenceAttachments SecfacEvidenceAttachment[]
   secfacScanProofs          SecfacScanProof[]
   secfacPatrolRoutes        SecfacPatrolRoute[]                    @relation("SecfacPatrolRouteSite")
+  secfacWelfareChecks       SecFacWelfareCheck[]                   @relation("SecFacWelfareCheckSite")
 }
 
 model SecuritySiteManpowerAllocation {
@@ -2258,6 +2261,15 @@ model SecfacEvidenceAttachment {
   gpsAccuracyMeters Float?
   uploadedById      String?
   uploadedBy        Employee?                @relation("SecfacEvidenceUploadedBy", fields: [uploadedById], references: [id], onDelete: SetNull)
+  clientFileHash    String?
+  serverFileHash    String?
+  hashAlgorithm     String?                  @default("SHA-256")
+  integrityStatus   String                   @default("UNVERIFIED") // VERIFIED | MISMATCH | UNVERIFIED
+  integrityFlags    Json?
+  clientCapturedAt  DateTime?
+  serverReceivedAt  DateTime?
+  deviceSessionId   String?
+  idempotencyKey    String?                  @unique
   isActive          Boolean                  @default(true)
   createdAt         DateTime                 @default(now())
   updatedAt         DateTime                 @updatedAt
@@ -2270,6 +2282,7 @@ model SecfacEvidenceAttachment {
   @@index([siteId])
   @@index([checkpointId])
   @@index([evidenceType])
+  @@index([integrityStatus])
   @@index([isActive])
 }
 
@@ -2337,6 +2350,7 @@ model SecfacPatrolRoute {
   description   String?      @db.Text
   siteId        String
   site          ManpowerSite @relation("SecfacPatrolRouteSite", fields: [siteId], references: [id], onDelete: Restrict)
+  sequenceMode  String       @default("MANDATORY") // MANDATORY | ADVISORY | ANY_ORDER
   isActive      Boolean      @default(true)
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
@@ -2367,18 +2381,20 @@ model SecfacPatrolRouteCheckpoint {
 }
 
 model SecfacPatrolExecution {
-  id           String            @id @default(uuid())
-  routeId      String
-  route        SecfacPatrolRoute @relation("SecfacPatrolExecutionRoute", fields: [routeId], references: [id], onDelete: Restrict)
-  assignmentId String
-  assignment   SecfacAssignment  @relation("SecfacPatrolExecutionAssignment", fields: [assignmentId], references: [id], onDelete: Restrict)
-  employeeId   String
-  employee     Employee          @relation("SecfacPatrolExecutionEmployee", fields: [employeeId], references: [id], onDelete: Restrict)
-  status       String            @default("NOT_STARTED") // NOT_STARTED | IN_PROGRESS | PENDING_REVIEW | COMPLETED | INCOMPLETE | CANCELLED
-  startedAt    DateTime?
-  completedAt  DateTime?
-  createdAt    DateTime          @default(now())
-  updatedAt    DateTime          @updatedAt
+  id               String            @id @default(uuid())
+  routeId          String
+  route            SecfacPatrolRoute @relation("SecfacPatrolExecutionRoute", fields: [routeId], references: [id], onDelete: Restrict)
+  assignmentId     String
+  assignment       SecfacAssignment  @relation("SecfacPatrolExecutionAssignment", fields: [assignmentId], references: [id], onDelete: Restrict)
+  employeeId       String
+  employee         Employee          @relation("SecfacPatrolExecutionEmployee", fields: [employeeId], references: [id], onDelete: Restrict)
+  status           String            @default("NOT_STARTED") // NOT_STARTED | IN_PROGRESS | PENDING_REVIEW | COMPLETED | INCOMPLETE | CANCELLED
+  evaluationStatus String            @default("SCHEDULED") // SCHEDULED | ON_TIME | LATE | MISSED | DEVIATED | COMPLETED_WITH_EXCEPTIONS
+  evaluationRunId  String?
+  startedAt        DateTime?
+  completedAt      DateTime?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
 
   checkpoints SecfacPatrolExecutionCheckpoint[] @relation("SecfacExecutionCheckpoints")
 
@@ -2386,27 +2402,40 @@ model SecfacPatrolExecution {
   @@index([assignmentId])
   @@index([employeeId])
   @@index([status])
+  @@index([evaluationStatus])
 }
 
 model SecfacPatrolExecutionCheckpoint {
-  id           String                @id @default(uuid())
-  executionId  String
-  execution    SecfacPatrolExecution @relation("SecfacExecutionCheckpoints", fields: [executionId], references: [id], onDelete: Cascade)
-  checkpointId String
-  checkpoint   SecfacCheckpoint      @relation("CheckpointToExecutionCheckpoints", fields: [checkpointId], references: [id], onDelete: Restrict)
-  sequenceNo   Int
-  required     Boolean               @default(true)
-  status       String                @default("PENDING") // PENDING | VALIDATED | PENDING_REVIEW | INVALID | SKIPPED
-  scanProofId  String?               @unique
-  scanProof    SecfacScanProof?      @relation("SecfacScanProofPatrolCheckpoint", fields: [scanProofId], references: [id], onDelete: SetNull)
-  validatedAt  DateTime?
-  createdAt    DateTime              @default(now())
-  updatedAt    DateTime              @updatedAt
+  id                      String                @id @default(uuid())
+  executionId             String
+  execution               SecfacPatrolExecution @relation("SecfacExecutionCheckpoints", fields: [executionId], references: [id], onDelete: Cascade)
+  checkpointId            String
+  checkpoint              SecfacCheckpoint      @relation("CheckpointToExecutionCheckpoints", fields: [checkpointId], references: [id], onDelete: Restrict)
+  sequenceNo              Int
+  required                Boolean               @default(true)
+  status                  String                @default("PENDING") // PENDING | VALIDATED | PENDING_REVIEW | INVALID | SKIPPED
+  assuranceStatus         String                @default("PENDING") // PENDING | ON_TIME | LATE | MISSED | SEQUENCE_DEVIATION | EXCUSED | COMPLETED_LATE
+  targetTime              DateTime?
+  lateAt                  DateTime?
+  missedAt                DateTime?
+  sequenceDeviated        Boolean               @default(false)
+  alertId                 String?
+  evaluationRunId         String?
+  exceptionAcknowledged   Boolean               @default(false)
+  exceptionAcknowledgedBy String?
+  exceptionAcknowledgedAt DateTime?
+  exceptionNotes          String?               @db.Text
+  scanProofId             String?               @unique
+  scanProof               SecfacScanProof?      @relation("SecfacScanProofPatrolCheckpoint", fields: [scanProofId], references: [id], onDelete: SetNull)
+  validatedAt             DateTime?
+  createdAt               DateTime              @default(now())
+  updatedAt               DateTime              @updatedAt
 
   @@unique([executionId, sequenceNo])
   @@index([executionId])
   @@index([checkpointId])
   @@index([status])
+  @@index([assuranceStatus])
 }
 
 model SecfacSyncConflict {
@@ -2630,6 +2659,7 @@ model SecFacOperationalAlert {
   events              SecFacAlertEvent[]
   notifications       SecFacAlertNotification[]
   dispatchAssignments SecFacDispatchAssignment[]
+  welfareChecks       SecFacWelfareCheck[]       @relation("SecFacWelfareCheckAlert")
 
   @@unique([operationType, deduplicationKey])
   @@index([operationType, status, severity])
@@ -2915,4 +2945,64 @@ model SecFacDispatchAssignment {
   @@index([status])
   @@index([acceptanceDeadline])
   @@index([dispatchedAt])
+}
+
+model SecFacWelfareSetting {
+  id                 String   @id @default(cuid())
+  operationType      String // SECURITY_GUARDING | FACILITY_MANAGEMENT
+  companyId          String
+  projectId          String?
+  siteId             String?
+  postId             String?
+  scopeKey           String   @unique // e.g. SECURITY_GUARDING:COMPANY:COMP-002
+  checkFrequencyMins Int      @default(60)
+  gracePeriodMins    Int      @default(10)
+  isActive           Boolean  @default(true)
+  createdById        String
+  createdBy          Employee @relation("WelfareSettingCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([operationType])
+  @@index([companyId])
+  @@index([siteId])
+  @@index([postId])
+  @@index([isActive])
+}
+
+model SecFacWelfareCheck {
+  id                    String                  @id @default(cuid())
+  operationType         String // SECURITY_GUARDING | FACILITY_MANAGEMENT
+  companyId             String
+  contractId            String?
+  projectId             String?
+  siteId                String
+  site                  ManpowerSite            @relation("SecFacWelfareCheckSite", fields: [siteId], references: [id], onDelete: Restrict)
+  postId                String?
+  deploymentId          String?
+  employeeId            String
+  employee              Employee                @relation("SecFacWelfareCheckEmployee", fields: [employeeId], references: [id], onDelete: Restrict)
+  scheduledAt           DateTime
+  dueAt                 DateTime
+  graceExpiresAt        DateTime
+  status                String                  @default("PENDING") // PENDING | ACKNOWLEDGED | MISSED | EXEMPTED | CANCELLED
+  acknowledgedAt        DateTime?
+  acknowledgementMethod String? // MOBILE_APP | CONTROL_ROOM | OFFLINE_SYNC
+  exemptionType         String? // SHIFT_END | SUPERVISOR_OVERRIDE | SITE_EXEMPTION
+  exemptionReason       String?                 @db.Text
+  alertId               String?
+  alert                 SecFacOperationalAlert? @relation("SecFacWelfareCheckAlert", fields: [alertId], references: [id], onDelete: SetNull)
+  idempotencyKey        String                  @unique
+  settingSourceType     String                  @default("SYSTEM_DEFAULT") // POST | SITE | PROJECT | COMPANY | SYSTEM_DEFAULT
+  settingSourceId       String?
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
+
+  @@index([operationType])
+  @@index([companyId])
+  @@index([siteId])
+  @@index([employeeId])
+  @@index([status])
+  @@index([dueAt])
+  @@index([graceExpiresAt])
 }

@@ -483,6 +483,8 @@ let memoryDb: {
   secfacPatrolRouteCheckpoints: SecfacPatrolRouteCheckpoint[];
   secfacPatrolExecutions: SecfacPatrolExecution[];
   secfacPatrolExecutionCheckpoints: SecfacPatrolExecutionCheckpoint[];
+  secfacWelfareSettings: any[];
+  secfacWelfareChecks: any[];
   secfacSyncConflicts: any[];
   secfacFieldExecutionAudits: any[];
 } = {
@@ -778,6 +780,8 @@ let memoryDb: {
   secfacPatrolRouteCheckpoints: [],
   secfacPatrolExecutions: [],
   secfacPatrolExecutionCheckpoints: [],
+  secfacWelfareSettings: [],
+  secfacWelfareChecks: [],
   secfacSyncConflicts: [],
   secfacFieldExecutionAudits: []
 };

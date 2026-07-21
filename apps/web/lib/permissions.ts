@@ -25,7 +25,11 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "secfac.checkpoints.view", "secfac.checkpoints.create", "secfac.checkpoints.edit", "secfac.checkpoints.delete",
     "secfac.checklists.view", "secfac.checklists.create", "secfac.checklists.edit", "secfac.checklists.delete",
     "secfac.patrolRoutes.view", "secfac.patrolRoutes.create", "secfac.patrolRoutes.edit", "secfac.patrolRoutes.delete",
-    "secfac.patrolAssignments.view", "secfac.patrolAssignments.create", "secfac.patrolAssignments.edit", "secfac.patrolAssignments.delete"
+    "secfac.patrolAssignments.view", "secfac.patrolAssignments.create", "secfac.patrolAssignments.edit", "secfac.patrolAssignments.delete",
+    "secfac.dispatch.view", "secfac.dispatch.respond", "secfac.dispatch.reassign",
+    "secfac.welfare.view", "secfac.welfare.manage", "secfac.welfare.acknowledge",
+    "secfac.patrolAssurance.view", "secfac.patrolAssurance.manage",
+    "secfac.evidence.verify", "secfac.worker.monitor"
   ],
   ADMIN: [
     "dashboard.view", "employees.view", "employees.create", "employees.edit", "employees.bulkUpload", "employees.manage",
@@ -53,7 +57,11 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "secfac.checkpoints.view", "secfac.checkpoints.create", "secfac.checkpoints.edit", "secfac.checkpoints.delete",
     "secfac.checklists.view", "secfac.checklists.create", "secfac.checklists.edit", "secfac.checklists.delete",
     "secfac.patrolRoutes.view", "secfac.patrolRoutes.create", "secfac.patrolRoutes.edit", "secfac.patrolRoutes.delete",
-    "secfac.patrolAssignments.view", "secfac.patrolAssignments.create", "secfac.patrolAssignments.edit", "secfac.patrolAssignments.delete"
+    "secfac.patrolAssignments.view", "secfac.patrolAssignments.create", "secfac.patrolAssignments.edit", "secfac.patrolAssignments.delete",
+    "secfac.dispatch.view", "secfac.dispatch.respond", "secfac.dispatch.reassign",
+    "secfac.welfare.view", "secfac.welfare.manage", "secfac.welfare.acknowledge",
+    "secfac.patrolAssurance.view", "secfac.patrolAssurance.manage",
+    "secfac.evidence.verify", "secfac.worker.monitor"
   ],
   SYSTEM_ADMIN: [
     "settings.view", "settings.manage", "users.view", "users.manage", "roles.view", "roles.manage",

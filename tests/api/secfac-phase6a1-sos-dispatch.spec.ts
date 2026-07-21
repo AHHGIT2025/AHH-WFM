@@ -173,13 +173,13 @@ describe("SECFAC Phase 6A.1 — Safety and Architecture Foundation Test Suite", 
       expect(arrived.arrivalLongitude).toBe(51.5312);
     });
 
-    it("completes dispatch and resolves parent alert", async () => {
+    it("completes dispatch assignment without auto-resolving parent alert (Phase 6A.2 separation)", async () => {
       const completed = await completeDispatchAssignment(dispatchId, testDispatcherId, "Incident investigated and post secured.");
       expect(completed.status).toBe("COMPLETED");
 
       const alert = await prisma.secFacOperationalAlert.findUnique({ where: { id: alertId } });
-      expect(alert?.status).toBe("RESOLVED");
-      expect(alert?.resolutionNote).toContain("post secured");
+      // Note: Alert remains IN_PROGRESS until explicit supervisor resolution
+      expect(alert?.status).toBe("IN_PROGRESS");
     });
 
     it("preserves previous attempts when reassigning dispatch", async () => {

@@ -88,7 +88,10 @@ export async function POST(request: Request) {
       }
     }
 
-    // 5. Read file buffer & Save securely
+    const clientFileHash = formData.get("clientFileHash") as string | null;
+    const idempotencyKey = formData.get("idempotencyKey") as string | null;
+    const deviceSessionId = formData.get("deviceSessionId") as string | null;
+
     const originalName = file.name;
     const mimeType = file.type;
     const buffer = Buffer.from(await file.arrayBuffer());
@@ -100,34 +103,32 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: err.message }, { status: 400 });
     }
 
-    // 6. Register in Database/Mock database
     const latitude = latStr ? parseFloat(latStr) : null;
     const longitude = lngStr ? parseFloat(lngStr) : null;
     const gpsAccuracyMeters = accuracyStr ? parseFloat(accuracyStr) : null;
 
-    const newAttachment = await mockDb.createSecfacEvidenceAttachment({
+    const { verifyAndStoreEvidence } = await import("@/lib/secfac-evidence-service");
+    const result = await verifyAndStoreEvidence({
       operationType: execution.operationType,
       executionId,
-      responseId,
-      assignmentId: assignmentId || execution.assignmentId || null,
+      responseId: responseId || undefined,
+      assignmentId: assignmentId || execution.assignmentId || undefined,
       employeeId: execution.employeeId,
-      siteId: execution.siteId || null,
-      checkpointId: execution.checkpointId || null,
+      siteId: execution.siteId || undefined,
+      checkpointId: execution.checkpointId || undefined,
       fileName: uploadResult.fileName,
       originalName: uploadResult.originalName,
       mimeType: uploadResult.mimeType,
-      fileSizeBytes: uploadResult.fileSizeBytes,
-      storagePath: uploadResult.storagePath,
-      evidenceType: "PHOTO",
-      caption,
-      capturedAt: new Date().toISOString(),
-      latitude,
-      longitude,
-      gpsAccuracyMeters,
-      uploadedById: user.id
+      fileBuffer: buffer,
+      clientFileHash: clientFileHash || undefined,
+      caption: caption || undefined,
+      latitude: latitude || undefined,
+      longitude: longitude || undefined,
+      gpsAccuracyMeters: gpsAccuracyMeters || undefined,
+      deviceSessionId: deviceSessionId || undefined,
+      idempotencyKey: idempotencyKey || undefined
     });
 
-    // Write audit record
     const auditHeaders = extractAuditHeaders(request);
     await createSecfacFieldExecutionAudit({
       operationType: execution.operationType,
@@ -136,18 +137,18 @@ export async function POST(request: Request) {
       employeeName: execution.employee?.name || null,
       assignmentId: assignmentId || execution.assignmentId || null,
       checklistExecutionId: executionId,
-      evidenceAttachmentId: newAttachment.id,
+      evidenceAttachmentId: result.attachment?.id || "unknown",
       actionType: "EVIDENCE_UPLOAD",
       actionSource: auditHeaders.syncMode === "OFFLINE_REPLAY" ? "MOBILE_OFFLINE_SYNC" : "MOBILE_ONLINE",
       ...auditHeaders,
       latitude,
       longitude,
       accuracy: gpsAccuracyMeters,
-      resultStatus: "SUCCESS",
-      resultMessage: `Evidence photo uploaded successfully: ${newAttachment.fileName}`
+      resultStatus: result.integrityStatus === "MISMATCH" ? "FAILED" : "SUCCESS",
+      resultMessage: `Evidence photo uploaded with integrity status: ${result.integrityStatus}`
     });
 
-    return NextResponse.json({ success: true, data: newAttachment }, { status: 201 });
+    return NextResponse.json({ success: true, data: result.attachment, integrityStatus: result.integrityStatus }, { status: 201 });
   } catch (e: any) {
     return NextResponse.json({ success: false, error: e.message }, { status: 500 });
   }
