@@ -2138,6 +2138,85 @@ export interface SecFacChannelConfiguration {
   updatedAt: string | Date;
 }
 
+export type SecFacSosStatus =
+  | 'CLIENT_HOLDING'
+  | 'CLIENT_SUBMITTING'
+  | 'PENDING_NETWORK'
+  | 'SERVER_RECEIVED'
+  | 'OPEN'
+  | 'ACKNOWLEDGED'
+  | 'DISPATCHED'
+  | 'RESPONDER_ARRIVED'
+  | 'RESOLVED'
+  | 'CLOSED'
+  | 'CANCELLED'
+  | 'FALSE_ALARM'
+  | 'DUPLICATE';
+
+export type SecFacDispatchStatus =
+  | 'PENDING_ACCEPTANCE'
+  | 'ACCEPTED'
+  | 'REJECTED'
+  | 'TIMED_OUT'
+  | 'ARRIVED'
+  | 'COMPLETED'
+  | 'CANCELLED';
+
+export interface SecFacDispatchAssignment {
+  id: string;
+  operationType: OperationType | string;
+  companyId?: string | null;
+  contractId?: string | null;
+  projectId?: string | null;
+  siteId: string;
+  postId?: string | null;
+  deploymentId?: string | null;
+  shiftAssignmentId?: string | null;
+  alertId: string;
+  alert?: SecFacOperationalAlert | null;
+  responderId: string;
+  responder?: any | null;
+  dispatchedById: string;
+  dispatchedBy?: any | null;
+  status: SecFacDispatchStatus | string;
+  attemptNumber: number;
+  assignmentSequence: number;
+  previousAssignmentId?: string | null;
+  acceptanceDeadline?: string | Date | null;
+  dispatchedAt: string | Date;
+  acceptedAt?: string | Date | null;
+  rejectedAt?: string | Date | null;
+  timedOutAt?: string | Date | null;
+  arrivedAt?: string | Date | null;
+  completedAt?: string | Date | null;
+  cancelledAt?: string | Date | null;
+  rejectionCategory?: string | null;
+  rejectionReason?: string | null;
+  reassignmentReason?: string | null;
+  cancellationCategory?: string | null;
+  cancellationReason?: string | null;
+  arrivalLatitude?: number | null;
+  arrivalLongitude?: number | null;
+  arrivalAccuracyMeters?: number | null;
+  completionNotes?: string | null;
+  responderEligibilitySnapshot?: Record<string, any> | null;
+  createdAt: string | Date;
+  updatedAt: string | Date;
+}
+
+export interface SecFacSosPayload {
+  idempotencyKey: string;
+  holdDurationMs?: number;
+  latitude?: number;
+  longitude?: number;
+  gpsAccuracyMeters?: number;
+  clientCapturedAt: string;
+  emergencyNotes?: string;
+  siteId?: string;
+  deviceSessionId?: string;
+}
+
+
 export interface ProviderValidationResult {
   valid: boolean;
   provider: string;

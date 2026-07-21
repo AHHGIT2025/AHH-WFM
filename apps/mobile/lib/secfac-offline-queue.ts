@@ -1,10 +1,11 @@
 export interface QueueItem {
   id: string;
   idempotencyKey: string;
-  actionType: 'CHECKLIST_DRAFT_SAVE' | 'CHECKLIST_SUBMIT' | 'SCAN_PROOF_CREATE' | 'PATROL_CHECKPOINT_VALIDATE' | 'PATROL_ROUTE_SUBMIT';
+  actionType: 'SOS_PANIC' | 'CHECKLIST_DRAFT_SAVE' | 'CHECKLIST_SUBMIT' | 'SCAN_PROOF_CREATE' | 'PATROL_CHECKPOINT_VALIDATE' | 'PATROL_ROUTE_SUBMIT';
   endpoint: string;
   method: string;
   payload: any;
+  encryptedPayload?: { iv: string; ciphertext: string };
   createdAt: string;
   lastAttemptAt?: string;
   attemptCount: number;

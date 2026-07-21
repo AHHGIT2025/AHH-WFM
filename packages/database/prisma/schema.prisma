@@ -112,30 +112,32 @@ model Employee {
   clearanceApprovals ClearanceApprovalStep[] @relation("Approver")
 
   // --- Manpower Operations Additions ---
-  operationType               String                                 @default("WHITE_COLLAR") // "WHITE_COLLAR" | "SECURITY_GUARDING" | "FACILITY_MANAGEMENT"
-  manpowerCategoryId          String?
-  manpowerCategory            ManpowerCategory?                      @relation(fields: [manpowerCategoryId], references: [id], onDelete: SetNull)
-  userOperationAccess         UserOperationAccess?
-  manpowerAssignments         ManpowerDeploymentAssignment[]
-  manpowerRelievers           ManpowerRelieverAssignment[]
-  securityLicense             SecurityLicense?
-  securityGatePasses          SecurityGatePass[]
-  relieverAssignments         SecurityProjectRelieverAssignment[]
-  coordinatorAssignments      SecurityProjectCoordinatorAssignment[]
-  siteInspections             SecuritySiteInspection[]
-  securityOperationalEmployee SecurityOperationalEmployee?
-  secfacEmployeeAssignments   SecfacAssignment[]                     @relation("SecfacEmployeeAssignments")
-  secfacSupervisorAssignments SecfacAssignment[]                     @relation("SecfacSupervisorAssignments")
-  secfacChecklistExecutions   SecfacChecklistExecution[]             @relation("SecfacEmployeeExecutions")
-  secfacExecutionReviews      SecfacChecklistExecution[]             @relation("SecfacExecutionReviewer")
-  secfacExecutionHistories    SecfacChecklistExecutionHistory[]      @relation("SecfacExecutionHistoryPerformer")
-  secfacEvidenceAttachments   SecfacEvidenceAttachment[]             @relation("SecfacEmployeeEvidence")
-  secfacEvidenceUploadedBy    SecfacEvidenceAttachment[]             @relation("SecfacEvidenceUploadedBy")
-  secfacScanProofs            SecfacScanProof[]                      @relation("SecfacEmployeeScanProofs")
-  secfacReviewedScanProofs    SecfacScanProof[]                      @relation("SecfacScanProofReviewedBy")
-  secfacPatrolExecutions      SecfacPatrolExecution[]                @relation("SecfacPatrolExecutionEmployee")
-  secfacSyncConflicts         SecfacSyncConflict[]                   @relation("SecfacEmployeeSyncConflicts")
-  secfacFieldAudits           SecfacFieldExecutionAudit[]            @relation("SecfacFieldAuditEmployee")
+  operationType                 String                                 @default("WHITE_COLLAR") // "WHITE_COLLAR" | "SECURITY_GUARDING" | "FACILITY_MANAGEMENT"
+  manpowerCategoryId            String?
+  manpowerCategory              ManpowerCategory?                      @relation(fields: [manpowerCategoryId], references: [id], onDelete: SetNull)
+  userOperationAccess           UserOperationAccess?
+  manpowerAssignments           ManpowerDeploymentAssignment[]
+  manpowerRelievers             ManpowerRelieverAssignment[]
+  securityLicense               SecurityLicense?
+  securityGatePasses            SecurityGatePass[]
+  relieverAssignments           SecurityProjectRelieverAssignment[]
+  coordinatorAssignments        SecurityProjectCoordinatorAssignment[]
+  siteInspections               SecuritySiteInspection[]
+  securityOperationalEmployee   SecurityOperationalEmployee?
+  secfacEmployeeAssignments     SecfacAssignment[]                     @relation("SecfacEmployeeAssignments")
+  secfacSupervisorAssignments   SecfacAssignment[]                     @relation("SecfacSupervisorAssignments")
+  secfacChecklistExecutions     SecfacChecklistExecution[]             @relation("SecfacEmployeeExecutions")
+  secfacExecutionReviews        SecfacChecklistExecution[]             @relation("SecfacExecutionReviewer")
+  secfacExecutionHistories      SecfacChecklistExecutionHistory[]      @relation("SecfacExecutionHistoryPerformer")
+  secfacEvidenceAttachments     SecfacEvidenceAttachment[]             @relation("SecfacEmployeeEvidence")
+  secfacEvidenceUploadedBy      SecfacEvidenceAttachment[]             @relation("SecfacEvidenceUploadedBy")
+  secfacScanProofs              SecfacScanProof[]                      @relation("SecfacEmployeeScanProofs")
+  secfacReviewedScanProofs      SecfacScanProof[]                      @relation("SecfacScanProofReviewedBy")
+  secfacPatrolExecutions        SecfacPatrolExecution[]                @relation("SecfacPatrolExecutionEmployee")
+  secfacSyncConflicts           SecfacSyncConflict[]                   @relation("SecfacEmployeeSyncConflicts")
+  secfacFieldAudits             SecfacFieldExecutionAudit[]            @relation("SecfacFieldAuditEmployee")
+  secfacDispatchResponders      SecFacDispatchAssignment[]             @relation("SecFacDispatchResponder")
+  secfacDispatchedByAssignments SecFacDispatchAssignment[]             @relation("SecFacDispatcherUser")
 }
 
 model Department {
@@ -2625,8 +2627,9 @@ model SecFacOperationalAlert {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  events        SecFacAlertEvent[]
-  notifications SecFacAlertNotification[]
+  events              SecFacAlertEvent[]
+  notifications       SecFacAlertNotification[]
+  dispatchAssignments SecFacDispatchAssignment[]
 
   @@unique([operationType, deduplicationKey])
   @@index([operationType, status, severity])
@@ -2852,4 +2855,64 @@ model SecFacMonitoringSnapshot {
   @@index([operationType, snapshotType, capturedAt], map: "sf_ms_op_type_cap_idx")
   @@index([healthStatus, capturedAt], map: "sf_ms_status_cap_idx")
   @@index([severity, capturedAt], map: "sf_ms_sev_cap_idx")
+}
+
+model SecFacDispatchAssignment {
+  id                String  @id @default(cuid())
+  operationType     String // SECURITY_GUARDING | FACILITY_MANAGEMENT
+  companyId         String?
+  contractId        String?
+  projectId         String?
+  siteId            String
+  postId            String?
+  deploymentId      String?
+  shiftAssignmentId String?
+
+  alertId String
+  alert   SecFacOperationalAlert @relation(fields: [alertId], references: [id], onDelete: Cascade)
+
+  responderId String
+  responder   Employee @relation("SecFacDispatchResponder", fields: [responderId], references: [id], onDelete: Restrict)
+
+  dispatchedById String
+  dispatchedBy   Employee @relation("SecFacDispatcherUser", fields: [dispatchedById], references: [id], onDelete: Restrict)
+
+  status               String    @default("PENDING_ACCEPTANCE") // PENDING_ACCEPTANCE | ACCEPTED | REJECTED | TIMED_OUT | ARRIVED | COMPLETED | CANCELLED
+  attemptNumber        Int       @default(1)
+  assignmentSequence   Int       @default(1)
+  previousAssignmentId String?
+  acceptanceDeadline   DateTime?
+  dispatchedAt         DateTime  @default(now())
+  acceptedAt           DateTime?
+  rejectedAt           DateTime?
+  timedOutAt           DateTime?
+  arrivedAt            DateTime?
+  completedAt          DateTime?
+  cancelledAt          DateTime?
+
+  rejectionCategory    String?
+  rejectionReason      String? @db.Text
+  reassignmentReason   String? @db.Text
+  cancellationCategory String?
+  cancellationReason   String? @db.Text
+
+  arrivalLatitude       Float?
+  arrivalLongitude      Float?
+  arrivalAccuracyMeters Float?
+
+  completionNotes              String? @db.Text
+  responderEligibilitySnapshot Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([operationType])
+  @@index([companyId])
+  @@index([siteId])
+  @@index([alertId])
+  @@index([responderId])
+  @@index([dispatchedById])
+  @@index([status])
+  @@index([acceptanceDeadline])
+  @@index([dispatchedAt])
 }
