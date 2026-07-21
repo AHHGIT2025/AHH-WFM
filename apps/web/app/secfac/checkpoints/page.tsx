@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { SecfacPageGuard } from "@/components/secfac-guard";
+import { hasPermission } from "@/lib/permissions";
 
 interface SecfacCheckpoint {
   id: string;
@@ -335,20 +336,50 @@ export default function CheckpointsPage() {
     setIsDrawerOpen(true);
   };
 
-  const handleDeactivate = async (cp: SecfacCheckpoint) => {
-    if (!confirm(`Are you sure you want to deactivate ${cp.checkpointName}?`)) return;
+  const handleDelete = async (cp: SecfacCheckpoint) => {
+    if (!confirm(`Delete checkpoint "${cp.checkpointName}"?\n\nThis is allowed only when the checkpoint has no route, scan, evidence, or execution history.`)) return;
     try {
       const res = await fetch(`/api/v1/secfac/checkpoints/${cp.id}`, {
         method: "DELETE"
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        alert(`Checkpoint "${cp.checkpointName}" deleted successfully.`);
+        fetchCheckpoints();
+        if (selectedCheckpoint?.id === cp.id) setSelectedCheckpoint(null);
+      } else if (res.status === 409 && data.error === "DELETE_BLOCKED") {
+        if (confirm(`${data.message}\n\nWould you like to DEACTIVATE "${cp.checkpointName}" instead to preserve historical records?`)) {
+          await handleDeactivate(cp);
+        }
+      } else {
+        alert(data.message || data.error || "Failed to delete checkpoint");
+      }
+    } catch (e: any) {
+      alert("Error deleting checkpoint: " + e.message);
+    }
+  };
+
+  const handleDeactivate = async (cp: SecfacCheckpoint) => {
+    const reason = prompt(`Deactivate checkpoint "${cp.checkpointName}"?\n\nPlease enter a reason:`, "Operational deactivation");
+    if (reason === null) return;
+
+    try {
+      const res = await fetch(`/api/v1/secfac/checkpoints/${cp.id}/deactivate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason })
       });
       if (res.ok) {
         fetchCheckpoints();
         if (selectedCheckpoint?.id === cp.id) {
           setSelectedCheckpoint(prev => prev ? { ...prev, isActive: false } : null);
         }
+      } else {
+        const data = await res.json();
+        alert(data.message || data.error || "Failed to deactivate checkpoint");
       }
-    } catch (e) {
-      console.error(e);
+    } catch (e: any) {
+      alert("Error deactivating checkpoint: " + e.message);
     }
   };
 
@@ -682,6 +713,15 @@ export default function CheckpointsPage() {
                             >
                               <span className="material-symbols-outlined text-base">edit</span>
                             </button>
+                            {hasPermission(user, "secfac.checkpoints.delete") && (
+                              <button
+                                onClick={() => handleDelete(cp)}
+                                className="p-1 hover:bg-red-100 rounded text-red-800"
+                                title="Delete Checkpoint"
+                              >
+                                <span className="material-symbols-outlined text-base">delete</span>
+                              </button>
+                            )}
                             {cp.isActive ? (
                               <button
                                 onClick={() => handleDeactivate(cp)}
@@ -786,6 +826,14 @@ export default function CheckpointsPage() {
               >
                 Edit
               </button>
+              {hasPermission(user, "secfac.checkpoints.delete") && (
+                <button
+                  onClick={() => handleDelete(selectedCheckpoint)}
+                  className="flex-1 bg-red-100 hover:bg-red-200 text-red-800 py-2 rounded-lg text-xs font-bold font-mono transition-all"
+                >
+                  Delete
+                </button>
+              )}
               {selectedCheckpoint.isActive ? (
                 <button
                   onClick={() => handleDeactivate(selectedCheckpoint)}

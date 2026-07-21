@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { SecfacPageGuard } from "@/components/secfac-guard";
+import { hasPermission } from "@/lib/permissions";
 
 interface PatrolCheckpoint {
   id: string;
@@ -174,20 +175,46 @@ export default function PatrolRoutesPage() {
     setIsDrawerOpen(true);
   };
 
-  const handleDeactivate = async (route: PatrolRoute) => {
-    if (!confirm(`Are you sure you want to deactivate patrol route "${route.routeName}"?`)) return;
+  const handleDelete = async (route: PatrolRoute) => {
+    if (!confirm(`Delete patrol route "${route.routeName}"?\n\nThis is allowed only when the route has no assignment or execution history.`)) return;
     try {
       const res = await fetch(`/api/v1/secfac/patrol-routes/${route.id}`, {
         method: "DELETE"
       });
       const data = await res.json();
       if (res.ok && data.success) {
+        alert(`Patrol route "${route.routeName}" deleted successfully.`);
         fetchRoutes();
+      } else if (res.status === 409 && data.error === "DELETE_BLOCKED") {
+        if (confirm(`${data.message}\n\nWould you like to DEACTIVATE "${route.routeName}" instead to preserve historical records?`)) {
+          await handleDeactivate(route);
+        }
       } else {
-        alert(data.error || "Failed to deactivate route");
+        alert(data.message || data.error || "Failed to delete patrol route");
       }
     } catch (e: any) {
-      alert("Error: " + e.message);
+      alert("Error deleting patrol route: " + e.message);
+    }
+  };
+
+  const handleDeactivate = async (route: PatrolRoute) => {
+    const reason = prompt(`Deactivate patrol route "${route.routeName}"?\n\nPlease enter a reason:`, "Operational deactivation");
+    if (reason === null) return;
+
+    try {
+      const res = await fetch(`/api/v1/secfac/patrol-routes/${route.id}/deactivate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        fetchRoutes();
+      } else {
+        alert(data.message || data.error || "Failed to deactivate route");
+      }
+    } catch (e: any) {
+      alert("Error deactivating route: " + e.message);
     }
   };
 
@@ -437,6 +464,14 @@ export default function PatrolRoutesPage() {
 
                 {/* Card Actions */}
                 <div className="bg-slate-50 border-t border-[#C4C6D2]/60 px-5 py-3 flex gap-2 justify-end">
+                  {hasPermission(user, "secfac.patrolRoutes.delete") && (
+                    <button
+                      onClick={() => handleDelete(r)}
+                      className="border border-red-400 text-red-800 hover:bg-red-100 px-3 py-1.5 rounded-lg text-[10.5px] font-bold transition-all"
+                    >
+                      Delete
+                    </button>
+                  )}
                   {r.isActive && (
                     <button
                       onClick={() => handleDeactivate(r)}

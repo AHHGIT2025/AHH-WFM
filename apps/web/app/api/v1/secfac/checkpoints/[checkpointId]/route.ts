@@ -205,8 +205,26 @@ export async function DELETE(
   request: Request,
   { params }: { params: { checkpointId: string } }
 ) {
-  const auth = await checkApiAuth();
-  if (auth.error) return auth.error;
+  const auth = await checkApiAuth(undefined, { requiredPermission: "secfac.checkpoints.delete" });
+  if (auth.error) {
+    const session = auth.session as any;
+    if (session?.user?.id) {
+      const { auditSecfacDeleteAction } = require("@/lib/secfac-delete-audit-service");
+      await auditSecfacDeleteAction({
+        entityType: "CHECKPOINT",
+        entityId: params.checkpointId,
+        actionType: "PERMISSION_DENIED",
+        userId: session.user.id,
+        userRole: session.user.role,
+        userEmail: session.user.email,
+        permission: "secfac.checkpoints.delete",
+        operationType: "SECURITY_GUARDING",
+        resultStatus: "DENIED",
+        resultMessage: "Forbidden: User lacks secfac.checkpoints.delete permission"
+      });
+    }
+    return auth.error;
+  }
 
   const user = auth.session?.user as any;
   const isAdmin = isAdminUser(user);
@@ -219,20 +237,135 @@ export async function DELETE(
       return NextResponse.json({ success: false, error: "Checkpoint not found" }, { status: 404 });
     }
 
-    // Apply RBAC Operation Restrictions
+    const opType = checkpoint.operationType as "SECURITY_GUARDING" | "FACILITY_MANAGEMENT";
+
+    // Apply RBAC Scope Isolation (Guarding vs FM)
     if (!isAdmin) {
-      if (checkpoint.operationType === "SECURITY_GUARDING" && operationAccess.allowedSecurityGuarding !== true) {
-        return NextResponse.json({ success: false, error: "Forbidden: No access to delete security checkpoints" }, { status: 403 });
+      if (opType === "SECURITY_GUARDING" && operationAccess.allowedSecurityGuarding !== true) {
+        const { auditSecfacDeleteAction } = require("@/lib/secfac-delete-audit-service");
+        await auditSecfacDeleteAction({
+          entityType: "CHECKPOINT",
+          entityId: checkpointId,
+          actionType: "PERMISSION_DENIED",
+          userId: user.id,
+          userRole: user.role,
+          permission: "secfac.checkpoints.delete",
+          operationType: opType,
+          siteId: checkpoint.siteId,
+          resultStatus: "DENIED",
+          resultMessage: "Forbidden: User lacks access to Security Guarding scope"
+        });
+        return NextResponse.json({ success: false, error: "Forbidden: Scope access denied for Security Guarding" }, { status: 403 });
       }
-      if (checkpoint.operationType === "FACILITY_MANAGEMENT" && operationAccess.allowedFacilityManagement !== true) {
-        return NextResponse.json({ success: false, error: "Forbidden: No access to delete facility checkpoints" }, { status: 403 });
+      if (opType === "FACILITY_MANAGEMENT" && operationAccess.allowedFacilityManagement !== true) {
+        const { auditSecfacDeleteAction } = require("@/lib/secfac-delete-audit-service");
+        await auditSecfacDeleteAction({
+          entityType: "CHECKPOINT",
+          entityId: checkpointId,
+          actionType: "PERMISSION_DENIED",
+          userId: user.id,
+          userRole: user.role,
+          permission: "secfac.checkpoints.delete",
+          operationType: opType,
+          siteId: checkpoint.siteId,
+          resultStatus: "DENIED",
+          resultMessage: "Forbidden: User lacks access to Facility Management scope"
+        });
+        return NextResponse.json({ success: false, error: "Forbidden: Scope access denied for Facility Management" }, { status: 403 });
       }
     }
 
-    // Soft delete
-    await mockDb.deleteSecfacCheckpoint(checkpointId);
+    // Check all operational dependencies
+    let dependencies = {
+      routeLinks: 0,
+      scanProofs: 0,
+      evidenceAttachments: 0,
+      checklistExecutions: 0,
+      patrolExecutions: 0,
+      checklistTemplates: 0,
+      assignments: 0
+    };
 
-    return NextResponse.json({ success: true });
+    const isDb = isDbConnected();
+    if (isDb) {
+      const routeLinks = await prisma.secfacPatrolRouteCheckpoint.count({ where: { checkpointId } });
+      const scanProofs = await prisma.secfacScanProof.count({ where: { checkpointId } });
+      const evidence = await prisma.secfacEvidenceAttachment.count({ where: { checkpointId } });
+      const executions = await prisma.secfacChecklistExecution.count({ where: { checkpointId } });
+      const patrolExecs = await prisma.secfacPatrolExecutionCheckpoint.count({ where: { checkpointId } });
+      const templates = await prisma.secfacChecklistTemplate.count({ where: { checkpointId } });
+      const assignments = await prisma.secfacAssignment.count({ where: { checkpointId } });
+
+      dependencies = {
+        routeLinks,
+        scanProofs,
+        evidenceAttachments: evidence,
+        checklistExecutions: executions,
+        patrolExecutions: patrolExecs,
+        checklistTemplates: templates,
+        assignments
+      };
+    } else {
+      const db = readDb();
+      dependencies.routeLinks = (db.secfacPatrolRouteCheckpoints || []).filter((x: any) => x.checkpointId === checkpointId).length;
+      dependencies.scanProofs = (db.secfacScanProofs || []).filter((x: any) => x.checkpointId === checkpointId).length;
+      dependencies.evidenceAttachments = (db.secfacEvidenceAttachments || []).filter((x: any) => x.checkpointId === checkpointId).length;
+      dependencies.checklistExecutions = (db.secfacChecklistExecutions || []).filter((x: any) => x.checkpointId === checkpointId).length;
+      dependencies.patrolExecutions = (db.secfacPatrolExecutionCheckpoints || []).filter((x: any) => x.checkpointId === checkpointId).length;
+      dependencies.checklistTemplates = (db.secfacChecklistTemplates || []).filter((x: any) => x.checkpointId === checkpointId).length;
+      dependencies.assignments = (db.secfacAssignments || []).filter((x: any) => x.checkpointId === checkpointId).length;
+    }
+
+    const totalDependencies = Object.values(dependencies).reduce((sum, n) => sum + n, 0);
+
+    if (totalDependencies > 0) {
+      const { auditSecfacDeleteAction } = require("@/lib/secfac-delete-audit-service");
+      await auditSecfacDeleteAction({
+        entityType: "CHECKPOINT",
+        entityId: checkpointId,
+        actionType: "DEPENDENCY_BLOCKED",
+        userId: user.id,
+        userRole: user.role,
+        userEmail: user.email,
+        permission: "secfac.checkpoints.delete",
+        operationType: opType,
+        siteId: checkpoint.siteId,
+        resultStatus: "BLOCKED",
+        resultMessage: `Deletion blocked due to ${totalDependencies} active operational dependency records`
+      });
+
+      return NextResponse.json({
+        success: false,
+        error: "DELETE_BLOCKED",
+        message: `This checkpoint cannot be hard deleted because operational history exists (${totalDependencies} references).`,
+        dependencies,
+        allowedAction: "DEACTIVATE"
+      }, { status: 409 });
+    }
+
+    // Hard delete when zero dependencies
+    if (isDb) {
+      await prisma.secfacCheckpoint.delete({ where: { id: checkpointId } });
+    } else {
+      await mockDb.deleteSecfacCheckpoint(checkpointId);
+    }
+
+    const { auditSecfacDeleteAction } = require("@/lib/secfac-delete-audit-service");
+    await auditSecfacDeleteAction({
+      entityType: "CHECKPOINT",
+      entityId: checkpointId,
+      actionType: "HARD_DELETE",
+      userId: user.id,
+      userRole: user.role,
+      userEmail: user.email,
+      permission: "secfac.checkpoints.delete",
+      operationType: opType,
+      siteId: checkpoint.siteId,
+      resultStatus: "SUCCESS",
+      resultMessage: "Checkpoint permanently deleted (zero operational dependencies)"
+    });
+
+    return NextResponse.json({ success: true, message: "Checkpoint deleted successfully" });
   } catch (error: any) {
     return NextResponse.json({ success: false, message: "Failed to delete checkpoint", error: error.message }, { status: 500 });
   }

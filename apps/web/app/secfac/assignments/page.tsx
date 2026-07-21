@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { SecfacPageGuard } from "@/components/secfac-guard";
+import { hasPermission } from "@/lib/permissions";
 
 interface SecfacAssignment {
   id: string;
@@ -404,20 +405,50 @@ export default function AssignmentsPlannerPage() {
     setIsDrawerOpen(true);
   };
 
-  const handleDeactivate = async (a: SecfacAssignment) => {
-    if (!confirm(`Are you sure you want to deactivate assignment ${a.assignmentName}?`)) return;
+  const handleDelete = async (a: SecfacAssignment) => {
+    if (!confirm(`Delete assignment "${a.assignmentName}"?\n\nThis is allowed only for unstarted pending assignments with no operational history.`)) return;
     try {
       const res = await fetch(`/api/v1/secfac/assignments/${a.id}`, {
         method: "DELETE"
       });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        alert(`Assignment "${a.assignmentName}" deleted successfully.`);
+        fetchAssignments();
+        if (selectedAssignment?.id === a.id) setSelectedAssignment(null);
+      } else if (res.status === 409 && data.error === "DELETE_BLOCKED") {
+        if (confirm(`${data.message}\n\nWould you like to CANCEL "${a.assignmentName}" instead to preserve historical records?`)) {
+          await handleCancel(a);
+        }
+      } else {
+        alert(data.message || data.error || "Failed to delete assignment");
+      }
+    } catch (e: any) {
+      alert("Error deleting assignment: " + e.message);
+    }
+  };
+
+  const handleCancel = async (a: SecfacAssignment) => {
+    const reason = prompt(`Cancel assignment "${a.assignmentName}"?\n\nPlease enter a reason:`, "Assignment cancelled by supervisor");
+    if (reason === null) return;
+
+    try {
+      const res = await fetch(`/api/v1/secfac/assignments/${a.id}/cancel`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason })
+      });
       if (res.ok) {
         fetchAssignments();
         if (selectedAssignment?.id === a.id) {
-          setSelectedAssignment(prev => prev ? { ...prev, isActive: false } : null);
+          setSelectedAssignment(prev => prev ? { ...prev, status: "SKIPPED", isActive: false } : null);
         }
+      } else {
+        const data = await res.json();
+        alert(data.message || data.error || "Failed to cancel assignment");
       }
-    } catch (e) {
-      console.error(e);
+    } catch (e: any) {
+      alert("Error cancelling assignment: " + e.message);
     }
   };
 
@@ -819,13 +850,22 @@ export default function AssignmentsPlannerPage() {
                             >
                               <span className="material-symbols-outlined text-base">edit</span>
                             </button>
-                            {a.isActive ? (
+                            {hasPermission(user, "secfac.patrolAssignments.delete") && (
                               <button
-                                onClick={() => handleDeactivate(a)}
-                                className="p-1 hover:bg-red-50 rounded text-red-700"
-                                title="Deactivate"
+                                onClick={() => handleDelete(a)}
+                                className="p-1 hover:bg-red-100 rounded text-red-800"
+                                title="Delete Assignment"
                               >
-                                <span className="material-symbols-outlined text-base">block</span>
+                                <span className="material-symbols-outlined text-base">delete</span>
+                              </button>
+                            )}
+                            {a.isActive && a.status !== "SKIPPED" ? (
+                              <button
+                                onClick={() => handleCancel(a)}
+                                className="p-1 hover:bg-red-50 rounded text-red-700"
+                                title="Cancel Assignment"
+                              >
+                                <span className="material-symbols-outlined text-base">cancel</span>
                               </button>
                             ) : (
                               <button

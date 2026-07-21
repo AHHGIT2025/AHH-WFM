@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { SecfacPageGuard } from "@/components/secfac-guard";
+import { hasPermission } from "@/lib/permissions";
 
 interface SecfacChecklistItem {
   id?: string;
@@ -410,20 +411,50 @@ export default function ChecklistBuilderPage() {
     setIsDrawerOpen(true);
   };
 
-  const handleDeactivate = async (t: SecfacChecklistTemplate) => {
-    if (!confirm(`Are you sure you want to deactivate template ${t.templateName}?`)) return;
+  const handleDelete = async (t: SecfacChecklistTemplate) => {
+    if (!confirm(`Delete checklist template "${t.templateName}"?\n\nThis is allowed only when the template is unassigned and has no execution history.`)) return;
     try {
       const res = await fetch(`/api/v1/secfac/checklists/${t.id}`, {
         method: "DELETE"
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        alert(`Checklist template "${t.templateName}" deleted successfully.`);
+        fetchTemplates();
+        if (selectedTemplate?.id === t.id) setSelectedTemplate(null);
+      } else if (res.status === 409 && data.error === "DELETE_BLOCKED") {
+        if (confirm(`${data.message}\n\nWould you like to ARCHIVE "${t.templateName}" instead to preserve historical records?`)) {
+          await handleArchive(t);
+        }
+      } else {
+        alert(data.message || data.error || "Failed to delete checklist template");
+      }
+    } catch (e: any) {
+      alert("Error deleting checklist template: " + e.message);
+    }
+  };
+
+  const handleArchive = async (t: SecfacChecklistTemplate) => {
+    const reason = prompt(`Archive checklist template "${t.templateName}"?\n\nPlease enter a reason:`, "Template archived");
+    if (reason === null) return;
+
+    try {
+      const res = await fetch(`/api/v1/secfac/checklists/${t.id}/archive`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reason })
       });
       if (res.ok) {
         fetchTemplates();
         if (selectedTemplate?.id === t.id) {
           setSelectedTemplate(prev => prev ? { ...prev, isActive: false } : null);
         }
+      } else {
+        const data = await res.json();
+        alert(data.message || data.error || "Failed to archive checklist template");
       }
-    } catch (e) {
-      console.error(e);
+    } catch (e: any) {
+      alert("Error archiving checklist template: " + e.message);
     }
   };
 
@@ -781,13 +812,22 @@ export default function ChecklistBuilderPage() {
                             >
                               <span className="material-symbols-outlined text-base">edit</span>
                             </button>
+                            {hasPermission(user, "secfac.checklists.delete") && (
+                              <button
+                                onClick={() => handleDelete(t)}
+                                className="p-1 hover:bg-red-100 rounded text-red-800"
+                                title="Delete Template"
+                              >
+                                <span className="material-symbols-outlined text-base">delete</span>
+                              </button>
+                            )}
                             {t.isActive ? (
                               <button
-                                onClick={() => handleDeactivate(t)}
+                                onClick={() => handleArchive(t)}
                                 className="p-1 hover:bg-red-50 rounded text-red-700"
-                                title="Deactivate"
+                                title="Archive Template"
                               >
-                                <span className="material-symbols-outlined text-base">block</span>
+                                <span className="material-symbols-outlined text-base">archive</span>
                               </button>
                             ) : (
                               <button

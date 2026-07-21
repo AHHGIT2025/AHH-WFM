@@ -21,7 +21,11 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "settings.manage", "system.config.view", "system.config.manage", "masterdata.view", "masterdata.manage", "audit.export", "integration.view", "integration.manage",
     "settings.audit.view", "settings.backup.view", "settings.backup.manage", "settings.productionReadiness.view", "settings.integration.view", "settings.integration.manage",
     "secfac.alerts.view", "secfac.alerts.manage", "secfac.alerts.acknowledge", "secfac.alerts.resolve", "secfac.alerts.escalate", "secfac.alert.rules.view", "secfac.alert.rules.manage",
-    "secfac.notifications.view", "secfac.notifications.manage", "secfac.notifications.retry", "secfac.notifications.configure", "secfac.workers.view", "secfac.workers.manage"
+    "secfac.notifications.view", "secfac.notifications.manage", "secfac.notifications.retry", "secfac.notifications.configure", "secfac.workers.view", "secfac.workers.manage",
+    "secfac.checkpoints.view", "secfac.checkpoints.create", "secfac.checkpoints.edit", "secfac.checkpoints.delete",
+    "secfac.checklists.view", "secfac.checklists.create", "secfac.checklists.edit", "secfac.checklists.delete",
+    "secfac.patrolRoutes.view", "secfac.patrolRoutes.create", "secfac.patrolRoutes.edit", "secfac.patrolRoutes.delete",
+    "secfac.patrolAssignments.view", "secfac.patrolAssignments.create", "secfac.patrolAssignments.edit", "secfac.patrolAssignments.delete"
   ],
   ADMIN: [
     "dashboard.view", "employees.view", "employees.create", "employees.edit", "employees.bulkUpload", "employees.manage",
@@ -45,7 +49,11 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "settings.manage", "system.config.view", "system.config.manage", "masterdata.view", "masterdata.manage", "audit.export", "integration.view", "integration.manage",
     "settings.audit.view", "settings.backup.view", "settings.backup.manage", "settings.productionReadiness.view", "settings.integration.view", "settings.integration.manage",
     "secfac.alerts.view", "secfac.alerts.manage", "secfac.alerts.acknowledge", "secfac.alerts.resolve", "secfac.alerts.escalate", "secfac.alert.rules.view", "secfac.alert.rules.manage",
-    "secfac.notifications.view", "secfac.notifications.manage", "secfac.notifications.retry", "secfac.notifications.configure", "secfac.workers.view", "secfac.workers.manage"
+    "secfac.notifications.view", "secfac.notifications.manage", "secfac.notifications.retry", "secfac.notifications.configure", "secfac.workers.view", "secfac.workers.manage",
+    "secfac.checkpoints.view", "secfac.checkpoints.create", "secfac.checkpoints.edit", "secfac.checkpoints.delete",
+    "secfac.checklists.view", "secfac.checklists.create", "secfac.checklists.edit", "secfac.checklists.delete",
+    "secfac.patrolRoutes.view", "secfac.patrolRoutes.create", "secfac.patrolRoutes.edit", "secfac.patrolRoutes.delete",
+    "secfac.patrolAssignments.view", "secfac.patrolAssignments.create", "secfac.patrolAssignments.edit", "secfac.patrolAssignments.delete"
   ],
   SYSTEM_ADMIN: [
     "settings.view", "settings.manage", "users.view", "users.manage", "roles.view", "roles.manage",

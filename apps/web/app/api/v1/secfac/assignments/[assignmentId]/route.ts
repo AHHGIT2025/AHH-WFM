@@ -254,8 +254,26 @@ export async function DELETE(
   request: Request,
   { params }: { params: { assignmentId: string } }
 ) {
-  const auth = await checkApiAuth();
-  if (auth.error) return auth.error;
+  const auth = await checkApiAuth(undefined, { requiredPermission: "secfac.patrolAssignments.delete" });
+  if (auth.error) {
+    const session = auth.session as any;
+    if (session?.user?.id) {
+      const { auditSecfacDeleteAction } = require("@/lib/secfac-delete-audit-service");
+      await auditSecfacDeleteAction({
+        entityType: "PATROL_ASSIGNMENT",
+        entityId: params.assignmentId,
+        actionType: "PERMISSION_DENIED",
+        userId: session.user.id,
+        userRole: session.user.role,
+        userEmail: session.user.email,
+        permission: "secfac.patrolAssignments.delete",
+        operationType: "SECURITY_GUARDING",
+        resultStatus: "DENIED",
+        resultMessage: "Forbidden: User lacks secfac.patrolAssignments.delete permission"
+      });
+    }
+    return auth.error;
+  }
 
   const user = auth.session?.user as any;
   const isAdmin = isAdminUser(user);
@@ -268,20 +286,118 @@ export async function DELETE(
       return NextResponse.json({ success: false, error: "Assignment not found" }, { status: 404 });
     }
 
-    // Apply RBAC Operation Restrictions
+    const opType = assignment.operationType as "SECURITY_GUARDING" | "FACILITY_MANAGEMENT";
+
     if (!isAdmin) {
-      if (assignment.operationType === "SECURITY_GUARDING" && operationAccess.allowedSecurityGuarding !== true) {
-        return NextResponse.json({ success: false, error: "Forbidden: No access to delete security assignments" }, { status: 403 });
+      if (opType === "SECURITY_GUARDING" && operationAccess.allowedSecurityGuarding !== true) {
+        const { auditSecfacDeleteAction } = require("@/lib/secfac-delete-audit-service");
+        await auditSecfacDeleteAction({
+          entityType: "PATROL_ASSIGNMENT",
+          entityId: assignmentId,
+          actionType: "PERMISSION_DENIED",
+          userId: user.id,
+          userRole: user.role,
+          permission: "secfac.patrolAssignments.delete",
+          operationType: opType,
+          siteId: assignment.siteId,
+          resultStatus: "DENIED",
+          resultMessage: "Forbidden: Scope access denied for Security Guarding"
+        });
+        return NextResponse.json({ success: false, error: "Forbidden: Scope access denied for Security Guarding" }, { status: 403 });
       }
-      if (assignment.operationType === "FACILITY_MANAGEMENT" && operationAccess.allowedFacilityManagement !== true) {
-        return NextResponse.json({ success: false, error: "Forbidden: No access to delete facility assignments" }, { status: 403 });
+      if (opType === "FACILITY_MANAGEMENT" && operationAccess.allowedFacilityManagement !== true) {
+        const { auditSecfacDeleteAction } = require("@/lib/secfac-delete-audit-service");
+        await auditSecfacDeleteAction({
+          entityType: "PATROL_ASSIGNMENT",
+          entityId: assignmentId,
+          actionType: "PERMISSION_DENIED",
+          userId: user.id,
+          userRole: user.role,
+          permission: "secfac.patrolAssignments.delete",
+          operationType: opType,
+          siteId: assignment.siteId,
+          resultStatus: "DENIED",
+          resultMessage: "Forbidden: Scope access denied for Facility Management"
+        });
+        return NextResponse.json({ success: false, error: "Forbidden: Scope access denied for Facility Management" }, { status: 403 });
       }
     }
 
-    // Soft delete
-    await mockDb.deleteSecfacAssignment(assignmentId);
+    let dependencies = {
+      checklistExecutions: 0,
+      patrolExecutions: 0,
+      scanProofs: 0,
+      evidenceAttachments: 0
+    };
 
-    return NextResponse.json({ success: true });
+    const isDb = isDbConnected();
+    if (isDb) {
+      const checklistExecutions = await prisma.secfacChecklistExecution.count({ where: { assignmentId } });
+      const patrolExecutions = await prisma.secfacPatrolExecution.count({ where: { assignmentId } });
+      const scanProofs = await prisma.secfacScanProof.count({ where: { assignmentId } });
+      const evidence = await prisma.secfacEvidenceAttachment.count({ where: { assignmentId } });
+      dependencies = { checklistExecutions, patrolExecutions, scanProofs, evidenceAttachments: evidence };
+    } else {
+      const db = readDb();
+      dependencies.checklistExecutions = (db.secfacChecklistExecutions || []).filter((x: any) => x.assignmentId === assignmentId).length;
+      dependencies.patrolExecutions = (db.secfacPatrolExecutions || []).filter((x: any) => x.assignmentId === assignmentId).length;
+      dependencies.scanProofs = (db.secfacScanProofs || []).filter((x: any) => x.assignmentId === assignmentId).length;
+      dependencies.evidenceAttachments = (db.secfacEvidenceAttachments || []).filter((x: any) => x.assignmentId === assignmentId).length;
+    }
+
+    const totalDependencies = Object.values(dependencies).reduce((sum, n) => sum + n, 0);
+    const isStartedOrFinished = assignment.status !== "PENDING";
+
+    if (isStartedOrFinished || totalDependencies > 0) {
+      const { auditSecfacDeleteAction } = require("@/lib/secfac-delete-audit-service");
+      await auditSecfacDeleteAction({
+        entityType: "PATROL_ASSIGNMENT",
+        entityId: assignmentId,
+        actionType: "DEPENDENCY_BLOCKED",
+        userId: user.id,
+        userRole: user.role,
+        userEmail: user.email,
+        permission: "secfac.patrolAssignments.delete",
+        operationType: opType,
+        siteId: assignment.siteId,
+        resultStatus: "BLOCKED",
+        resultMessage: `Deletion blocked: status = ${assignment.status}, totalHistoryRecords = ${totalDependencies}`
+      });
+
+      return NextResponse.json({
+        success: false,
+        error: "DELETE_BLOCKED",
+        message: `This patrol assignment cannot be hard deleted because it has status '${assignment.status}' or operational history exists (${totalDependencies} references).`,
+        dependencies: {
+          status: assignment.status,
+          ...dependencies
+        },
+        allowedAction: "CANCEL"
+      }, { status: 409 });
+    }
+
+    if (isDb) {
+      await prisma.secfacAssignment.delete({ where: { id: assignmentId } });
+    } else {
+      await mockDb.deleteSecfacAssignment(assignmentId);
+    }
+
+    const { auditSecfacDeleteAction } = require("@/lib/secfac-delete-audit-service");
+    await auditSecfacDeleteAction({
+      entityType: "PATROL_ASSIGNMENT",
+      entityId: assignmentId,
+      actionType: "HARD_DELETE",
+      userId: user.id,
+      userRole: user.role,
+      userEmail: user.email,
+      permission: "secfac.patrolAssignments.delete",
+      operationType: opType,
+      siteId: assignment.siteId,
+      resultStatus: "SUCCESS",
+      resultMessage: "Patrol assignment permanently deleted (unstarted PENDING with zero history)"
+    });
+
+    return NextResponse.json({ success: true, message: "Patrol assignment deleted successfully" });
   } catch (error: any) {
     return NextResponse.json({ success: false, message: "Failed to delete assignment", error: error.message }, { status: 500 });
   }

@@ -389,23 +389,13 @@ describe('AHH WFM API Routes Verification', () => {
     expect(updateRes.status).toBe(200);
     expect(updateRes.data.data.checkpointName).toBe('Temp Checkpoint Updated');
 
-    // Delete (Soft-delete / set isActive=false)
+    // Delete (Hard delete since zero dependencies exist)
     const delRes = await axios.delete(`${WEB_URL}/api/v1/secfac/checkpoints/${createdId}`, { headers, validateStatus: () => true });
     expect(delRes.status).toBe(200);
 
-    // Verify detail is inactive
+    // Verify detail is deleted (404 Not Found)
     const afterDelRes = await axios.get(`${WEB_URL}/api/v1/secfac/checkpoints/${createdId}`, { headers, validateStatus: () => true });
-    expect(afterDelRes.status).toBe(200);
-    expect(afterDelRes.data.data.isActive).toBe(false);
-
-    // Hard cleanup in database if DB is connected
-    try {
-      if (prisma) {
-        await prisma.secfacCheckpoint.delete({ where: { id: createdId } });
-      }
-    } catch (e) {
-      // ignore mock db deletes
-    }
+    expect([404, 400]).toContain(afterDelRes.status);
   });
 
   test('GET /api/v1/secfac/checklists unauthenticated should return 401', async () => {
@@ -534,24 +524,13 @@ describe('AHH WFM API Routes Verification', () => {
     expect(updateRes.data.data.templateName).toBe('Temp Checklist Updated');
     expect(updateRes.data.data.items).toHaveLength(1);
 
-    // Delete (Soft-delete / set isActive=false)
+    // Delete (Hard delete since zero dependencies exist)
     const delRes = await axios.delete(`${WEB_URL}/api/v1/secfac/checklists/${createdId}`, { headers, validateStatus: () => true });
     expect(delRes.status).toBe(200);
 
-    // Verify detail is inactive
+    // Verify detail is deleted (404 Not Found)
     const afterDelRes = await axios.get(`${WEB_URL}/api/v1/secfac/checklists/${createdId}`, { headers, validateStatus: () => true });
-    expect(afterDelRes.status).toBe(200);
-    expect(afterDelRes.data.data.isActive).toBe(false);
-
-    // Hard cleanup in database if DB is connected
-    try {
-      if (prisma) {
-        await prisma.secfacChecklistItem.deleteMany({ where: { templateId: createdId } });
-        await prisma.secfacChecklistTemplate.delete({ where: { id: createdId } });
-      }
-    } catch (e) {
-      // ignore mock db deletes
-    }
+    expect([404, 400]).toContain(afterDelRes.status);
   });
 
   test('GET /api/v1/secfac/assignments unauthenticated should return 401', async () => {
@@ -677,29 +656,19 @@ describe('AHH WFM API Routes Verification', () => {
     // Update (PATCH)
     const updateRes = await axios.patch(`${WEB_URL}/api/v1/secfac/assignments/${createdId}`, {
       assignmentName: 'Temp Assignment Updated',
-      status: 'IN_PROGRESS'
+      status: 'PENDING'
     }, { headers, validateStatus: () => true });
     expect(updateRes.status).toBe(200);
     expect(updateRes.data.data.assignmentName).toBe('Temp Assignment Updated');
-    expect(updateRes.data.data.status).toBe('IN_PROGRESS');
+    expect(updateRes.data.data.status).toBe('PENDING');
 
-    // Delete (Soft-delete / set isActive=false)
+    // Delete (Hard delete for unstarted PENDING assignment with zero history)
     const delRes = await axios.delete(`${WEB_URL}/api/v1/secfac/assignments/${createdId}`, { headers, validateStatus: () => true });
     expect(delRes.status).toBe(200);
 
-    // Verify detail is inactive
+    // Verify detail is deleted (404 Not Found)
     const afterDelRes = await axios.get(`${WEB_URL}/api/v1/secfac/assignments/${createdId}`, { headers, validateStatus: () => true });
-    expect(afterDelRes.status).toBe(200);
-    expect(afterDelRes.data.data.isActive).toBe(false);
-
-    // Hard cleanup in database if DB is connected
-    try {
-      if (prisma) {
-        await prisma.secfacAssignment.delete({ where: { id: createdId } });
-      }
-    } catch (e) {
-      // ignore mock db deletes
-    }
+    expect([404, 400]).toContain(afterDelRes.status);
   });
 
   test('GET /api/v1/secfac/assigned-tasks unauthenticated should return 401', async () => {
