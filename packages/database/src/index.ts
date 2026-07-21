@@ -1,4 +1,4 @@
-import { PrismaClient } from "./generated/client2/index.js";
+import { PrismaClient, Prisma } from "./generated/client2/index.js";
 
 declare global {
   var prismaGlobal: PrismaClient | undefined;
@@ -10,24 +10,5 @@ if (process.env.NODE_ENV !== "production") {
   globalThis.prismaGlobal = prisma;
 }
 
-export * from "./generated/client2/index.js";
-export type {
-  Employee,
-  AttendanceRecord,
-  Shift,
-  LeaveRequest,
-  SapMapping,
-  SyncLog,
-  Announcement,
-  SecurityOperationalEmployee,
-  SecFacAlertRule,
-  SecFacOperationalAlert,
-  SecFacAlertEvent,
-  SecFacAlertNotification,
-  SecFacNotificationPreference,
-  SecFacNotificationAttempt,
-  SecFacWorkerJob,
-  SecFacWorkerLock,
-  SecFacChannelConfiguration,
-  SecFacMonitoringSnapshot
-} from "./generated/client2/index.js";
+export { PrismaClient, Prisma };
+export type * from "./generated/client2/index.js";
