@@ -37,6 +37,10 @@ export async function POST(request: Request) {
   try {
     const isLocked = locked === undefined ? true : !!locked;
 
+    if (!isLocked && !body.unlockReason) {
+      return NextResponse.json({ error: "Missing unlockReason in request body when unlocking a period" }, { status: 400 });
+    }
+
     const lock = await prisma.manpowerSchedulingPeriodLock.upsert({
       where: {
         operationType_period: { operationType, period }
@@ -89,7 +93,7 @@ export async function POST(request: Request) {
         action: isLocked ? "ROSTER_PERIOD_LOCK" : "ROSTER_PERIOD_UNLOCK",
         entityType: "ManpowerSchedulingPeriodLock",
         entityId: lock.id,
-        afterJson: JSON.stringify({ operationType, period, isLocked })
+        afterJson: JSON.stringify({ operationType, period, isLocked, unlockReason: body.unlockReason })
       }
     });
 

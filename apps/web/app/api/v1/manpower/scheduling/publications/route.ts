@@ -41,6 +41,23 @@ export async function POST(request: Request) {
     const startDate = getQatarDate(startDateStr);
     const endDate = getQatarDate(endDateStr);
 
+    const startPeriod = startDateStr.slice(0, 7);
+    const endPeriod = endDateStr.slice(0, 7);
+
+    const locks = await prisma.manpowerSchedulingPeriodLock.findMany({
+      where: {
+        operationType: contract.operationType,
+        period: { in: [startPeriod, endPeriod] },
+        locked: true
+      }
+    });
+
+    if (locks.length > 0) {
+      return NextResponse.json({
+        error: `Conflict: The period ${locks[0].period} is locked. Action not allowed.`
+      }, { status: 409 });
+    }
+
     // Fetch all slots in the range
     const slots = await prisma.rosterRequirementSlot.findMany({
       where: {

@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { hasPermission } from "../../../../lib/permissions";
+import { Badge } from "@ahh-wfm/ui/src";
 
 interface RosterSlot {
   id: string;

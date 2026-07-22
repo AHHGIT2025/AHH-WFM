@@ -131,6 +131,13 @@ export async function syncSlotsForContractDate(
     return { generated: 0, cancelled: 0, exceptions: [] };
   }
 
+  // Check if business date is outside contract active period
+  const startStr = getQatarDateString(contract.startDate);
+  const endStr = contract.endDate ? getQatarDateString(contract.endDate) : null;
+  if (dateStr < startStr || (endStr && dateStr > endStr)) {
+    return { generated: 0, cancelled: 0, exceptions: [] };
+  }
+
   // 2. Check if contract is terminated on or before this date
   const isTerminated = contract.status === "TERMINATED" && contract.terminatedAt && qatarDate >= new Date(getQatarDateString(contract.terminatedAt));
 
