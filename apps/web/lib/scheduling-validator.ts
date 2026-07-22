@@ -238,14 +238,15 @@ export function validateDeploymentEligibility(
     console.warn(`Employee operational scope mismatch: master=${masterOpType}, securitySnapshot=${snapOpType}`);
   }
 
-  if (effectiveOperationType !== "SECURITY_GUARDING") {
+  const targetOperationType = deploymentSlot.operationType || "SECURITY_GUARDING";
+  if (effectiveOperationType !== targetOperationType) {
     result.canDeploy = false;
     result.severity = "BLOCKED";
-    result.blockingIssues.push(`Employee operation type is '${effectiveOperationType}', not 'SECURITY_GUARDING'.`);
-    addChecklist("Operational Scope", "FAIL", "Invalid scope");
+    result.blockingIssues.push(`Employee operation type is '${effectiveOperationType}', not '${targetOperationType}'.`);
+    addChecklist("Operational Scope", "FAIL", `Invalid scope (expected ${targetOperationType})`);
     return result;
   } else {
-    addChecklist("Operational Scope", "PASS", "Security Guarding");
+    addChecklist("Operational Scope", "PASS", targetOperationType === "SECURITY_GUARDING" ? "Security Guarding" : "Facility Management");
   }
 
   // Rule 3: Leave overlap check

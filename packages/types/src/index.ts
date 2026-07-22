@@ -2340,3 +2340,117 @@ export interface EffectiveWelfareSetting {
   effectiveFrequencyMins: number;
   effectiveGracePeriodMins: number;
 }
+
+export interface RosterRequirementSlot {
+  id: string;
+  operationType: string;
+  companyId?: string | null;
+  contractId: string;
+  projectId: string;
+  siteId?: string | null;
+  externalVenueSnapshot?: string | null;
+  locationKey: string;
+  contractRequirementId: string;
+  addendumId?: string | null;
+  addendumLineItemId?: string | null;
+  sourceType: string;
+  sourceEffectiveFrom: string | Date;
+  sourceEffectiveTo?: string | Date | null;
+  sourceVersion: number;
+  businessDate: string | Date;
+  shiftRequirementId?: string | null;
+  shiftKey: string;
+  slotIndex: number;
+  generationKey: string;
+  snapshotPosition: string;
+  snapshotShiftName: string;
+  snapshotStartTime: string;
+  snapshotEndTime: string;
+  fulfillmentStatus: "VACANT" | "FILLED" | "CANCELLED" | string;
+  scheduleStatus: "DRAFT" | "REVIEWED" | "PUBLISHED" | "LOCKED" | "COMPLETED" | string;
+  rowVersion: number;
+  createdAt?: string | Date;
+  updatedAt?: string | Date;
+  assignments?: RosterSlotAssignment[];
+}
+
+export interface RosterSlotAssignment {
+  id: string;
+  slotId: string;
+  employeeId: string;
+  assignmentType: "PRIMARY" | "RELIEVER" | "TEMPORARY_COVER" | string;
+  historyStatus: "ACTIVE" | "ENDED" | "CANCELLED" | string;
+  assignedById: string;
+  assignedAt?: string | Date;
+  unassignedById?: string | null;
+  unassignedAt?: string | Date | null;
+  unassignmentReason?: string | null;
+  validationSnapshot?: any;
+  legacyShiftAssignmentId?: string | null;
+  legacyDeploymentId?: string | null;
+  syncStatus: "PENDING" | "PROCESSING" | "SUCCESS" | "PARTIAL_FAILURE" | "FAILED" | "RETRY_PENDING" | string;
+  lastSyncedAt?: string | Date | null;
+  syncError?: string | null;
+  rowVersion: number;
+  createdAt?: string | Date;
+  updatedAt?: string | Date;
+}
+
+export interface RosterPublication {
+  id: string;
+  operationType: string;
+  contractId: string;
+  siteId?: string | null;
+  startDate: string | Date;
+  endDate: string | Date;
+  publicationVersion: number;
+  publishedById: string;
+  publishedAt?: string | Date;
+  createdAt?: string | Date;
+  updatedAt?: string | Date;
+  publicationSlots?: RosterPublicationSlot[];
+}
+
+export interface RosterPublicationSlot {
+  id: string;
+  publicationId: string;
+  slotId: string;
+  employeeId?: string | null;
+  employeeCode?: string | null;
+  employeeName?: string | null;
+  position: string;
+  shiftName: string;
+  startTime: string;
+  endTime: string;
+  businessDate: string | Date;
+  assignmentStatus: string;
+  createdAt?: string | Date;
+}
+
+export interface RosterPlanningException {
+  id: string;
+  operationType: string;
+  contractId: string;
+  siteId?: string | null;
+  exceptionType: "EXCESS_ASSIGNED_SLOT" | "CONTRACT_TERMINATED_WITH_ASSIGNMENT" | "ELIGIBILITY_CHANGED" | "LEGACY_SYNC_FAILED" | "SHIFT_CHANGED_AFTER_ASSIGNMENT" | string;
+  severity: "WARNING" | "CRITICAL" | string;
+  message: string;
+  details?: any;
+  resolved: boolean;
+  resolvedById?: string | null;
+  resolvedAt?: string | Date | null;
+  createdAt?: string | Date;
+  updatedAt?: string | Date;
+}
+
+export interface ManpowerSchedulingPeriodLock {
+  id: string;
+  operationType: string;
+  period: string;
+  locked: boolean;
+  lockedById?: string | null;
+  lockedAt?: string | Date | null;
+  createdAt?: string | Date;
+  updatedAt?: string | Date;
+}
+
