@@ -2634,7 +2634,22 @@ export default function ManpowerMasterPage() {
 
   const updateManpowerRow = (index: number, field: string, value: any) => {
     const list = [...(formData.manpowerRequirements || [])];
-    list[index] = { ...list[index], [field]: value };
+    const item = { ...list[index], [field]: value };
+    
+    // Recalculate lineTotal dynamically
+    const qty = field === "quantity" ? (parseInt(value, 10) || 0) : (parseInt(item.quantity, 10) || 0);
+    const price = field === "unitPrice" ? (parseFloat(value) || 0) : (parseFloat(item.unitPrice) || 0);
+    const periodCount = field === "billingPeriodCount" ? (parseInt(value, 10) || 1) : (parseInt(item.billingPeriodCount, 10) || 1);
+    
+    // If APPROVED, unitPrice and lineTotal must be 0
+    const isFoc = item.focStatus === "APPROVED" || item.isFoc;
+    
+    item.lineTotal = isFoc ? 0 : qty * price * periodCount;
+    if (isFoc) {
+      item.unitPrice = 0;
+    }
+    
+    list[index] = item;
     setFormData({ ...formData, manpowerRequirements: list });
   };
 
@@ -2642,6 +2657,129 @@ export default function ManpowerMasterPage() {
     const list = [...(formData.manpowerRequirements || [])];
     list.splice(index, 1);
     setFormData({ ...formData, manpowerRequirements: list });
+  };
+
+  const handleFocAction = async (idx: number, actionType: "REQUEST" | "APPROVE" | "REJECT" | "REVOKE") => {
+    const list = [...(formData.manpowerRequirements || [])];
+    const row = list[idx];
+    const isNew = !row.id || row.id.startsWith("new-mr-") || row.id.startsWith("new-rr-");
+
+    if (actionType === "REQUEST") {
+      const reason = window.prompt("Enter FOC Request Reason (Mandatory):");
+      if (!reason) {
+        alert("FOC Request Reason is mandatory!");
+        return;
+      }
+      if (isNew) {
+        list[idx] = {
+          ...row,
+          focStatus: "PENDING_APPROVAL",
+          focRequestedById: (session?.user as any)?.id || "local-user",
+          focRequestReason: reason,
+          preFocUnitPrice: row.unitPrice || 0,
+          preFocLineTotal: row.lineTotal || 0,
+          billingEligible: false
+        };
+        setFormData({ ...formData, manpowerRequirements: list });
+      } else {
+        try {
+          const res = await fetch(`/api/v1/manpower/contracts/requirements/${row.id}/foc-request`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ reason })
+          });
+          if (res.ok) {
+            const updated = await res.json();
+            list[idx] = updated;
+            setFormData({ ...formData, manpowerRequirements: list });
+            alert("FOC Request submitted successfully!");
+          } else {
+            const err = await res.json();
+            alert(`Failed to request FOC: ${err.error || res.statusText}`);
+          }
+        } catch (e: any) {
+          alert(`Error requesting FOC: ${e.message}`);
+        }
+      }
+    } else if (actionType === "APPROVE" || actionType === "REJECT") {
+      let reason = "";
+      if (actionType === "REJECT") {
+        reason = window.prompt("Enter FOC Rejection Reason (Mandatory):") || "";
+        if (!reason) {
+          alert("Rejection Reason is mandatory!");
+          return;
+        }
+      }
+      if (isNew) {
+        list[idx] = {
+          ...row,
+          focStatus: actionType === "APPROVE" ? "APPROVED" : "REJECTED",
+          focApprovedById: actionType === "APPROVE" ? ((session?.user as any)?.id || "local-user") : null,
+          focRejectedById: actionType === "REJECT" ? ((session?.user as any)?.id || "local-user") : null,
+          focRejectionReason: actionType === "REJECT" ? reason : null,
+          unitPrice: actionType === "APPROVE" ? 0 : (row.preFocUnitPrice || row.unitPrice),
+          lineTotal: actionType === "APPROVE" ? 0 : (row.preFocLineTotal || row.lineTotal),
+          billingEligible: actionType === "APPROVE" ? false : true
+        };
+        setFormData({ ...formData, manpowerRequirements: list });
+      } else {
+        try {
+          const res = await fetch(`/api/v1/manpower/contracts/requirements/${row.id}/foc-evaluate`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: actionType, reason })
+          });
+          if (res.ok) {
+            const updated = await res.json();
+            list[idx] = updated;
+            setFormData({ ...formData, manpowerRequirements: list });
+            alert(`FOC ${actionType === "APPROVE" ? "Approved" : "Rejected"} successfully!`);
+          } else {
+            const err = await res.json();
+            alert(`Evaluation failed: ${err.error || res.statusText}`);
+          }
+        } catch (e: any) {
+          alert(`Error: ${e.message}`);
+        }
+      }
+    } else if (actionType === "REVOKE") {
+      const reason = window.prompt("Enter FOC Revocation Reason (Mandatory):");
+      if (!reason) {
+        alert("Revocation Reason is mandatory!");
+        return;
+      }
+      if (isNew) {
+        list[idx] = {
+          ...row,
+          focStatus: "REVOKED",
+          focRevokedById: (session?.user as any)?.id || "local-user",
+          focRevocationReason: reason,
+          unitPrice: 0,
+          lineTotal: 0,
+          billingEligible: false
+        };
+        setFormData({ ...formData, manpowerRequirements: list });
+      } else {
+        try {
+          const res = await fetch(`/api/v1/manpower/contracts/requirements/${row.id}/foc-revoke`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ reason })
+          });
+          if (res.ok) {
+            const updated = await res.json();
+            list[idx] = updated;
+            setFormData({ ...formData, manpowerRequirements: list });
+            alert("FOC Revoked successfully!");
+          } else {
+            const err = await res.json();
+            alert(`Revocation failed: ${err.error || res.statusText}`);
+          }
+        } catch (e: any) {
+          alert(`Error: ${e.message}`);
+        }
+      }
+    }
   };
 
   const addRelieverRow = () => {
@@ -2968,7 +3106,16 @@ export default function ManpowerMasterPage() {
         penaltyClause: formData.penaltyClause || "",
         escalationMatrix: formData.escalationMatrix || "",
         otherContractConditions: formData.otherContractConditions || "",
-        workflowLevels: workflowLevels
+        workflowLevels: workflowLevels,
+        contractType: formData.contractType || "PERMANENT",
+        billingBasis: formData.billingBasis || null,
+        serviceStartAt: formData.serviceStartAt || null,
+        serviceEndAt: formData.serviceEndAt || null,
+        eventVenue: formData.eventVenue || null,
+        eventDetails: formData.eventDetails || null,
+        mobilisationStatus: formData.mobilisationStatus || "NOT_REQUIRED",
+        siteId: formData.siteId || null,
+        relieverRequired: formData.relieverRequired || "No"
       };
 
       const url = isEditing ? `${apiBase}/${editItem.id}` : apiBase;
@@ -3399,8 +3546,8 @@ export default function ManpowerMasterPage() {
     const currentScope = isSecurity ? "SECURITY_GUARDING" : "FACILITY_MANAGEMENT";
     const filteredClients = clients.filter((c: any) => c.operationType === currentScope);
     
-    const secCategories = categories.filter((c: any) => c.operationType === "SECURITY_GUARDING");
-    const fallbackCategories = [
+    const currentScopeCategories = categories.filter((c: any) => c.operationType === currentScope);
+    const fallbackCategories = isSecurity ? [
       { id: "PM-CAT-SEC-01", name: "CCTV Operator", code: "CCTV" },
       { id: "PM-CAT-SEC-02", name: "Security Guard", code: "GUARD" },
       { id: "PM-CAT-SEC-03", name: "Head Guard", code: "HEAD_GUARD" },
@@ -3411,8 +3558,12 @@ export default function ManpowerMasterPage() {
       { id: "PM-CAT-SEC-09", name: "Project Coordinator", code: "COORDINATOR" },
       { id: "PM-CAT-SEC-10", name: "Event Guard", code: "EVENT_GUARD" },
       { id: "PM-CAT-SEC-11", name: "Other Security Manpower", code: "OTHER_SEC" }
+    ] : [
+      { id: "PM-CAT-FM-01", name: "FM Technician", code: "FM_TECH" },
+      { id: "PM-CAT-FM-02", name: "FM Supervisor", code: "FM_SUPERVISOR" },
+      { id: "PM-CAT-FM-03", name: "FM Cleaner", code: "FM_CLEANER" }
     ];
-    const displayCategories = secCategories.length > 0 ? secCategories : fallbackCategories;
+    const displayCategories = currentScopeCategories.length > 0 ? currentScopeCategories : fallbackCategories;
     
     // Filter materials by scope
     const allowedMaterials = materialsList.filter((m: any) => {
@@ -3512,6 +3663,22 @@ export default function ManpowerMasterPage() {
                   value={formData.title || ""}
                   onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                 />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Contract Type *</label>
+                <select
+                  required
+                  className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                  value={formData.contractType || "PERMANENT"}
+                  onChange={(e) => setFormData({ ...formData, contractType: e.target.value })}
+                >
+                  <option value="PERMANENT">Permanent</option>
+                  <option value="FIXED_TERM">Fixed Term</option>
+                  <option value="TEMPORARY">Temporary</option>
+                  <option value="EVENT">Event-Based</option>
+                  <option value="CALL_OFF">Call-Off</option>
+                  <option value="HOURLY_SERVICE">Hourly Service</option>
+                </select>
               </div>
               <div>
                 <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Remarks / Notes (Optional)</label>
@@ -3644,11 +3811,156 @@ export default function ManpowerMasterPage() {
               </div>
             </div>
           </div>
+
+          {/* Conditional Temporary / Event Contract Parameters */}
+          {(formData.contractType === "TEMPORARY" || formData.contractType === "EVENT") && (
+            <div className="border-t border-outline-variant/60 pt-4 mt-2 space-y-4">
+              <h5 className="text-[11px] font-bold text-primary uppercase tracking-wider">
+                Temporary / Event Contract Parameters
+              </h5>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">
+                        Service Start Date & Time *
+                      </label>
+                      <input
+                        type="datetime-local"
+                        required
+                        className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                        value={formData.serviceStartAt ? formData.serviceStartAt.substring(0, 16) : ""}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          const isoVal = val ? new Date(val).toISOString() : "";
+                          const dateOnly = val ? val.split("T")[0] + "T00:00:00.000Z" : "";
+                          setFormData({
+                            ...formData,
+                            serviceStartAt: isoVal,
+                            startDate: dateOnly || formData.startDate
+                          });
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">
+                        Service End Date & Time *
+                      </label>
+                      <input
+                        type="datetime-local"
+                        required
+                        className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                        value={formData.serviceEndAt ? formData.serviceEndAt.substring(0, 16) : ""}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          const isoVal = val ? new Date(val).toISOString() : "";
+                          const dateOnly = val ? val.split("T")[0] + "T00:00:00.000Z" : "";
+                          setFormData({
+                            ...formData,
+                            serviceEndAt: isoVal,
+                            endDate: dateOnly || formData.endDate
+                          });
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">
+                      Billing Basis *
+                    </label>
+                    <select
+                      required
+                      className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                      value={formData.billingBasis || ""}
+                      onChange={(e) => setFormData({ ...formData, billingBasis: e.target.value })}
+                    >
+                      <option value="">Select Billing Basis...</option>
+                      <option value="HOURLY">Hourly</option>
+                      <option value="DAILY">Daily</option>
+                      <option value="MONTHLY">Monthly</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">
+                      Deployment Location Mode *
+                    </label>
+                    <div className="flex gap-4 mb-2">
+                      <label className="inline-flex items-center text-xs text-on-surface">
+                        <input
+                          type="radio"
+                          name="locationMode"
+                          className="mr-1.5 rounded focus:ring-primary h-3.5 w-3.5 text-primary"
+                          checked={!formData.eventVenue}
+                          onChange={() => setFormData({ ...formData, eventVenue: "", eventDetails: "" })}
+                        />
+                        Worksite Location
+                      </label>
+                      <label className="inline-flex items-center text-xs text-on-surface">
+                        <input
+                          type="radio"
+                          name="locationMode"
+                          className="mr-1.5 rounded focus:ring-primary h-3.5 w-3.5 text-primary"
+                          checked={!!formData.eventVenue}
+                          onChange={() => setFormData({ ...formData, siteId: "" })}
+                        />
+                        External Event Venue
+                      </label>
+                    </div>
+
+                    {!formData.eventVenue ? (
+                      <div>
+                        <select
+                          className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                          value={formData.siteId || ""}
+                          onChange={(e) => setFormData({ ...formData, siteId: e.target.value })}
+                        >
+                          <option value="">Select Worksite...</option>
+                          {sites.map((s: any) => (
+                            <option key={s.id} value={s.id}>
+                              {s.name} ({s.code})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    ) : (
+                      <div>
+                        <input
+                          type="text"
+                          required
+                          placeholder="e.g. Doha Exhibition and Convention Center"
+                          className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface"
+                          value={formData.eventVenue || ""}
+                          onChange={(e) => setFormData({ ...formData, eventVenue: e.target.value })}
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">
+                      Event / Temporary Details
+                    </label>
+                    <textarea
+                      placeholder="Specify event scope, mobilization plan, relievers requirements..."
+                      rows={2}
+                      className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-2 text-xs focus:outline-none focus:border-primary text-on-surface resize-none"
+                      value={formData.eventDetails || ""}
+                      onChange={(e) => setFormData({ ...formData, eventDetails: e.target.value })}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Manpower Requirements Grid (Security Guarding Only) */}
-        {isSecurity && (
-          <div className="bg-surface-container-low border border-outline-variant p-4 rounded-xl space-y-4">
+        {/* Manpower Requirements Grid */}
+        <div className="bg-surface-container-low border border-outline-variant p-4 rounded-xl space-y-4">
             <div className="flex justify-between items-center border-b border-outline-variant/60 pb-1">
               <h4 className="text-xs font-bold text-primary uppercase tracking-wider">Manpower Requirements *</h4>
               <button
@@ -3709,17 +4021,19 @@ export default function ManpowerMasterPage() {
                             required
                             min="0"
                             step="0.01"
+                            disabled={row.focStatus === "PENDING_APPROVAL" || row.focStatus === "APPROVED"}
                             value={row.unitPrice || 0}
                             onChange={(e) => updateManpowerRow(idx, "unitPrice", parseFloat(e.target.value))}
-                            className="w-full bg-surface-container-lowest border border-outline-variant rounded px-1 py-1 focus:outline-none"
+                            className={`w-full border rounded px-1 py-1 focus:outline-none ${row.focStatus === "PENDING_APPROVAL" || row.focStatus === "APPROVED" ? "bg-surface-container-low text-on-surface-variant cursor-not-allowed border-outline-variant/60" : "bg-surface-container-lowest border-outline-variant"}`}
                           />
                         </td>
                         <td className="py-2 pr-2">
                           <select
                             required
+                            disabled={row.focStatus === "PENDING_APPROVAL" || row.focStatus === "APPROVED"}
                             value={row.billingFrequency || "Monthly"}
                             onChange={(e) => updateManpowerRow(idx, "billingFrequency", e.target.value)}
-                            className="w-full bg-surface-container-lowest border border-outline-variant rounded px-1 py-1 focus:outline-none"
+                            className={`w-full border rounded px-1 py-1 focus:outline-none ${row.focStatus === "PENDING_APPROVAL" || row.focStatus === "APPROVED" ? "bg-surface-container-low text-on-surface-variant cursor-not-allowed border-outline-variant/60" : "bg-surface-container-lowest border-outline-variant"}`}
                           >
                             <option value="Hourly">Hourly</option>
                             <option value="Daily">Daily</option>
@@ -3732,18 +4046,119 @@ export default function ManpowerMasterPage() {
                             type="number"
                             required
                             min="1"
+                            disabled={row.focStatus === "PENDING_APPROVAL" || row.focStatus === "APPROVED"}
                             value={row.billingPeriodCount || 1}
                             onChange={(e) => updateManpowerRow(idx, "billingPeriodCount", parseInt(e.target.value, 10))}
-                            className="w-full bg-surface-container-lowest border border-outline-variant rounded px-1 py-1 focus:outline-none"
+                            className={`w-full border rounded px-1 py-1 focus:outline-none ${row.focStatus === "PENDING_APPROVAL" || row.focStatus === "APPROVED" ? "bg-surface-container-low text-on-surface-variant cursor-not-allowed border-outline-variant/60" : "bg-surface-container-lowest border-outline-variant"}`}
                           />
                         </td>
                         <td className="py-2 pr-2 text-center">
-                          <input
-                            type="checkbox"
-                            checked={!!row.isFoc}
-                            onChange={(e) => updateManpowerRow(idx, "isFoc", e.target.checked)}
-                            className="rounded text-primary focus:ring-primary h-3.5 w-3.5"
-                          />
+                          <div className="flex flex-col items-center gap-1">
+                            {/* Badges and actions */}
+                            {(!row.focStatus || row.focStatus === "NOT_APPLICABLE") && (
+                              <button
+                                type="button"
+                                onClick={() => handleFocAction(idx, "REQUEST")}
+                                className="px-2 py-1 bg-surface-container-high hover:bg-primary/20 text-on-surface-variant hover:text-primary rounded text-[10px] font-bold border border-outline-variant transition-colors"
+                              >
+                                Request FOC
+                              </button>
+                            )}
+
+                            {row.focStatus === "PENDING_APPROVAL" && (
+                              <div className="flex flex-col gap-1 items-center">
+                                <span className="px-1.5 py-0.5 bg-amber-100 text-amber-800 border border-amber-200 rounded text-[9px] font-bold uppercase tracking-wider animate-pulse">
+                                  Pending FOC
+                                </span>
+                                {(() => {
+                                  const isRequester = row.focRequestedById === (session?.user as any)?.id;
+                                  const canApprove = hasPermission(session?.user as any, "manpower.admin.full_access") || 
+                                                     hasPermission(session?.user as any, business === "security-guarding" ? "manpower.security.contracts.foc_approve" : "manpower.fm.contracts.foc_approve");
+                                  if (canApprove && !isRequester) {
+                                    return (
+                                      <div className="flex gap-1 mt-0.5">
+                                        <button
+                                          type="button"
+                                          onClick={() => handleFocAction(idx, "APPROVE")}
+                                          className="px-1 py-0.5 bg-status-success text-white rounded text-[8px] font-bold uppercase hover:bg-status-success/80"
+                                        >
+                                          Approve
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleFocAction(idx, "REJECT")}
+                                          className="px-1 py-0.5 bg-status-error text-white rounded text-[8px] font-bold uppercase hover:bg-status-error/80"
+                                        >
+                                          Reject
+                                        </button>
+                                      </div>
+                                    );
+                                  }
+                                  return null;
+                                })()}
+                              </div>
+                            )}
+
+                            {row.focStatus === "APPROVED" && (
+                              <div className="flex flex-col gap-1 items-center">
+                                <span className="px-1.5 py-0.5 bg-green-100 text-green-800 border border-green-200 rounded text-[9px] font-bold uppercase tracking-wider">
+                                  FOC Approved
+                                </span>
+                                {(() => {
+                                  const canApprove = hasPermission(session?.user as any, "manpower.admin.full_access") || 
+                                                     hasPermission(session?.user as any, business === "security-guarding" ? "manpower.security.contracts.foc_approve" : "manpower.fm.contracts.foc_approve");
+                                  if (canApprove) {
+                                    return (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleFocAction(idx, "REVOKE")}
+                                        className="px-1 py-0.5 bg-orange-500 text-white rounded text-[8px] font-bold uppercase hover:bg-orange-650"
+                                      >
+                                        Revoke
+                                      </button>
+                                    );
+                                  }
+                                  return null;
+                                })()}
+                              </div>
+                            )}
+
+                            {row.focStatus === "REJECTED" && (
+                              <div className="flex flex-col gap-1 items-center">
+                                <span 
+                                  title={row.focRejectionReason || "No reason specified"}
+                                  className="px-1.5 py-0.5 bg-red-100 text-red-800 border border-red-200 rounded text-[9px] font-bold uppercase tracking-wider cursor-help"
+                                >
+                                  Rejected
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleFocAction(idx, "REQUEST")}
+                                  className="px-1 py-0.5 bg-surface-container hover:bg-primary/20 text-on-surface-variant hover:text-primary rounded text-[8px] font-bold"
+                                >
+                                  Retry Request
+                                </button>
+                              </div>
+                            )}
+
+                            {row.focStatus === "REVOKED" && (
+                              <div className="flex flex-col gap-1 items-center">
+                                <span 
+                                  title={row.focRevocationReason || "No reason specified"}
+                                  className="px-1.5 py-0.5 bg-orange-100 text-orange-800 border border-orange-200 rounded text-[9px] font-bold uppercase tracking-wider cursor-help"
+                                >
+                                  Revoked
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => handleFocAction(idx, "REQUEST")}
+                                  className="px-1 py-0.5 bg-surface-container hover:bg-primary/20 text-on-surface-variant hover:text-primary rounded text-[8px] font-bold"
+                                >
+                                  Retry Request
+                                </button>
+                              </div>
+                            )}
+                          </div>
                         </td>
                         <td className="py-2 pr-2 text-right font-bold text-[11px] text-on-surface">
                           {(row.lineTotal || 0).toFixed(2)}
@@ -3773,11 +4188,9 @@ export default function ManpowerMasterPage() {
               </div>
             )}
           </div>
-        )}
 
-        {/* Reliever Requirements Grid (Security Guarding Only) */}
-        {isSecurity && (
-          <div className="bg-surface-container-low border border-outline-variant p-4 rounded-xl space-y-4">
+        {/* Reliever Requirements Grid */}
+        <div className="bg-surface-container-low border border-outline-variant p-4 rounded-xl space-y-4">
             <div className="flex justify-between items-center border-b border-outline-variant/60 pb-1">
               <div className="flex items-center gap-4">
                 <h4 className="text-xs font-bold text-primary uppercase tracking-wider">Reliever Requirements</h4>
@@ -3836,10 +4249,20 @@ export default function ManpowerMasterPage() {
                               className="w-full bg-surface-container-lowest border border-outline-variant rounded px-2 py-1 focus:outline-none"
                             >
                               <option value="">Select Reliever Position...</option>
-                              <option value="Reliever Guard">Reliever Guard</option>
-                              <option value="Head Guard">Head Guard</option>
-                              <option value="Supervisor Reliever">Supervisor Reliever</option>
-                              <option value="Patrolling Reliever">Patrolling Reliever</option>
+                              {isSecurity ? (
+                                <>
+                                  <option value="Reliever Guard">Reliever Guard</option>
+                                  <option value="Head Guard">Head Guard</option>
+                                  <option value="Supervisor Reliever">Supervisor Reliever</option>
+                                  <option value="Patrolling Reliever">Patrolling Reliever</option>
+                                </>
+                              ) : (
+                                <>
+                                  <option value="FM Reliever Technician">FM Reliever Technician</option>
+                                  <option value="FM Reliever Supervisor">FM Reliever Supervisor</option>
+                                  <option value="FM Reliever Cleaner">FM Reliever Cleaner</option>
+                                </>
+                              )}
                             </select>
                           </td>
                           <td className="py-2 pr-2">
@@ -3893,11 +4316,9 @@ export default function ManpowerMasterPage() {
               <p className="text-[11px] text-on-surface-variant/70 italic">Relievers are not required for this contract.</p>
             )}
           </div>
-        )}
 
-        {/* Shift Requirements Grid (Security Guarding Only) */}
-        {isSecurity && (
-          <div className="bg-surface-container-low border border-outline-variant p-4 rounded-xl space-y-4">
+        {/* Shift Requirements Grid */}
+        <div className="bg-surface-container-low border border-outline-variant p-4 rounded-xl space-y-4">
             <div className="flex justify-between items-center border-b border-outline-variant/60 pb-1">
               <h4 className="text-xs font-bold text-primary uppercase tracking-wider">Shift Requirements *</h4>
               <button
@@ -4006,7 +4427,6 @@ export default function ManpowerMasterPage() {
               </div>
             )}
           </div>
-        )}
 
         {/* Contract Material Line Items Grid (Both SG and FM) */}
         <div className="bg-surface-container-low border border-outline-variant p-4 rounded-xl space-y-4">
@@ -6486,7 +6906,7 @@ export default function ManpowerMasterPage() {
                 });
                 setSiteAllowanceApplicable(false);
               }
-              setFormData(master === "manpower" ? { mode: "promote", isActive: true } : master === "contracts" ? { status: "DRAFT", manpowerRequirements: [], relieverRequirements: [], shiftRequirements: [], relieverRequired: "No" } : {});
+              setFormData(master === "manpower" ? { mode: "promote", isActive: true } : master === "contracts" ? { status: "DRAFT", mobilisationStatus: "NOT_REQUIRED", manpowerRequirements: [], relieverRequirements: [], shiftRequirements: [], relieverRequired: "No" } : {});
               setFormError("");
               setShowAddModal(true);
             }}
@@ -6878,7 +7298,7 @@ export default function ManpowerMasterPage() {
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    setFormData({ clientId: item.id, status: "DRAFT", manpowerRequirements: [], relieverRequirements: [], shiftRequirements: [], relieverRequired: "No" });
+                                    setFormData({ clientId: item.id, status: "DRAFT", mobilisationStatus: "NOT_REQUIRED", manpowerRequirements: [], relieverRequirements: [], shiftRequirements: [], relieverRequired: "No" });
                                     router.push(`/manpower/${business}/contracts`);
                                     setShowAddModal(true);
                                   }}
@@ -9008,7 +9428,26 @@ export default function ManpowerMasterPage() {
                 <div className="bg-surface-container-low border border-outline-variant p-4 rounded-xl space-y-2">
                   <h4 className="text-[10px] font-bold text-primary uppercase tracking-wider border-b border-outline-variant pb-1">Contract Summary</h4>
                   <p><span className="text-on-surface-variant font-medium">Client:</span> <span className="font-semibold">{selectedContractDetail.client?.name || selectedContractDetail.clientId}</span></p>
+                  <p><span className="text-on-surface-variant font-medium">Contract Type:</span> <span className="font-semibold uppercase text-primary">{selectedContractDetail.contractType || "PERMANENT"}</span></p>
                   <p><span className="text-on-surface-variant font-medium">Duration:</span> <span className="font-semibold">{new Date(selectedContractDetail.startDate).toLocaleDateString()} to {new Date(selectedContractDetail.endDate).toLocaleDateString()}</span></p>
+                  
+                  {/* Temporary/Event specifics */}
+                  {(selectedContractDetail.contractType === "TEMPORARY" || selectedContractDetail.contractType === "EVENT") && (
+                    <div className="bg-surface-container/40 p-2.5 rounded border border-outline-variant/65 my-2 space-y-1 text-[11px]">
+                      <span className="block text-[9px] font-bold uppercase tracking-wider text-primary mb-1">Temporary / Event Scope</span>
+                      <p><span className="text-on-surface-variant font-medium">Service Windows:</span> <span className="font-semibold">{selectedContractDetail.serviceStartAt ? new Date(selectedContractDetail.serviceStartAt).toLocaleString() : "N/A"} to {selectedContractDetail.serviceEndAt ? new Date(selectedContractDetail.serviceEndAt).toLocaleString() : "N/A"}</span></p>
+                      <p><span className="text-on-surface-variant font-medium">Billing Basis:</span> <span className="font-semibold">{selectedContractDetail.billingBasis || "N/A"}</span></p>
+                      {selectedContractDetail.siteId ? (
+                        <p><span className="text-on-surface-variant font-medium">Project Worksite:</span> <span className="font-semibold text-status-success">{selectedContractDetail.site?.name || selectedContractDetail.siteId}</span></p>
+                      ) : (
+                        <p><span className="text-on-surface-variant font-medium">External Venue:</span> <span className="font-semibold text-status-warning">{selectedContractDetail.eventVenue || "N/A"}</span></p>
+                      )}
+                      {selectedContractDetail.eventDetails && (
+                        <p><span className="text-on-surface-variant font-medium">Event Details:</span> <span className="italic">{selectedContractDetail.eventDetails}</span></p>
+                      )}
+                    </div>
+                  )}
+
                   <p><span className="text-on-surface-variant font-medium">Status:</span> 
                     <span className={`ml-2 px-1.5 py-0.5 rounded text-[10px] font-bold ${selectedContractDetail.status === "ACTIVE" ? "bg-status-success/15 text-status-success" : "bg-surface-container-high/40 text-on-surface-variant"}`}>
                       {selectedContractDetail.status}

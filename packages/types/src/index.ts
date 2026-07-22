@@ -1077,6 +1077,15 @@ export interface ManpowerContract {
   totalContractValue?: number | null;
   createdAt?: string;
   updatedAt?: string;
+  contractType?: "PERMANENT" | "FIXED_TERM" | "TEMPORARY" | "EVENT" | "CALL_OFF" | "HOURLY_SERVICE" | string;
+  billingBasis?: "HOURLY" | "DAILY" | "MONTHLY" | string | null;
+  serviceStartAt?: string | null;
+  serviceEndAt?: string | null;
+  eventVenue?: string | null;
+  eventDetails?: string | null;
+  mobilisationStatus?: "NOT_REQUIRED" | "PENDING" | "MOBILISED" | "COMPLETED" | "CLOSED" | string;
+  siteId?: string | null;
+  site?: any;
   manpowerRequirements?: ContractManpowerRequirement[];
   relieverRequirements?: ContractRelieverRequirement[];
   shiftRequirements?: ContractShiftRequirement[];
@@ -1430,6 +1439,22 @@ export interface ContractManpowerRequirement {
   remarks?: string;
   createdAt?: string;
   updatedAt?: string;
+  focStatus?: "NOT_APPLICABLE" | "PENDING_APPROVAL" | "APPROVED" | "REJECTED" | "REVOKED" | string;
+  billingEligible?: boolean;
+  preFocUnitPrice?: number | null;
+  preFocLineTotal?: number | null;
+  focRequestedById?: string | null;
+  focRequestReason?: string | null;
+  focRequestedAt?: string | null;
+  focApprovedById?: string | null;
+  focApprovalReason?: string | null;
+  focApprovedAt?: string | null;
+  focRejectedById?: string | null;
+  focRejectionReason?: string | null;
+  focRejectedAt?: string | null;
+  focRevokedById?: string | null;
+  focRevocationReason?: string | null;
+  focRevokedAt?: string | null;
 }
 
 export interface ContractRelieverRequirement {

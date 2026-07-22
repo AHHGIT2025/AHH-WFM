@@ -140,6 +140,10 @@ model Employee {
   welfareSettingsCreated        SecFacWelfareSetting[]                 @relation("WelfareSettingCreatedBy")
   secfacWelfareChecks           SecFacWelfareCheck[]                   @relation("SecFacWelfareCheckEmployee")
   secfacFieldAudits             SecfacFieldExecutionAudit[]            @relation("SecfacFieldAuditEmployee")
+  focRequestedRequirements      ContractManpowerRequirement[]          @relation("FocRequester")
+  focApprovedRequirements       ContractManpowerRequirement[]          @relation("FocApprover")
+  focRejectedRequirements       ContractManpowerRequirement[]          @relation("FocRejector")
+  focRevokedRequirements        ContractManpowerRequirement[]          @relation("FocRevoker")
 }
 
 model Department {
@@ -1328,6 +1332,16 @@ model ManpowerContract {
   terminatedAt           DateTime?
   terminatedBy           String?
   terminationStatus      String? // e.g. "PENDING_APPROVAL", "APPROVED"
+
+  contractType       String        @default("PERMANENT") // "PERMANENT", "FIXED_TERM", "TEMPORARY", "EVENT", "CALL_OFF", "HOURLY_SERVICE"
+  billingBasis       String? // "HOURLY", "DAILY", "MONTHLY"
+  serviceStartAt     DateTime?
+  serviceEndAt       DateTime?
+  eventVenue         String?
+  eventDetails       String?       @db.Text
+  mobilisationStatus String        @default("NOT_REQUIRED") // "NOT_REQUIRED", "PENDING", "MOBILISED", "COMPLETED", "CLOSED"
+  siteId             String?
+  site               ManpowerSite? @relation(fields: [siteId], references: [id], onDelete: SetNull)
 }
 
 model ManpowerProject {
@@ -1385,6 +1399,7 @@ model ManpowerSite {
   secfacScanProofs          SecfacScanProof[]
   secfacPatrolRoutes        SecfacPatrolRoute[]                    @relation("SecfacPatrolRouteSite")
   secfacWelfareChecks       SecFacWelfareCheck[]                   @relation("SecFacWelfareCheckSite")
+  contracts                 ManpowerContract[]
 }
 
 model SecuritySiteManpowerAllocation {
@@ -1697,6 +1712,28 @@ model ContractManpowerRequirement {
   remarks            String?
   createdAt          DateTime         @default(now())
   updatedAt          DateTime         @updatedAt
+
+  focStatus           String    @default("NOT_APPLICABLE") // "NOT_APPLICABLE", "PENDING_APPROVAL", "APPROVED", "REJECTED", "REVOKED"
+  billingEligible     Boolean   @default(true)
+  preFocUnitPrice     Float?
+  preFocLineTotal     Float?
+  focRequestedById    String?
+  focRequestReason    String?   @db.Text
+  focRequestedAt      DateTime?
+  focApprovedById     String?
+  focApprovalReason   String?   @db.Text
+  focApprovedAt       DateTime?
+  focRejectedById     String?
+  focRejectionReason  String?   @db.Text
+  focRejectedAt       DateTime?
+  focRevokedById      String?
+  focRevocationReason String?   @db.Text
+  focRevokedAt        DateTime?
+
+  focRequestedBy Employee? @relation("FocRequester", fields: [focRequestedById], references: [id], onDelete: SetNull)
+  focApprovedBy  Employee? @relation("FocApprover", fields: [focApprovedById], references: [id], onDelete: SetNull)
+  focRejectedBy  Employee? @relation("FocRejector", fields: [focRejectedById], references: [id], onDelete: SetNull)
+  focRevokedBy   Employee? @relation("FocRevoker", fields: [focRevokedById], references: [id], onDelete: SetNull)
 }
 
 model ContractRelieverRequirement {

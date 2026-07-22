@@ -24,10 +24,64 @@ export const isDbConnected = () => {
   return !!prismaClient;
 };
 
+export function getQatarLocalDateString(dateInput: Date | string): string {
+  const d = new Date(dateInput);
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Qatar',
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric'
+  });
+  const parts = formatter.formatToParts(d);
+  const year = parts.find(p => p.type === 'year')?.value;
+  const month = parts.find(p => p.type === 'month')?.value.padStart(2, '0');
+  const day = parts.find(p => p.type === 'day')?.value.padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+export function validateContractPayload(data: any) {
+  const contractType = data.contractType || "PERMANENT";
+  const validTypes = ["PERMANENT", "FIXED_TERM", "TEMPORARY", "EVENT", "CALL_OFF", "HOURLY_SERVICE"];
+  if (!validTypes.includes(contractType)) {
+    throw new Error(`Invalid contract type: ${contractType}`);
+  }
+
+  if (contractType === "TEMPORARY" || contractType === "EVENT") {
+    if (!data.serviceStartAt || !data.serviceEndAt) {
+      throw new Error("Service start and end date-times are required for temporary/event contracts");
+    }
+    const start = new Date(data.serviceStartAt);
+    const end = new Date(data.serviceEndAt);
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      throw new Error("Invalid service start or end date-time format");
+    }
+    if (start.getTime() >= end.getTime()) {
+      throw new Error("Service end date-time must be after service start date-time");
+    }
+    
+    const hasSite = !!data.siteId && data.siteId !== "";
+    const hasVenue = !!data.eventVenue && data.eventVenue !== "";
+    if ((hasSite && hasVenue) || (!hasSite && !hasVenue)) {
+      throw new Error("Exactly one of Worksite or External Venue is required for temporary/event contracts");
+    }
+    
+    if (!data.billingBasis) {
+      throw new Error("Billing basis is required for temporary/event contracts");
+    }
+
+    // Programmatically derive startDate/endDate in Qatar timezone (UTC+3)
+    const qatarStartDateStr = getQatarLocalDateString(start);
+    const qatarEndDateStr = getQatarLocalDateString(end);
+    data.startDate = new Date(qatarStartDateStr + 'T00:00:00.000Z').toISOString();
+    data.endDate = new Date(qatarEndDateStr + 'T00:00:00.000Z').toISOString();
+  }
+}
+
 export async function getNextSequenceCode(prefix: string): Promise<string> {
   const tableMap: Record<string, { model: string; field: string; dbKey: string }> = {
     "SC": { model: "manpowerClient", field: "code", dbKey: "manpowerClients" },
     "SCON": { model: "manpowerContract", field: "contractNumber", dbKey: "manpowerContracts" },
+    "FCON": { model: "manpowerContract", field: "contractNumber", dbKey: "manpowerContracts" },
     "SPROJ": { model: "manpowerProject", field: "code", dbKey: "manpowerProjects" },
     "SSITE": { model: "manpowerSite", field: "code", dbKey: "manpowerSites" },
     "SLOC": { model: "manpowerLocationUnit", field: "code", dbKey: "manpowerLocationUnits" },
@@ -202,6 +256,8 @@ export function mapContractRecord(c: any) {
     updatedAt: c.updatedAt?.toISOString ? c.updatedAt.toISOString() : c.updatedAt,
     startDate: c.startDate?.toISOString ? c.startDate.toISOString() : c.startDate,
     endDate: c.endDate?.toISOString ? c.endDate.toISOString() : c.endDate,
+    serviceStartAt: c.serviceStartAt?.toISOString ? c.serviceStartAt.toISOString() : c.serviceStartAt,
+    serviceEndAt: c.serviceEndAt?.toISOString ? c.serviceEndAt.toISOString() : c.serviceEndAt,
     submittedForApprovalAt: c.submittedForApprovalAt?.toISOString ? c.submittedForApprovalAt.toISOString() : c.submittedForApprovalAt,
     approvedAt: c.approvedAt?.toISOString ? c.approvedAt.toISOString() : c.approvedAt,
     activatedAt: c.activatedAt?.toISOString ? c.activatedAt.toISOString() : c.activatedAt,
@@ -9412,6 +9468,7 @@ export const mockDb = {
     });
   },
   updateManpowerContract: async (id: string, data: any): Promise<any> => {
+    validateContractPayload(data);
     const operationType = data.operationType || "SECURITY_GUARDING";
 
     // Normalize dates
@@ -9526,6 +9583,14 @@ export const mockDb = {
       escalationMatrix: data.escalationMatrix || null,
       otherContractConditions: data.otherContractConditions || null,
       approvalStatus: data.approvalStatus || undefined,
+      contractType: data.contractType !== undefined ? data.contractType : undefined,
+      billingBasis: data.billingBasis !== undefined ? data.billingBasis : undefined,
+      serviceStartAt: data.serviceStartAt !== undefined ? (data.serviceStartAt ? new Date(data.serviceStartAt) : null) : undefined,
+      serviceEndAt: data.serviceEndAt !== undefined ? (data.serviceEndAt ? new Date(data.serviceEndAt) : null) : undefined,
+      eventVenue: data.eventVenue !== undefined ? data.eventVenue : undefined,
+      eventDetails: data.eventDetails !== undefined ? data.eventDetails : undefined,
+      mobilisationStatus: data.mobilisationStatus !== undefined ? data.mobilisationStatus : undefined,
+      siteId: data.siteId !== undefined ? data.siteId : undefined,
       submittedForApprovalAt: data.submittedForApprovalAt ? new Date(data.submittedForApprovalAt) : undefined,
       approvedAt: data.approvedAt ? new Date(data.approvedAt) : undefined,
       activatedAt: data.activatedAt ? new Date(data.activatedAt) : undefined,
@@ -9696,6 +9761,14 @@ export const mockDb = {
       escalationMatrix: dbData.escalationMatrix !== undefined ? dbData.escalationMatrix : existing.escalationMatrix,
       otherContractConditions: dbData.otherContractConditions !== undefined ? dbData.otherContractConditions : existing.otherContractConditions,
       approvalStatus: dbData.approvalStatus !== undefined ? dbData.approvalStatus : existing.approvalStatus,
+      contractType: dbData.contractType !== undefined ? dbData.contractType : existing.contractType,
+      billingBasis: dbData.billingBasis !== undefined ? dbData.billingBasis : existing.billingBasis,
+      serviceStartAt: dbData.serviceStartAt !== undefined ? dbData.serviceStartAt : existing.serviceStartAt,
+      serviceEndAt: dbData.serviceEndAt !== undefined ? dbData.serviceEndAt : existing.serviceEndAt,
+      eventVenue: dbData.eventVenue !== undefined ? dbData.eventVenue : existing.eventVenue,
+      eventDetails: dbData.eventDetails !== undefined ? dbData.eventDetails : existing.eventDetails,
+      mobilisationStatus: dbData.mobilisationStatus !== undefined ? dbData.mobilisationStatus : existing.mobilisationStatus,
+      siteId: dbData.siteId !== undefined ? dbData.siteId : existing.siteId,
       submittedForApprovalAt: dbData.submittedForApprovalAt !== undefined ? dbData.submittedForApprovalAt : existing.submittedForApprovalAt,
       approvedAt: dbData.approvedAt !== undefined ? dbData.approvedAt : existing.approvedAt,
       activatedAt: dbData.activatedAt !== undefined ? dbData.activatedAt : existing.activatedAt,
@@ -9864,6 +9937,40 @@ export const mockDb = {
       workflows
     });
   },
+  getContractManpowerRequirement: async (id: string): Promise<any> => {
+    if (isDbConnected()) {
+      return await prismaClient.contractManpowerRequirement.findUnique({
+        where: { id },
+        include: { contract: true }
+      });
+    }
+    const db = readDb();
+    const req = (db.contractManpowerRequirements || []).find((x: any) => x.id === id);
+    if (!req) return null;
+    const contract = (db.manpowerContracts || []).find((x: any) => x.id === req.contractId);
+    return { ...req, contract };
+  },
+  updateContractManpowerRequirement: async (id: string, data: any): Promise<any> => {
+    if (isDbConnected()) {
+      return await prismaClient.contractManpowerRequirement.update({
+        where: { id },
+        data,
+        include: { contract: true }
+      });
+    }
+    const db = readDb();
+    const idx = (db.contractManpowerRequirements || []).findIndex((x: any) => x.id === id);
+    if (idx === -1) throw new Error("Manpower requirement not found");
+    const updated = {
+      ...db.contractManpowerRequirements[idx],
+      ...data,
+      updatedAt: new Date().toISOString()
+    };
+    db.contractManpowerRequirements[idx] = updated;
+    writeDb(db);
+    const contract = (db.manpowerContracts || []).find((x: any) => x.id === updated.contractId);
+    return { ...updated, contract };
+  },
   getManpowerContractAddendums: async (contractId: string): Promise<any[]> => {
     if (isDbConnected()) {
       const res = await prismaClient.manpowerContractAddendum.findMany({
@@ -10000,6 +10107,7 @@ export const mockDb = {
     };
   },
   createManpowerContract: async (data: any): Promise<any> => {
+    validateContractPayload(data);
     const operationType = data.operationType || "SECURITY_GUARDING";
     const prefix = operationType === "FACILITY_MANAGEMENT" ? "FCON" : "SCON";
     const contractNumber = data.contractNumber || await getNextSequenceCode(prefix);
@@ -10123,6 +10231,14 @@ export const mockDb = {
           escalationMatrix: data.escalationMatrix || null,
           otherContractConditions: data.otherContractConditions || null,
           approvalStatus: data.status || "DRAFT",
+          contractType: data.contractType || "PERMANENT",
+          billingBasis: data.billingBasis || null,
+          serviceStartAt: data.serviceStartAt ? new Date(data.serviceStartAt) : null,
+          serviceEndAt: data.serviceEndAt ? new Date(data.serviceEndAt) : null,
+          eventVenue: data.eventVenue || null,
+          eventDetails: data.eventDetails || null,
+          mobilisationStatus: data.mobilisationStatus || "NOT_REQUIRED",
+          siteId: data.siteId || null,
 
           manpowerRequirements: {
             create: manpowerReqs.map((mr: any) => ({
@@ -10207,6 +10323,14 @@ export const mockDb = {
       escalationMatrix: dataWithCode.escalationMatrix || null,
       otherContractConditions: dataWithCode.otherContractConditions || null,
       approvalStatus: dataWithCode.status || "DRAFT",
+      contractType: dataWithCode.contractType || "PERMANENT",
+      billingBasis: dataWithCode.billingBasis || null,
+      serviceStartAt: dataWithCode.serviceStartAt || null,
+      serviceEndAt: dataWithCode.serviceEndAt || null,
+      eventVenue: dataWithCode.eventVenue || null,
+      eventDetails: dataWithCode.eventDetails || null,
+      mobilisationStatus: dataWithCode.mobilisationStatus || "NOT_REQUIRED",
+      siteId: dataWithCode.siteId || null,
       
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()

@@ -139,7 +139,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
   SECURITY_ADMIN: [
     "dashboard.view", "manpower.view", "manpower.manage", "manpower.admin.full_access",
     "manpower.security.view", "manpower.security.manage", "manpower.security.clients.view", "manpower.security.clients.manage",
-    "manpower.security.contracts.view", "manpower.security.contracts.manage", "manpower.security.projects.view", "manpower.security.projects.manage",
+    "manpower.security.contracts.view", "manpower.security.contracts.manage", "manpower.security.contracts.foc_approve", "manpower.security.projects.view", "manpower.security.projects.manage",
     "manpower.security.sites.view", "manpower.security.sites.manage", "manpower.security.zones.view", "manpower.security.zones.manage",
     "manpower.security.manpower.view", "manpower.security.manpower.manage", "manpower.security.shifts.view", "manpower.security.shifts.manage",
     "manpower.security.deployments.view", "manpower.security.deployments.manage", "manpower.security.relievers.view", "manpower.security.relievers.manage",
@@ -148,7 +148,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
   ],
   SECURITY_OPERATIONS_MANAGER: [
     "dashboard.view", "manpower.security.view", "manpower.security.manage", "manpower.security.clients.view",
-    "manpower.security.contracts.view", "manpower.security.projects.view", "manpower.security.sites.view", "manpower.security.zones.view",
+    "manpower.security.contracts.view", "manpower.security.contracts.foc_approve", "manpower.security.projects.view", "manpower.security.sites.view", "manpower.security.zones.view",
     "manpower.security.manpower.view", "manpower.security.manpower.manage", "manpower.security.shifts.view", "manpower.security.shifts.manage",
     "manpower.security.deployments.view", "manpower.security.deployments.manage", "manpower.security.relievers.view", "manpower.security.relievers.manage",
     "manpower.security.reports.view", "manpower.security.reports.export",
@@ -179,7 +179,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
   FM_ADMIN: [
     "dashboard.view", "manpower.view", "manpower.manage", "manpower.admin.full_access",
     "manpower.fm.view", "manpower.fm.manage", "manpower.fm.clients.view", "manpower.fm.clients.manage",
-    "manpower.fm.contracts.view", "manpower.fm.contracts.manage", "manpower.fm.projects.view", "manpower.fm.projects.manage",
+    "manpower.fm.contracts.view", "manpower.fm.contracts.manage", "manpower.fm.contracts.foc_approve", "manpower.fm.projects.view", "manpower.fm.projects.manage",
     "manpower.fm.sites.view", "manpower.fm.sites.manage", "manpower.fm.areas.view", "manpower.fm.areas.manage",
     "manpower.fm.manpower.view", "manpower.fm.manpower.manage", "manpower.fm.shifts.view", "manpower.fm.shifts.manage",
     "manpower.fm.deployments.view", "manpower.fm.deployments.manage", "manpower.fm.relievers.view", "manpower.fm.relievers.manage",
@@ -188,7 +188,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
   ],
   FM_OPERATIONS_MANAGER: [
     "dashboard.view", "manpower.fm.view", "manpower.fm.manage", "manpower.fm.clients.view",
-    "manpower.fm.contracts.view", "manpower.fm.projects.view", "manpower.fm.sites.view", "manpower.fm.areas.view",
+    "manpower.fm.contracts.view", "manpower.fm.contracts.foc_approve", "manpower.fm.projects.view", "manpower.fm.sites.view", "manpower.fm.areas.view",
     "manpower.fm.manpower.view", "manpower.fm.manpower.manage", "manpower.fm.shifts.view", "manpower.fm.shifts.manage",
     "manpower.fm.deployments.view", "manpower.fm.deployments.manage", "manpower.fm.relievers.view", "manpower.fm.relievers.manage",
     "manpower.fm.reports.view", "manpower.fm.reports.export",
