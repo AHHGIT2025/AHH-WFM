@@ -7,48 +7,77 @@ import { getQatarDate } from "../../../../../../lib/roster-engine";
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const contractId = searchParams.get("contractId");
+  const business = searchParams.get("business");
   const startDateStr = searchParams.get("startDate");
   const endDateStr = searchParams.get("endDate");
-
-  if (!contractId) {
-    return NextResponse.json({ error: "Missing contractId query parameter" }, { status: 400 });
-  }
+  const monthStr = searchParams.get("month"); // YYYY-MM
 
   const auth = await checkApiAuth();
   if (auth.error) return auth.error;
 
-  const contract = await prisma.manpowerContract.findUnique({
-    where: { id: contractId }
-  });
+  const user = auth.session?.user;
 
-  if (!contract) {
-    return NextResponse.json({ error: "Contract not found" }, { status: 404 });
+  let operationType: string;
+  let contractFilter: any = {};
+
+  if (contractId && contractId !== "all") {
+    const contract = await prisma.manpowerContract.findUnique({
+      where: { id: contractId }
+    });
+    if (!contract) {
+      return NextResponse.json({ error: "Contract not found" }, { status: 404 });
+    }
+    operationType = contract.operationType;
+    contractFilter = { contractId };
+  } else {
+    if (!business) {
+      return NextResponse.json({ error: "Missing business or contractId query parameter" }, { status: 400 });
+    }
+    operationType = business === "security-guarding" ? "SECURITY_GUARDING" : "FACILITY_MANAGEMENT";
+    contractFilter = { contract: { status: "ACTIVE", operationType } };
   }
 
   // Security & Isolation checks
-  const isSecurity = contract.operationType === "SECURITY_GUARDING";
-  const user = auth.session?.user;
-  
   if (!hasPermission(user, "manpower.admin.full_access") &&
       !hasPermission(user, "manpower.schedule.view")) {
-    // Check specific scope permissions
-    const scopePermission = isSecurity ? "manpower.security.view" : "manpower.fm.view";
+    const scopePermission = operationType === "SECURITY_GUARDING" ? "manpower.security.view" : "manpower.fm.view";
     if (!hasPermission(user, scopePermission)) {
       return NextResponse.json({ error: "Forbidden: You do not have permission to view schedule for this scope." }, { status: 403 });
     }
   }
 
   // Parse date range
-  const startDate = startDateStr ? getQatarDate(startDateStr) : getQatarDate(contract.startDate);
-  const endDate = endDateStr ? getQatarDate(endDateStr) : (contract.endDate ? getQatarDate(contract.endDate) : new Date(startDate.getTime() + 30 * 24 * 60 * 60 * 1000));
+  let startDate: Date;
+  let endDate: Date;
+
+  if (monthStr) {
+    const [year, month] = monthStr.split("-").map(Number);
+    startDate = new Date(year, month - 1, 1);
+    endDate = new Date(year, month, 0, 23, 59, 59, 999);
+  } else {
+    if (contractId && contractId !== "all") {
+      const contract = await prisma.manpowerContract.findUnique({ where: { id: contractId } });
+      startDate = startDateStr ? getQatarDate(startDateStr) : getQatarDate(contract!.startDate);
+      endDate = endDateStr ? getQatarDate(endDateStr) : (contract!.endDate ? getQatarDate(contract!.endDate) : new Date(startDate.getTime() + 30 * 24 * 60 * 60 * 1000));
+    } else {
+      startDate = startDateStr ? getQatarDate(startDateStr) : new Date();
+      endDate = endDateStr ? getQatarDate(endDateStr) : new Date(startDate.getTime() + 30 * 24 * 60 * 60 * 1000);
+    }
+  }
 
   try {
     const slots = await prisma.rosterRequirementSlot.findMany({
       where: {
-        contractId,
+        ...contractFilter,
         businessDate: { gte: startDate, lte: endDate }
       },
       include: {
+        contract: {
+          select: {
+            title: true,
+            contractNumber: true
+          }
+        },
         assignments: {
           where: { historyStatus: "ACTIVE" },
           include: {

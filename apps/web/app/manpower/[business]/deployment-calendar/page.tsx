@@ -6,6 +6,26 @@ import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { hasPermission } from "../../../../lib/permissions";
 import { Badge } from "@ahh-wfm/ui/src";
+import { 
+  ArrowLeft, 
+  RefreshCw, 
+  Upload, 
+  Lock, 
+  Unlock, 
+  CalendarDays, 
+  UserPlus, 
+  TriangleAlert, 
+  BarChart3, 
+  Grid2X2, 
+  Plus, 
+  X, 
+  AlertCircle, 
+  AlertTriangle, 
+  CheckCircle, 
+  XCircle, 
+  Info, 
+  UserMinus 
+} from "lucide-react";
 
 interface RosterSlot {
   id: string;
@@ -101,6 +121,7 @@ export default function RosterBoardPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [slots, setSlots] = useState<RosterSlot[]>([]);
   const [coverageMetrics, setCoverageMetrics] = useState<any>(null);
+  const [apiError, setApiError] = useState<string | null>(null);
   
   // Selected drawer objects
   const [activeDrawer, setActiveDrawer] = useState<"assign" | "details" | null>(null);
@@ -113,22 +134,22 @@ export default function RosterBoardPage() {
   const [overrideAllowed, setOverrideAllowed] = useState(false);
   const [overrideReason, setOverrideReason] = useState("");
   const [submittingAssign, setSubmittingAssign] = useState(false);
-
+ 
   // Period lock state
   const [periodLocked, setPeriodLocked] = useState(false);
   const [processingLock, setProcessingLock] = useState(false);
-
+ 
   // Sync operations
   const [syncingContracts, setSyncingContracts] = useState(false);
   const [publishingRoster, setPublishingRoster] = useState(false);
-
+ 
   // 1. Fetch filter metadata options
   useEffect(() => {
     async function loadFilters() {
       try {
-        const res = await fetch(`/api/v1/manpower/scheduling/filters?business=${business}`);
+        const res = await fetch(`/api/v1/manpower/scheduling/filters?business=${business}&month=${selectedMonth}`);
         if (res.ok) {
-          const json = await res.ok ? await res.json() : null;
+          const json = await res.json();
           if (json && json.success) {
             setClients(json.clients || []);
             setContracts(json.contracts || []);
@@ -141,23 +162,24 @@ export default function RosterBoardPage() {
       }
     }
     loadFilters();
-  }, [business]);
-
+  }, [business, selectedMonth]);
+ 
   // 2. Fetch slots and coverage metrics
   const fetchRosterData = async (showRefreshIndicator = false) => {
     if (showRefreshIndicator) setRefreshing(true);
     else setLoading(true);
-
+    setApiError(null);
+ 
     try {
       const urlParams = new URLSearchParams();
       urlParams.set("month", selectedMonth);
       urlParams.set("business", business);
       if (selectedContract !== "all") urlParams.set("contractId", selectedContract);
       if (selectedSite !== "all") urlParams.set("siteId", selectedSite);
-
+ 
       const rosterRes = await fetch(`/api/v1/manpower/scheduling/roster?${urlParams.toString()}`);
       const coverageRes = await fetch(`/api/v1/manpower/scheduling/coverage?${urlParams.toString()}`);
-
+ 
       if (rosterRes.ok && coverageRes.ok) {
         const rosterJson = await rosterRes.json();
         const coverageJson = await coverageRes.json();
@@ -165,16 +187,29 @@ export default function RosterBoardPage() {
           setSlots(rosterJson.slots || []);
           setCoverageMetrics(coverageJson.summary || null);
           setPeriodLocked(coverageJson.locked || false);
+        } else {
+          setApiError(rosterJson.error || coverageJson.error || "Failed to parse data");
+          setSlots([]);
+          setCoverageMetrics(null);
         }
+      } else {
+        const errRes = !rosterRes.ok ? rosterRes : coverageRes;
+        const errJson = await errRes.json().catch(() => ({}));
+        setApiError(errJson.error || `Server error (${errRes.status})`);
+        setSlots([]);
+        setCoverageMetrics(null);
       }
-    } catch (e) {
+    } catch (e: any) {
       console.error("Failed to fetch roster scheduling data", e);
+      setApiError(e.message || "Failed to fetch roster scheduling data");
+      setSlots([]);
+      setCoverageMetrics(null);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   };
-
+ 
   useEffect(() => {
     fetchRosterData();
   }, [selectedMonth, selectedContract, selectedSite, business]);
@@ -411,11 +446,11 @@ export default function RosterBoardPage() {
   return (
     <div className="min-h-screen bg-background p-6">
       {/* Header section */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between border-b border-outline-variant pb-6 mb-6">
+      <div className="flex flex-col md:flex-row md:items-start md:justify-between border-b border-outline-variant pb-6 mb-6">
         <div>
           <div className="flex items-center gap-3">
-            <Link href={`/manpower/${business}/dashboard`} className="text-secondary hover:text-primary transition-colors flex items-center">
-              <span className="material-icons text-xl">arrow_back</span>
+            <Link href={`/manpower/${business}/dashboard`} className="text-secondary hover:text-primary transition-colors flex items-center" aria-label="Go Back">
+              <ArrowLeft className="h-5 w-5" />
             </Link>
             <h1 className="text-2xl font-bold tracking-tight text-foreground">Roster Board & Shift Planner</h1>
             <Badge className="bg-primary/10 text-primary border border-primary/20">{businessLabel}</Badge>
@@ -423,73 +458,97 @@ export default function RosterBoardPage() {
           <p className="text-sm text-secondary mt-1">Schedule requirement slots, manage employee assignments, and publish standard rosters.</p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3 mt-4 md:mt-0">
-          <button
-            onClick={handleSyncSlots}
-            disabled={syncingContracts || selectedContract === "all"}
-            className="btn btn-outline border border-outline hover:bg-surface-variant text-sm font-medium h-10 px-4 rounded-lg inline-flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <span className="material-icons text-lg">sync</span>
-            {syncingContracts ? "Syncing..." : "Sync Contract Slots"}
-          </button>
-          
-          <button
-            onClick={handlePublishRoster}
-            disabled={publishingRoster || selectedContract === "all"}
-            className="btn bg-primary text-primary-foreground hover:bg-primary/95 text-sm font-medium h-10 px-4 rounded-lg inline-flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <span className="material-icons text-lg">publish</span>
-            {publishingRoster ? "Publishing..." : "Publish Month Roster"}
-          </button>
+        <div className="flex flex-col items-end gap-1 mt-4 md:mt-0">
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              onClick={handleSyncSlots}
+              disabled={syncingContracts || selectedContract === "all" || periodLocked || (selectedContract !== "all" && !contracts.find(c => c.id === selectedContract)?.syncEligible)}
+              className="btn btn-outline border border-outline hover:bg-surface-variant text-sm font-medium h-10 px-4 rounded-lg inline-flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <RefreshCw className={`h-4 w-4 ${syncingContracts ? "animate-spin" : ""}`} aria-hidden="true" />
+              {syncingContracts ? "Syncing..." : "Sync Contract Slots"}
+            </button>
+            
+            <button
+              onClick={handlePublishRoster}
+              disabled={publishingRoster || selectedContract === "all" || periodLocked}
+              className="btn bg-primary text-primary-foreground hover:bg-primary/95 text-sm font-medium h-10 px-4 rounded-lg inline-flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              aria-label="Publish Month Roster"
+            >
+              <Upload className="h-4 w-4" aria-hidden="true" />
+              {publishingRoster ? "Publishing..." : "Publish Month Roster"}
+            </button>
 
-          <button
-            onClick={handleToggleLock}
-            disabled={processingLock}
-            className={`btn text-sm font-medium h-10 px-4 rounded-lg inline-flex items-center gap-2 border ${
-              periodLocked
-                ? "bg-destructive/10 text-destructive border-destructive/20 hover:bg-destructive/15"
-                : "border-outline hover:bg-surface-variant text-foreground"
-            }`}
-          >
-            <span className="material-icons text-lg">{periodLocked ? "lock" : "lock_open"}</span>
-            {periodLocked ? "Locked" : "Unlock Period"}
-          </button>
+            <button
+              onClick={handleToggleLock}
+              disabled={processingLock}
+              className={`btn text-sm font-medium h-10 px-4 rounded-lg inline-flex items-center gap-2 border ${
+                periodLocked
+                  ? "bg-destructive/10 text-destructive border-destructive/20 hover:bg-destructive/15"
+                  : "border-outline hover:bg-surface-variant text-foreground"
+              }`}
+            >
+              {periodLocked ? <Lock className="h-4 w-4" aria-hidden="true" /> : <Unlock className="h-4 w-4" aria-hidden="true" />}
+              {periodLocked ? "Locked" : "Unlock Period"}
+            </button>
+          </div>
+          {/* Explanation tags */}
+          {selectedContract === "all" && (
+            <span className="text-[11px] text-amber-600 font-medium mt-1">Select a specific active contract to generate roster slots.</span>
+          )}
+          {selectedContract !== "all" && periodLocked && (
+            <span className="text-[11px] text-destructive font-medium mt-1">Period is locked. Action not allowed.</span>
+          )}
+          {selectedContract !== "all" && !periodLocked && !contracts.find(c => c.id === selectedContract)?.syncEligible && (
+            <span className="text-[11px] text-destructive font-medium mt-1">
+              Cannot Sync: {contracts.find(c => c.id === selectedContract)?.syncBlockReasons?.map((r: string) => {
+                if (r === "CONTRACT_NOT_ACTIVE") return "Contract is not active";
+                if (r === "NO_EFFECTIVE_MANPOWER_REQUIREMENTS") return "No manpower requirements";
+                if (r === "NO_ACTIVE_SHIFT_REQUIREMENTS") return "No active shift requirements";
+                if (r === "NO_ELIGIBLE_SITE") return "No project/site allocation";
+                if (r === "OUTSIDE_CONTRACT_PERIOD") return "Selected month is outside contract dates";
+                return r;
+              }).join(", ")}
+            </span>
+          )}
         </div>
       </div>
 
       {/* KPI stats bar */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        <div className="bg-surface border border-outline-variant p-4 rounded-xl shadow-sm flex items-center justify-between">
-          <div>
-            <span className="text-xs text-secondary font-medium uppercase tracking-wider block">Total Required Slots</span>
-            <span className="text-2xl font-bold tracking-tight text-foreground">{coverageMetrics?.requiredCount || 0}</span>
+      {!apiError && (
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+          <div className="bg-surface border border-outline-variant p-4 rounded-xl shadow-sm flex items-center justify-between">
+            <div>
+              <span className="text-xs text-secondary font-medium uppercase tracking-wider block">Total Required Slots</span>
+              <span className="text-2xl font-bold tracking-tight text-foreground">{coverageMetrics?.requiredCount || 0}</span>
+            </div>
+            <CalendarDays className="h-8 w-8 text-secondary bg-secondary/10 p-1.5 rounded-lg" aria-hidden="true" />
           </div>
-          <span className="material-icons text-secondary text-3xl bg-secondary/10 p-2 rounded-lg">calendar_today</span>
-        </div>
-        <div className="bg-surface border border-outline-variant p-4 rounded-xl shadow-sm flex items-center justify-between">
-          <div>
-            <span className="text-xs text-secondary font-medium uppercase tracking-wider block">Filled Assignments</span>
-            <span className="text-2xl font-bold tracking-tight text-success">{coverageMetrics?.filledCount || 0}</span>
+          <div className="bg-surface border border-outline-variant p-4 rounded-xl shadow-sm flex items-center justify-between">
+            <div>
+              <span className="text-xs text-secondary font-medium uppercase tracking-wider block">Filled Assignments</span>
+              <span className="text-2xl font-bold tracking-tight text-success">{coverageMetrics?.filledCount || 0}</span>
+            </div>
+            <UserPlus className="h-8 w-8 text-success bg-success/10 p-1.5 rounded-lg" aria-hidden="true" />
           </div>
-          <span className="material-icons text-success text-3xl bg-success/10 p-2 rounded-lg">person_add</span>
-        </div>
-        <div className="bg-surface border border-outline-variant p-4 rounded-xl shadow-sm flex items-center justify-between">
-          <div>
-            <span className="text-xs text-secondary font-medium uppercase tracking-wider block">Vacant Positions</span>
-            <span className="text-2xl font-bold tracking-tight text-amber-500">{coverageMetrics?.vacantCount || 0}</span>
+          <div className="bg-surface border border-outline-variant p-4 rounded-xl shadow-sm flex items-center justify-between">
+            <div>
+              <span className="text-xs text-secondary font-medium uppercase tracking-wider block">Vacant Positions</span>
+              <span className="text-2xl font-bold tracking-tight text-amber-500">{coverageMetrics?.vacantCount || 0}</span>
+            </div>
+            <TriangleAlert className="h-8 w-8 text-amber-500 bg-amber-500/10 p-1.5 rounded-lg" aria-hidden="true" />
           </div>
-          <span className="material-icons text-amber-500 text-3xl bg-amber-500/10 p-2 rounded-lg">warning_amber</span>
-        </div>
-        <div className="bg-surface border border-outline-variant p-4 rounded-xl shadow-sm flex items-center justify-between">
-          <div>
-            <span className="text-xs text-secondary font-medium uppercase tracking-wider block">Roster Coverage Rate</span>
-            <span className="text-2xl font-bold tracking-tight text-primary">
-              {coverageMetrics?.requiredCount ? Math.round((coverageMetrics.filledCount / coverageMetrics.requiredCount) * 100) : 0}%
-            </span>
+          <div className="bg-surface border border-outline-variant p-4 rounded-xl shadow-sm flex items-center justify-between">
+            <div>
+              <span className="text-xs text-secondary font-medium uppercase tracking-wider block">Roster Coverage Rate</span>
+              <span className="text-2xl font-bold tracking-tight text-primary">
+                {coverageMetrics?.requiredCount ? Math.round((coverageMetrics.filledCount / coverageMetrics.requiredCount) * 100) : 0}%
+              </span>
+            </div>
+            <BarChart3 className="h-8 w-8 text-primary bg-primary/10 p-1.5 rounded-lg" aria-hidden="true" />
           </div>
-          <span className="material-icons text-primary text-3xl bg-primary/10 p-2 rounded-lg">query_stats</span>
         </div>
-      </div>
+      )}
 
       {/* Filters bar */}
       <div className="bg-surface border border-outline-variant p-4 rounded-xl shadow-sm mb-6 flex flex-wrap items-center gap-4">
@@ -534,8 +593,9 @@ export default function RosterBoardPage() {
         <button
           onClick={() => fetchRosterData(true)}
           className="btn border border-outline hover:bg-surface-variant h-10 w-10 rounded-lg inline-flex items-center justify-center self-end"
+          aria-label="Refresh Roster Board"
         >
-          <span className="material-icons text-xl">refresh</span>
+          <RefreshCw className={`h-5 w-5 ${refreshing ? "animate-spin" : ""}`} />
         </button>
       </div>
 
@@ -546,12 +606,89 @@ export default function RosterBoardPage() {
             <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent"></div>
             <span className="text-sm font-medium text-secondary">Loading Roster slots...</span>
           </div>
-        ) : groupedRows.length === 0 ? (
-          <div className="p-12 text-center flex flex-col items-center justify-center">
-            <span className="material-icons text-secondary text-5xl mb-3">grid_off</span>
-            <h3 className="text-lg font-bold text-foreground">No Roster Slots Generated</h3>
-            <p className="text-sm text-secondary max-w-md mt-1">Ensure you have selected an active contract and clicked "Sync Contract Slots" to generate requirement slots for the month.</p>
+        ) : apiError ? (
+          <div className="p-12 text-center flex flex-col items-center justify-center text-destructive">
+            <AlertCircle className="h-12 w-12 text-destructive mb-3" />
+            <h3 className="text-lg font-bold">API Request Failed</h3>
+            <p className="text-sm max-w-md mt-1 mb-4">{apiError}</p>
+            <button
+              onClick={() => fetchRosterData(true)}
+              className="btn btn-outline border-destructive/20 text-destructive hover:bg-destructive/10 text-xs font-semibold py-2 px-4 rounded-lg inline-flex items-center gap-2"
+            >
+              <RefreshCw className="h-3 w-3" /> Retry
+            </button>
           </div>
+        ) : contracts.length === 0 ? (
+          <div className="p-12 text-center flex flex-col items-center justify-center">
+            <Grid2X2 className="h-12 w-12 text-secondary mb-3" />
+            <h3 className="text-lg font-bold text-foreground">No Active Contracts</h3>
+            <p className="text-sm text-secondary max-w-md mt-1">No active contracts found for the selected operation scope.</p>
+          </div>
+        ) : selectedContract === "all" && groupedRows.length === 0 ? (
+          <div className="p-12 text-center flex flex-col items-center justify-center">
+            <Grid2X2 className="h-12 w-12 text-secondary mb-3" />
+            <h3 className="text-lg font-bold text-foreground">Select a Contract to Sync</h3>
+            <p className="text-sm text-secondary max-w-md mt-1">Select an active contract and site, then click Sync Contract Slots.</p>
+          </div>
+        ) : selectedContract !== "all" && groupedRows.length === 0 ? (
+          (() => {
+            const activeContractMeta = contracts.find(c => c.id === selectedContract);
+            const reasons = activeContractMeta?.syncBlockReasons || [];
+
+            if (reasons.includes("NO_EFFECTIVE_MANPOWER_REQUIREMENTS")) {
+              return (
+                <div className="p-12 text-center flex flex-col items-center justify-center">
+                  <TriangleAlert className="h-12 w-12 text-amber-500 mb-3" />
+                  <h3 className="text-lg font-bold text-foreground">No Effective Manpower Requirements</h3>
+                  <p className="text-sm text-secondary max-w-md mt-1">This contract has no effective manpower and shift requirements for the selected month.</p>
+                </div>
+              );
+            }
+            if (reasons.includes("NO_ACTIVE_SHIFT_REQUIREMENTS")) {
+              return (
+                <div className="p-12 text-center flex flex-col items-center justify-center">
+                  <TriangleAlert className="h-12 w-12 text-amber-500 mb-3" />
+                  <h3 className="text-lg font-bold text-foreground">No Active Shift Requirements</h3>
+                  <p className="text-sm text-secondary max-w-md mt-1">This contract has no effective manpower and shift requirements for the selected month.</p>
+                </div>
+              );
+            }
+            if (reasons.includes("NO_ELIGIBLE_SITE")) {
+              return (
+                <div className="p-12 text-center flex flex-col items-center justify-center">
+                  <TriangleAlert className="h-12 w-12 text-amber-500 mb-3" />
+                  <h3 className="text-lg font-bold text-foreground">No Valid Site Allocation</h3>
+                  <p className="text-sm text-secondary max-w-md mt-1">This contract is missing a valid project/site allocation or event location.</p>
+                </div>
+              );
+            }
+            if (reasons.includes("OUTSIDE_CONTRACT_PERIOD")) {
+              return (
+                <div className="p-12 text-center flex flex-col items-center justify-center">
+                  <TriangleAlert className="h-12 w-12 text-amber-500 mb-3" />
+                  <h3 className="text-lg font-bold text-foreground">Outside Contract Period</h3>
+                  <p className="text-sm text-secondary max-w-md mt-1">The selected target month is outside this contract's active period.</p>
+                </div>
+              );
+            }
+            if (periodLocked) {
+              return (
+                <div className="p-12 text-center flex flex-col items-center justify-center">
+                  <Lock className="h-12 w-12 text-destructive mb-3" />
+                  <h3 className="text-lg font-bold text-foreground">Period Locked</h3>
+                  <p className="text-sm text-secondary max-w-md mt-1">This period is locked. Synchronization and assignments are disabled.</p>
+                </div>
+              );
+            }
+
+            return (
+              <div className="p-12 text-center flex flex-col items-center justify-center">
+                <Grid2X2 className="h-12 w-12 text-secondary mb-3" />
+                <h3 className="text-lg font-bold text-foreground">No Slots Synchronized</h3>
+                <p className="text-sm text-secondary max-w-md mt-1">Roster sync completed with zero slots. Click Sync Contract Slots to generate requirements.</p>
+              </div>
+            );
+          })()
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full border-collapse text-left text-xs">
@@ -591,7 +728,7 @@ export default function RosterBoardPage() {
                       let cellBgClass = "bg-surface border border-dashed border-outline-variant hover:border-primary/50 cursor-pointer";
                       let content = (
                         <div className="flex flex-col items-center justify-center h-full text-secondary gap-1 select-none">
-                          <span className="material-icons text-sm">add</span>
+                          <Plus className="h-3.5 w-3.5" />
                           <span className="text-[10px] font-semibold">VACANT</span>
                         </div>
                       );
@@ -624,13 +761,13 @@ export default function RosterBoardPage() {
                                 <span className="font-semibold text-foreground truncate max-w-[70px]">{activeAssignment.employee.name}</span>
                                 <span className="text-[9px] text-secondary truncate">{activeAssignment.employee.id}</span>
                               </div>
-                              <span className="material-icons text-xs">lock</span>
+                              <Lock className="h-3 w-3" />
                             </div>
                           );
                         } else {
                           content = (
                             <div className="flex items-center gap-1 text-secondary opacity-40">
-                              <span className="material-icons text-xs">lock</span>
+                              <Lock className="h-3 w-3" />
                               <span className="text-[9px] font-bold">LOCKED</span>
                             </div>
                           );
@@ -674,8 +811,8 @@ export default function RosterBoardPage() {
                   {selectedSlot.snapshotPosition} ({selectedSlot.snapshotStartTime} - {selectedSlot.snapshotEndTime})
                 </p>
               </div>
-              <button onClick={() => setActiveDrawer(null)} className="h-8 w-8 rounded-full hover:bg-surface-variant flex items-center justify-center">
-                <span className="material-icons">close</span>
+              <button onClick={() => setActiveDrawer(null)} className="h-8 w-8 rounded-full hover:bg-surface-variant flex items-center justify-center" aria-label="Close Drawer">
+                <X className="h-5 w-5" />
               </button>
             </div>
 
@@ -735,12 +872,12 @@ export default function RosterBoardPage() {
                         <div className="mt-2 space-y-1 pl-2 border-l border-outline-variant text-[11px]">
                           {item.errors.map(err => (
                             <div key={err} className="text-destructive flex items-center gap-1">
-                              <span className="material-icons text-[12px]">error</span> {err}
+                              <AlertCircle className="h-3.5 w-3.5" /> {err}
                             </div>
                           ))}
                           {item.warnings.map(warn => (
                             <div key={warn} className="text-amber-600 flex items-center gap-1">
-                              <span className="material-icons text-[12px]">warning</span> {warn}
+                              <AlertTriangle className="h-3.5 w-3.5" /> {warn}
                             </div>
                           ))}
                         </div>
@@ -779,7 +916,7 @@ export default function RosterBoardPage() {
             {overrideAllowed && (
               <div className="border-t border-outline-variant p-4 bg-amber-500/5 space-y-2">
                 <label className="text-xs font-semibold text-amber-700 flex items-center gap-1">
-                  <span className="material-icons text-sm">warning</span> Override Audit Reason Required
+                  <AlertTriangle className="h-4 w-4" /> Override Audit Reason Required
                 </label>
                 <textarea
                   value={overrideReason}
@@ -803,8 +940,8 @@ export default function RosterBoardPage() {
                 <h3 className="font-bold text-lg text-foreground">Assignment Details</h3>
                 <p className="text-xs text-secondary mt-0.5">Roster Slot ID: {selectedSlot.id}</p>
               </div>
-              <button onClick={() => setActiveDrawer(null)} className="h-8 w-8 rounded-full hover:bg-surface-variant flex items-center justify-center">
-                <span className="material-icons">close</span>
+              <button onClick={() => setActiveDrawer(null)} className="h-8 w-8 rounded-full hover:bg-surface-variant flex items-center justify-center" aria-label="Close Details">
+                <X className="h-5 w-5" />
               </button>
             </div>
 
@@ -859,11 +996,11 @@ export default function RosterBoardPage() {
                           <div className="text-[10px] text-secondary mt-0.5">{item.details}</div>
                         </div>
                         {item.status === "PASS" ? (
-                          <span className="material-icons text-success text-lg">check_circle</span>
+                          <CheckCircle className="h-5 w-5 text-success" />
                         ) : item.status === "FAIL" ? (
-                          <span className="material-icons text-destructive text-lg">cancel</span>
+                          <XCircle className="h-5 w-5 text-destructive" />
                         ) : (
-                          <span className="material-icons text-amber-500 text-lg">info</span>
+                          <Info className="h-5 w-5 text-amber-500" />
                         )}
                       </div>
                     ))}
@@ -878,7 +1015,7 @@ export default function RosterBoardPage() {
                 onClick={handleUnassign}
                 className="btn border border-destructive/20 text-destructive bg-destructive/5 hover:bg-destructive/10 text-sm font-semibold h-10 px-4 rounded-lg flex items-center gap-2"
               >
-                <span className="material-icons text-lg">person_remove</span> Unassign Slot
+                <UserMinus className="h-4 w-4" /> Unassign Slot
               </button>
             </div>
           </div>

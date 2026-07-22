@@ -8,35 +8,57 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const contractId = searchParams.get("contractId");
   const monthStr = searchParams.get("month"); // Format: YYYY-MM
+  const business = searchParams.get("business");
 
-  if (!contractId || !monthStr) {
-    return NextResponse.json({ error: "Missing contractId or month query parameter" }, { status: 400 });
+  if (!monthStr) {
+    return NextResponse.json({ error: "Missing month query parameter" }, { status: 400 });
   }
 
   const auth = await checkApiAuth();
   if (auth.error) return auth.error;
 
-  const contract = await prisma.manpowerContract.findUnique({
-    where: { id: contractId }
-  });
+  const user = auth.session?.user;
 
-  if (!contract) {
-    return NextResponse.json({ error: "Contract not found" }, { status: 404 });
+  let operationType: string;
+  let contractFilter: any = {};
+
+  if (contractId && contractId !== "all") {
+    const contract = await prisma.manpowerContract.findUnique({
+      where: { id: contractId }
+    });
+    if (!contract) {
+      return NextResponse.json({ error: "Contract not found" }, { status: 404 });
+    }
+    operationType = contract.operationType;
+    contractFilter = { contractId };
+  } else {
+    if (!business) {
+      return NextResponse.json({ error: "Missing business or contractId query parameter" }, { status: 400 });
+    }
+    operationType = business === "security-guarding" ? "SECURITY_GUARDING" : "FACILITY_MANAGEMENT";
+    contractFilter = { contract: { status: "ACTIVE", operationType } };
   }
 
   // Security & Isolation checks
-  const isSecurity = contract.operationType === "SECURITY_GUARDING";
-  const user = auth.session?.user;
-
   if (!hasPermission(user, "manpower.admin.full_access") &&
       !hasPermission(user, "manpower.schedule.view")) {
-    const scopePermission = isSecurity ? "manpower.security.view" : "manpower.fm.view";
+    const scopePermission = operationType === "SECURITY_GUARDING" ? "manpower.security.view" : "manpower.fm.view";
     if (!hasPermission(user, scopePermission)) {
       return NextResponse.json({ error: "Forbidden: You do not have permission to view coverage metrics." }, { status: 403 });
     }
   }
 
   try {
+    // Check if period is locked
+    const lock = await prisma.manpowerSchedulingPeriodLock.findFirst({
+      where: {
+        operationType,
+        period: monthStr,
+        locked: true
+      }
+    });
+    const periodLocked = !!lock;
+
     // Parse year and month
     const [year, month] = monthStr.split("-").map(Number);
     const startDate = new Date(year, month - 1, 1);
@@ -44,7 +66,7 @@ export async function GET(request: Request) {
 
     const slots = await prisma.rosterRequirementSlot.findMany({
       where: {
-        contractId,
+        ...contractFilter,
         businessDate: { gte: startDate, lte: endDate },
         fulfillmentStatus: { not: "CANCELLED" }
       },
@@ -102,15 +124,19 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       success: true,
+      locked: periodLocked,
       summary: {
+        totalSlotsCount: monthlyRequired,
+        filledSlotsCount: monthlyFilled,
+        vacantSlotsCount: monthlyVacant,
+        coveragePercentage: monthlyCoveragePercentage,
         requiredCount: monthlyRequired,
         filledCount: monthlyFilled,
         vacantCount: monthlyVacant,
-        coveragePercentage: monthlyCoveragePercentage
-      },
-      days
+        days
+      }
     });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message || "Failed to calculate coverage metrics" }, { status: 500 });
+    return NextResponse.json({ error: error.message || "Failed to fetch coverage metrics" }, { status: 500 });
   }
 }

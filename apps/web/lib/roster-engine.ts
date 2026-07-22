@@ -141,11 +141,7 @@ export async function syncSlotsForContractDate(
   // 2. Check if contract is terminated on or before this date
   const isTerminated = contract.status === "TERMINATED" && contract.terminatedAt && qatarDate >= new Date(getQatarDateString(contract.terminatedAt));
 
-  // Determine location details (mutually exclusive siteId vs externalVenueSnapshot)
-  const siteId = contract.siteId || null;
-  const externalVenueSnapshot = !siteId ? contract.eventVenue : null;
-  const locationKey = siteId ? `site:${siteId}` : (contract.eventVenue ? `venue:${contract.eventVenue}` : "unknown");
-
+  // Determine location details and resolve sites to sync
   // Load or create project for foreign key constraints
   let project = await tx.manpowerProject.findFirst({
     where: { contractId: contract.id }
@@ -160,6 +156,28 @@ export async function syncSlotsForContractDate(
         isActive: true
       }
     });
+  }
+
+  const sitesToSync: Array<{ projectId: string; siteId: string | null; externalVenueSnapshot: string | null }> = [];
+
+  if (contract.siteId) {
+    sitesToSync.push({ projectId: project.id, siteId: contract.siteId, externalVenueSnapshot: null });
+  } else if (contract.eventVenue) {
+    sitesToSync.push({ projectId: project.id, siteId: null, externalVenueSnapshot: contract.eventVenue });
+  } else {
+    const projectsWithSites = await tx.manpowerProject.findMany({
+      where: { contractId: contract.id },
+      include: { sites: { where: { operationType: contract.operationType } } }
+    });
+    for (const proj of projectsWithSites) {
+      for (const site of proj.sites) {
+        sitesToSync.push({ projectId: proj.id, siteId: site.id, externalVenueSnapshot: null });
+      }
+    }
+  }
+
+  if (sitesToSync.length === 0) {
+    throw new Error(`Contract ${contract.contractNumber} is missing a valid project/site allocation or event location.`);
   }
 
   // Load any company record to satisfy foreign key if needed
@@ -206,67 +224,85 @@ export async function syncSlotsForContractDate(
     return { generated: 0, cancelled: cancelledCount, exceptions };
   }
 
+  // Validate requirements existence before generating
+  const manpowerCount = await tx.contractManpowerRequirement.count({
+    where: { contractId }
+  });
+  if (manpowerCount === 0) {
+    throw new Error(`Contract ${contract.contractNumber} has no manpower requirements.`);
+  }
+  if (contract.shiftRequirements.length === 0) {
+    throw new Error(`Contract ${contract.contractNumber} has no active shift requirements.`);
+  }
+
   // Get active requirements for this date
   const activeReqs = await getEffectiveRequirementsForDate(contractId, qatarDate);
 
-  // Generate slots for each requirement
-  for (const req of activeReqs) {
-    const shifts = contract.shiftRequirements.length > 0
-      ? contract.shiftRequirements
-      : [{ id: null, shiftName: "Standard Shift", startTime: "06:00", endTime: "18:00" }];
+  // Generate slots for each resolved site
+  for (const siteInfo of sitesToSync) {
+    const locationKey = siteInfo.siteId 
+      ? `site:${siteInfo.siteId}` 
+      : (siteInfo.externalVenueSnapshot ? `venue:${siteInfo.externalVenueSnapshot}` : "unknown");
 
-    for (const shift of shifts) {
-      const shiftKey = shift.id ? `shift:${shift.id}` : "shift:DEFAULT";
-      
-      // Generate up to quantity slots
-      for (let i = 1; i <= req.quantity; i++) {
-        const generationKey = `${req.contractRequirementId}:${dateStr}:${shiftKey}:${i}`;
-        generatedKeys.add(generationKey);
+    for (const req of activeReqs) {
+      const shifts = contract.shiftRequirements.length > 0
+        ? contract.shiftRequirements
+        : [{ id: null, shiftName: "Standard Shift", startTime: "06:00", endTime: "18:00" }];
 
-        // Find or create slot idempotently
-        const existingSlot = await tx.rosterRequirementSlot.findUnique({
-          where: { generationKey },
-          include: { assignments: { where: { historyStatus: "ACTIVE" } } }
-        });
+      for (const shift of shifts) {
+        const shiftKey = shift.id ? `shift:${shift.id}` : "shift:DEFAULT";
+        
+        // Generate up to quantity slots
+        for (let i = 1; i <= req.quantity; i++) {
+          const genSitePart = siteInfo.siteId || siteInfo.externalVenueSnapshot || "null";
+          const generationKey = `${req.contractRequirementId}:${dateStr}:${shiftKey}:${genSitePart}:${i}`;
+          generatedKeys.add(generationKey);
 
-        if (!existingSlot) {
-          await tx.rosterRequirementSlot.create({
-            data: {
-              operationType: contract.operationType,
-              companyId: dbCompanyId,
-              contractId,
-              projectId: project.id,
-              siteId: contract.siteId,
-              externalVenueSnapshot,
-              locationKey,
-              contractRequirementId: req.contractRequirementId,
-              addendumId: req.addendumId,
-              addendumLineItemId: req.addendumLineItemId,
-              sourceType: req.sourceType,
-              sourceEffectiveFrom: req.sourceEffectiveFrom,
-              sourceEffectiveTo: req.sourceEffectiveTo,
-              sourceVersion: req.sourceVersion,
-              businessDate: qatarDate,
-              shiftRequirementId: shift.id,
-              shiftKey,
-              slotIndex: i,
-              generationKey,
-              snapshotPosition: req.position,
-              snapshotShiftName: shift.shiftName,
-              snapshotStartTime: shift.startTime,
-              snapshotEndTime: shift.endTime,
-              fulfillmentStatus: "VACANT",
-              scheduleStatus: contract.status === "APPROVED" ? "DRAFT" : "DRAFT"
-            }
+          // Find or create slot idempotently
+          const existingSlot = await tx.rosterRequirementSlot.findUnique({
+            where: { generationKey },
+            include: { assignments: { where: { historyStatus: "ACTIVE" } } }
           });
-          generatedCount++;
-        } else if (existingSlot.fulfillmentStatus === "CANCELLED") {
-          // Reactivate previously cancelled slot if quantity/requirements restored
-          await tx.rosterRequirementSlot.update({
-            where: { id: existingSlot.id },
-            data: { fulfillmentStatus: "VACANT" }
-          });
-          generatedCount++;
+
+          if (!existingSlot) {
+            await tx.rosterRequirementSlot.create({
+              data: {
+                operationType: contract.operationType,
+                companyId: dbCompanyId,
+                contractId,
+                projectId: siteInfo.projectId,
+                siteId: siteInfo.siteId,
+                externalVenueSnapshot: siteInfo.externalVenueSnapshot,
+                locationKey,
+                contractRequirementId: req.contractRequirementId,
+                addendumId: req.addendumId,
+                addendumLineItemId: req.addendumLineItemId,
+                sourceType: req.sourceType,
+                sourceEffectiveFrom: req.sourceEffectiveFrom,
+                sourceEffectiveTo: req.sourceEffectiveTo,
+                sourceVersion: req.sourceVersion,
+                businessDate: qatarDate,
+                shiftRequirementId: shift.id,
+                shiftKey,
+                slotIndex: i,
+                generationKey,
+                snapshotPosition: req.position,
+                snapshotShiftName: shift.shiftName,
+                snapshotStartTime: shift.startTime,
+                snapshotEndTime: shift.endTime,
+                fulfillmentStatus: "VACANT",
+                scheduleStatus: "DRAFT"
+              }
+            });
+            generatedCount++;
+          } else if (existingSlot.fulfillmentStatus === "CANCELLED") {
+            // Reactivate previously cancelled slot if quantity/requirements restored
+            await tx.rosterRequirementSlot.update({
+              where: { id: existingSlot.id },
+              data: { fulfillmentStatus: "VACANT" }
+            });
+            generatedCount++;
+          }
         }
       }
     }

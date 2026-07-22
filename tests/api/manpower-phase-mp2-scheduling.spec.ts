@@ -230,8 +230,18 @@ describe("Manpower Planning Phase MP-2A Roster-Scheduling Complete Release Harde
         endDate: new Date("2026-07-23"),
         operationType: "SECURITY_GUARDING",
         status: "APPROVED",
+        siteId: mockSite.id,
         manpowerRequirements: {
           create: { position: "Guard", quantity: 1, deploymentType: "Permanent" }
+        },
+        shiftRequirements: {
+          create: {
+            shiftName: "Day Shift",
+            startTime: "06:00",
+            endTime: "18:00",
+            postsCovered: 1,
+            daysPattern: "Daily"
+          }
         }
       }
     });
@@ -253,8 +263,18 @@ describe("Manpower Planning Phase MP-2A Roster-Scheduling Complete Release Harde
         endDate: new Date("2026-07-20"),
         operationType: "SECURITY_GUARDING",
         status: "ACTIVE",
+        siteId: mockSite.id,
         manpowerRequirements: {
           create: { position: "Guard", quantity: 1, deploymentType: "Permanent" }
+        },
+        shiftRequirements: {
+          create: {
+            shiftName: "Day Shift",
+            startTime: "06:00",
+            endTime: "18:00",
+            postsCovered: 1,
+            daysPattern: "Daily"
+          }
         }
       }
     });
@@ -277,8 +297,18 @@ describe("Manpower Planning Phase MP-2A Roster-Scheduling Complete Release Harde
         endDate: new Date("2026-07-10"),
         operationType: "SECURITY_GUARDING",
         status: "ACTIVE",
+        siteId: mockSite.id,
         manpowerRequirements: {
           create: { position: "Guard", quantity: 1, deploymentType: "Permanent" }
+        },
+        shiftRequirements: {
+          create: {
+            shiftName: "Day Shift",
+            startTime: "06:00",
+            endTime: "18:00",
+            postsCovered: 1,
+            daysPattern: "Daily"
+          }
         }
       }
     });
@@ -302,8 +332,18 @@ describe("Manpower Planning Phase MP-2A Roster-Scheduling Complete Release Harde
         operationType: "SECURITY_GUARDING",
         status: "TERMINATED",
         terminatedAt: new Date("2026-07-10"),
+        siteId: mockSite.id,
         manpowerRequirements: {
           create: { position: "Guard", quantity: 1, deploymentType: "Permanent" }
+        },
+        shiftRequirements: {
+          create: {
+            shiftName: "Day Shift",
+            startTime: "06:00",
+            endTime: "18:00",
+            postsCovered: 1,
+            daysPattern: "Daily"
+          }
         }
       }
     });
@@ -548,8 +588,18 @@ describe("Manpower Planning Phase MP-2A Roster-Scheduling Complete Release Harde
         endDate: new Date("2026-02-28"),
         operationType: "SECURITY_GUARDING",
         status: "ACTIVE",
+        siteId: mockSite.id,
         manpowerRequirements: {
           create: { position: "Guard", quantity: 1, deploymentType: "Permanent" }
+        },
+        shiftRequirements: {
+          create: {
+            shiftName: "Day Shift",
+            startTime: "06:00",
+            endTime: "18:00",
+            postsCovered: 1,
+            daysPattern: "Daily"
+          }
         }
       }
     });
@@ -572,8 +622,18 @@ describe("Manpower Planning Phase MP-2A Roster-Scheduling Complete Release Harde
         endDate: new Date("2028-02-29"),
         operationType: "SECURITY_GUARDING",
         status: "ACTIVE",
+        siteId: mockSite.id,
         manpowerRequirements: {
           create: { position: "Guard", quantity: 1, deploymentType: "Permanent" }
+        },
+        shiftRequirements: {
+          create: {
+            shiftName: "Day Shift",
+            startTime: "06:00",
+            endTime: "18:00",
+            postsCovered: 1,
+            daysPattern: "Daily"
+          }
         }
       }
     });
