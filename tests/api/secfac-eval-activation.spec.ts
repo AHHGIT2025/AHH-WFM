@@ -60,6 +60,9 @@ describe("SECFAC Phase 5C — Controlled Evaluation Worker Activation Suite", ()
       delete process.env.SECFAC_NOTIFICATION_WORKER_ENABLED;
       delete process.env.SECFAC_EMAIL_ENABLED;
 
+      await prisma.secFacAlertNotification.deleteMany({
+        where: { operationType: "SECURITY_GUARDING" }
+      });
       const report = await runControlledEvaluationPilot(3, "SECURITY_GUARDING", "PROJ-SEC-01");
 
       expect(report.operationType).toBe("SECURITY_GUARDING");

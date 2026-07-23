@@ -125,6 +125,9 @@ describe("SECFAC Phase 5D — Operational Monitoring & Stabilization Suite", () 
 
   describe("2. Queue Metrics, Thresholds & Scope Isolation", () => {
     it("7. calculates queue health metrics and status", async () => {
+      await prisma.secFacAlertNotification.deleteMany({
+        where: { operationType: testOp, channel: "IN_APP", status: "PENDING" }
+      });
       const queue = await getQueueHealth(testOp, "IN_APP");
       expect(queue.operationType).toBe(testOp);
       expect(queue.channel).toBe("IN_APP");

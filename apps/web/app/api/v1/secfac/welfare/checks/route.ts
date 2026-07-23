@@ -9,6 +9,8 @@ export async function GET(req: NextRequest) {
     const status = searchParams.get("status") || undefined;
     const siteId = searchParams.get("siteId") || undefined;
     const employeeId = searchParams.get("employeeId") || undefined;
+    const contractId = searchParams.get("contractId") || undefined;
+    const postId = searchParams.get("postId") || undefined;
 
     const auth = await checkApiAuth(undefined, {
       requiredOperation: operationType || undefined,
@@ -21,6 +23,8 @@ export async function GET(req: NextRequest) {
     if (status) where.status = status;
     if (siteId) where.siteId = siteId;
     if (employeeId) where.employeeId = employeeId;
+    if (contractId) where.contractId = contractId;
+    if (postId) where.postId = postId;
 
     const checks = await prisma.secFacWelfareCheck.findMany({
       where,
