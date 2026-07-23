@@ -133,8 +133,9 @@ export async function POST(req: NextRequest) {
           });
         } else {
           for (const asg of slotAssignments) {
-            const role = asg.assignmentRole === "RELIEVER" ? "RELIEVER" : "PRIMARY";
-            const cov = asg.assignmentRole === "RELIEVER" ? "RELIEVER_DUTY" : "PRIMARY_DUTY";
+            const isReliever = asg.assignmentType === "RELIEVER" || (asg as any).assignmentRole === "RELIEVER";
+            const role = isReliever ? "RELIEVER" : "PRIMARY";
+            const cov = isReliever ? "RELIEVER_DUTY" : "PRIMARY_DUTY";
             await tx.rosterPublicationSlot.create({
               data: {
                 publicationId: pub.id,

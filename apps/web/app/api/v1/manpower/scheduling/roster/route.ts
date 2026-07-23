@@ -128,6 +128,10 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ success: true, slots });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message || "Failed to fetch roster slots" }, { status: 500 });
+    console.error("[GET /api/v1/manpower/scheduling/roster Error]", error);
+    const userMessage = typeof error?.message === "string" && !error.message.includes("prisma") && !error.message.includes("invocation") && !error.message.includes("database")
+      ? error.message
+      : "Unable to load roster data. Please contact the system administrator.";
+    return NextResponse.json({ error: userMessage }, { status: 500 });
   }
 }

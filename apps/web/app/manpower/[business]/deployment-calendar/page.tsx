@@ -233,20 +233,32 @@ export default function RosterBoardPage() {
           setCoverageMetrics(coverageJson.summary || null);
           setPeriodLocked(coverageJson.locked || false);
         } else {
-          setApiError(rosterJson.error || coverageJson.error || "Failed to parse data");
+          const rawErr = rosterJson.error || coverageJson.error || "Failed to parse data";
+          const userMsg = typeof rawErr === "string" && (rawErr.includes("prisma") || rawErr.includes("invocation") || rawErr.includes("column") || rawErr.includes("database"))
+            ? "Unable to load roster data. Please contact the system administrator."
+            : rawErr;
+          setApiError(userMsg);
           setSlots([]);
           setCoverageMetrics(null);
         }
       } else {
         const errRes = !rosterRes.ok ? rosterRes : coverageRes;
         const errJson = await errRes.json().catch(() => ({}));
-        setApiError(errJson.error || `Server error (${errRes.status})`);
+        const rawErr = errJson.error || `Server error (${errRes.status})`;
+        const userMsg = typeof rawErr === "string" && (rawErr.includes("prisma") || rawErr.includes("invocation") || rawErr.includes("column") || rawErr.includes("database"))
+          ? "Unable to load roster data. Please contact the system administrator."
+          : rawErr;
+        setApiError(userMsg);
         setSlots([]);
         setCoverageMetrics(null);
       }
     } catch (e: any) {
       console.error("Failed to fetch roster scheduling data", e);
-      setApiError(e.message || "Failed to fetch roster scheduling data");
+      const rawMsg = e.message || "Failed to fetch roster scheduling data";
+      const userMsg = typeof rawMsg === "string" && (rawMsg.includes("prisma") || rawMsg.includes("invocation") || rawMsg.includes("column") || rawMsg.includes("database"))
+        ? "Unable to load roster data. Please contact the system administrator."
+        : rawMsg;
+      setApiError(userMsg);
       setSlots([]);
       setCoverageMetrics(null);
     } finally {

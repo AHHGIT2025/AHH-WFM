@@ -169,6 +169,10 @@ export async function GET(request: Request) {
       }
     });
   } catch (error: any) {
-    return NextResponse.json({ error: error.message || "Failed to fetch coverage metrics" }, { status: 500 });
+    console.error("[GET /api/v1/manpower/scheduling/coverage Error]", error);
+    const userMessage = typeof error?.message === "string" && !error.message.includes("prisma") && !error.message.includes("invocation") && !error.message.includes("database")
+      ? error.message
+      : "Unable to load coverage data. Please contact the system administrator.";
+    return NextResponse.json({ error: userMessage }, { status: 500 });
   }
 }
