@@ -511,7 +511,7 @@ export default function RosterBoardPage() {
             <button
               onClick={handleSyncSlots}
               disabled={syncingContracts || selectedContract === "all" || periodLocked || (selectedContract !== "all" && !contracts.find(c => c.id === selectedContract)?.syncEligible)}
-              className="btn btn-outline border border-outline hover:bg-surface-variant text-sm font-medium h-10 px-4 rounded-lg inline-flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="border border-outline hover:bg-surface-variant/50 text-foreground text-sm font-medium h-10 px-4 rounded-lg inline-flex items-center gap-2 focus-visible:ring-2 focus-visible:ring-secondary/50 focus-visible:ring-offset-2 outline-none disabled:bg-surface-container disabled:text-on-surface-variant/50 disabled:border-transparent disabled:cursor-not-allowed disabled:opacity-100"
             >
               <RefreshCw className={`h-4 w-4 ${syncingContracts ? "animate-spin" : ""}`} aria-hidden="true" />
               {syncingContracts ? "Syncing..." : "Sync Contract Slots"}
@@ -520,7 +520,7 @@ export default function RosterBoardPage() {
             <button
               onClick={handlePublishRoster}
               disabled={publishingRoster || selectedContract === "all" || periodLocked}
-              className="btn bg-primary text-primary-foreground hover:bg-primary/95 text-sm font-medium h-10 px-4 rounded-lg inline-flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="bg-secondary text-white hover:bg-[#0047a3] text-sm font-medium h-10 px-4 rounded-lg inline-flex items-center gap-2 focus-visible:ring-2 focus-visible:ring-secondary/50 focus-visible:ring-offset-2 outline-none disabled:bg-surface-container disabled:text-on-surface-variant/50 disabled:cursor-not-allowed disabled:opacity-100"
               aria-label="Publish Month Roster"
             >
               <Upload className="h-4 w-4" aria-hidden="true" />
@@ -530,9 +530,9 @@ export default function RosterBoardPage() {
             <button
               onClick={handleToggleLock}
               disabled={processingLock}
-              className={`btn text-sm font-medium h-10 px-4 rounded-lg inline-flex items-center gap-2 border ${
+              className={`text-sm font-medium h-10 px-4 rounded-lg inline-flex items-center gap-2 border focus-visible:ring-2 focus-visible:ring-secondary/50 focus-visible:ring-offset-2 outline-none disabled:bg-surface-container disabled:text-on-surface-variant/50 disabled:border-transparent disabled:cursor-not-allowed disabled:opacity-100 ${
                 periodLocked
-                  ? "bg-destructive/10 text-destructive border-destructive/20 hover:bg-destructive/15"
+                  ? "bg-status-error/10 text-status-error border-status-error/20 hover:bg-status-error/15"
                   : "border-outline hover:bg-surface-variant text-foreground"
               }`}
             >
