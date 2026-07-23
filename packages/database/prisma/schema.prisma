@@ -148,6 +148,11 @@ model Employee {
   rosterSlotsAssigned           RosterSlotAssignment[]                 @relation("AssignedByEmployee")
   rosterSlotsUnassigned         RosterSlotAssignment[]                 @relation("UnassignedByEmployee")
   publishedPublications         RosterPublication[]                    @relation("PublishedByEmployee")
+  cancelledPublications         RosterPublication[]                    @relation("CancelledPublicationByEmployee")
+  requestedChangeRequests       RosterChangeRequest[]                  @relation("ChangeRequestedByEmployee")
+  reviewedChangeRequests        RosterChangeRequest[]                  @relation("ChangeReviewedByEmployee")
+  targetChangeRequests          RosterChangeRequest[]                  @relation("ChangeRequestTargetEmployee")
+  slotAcknowledgments           RosterSlotAcknowledgment[]             @relation("EmployeeSlotAcknowledgments")
   lockedSchedulingLocks         ManpowerSchedulingPeriodLock[]         @relation("LockedByEmployee")
   rosterPlanningExceptions      RosterPlanningException[]              @relation("EmployeePlanningExceptions")
   cancelledExceptions           RosterPlanningException[]              @relation("CancelledByEmployee")
@@ -1343,18 +1348,19 @@ model ManpowerContract {
   terminatedBy           String?
   terminationStatus      String? // e.g. "PENDING_APPROVAL", "APPROVED"
 
-  contractType       String                    @default("PERMANENT") // "PERMANENT", "FIXED_TERM", "TEMPORARY", "EVENT", "CALL_OFF", "HOURLY_SERVICE"
-  billingBasis       String? // "HOURLY", "DAILY", "MONTHLY"
-  serviceStartAt     DateTime?
-  serviceEndAt       DateTime?
-  eventVenue         String?
-  eventDetails       String?                   @db.Text
-  mobilisationStatus String                    @default("NOT_REQUIRED") // "NOT_REQUIRED", "PENDING", "MOBILISED", "COMPLETED", "CLOSED"
-  siteId             String?
-  site               ManpowerSite?             @relation(fields: [siteId], references: [id], onDelete: SetNull)
-  rosterSlots        RosterRequirementSlot[]
-  rosterPublications RosterPublication[]
-  rosterExceptions   RosterPlanningException[]
+  contractType        String                    @default("PERMANENT") // "PERMANENT", "FIXED_TERM", "TEMPORARY", "EVENT", "CALL_OFF", "HOURLY_SERVICE"
+  billingBasis        String? // "HOURLY", "DAILY", "MONTHLY"
+  serviceStartAt      DateTime?
+  serviceEndAt        DateTime?
+  eventVenue          String?
+  eventDetails        String?                   @db.Text
+  mobilisationStatus  String                    @default("NOT_REQUIRED") // "NOT_REQUIRED", "PENDING", "MOBILISED", "COMPLETED", "CLOSED"
+  siteId              String?
+  site                ManpowerSite?             @relation(fields: [siteId], references: [id], onDelete: SetNull)
+  rosterSlots         RosterRequirementSlot[]
+  rosterPublications  RosterPublication[]
+  rosterExceptions    RosterPlanningException[]
+  RosterChangeRequest RosterChangeRequest[]
 }
 
 model ManpowerProject {
@@ -1417,6 +1423,7 @@ model ManpowerSite {
   rosterSlots               RosterRequirementSlot[]
   rosterPublications        RosterPublication[]
   rosterExceptions          RosterPlanningException[]
+  RosterChangeRequest       RosterChangeRequest[]
 }
 
 model SecuritySiteManpowerAllocation {
@@ -3100,6 +3107,7 @@ model RosterRequirementSlot {
   assignments           RosterSlotAssignment[]
   publicationSlots      RosterPublicationSlot[]
   planningExceptions    RosterPlanningException[]
+  RosterChangeRequest   RosterChangeRequest[]
 
   @@index([contractId])
   @@index([projectId])
@@ -3132,52 +3140,175 @@ model RosterSlotAssignment {
   createdAt               DateTime              @default(now())
   updatedAt               DateTime              @updatedAt
 
-  replacesAssignmentId String?
-  replaces             RosterSlotAssignment?     @relation("RosterAssignmentReplacements", fields: [replacesAssignmentId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  replacements         RosterSlotAssignment[]    @relation("RosterAssignmentReplacements")
-  planningExceptionId  String?
-  planningException    RosterPlanningException?  @relation("ExceptionRelievers", fields: [planningExceptionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  activeCoverageKey    String?                   @unique
-  primaryExceptions    RosterPlanningException[] @relation("PrimaryAssignmentExceptions")
+  replacesAssignmentId     String?
+  replaces                 RosterSlotAssignment?      @relation("RosterAssignmentReplacements", fields: [replacesAssignmentId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  replacements             RosterSlotAssignment[]     @relation("RosterAssignmentReplacements")
+  planningExceptionId      String?
+  planningException        RosterPlanningException?   @relation("ExceptionRelievers", fields: [planningExceptionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  activeCoverageKey        String?                    @unique
+  primaryExceptions        RosterPlanningException[]  @relation("PrimaryAssignmentExceptions")
+  RosterChangeRequest      RosterChangeRequest[]
+  RosterSlotAcknowledgment RosterSlotAcknowledgment[]
 
   @@index([slotId])
   @@index([employeeId])
 }
 
 model RosterPublication {
-  id                 String                  @id @default(uuid())
-  operationType      String // "SECURITY_GUARDING" | "FACILITY_MANAGEMENT"
-  contractId         String
-  contract           ManpowerContract        @relation(fields: [contractId], references: [id], onDelete: Restrict)
-  siteId             String?
-  site               ManpowerSite?           @relation(fields: [siteId], references: [id], onDelete: SetNull)
-  startDate          DateTime                @db.Date
-  endDate            DateTime                @db.Date
-  publicationVersion Int                     @default(1)
-  publishedById      String
-  publishedBy        Employee                @relation("PublishedByEmployee", fields: [publishedById], references: [id], onDelete: Restrict)
-  publishedAt        DateTime                @default(now())
-  createdAt          DateTime                @default(now())
-  updatedAt          DateTime                @updatedAt
-  publicationSlots   RosterPublicationSlot[]
+  id                      String             @id @default(uuid())
+  operationType           String // "SECURITY_GUARDING" | "FACILITY_MANAGEMENT"
+  contractId              String
+  contract                ManpowerContract   @relation(fields: [contractId], references: [id], onDelete: Restrict)
+  siteId                  String?
+  site                    ManpowerSite?      @relation(fields: [siteId], references: [id], onDelete: SetNull)
+  startDate               DateTime           @db.Date
+  endDate                 DateTime           @db.Date
+  seriesKey               String
+  activeSeriesKey         String?            @unique
+  publicationVersion      Int                @default(1)
+  status                  String             @default("ACTIVE") // "ACTIVE" | "SUPERSEDED" | "CANCELLED"
+  revisionReason          String?            @db.Text
+  supersedesPublicationId String?            @unique
+  supersedesPublication   RosterPublication? @relation("PublicationSupercedence", fields: [supersedesPublicationId], references: [id], onDelete: Restrict)
+  supersededBy            RosterPublication? @relation("PublicationSupercedence")
+  supersededAt            DateTime?
+  cancelledById           String?
+  cancelledBy             Employee?          @relation("CancelledPublicationByEmployee", fields: [cancelledById], references: [id], onDelete: SetNull)
+  cancelledAt             DateTime?
+  cancellationReason      String?            @db.Text
+  publishedById           String
+  publishedBy             Employee           @relation("PublishedByEmployee", fields: [publishedById], references: [id], onDelete: Restrict)
+  publishedAt             DateTime           @default(now())
+  createdAt               DateTime           @default(now())
+  updatedAt               DateTime           @updatedAt
+
+  publicationSlots        RosterPublicationSlot[]
+  baseChangeRequests      RosterChangeRequest[]      @relation("BasePublicationChangeRequests")
+  resultingChangeRequests RosterChangeRequest[]      @relation("ResultingPublication")
+  acknowledgments         RosterSlotAcknowledgment[]
+
+  @@unique([seriesKey, publicationVersion])
+  @@index([contractId])
+  @@index([siteId])
+  @@index([seriesKey])
+  @@index([status])
 }
 
 model RosterPublicationSlot {
-  id               String                @id @default(uuid())
-  publicationId    String
-  publication      RosterPublication     @relation(fields: [publicationId], references: [id], onDelete: Cascade)
-  slotId           String
-  slot             RosterRequirementSlot @relation(fields: [slotId], references: [id], onDelete: Restrict)
-  employeeId       String?
-  employeeCode     String?
-  employeeName     String?
-  position         String
-  shiftName        String
-  startTime        String
-  endTime          String
-  businessDate     DateTime              @db.Date
-  assignmentStatus String
-  createdAt        DateTime              @default(now())
+  id                        String                @id @default(uuid())
+  publicationId             String
+  publication               RosterPublication     @relation(fields: [publicationId], references: [id], onDelete: Restrict)
+  slotId                    String
+  slot                      RosterRequirementSlot @relation(fields: [slotId], references: [id], onDelete: Restrict)
+  snapshotKey               String
+  sourceAssignmentId        String?
+  sourceAssignmentRole      String                @default("UNFILLED") // "PRIMARY" | "RELIEVER" | "UNFILLED" | "EXCEPTION"
+  sourcePlanningExceptionId String?
+  coverageType              String                @default("PRIMARY_DUTY") // "PRIMARY_DUTY" | "RELIEVER_DUTY" | "DAY_OFF" | "LEAVE_EFFECT" | "ABSENT" | "VACANT"
+  employeeId                String?
+  employeeCode              String?
+  employeeName              String?
+  position                  String
+  shiftName                 String
+  startTime                 String
+  endTime                   String
+  businessDate              DateTime              @db.Date
+  assignmentStatus          String
+  createdAt                 DateTime              @default(now())
+
+  baseChangeRequests RosterChangeRequest[]      @relation("BasePublicationSlotChangeRequests")
+  acknowledgments    RosterSlotAcknowledgment[]
+
+  @@unique([publicationId, snapshotKey])
+  @@index([publicationId, slotId])
+  @@index([publicationId])
+  @@index([slotId])
+  @@index([employeeId])
+  @@index([businessDate])
+}
+
+model RosterChangeRequest {
+  id                     String                @id @default(uuid())
+  operationType          String // "SECURITY_GUARDING" | "FACILITY_MANAGEMENT"
+  contractId             String
+  contract               ManpowerContract      @relation(fields: [contractId], references: [id], onDelete: Restrict)
+  siteId                 String?
+  site                   ManpowerSite?         @relation(fields: [siteId], references: [id], onDelete: SetNull)
+  basePublicationId      String
+  basePublication        RosterPublication     @relation("BasePublicationChangeRequests", fields: [basePublicationId], references: [id], onDelete: Restrict)
+  basePublicationVersion Int
+  publicationSlotId      String
+  publicationSlot        RosterPublicationSlot @relation("BasePublicationSlotChangeRequests", fields: [publicationSlotId], references: [id], onDelete: Restrict)
+  slotId                 String
+  slot                   RosterRequirementSlot @relation(fields: [slotId], references: [id], onDelete: Restrict)
+  primaryAssignmentId    String?
+  primaryAssignment      RosterSlotAssignment? @relation(fields: [primaryAssignmentId], references: [id], onDelete: SetNull)
+  activeRequestKey       String?               @unique // Format: "REQ:[basePublicationId]:[publicationSlotId]" while PENDING
+  changeType             String // "EMPLOYEE_REPLACEMENT" | "ASSIGNMENT_REMOVAL" | "SHIFT_TIME_CHANGE" | "SLOT_CANCELLATION" | "SLOT_REACTIVATION"
+  targetEmployeeId       String?
+  targetEmployee         Employee?             @relation("ChangeRequestTargetEmployee", fields: [targetEmployeeId], references: [id], onDelete: SetNull)
+  proposedShiftName      String?
+  proposedStartTime      String?
+  proposedEndTime        String?
+  beforeSnapshot         Json
+  proposedSnapshot       Json
+  reason                 String                @db.Text
+  status                 String                @default("PENDING") // "PENDING" | "APPROVED" | "REJECTED" | "WITHDRAWN" | "SUPERSEDED" | "CONFLICTED"
+  requestedById          String
+  requestedBy            Employee              @relation("ChangeRequestedByEmployee", fields: [requestedById], references: [id], onDelete: Restrict)
+  requestedAt            DateTime              @default(now())
+  reviewedById           String?
+  reviewedBy             Employee?             @relation("ChangeReviewedByEmployee", fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviewedAt             DateTime?
+  reviewNotes            String?               @db.Text
+  selfApprovalOverride   Boolean               @default(false)
+  selfApprovalReason     String?               @db.Text
+  resultingPublicationId String?
+  resultingPublication   RosterPublication?    @relation("ResultingPublication", fields: [resultingPublicationId], references: [id], onDelete: SetNull)
+  createdAt              DateTime              @default(now())
+  updatedAt              DateTime              @updatedAt
+
+  @@index([contractId])
+  @@index([basePublicationId])
+  @@index([publicationSlotId])
+  @@index([slotId])
+  @@index([status])
+  @@index([requestedById])
+  @@index([reviewedById])
+}
+
+model RosterSlotAcknowledgment {
+  id                 String                @id @default(uuid())
+  operationType      String // "SECURITY_GUARDING" | "FACILITY_MANAGEMENT"
+  publicationId      String
+  publication        RosterPublication     @relation(fields: [publicationId], references: [id], onDelete: Restrict)
+  publicationVersion Int
+  publicationSlotId  String
+  publicationSlot    RosterPublicationSlot @relation(fields: [publicationSlotId], references: [id], onDelete: Restrict)
+  assignmentId       String?
+  assignment         RosterSlotAssignment? @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
+  employeeId         String
+  employee           Employee              @relation("EmployeeSlotAcknowledgments", fields: [employeeId], references: [id], onDelete: Restrict)
+  acknowledgedAt     DateTime              @default(now())
+  deviceGeneratedAt  DateTime
+  receivedAt         DateTime              @default(now())
+  submittedOffline   Boolean               @default(false)
+  clientRequestId    String                @unique
+  createdAt          DateTime              @default(now())
+
+  @@unique([publicationSlotId, employeeId])
+  @@index([publicationId])
+  @@index([publicationSlotId])
+  @@index([employeeId])
+}
+
+model ManpowerPublicationScopeLock {
+  id         String   @id @default(uuid())
+  lockKey    String   @unique
+  ownerId    String
+  acquiredAt DateTime @default(now())
+  expiresAt  DateTime
+  updatedAt  DateTime @updatedAt
 }
 
 model RosterPlanningException {

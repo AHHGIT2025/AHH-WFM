@@ -44,7 +44,8 @@ export async function checkApiAuth(
 
     // 4. Validate IT/Admin restriction
     // If the API requires admin/settings actions, only allow if user has settings/users/roles manage permissions
-    const requiresAdmin = allowedRoles?.includes("ADMIN") || options?.requiredPermission?.startsWith("settings.") || options?.requiredPermission?.startsWith("users.") || options?.requiredPermission?.startsWith("roles.");
+    const isOnlyAdminRoles = allowedRoles && allowedRoles.length > 0 && allowedRoles.every(r => ["ADMIN", "SUPER_ADMIN", "SYSTEM_ADMIN", "IT_ADMIN", "SETTINGS_ADMIN"].includes(r));
+    const requiresAdmin = isOnlyAdminRoles || options?.requiredPermission?.startsWith("settings.") || options?.requiredPermission?.startsWith("users.") || options?.requiredPermission?.startsWith("roles.");
     if (requiresAdmin) {
       const isItAdminRole = ["SUPER_ADMIN", "SYSTEM_ADMIN", "IT_ADMIN", "APPLICATION_ADMIN", "SETTINGS_ADMIN"].includes(userRole?.toUpperCase());
       const hasSystemManage = userPermissions.some((p: string) => p.startsWith("settings.") || p.startsWith("users.") || p.startsWith("roles.") || p.startsWith("system."));

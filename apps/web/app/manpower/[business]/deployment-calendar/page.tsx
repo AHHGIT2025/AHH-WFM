@@ -28,6 +28,9 @@ import {
 } from "lucide-react";
 
 import { DateRangeSelector } from "./components/DateRangeSelector";
+import { RosterPublicationHistoryModal } from "../../../../components/manpower/RosterPublicationHistoryModal";
+import { RosterChangeRequestModal } from "../../../../components/manpower/RosterChangeRequestModal";
+import { History, FileText } from "lucide-react";
 import { DayOffModal } from "./components/DayOffModal";
 import { LeaveEffectModal } from "./components/LeaveEffectModal";
 import { AbsenceModal } from "./components/AbsenceModal";
@@ -173,9 +176,11 @@ export default function RosterBoardPage() {
   const [unlockReason, setUnlockReason] = useState("");
   const [unlockError, setUnlockError] = useState<string | null>(null);
  
-  // Sync operations
+  // Sync & Publication operations
   const [syncingContracts, setSyncingContracts] = useState(false);
   const [publishingRoster, setPublishingRoster] = useState(false);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [showChangeRequestsModal, setShowChangeRequestsModal] = useState(false);
  
   // 1. Fetch filter metadata options
   useEffect(() => {
@@ -381,17 +386,19 @@ export default function RosterBoardPage() {
       alert("Please select a specific contract to publish.");
       return;
     }
-    if (confirm(`Are you sure you want to publish the roster for contract and range?`)) {
+    if (confirm(`Are you sure you want to publish the initial roster for contract and range?`)) {
       setPublishingRoster(true);
       try {
         const [year, month] = selectedMonth.split("-").map(Number);
         const startStr = `${year}-${String(month).padStart(2, "0")}-01`;
         const endStr = new Date(year, month, 0).toISOString().split("T")[0];
+        const opType = business === "security-guarding" ? "SECURITY_GUARDING" : "FACILITY_MANAGEMENT";
 
-        const res = await fetch("/api/v1/manpower/scheduling/publications", {
+        const res = await fetch("/api/v1/manpower/scheduling/publish", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
+            operationType: opType,
             contractId: selectedContract,
             startDate: startStr,
             endDate: endStr
@@ -399,8 +406,11 @@ export default function RosterBoardPage() {
         });
         const json = await res.json();
         if (res.ok && json.success) {
-          alert(`Roster published successfully! ${json.slotsPublishedCount} slots snapshot created.`);
+          alert(`Roster Version 1 published successfully!`);
           fetchRosterData(true);
+        } else if (res.status === 409) {
+          alert(`Active publication already exists. Post-publication changes require an approved RosterChangeRequest.`);
+          setShowChangeRequestsModal(true);
         } else {
           alert(json.error || "Failed to publish roster.");
         }
@@ -578,6 +588,28 @@ export default function RosterBoardPage() {
             >
               <Upload className="h-4 w-4" aria-hidden="true" />
               {publishingRoster ? "Publishing..." : "Publish Month Roster"}
+            </Button>
+
+            <Button
+              variant="secondary"
+              onClick={() => setShowHistoryModal(true)}
+              disabled={selectedContract === "all"}
+              className="h-10 gap-2"
+              aria-label="View Version History"
+            >
+              <History className="h-4 w-4" aria-hidden="true" />
+              Version History
+            </Button>
+
+            <Button
+              variant="secondary"
+              onClick={() => setShowChangeRequestsModal(true)}
+              disabled={selectedContract === "all"}
+              className="h-10 gap-2"
+              aria-label="Change Requests Inbox"
+            >
+              <FileText className="h-4 w-4" aria-hidden="true" />
+              Change Requests
             </Button>
 
             <Button
@@ -1242,6 +1274,26 @@ export default function RosterBoardPage() {
         primaryAssignment={relieverDrawerData?.primaryAssignment}
         onSuccess={() => fetchRosterData(true)}
         periodLocked={periodLocked}
+      />
+
+      <RosterPublicationHistoryModal
+        isOpen={showHistoryModal}
+        onClose={() => setShowHistoryModal(false)}
+        operationType={business === "security-guarding" ? "SECURITY_GUARDING" : "FACILITY_MANAGEMENT"}
+        contractId={selectedContract}
+        siteId={selectedSite !== "all" ? selectedSite : null}
+        onCancelSuccess={() => fetchRosterData(true)}
+      />
+
+      <RosterChangeRequestModal
+        isOpen={showChangeRequestsModal}
+        onClose={() => setShowChangeRequestsModal(false)}
+        operationType={business === "security-guarding" ? "SECURITY_GUARDING" : "FACILITY_MANAGEMENT"}
+        contractId={selectedContract}
+        siteId={selectedSite !== "all" ? selectedSite : null}
+        currentUserEmployeeId={(session?.user as any)?.employeeId || (session?.user as any)?.id}
+        currentUserRole={(session?.user as any)?.role}
+        onReviewSuccess={() => fetchRosterData(true)}
       />
     </div>
   );

@@ -29,7 +29,10 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "secfac.dispatch.view", "secfac.dispatch.respond", "secfac.dispatch.reassign",
     "secfac.welfare.view", "secfac.welfare.manage", "secfac.welfare.acknowledge",
     "secfac.patrolAssurance.view", "secfac.patrolAssurance.manage",
-    "secfac.evidence.verify", "secfac.worker.monitor"
+    "secfac.evidence.verify", "secfac.worker.monitor",
+    "manpower.roster.publish", "manpower.roster.cancel", "manpower.roster.changeRequest.submit", "manpower.roster.changeRequest.review",
+    "manpower.roster.changeRequest.approve", "manpower.roster.changeRequest.reject", "manpower.roster.changeRequest.withdraw",
+    "manpower.roster.changeRequest.selfApprovalOverride", "manpower.roster.acknowledge", "manpower.roster.publication.viewHistory"
   ],
   ADMIN: [
     "dashboard.view", "employees.view", "employees.create", "employees.edit", "employees.bulkUpload", "employees.manage",
@@ -61,7 +64,10 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "secfac.dispatch.view", "secfac.dispatch.respond", "secfac.dispatch.reassign",
     "secfac.welfare.view", "secfac.welfare.manage", "secfac.welfare.acknowledge",
     "secfac.patrolAssurance.view", "secfac.patrolAssurance.manage",
-    "secfac.evidence.verify", "secfac.worker.monitor"
+    "secfac.evidence.verify", "secfac.worker.monitor",
+    "manpower.roster.publish", "manpower.roster.cancel", "manpower.roster.changeRequest.submit", "manpower.roster.changeRequest.review",
+    "manpower.roster.changeRequest.approve", "manpower.roster.changeRequest.reject", "manpower.roster.changeRequest.withdraw",
+    "manpower.roster.publication.viewHistory"
   ],
   SYSTEM_ADMIN: [
     "settings.view", "settings.manage", "users.view", "users.manage", "roles.view", "roles.manage",
@@ -124,7 +130,8 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
   ],
   EMPLOYEE: [
     "dashboard.view", "employees.view", "attendance.view", "leaves.view", "shifts.view",
-    "self.profile.view", "self.attendance.view", "self.attendance.punch", "self.leave.view", "self.leave.apply", "self.announcements.view", "self.password.change"
+    "self.profile.view", "self.attendance.view", "self.attendance.punch", "self.leave.view", "self.leave.apply", "self.announcements.view", "self.password.change",
+    "manpower.roster.acknowledge"
   ],
   SAP_ADMIN: [
     "dashboard.view", "sap.view", "sap.sync", "sap.mapping", "reports.view",
