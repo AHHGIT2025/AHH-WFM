@@ -1,6 +1,35 @@
-module = module || {};
 module.exports = {
   apps: [
+    {
+      name: "ahh-wfm-web-dev",
+      script: "node_modules/next/dist/bin/next",
+      args: "start apps/web -p 3000",
+      cwd: "D:\\Apps\\AHH-WFM\\dev",
+      instances: 1,
+      exec_mode: "fork",
+      autorestart: true,
+      watch: false,
+      max_memory_restart: "1G",
+      env: {
+        NODE_ENV: "development",
+        PORT: 3000
+      }
+    },
+    {
+      name: "ahh-wfm-mobile-dev",
+      script: "node_modules/next/dist/bin/next",
+      args: "start apps/mobile -p 3001",
+      cwd: "D:\\Apps\\AHH-WFM\\dev",
+      instances: 1,
+      exec_mode: "fork",
+      autorestart: true,
+      watch: false,
+      max_memory_restart: "1G",
+      env: {
+        NODE_ENV: "development",
+        PORT: 3001
+      }
+    },
     {
       name: "ahh-wfm-secfac-notification-worker-dev",
       script: "dist/workers/apps/web/workers/secfac-notification-worker.js",

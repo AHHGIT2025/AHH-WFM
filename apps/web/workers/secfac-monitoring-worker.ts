@@ -141,17 +141,66 @@ export async function runMonitoringWorkerCycle(
   }
 }
 
-if (require.main === module) {
-  // Fail fast on a broken Prisma client before entering the cycle.
+const WORKER_ID = `secfac-monitoring-worker-${process.pid}`;
+const MONITORING_INTERVAL_MS = Number(process.env.SECFAC_MONITORING_INTERVAL_MS) || 300000; // 5 minutes
+let isShuttingDown = false;
+let isCycleRunning = false;
+
+async function runFullMonitoringCycle(): Promise<void> {
+  if (isShuttingDown || isCycleRunning) return;
+
+  const isEnabled = process.env.SECFAC_MONITORING_WORKER_ENABLED !== "false";
+  if (!isEnabled) {
+    return;
+  }
+
+  isCycleRunning = true;
+  try {
+    const res = await runMonitoringWorkerCycle("SECURITY_GUARDING", WORKER_ID);
+    console.log("[secfac-monitoring-worker] Cycle completed:", res);
+  } catch (err: any) {
+    console.error("[secfac-monitoring-worker] Cycle error:", err?.message || String(err));
+  } finally {
+    isCycleRunning = false;
+  }
+}
+
+async function startWorkerLoop(): Promise<void> {
   assertPrismaClient();
-  runMonitoringWorkerCycle()
-    .then((res) => {
-      console.log("[secfac-monitoring-worker] Cycle completed:", res);
-      process.exit(0);
-    })
-    .catch((err) => {
-      console.error("[secfac-monitoring-worker] Cycle failed:", err);
-      process.exit(1);
-    });
+
+  console.log(
+    `[secfac-monitoring-worker] Started — ` +
+    `ID: ${WORKER_ID} | Scope: SECURITY_GUARDING | ` +
+    `Interval: ${MONITORING_INTERVAL_MS}ms | ` +
+    `Enabled: ${process.env.SECFAC_MONITORING_WORKER_ENABLED !== "false"}`
+  );
+
+  while (!isShuttingDown) {
+    await runFullMonitoringCycle();
+    await new Promise(resolve => setTimeout(resolve, MONITORING_INTERVAL_MS));
+  }
+
+  console.log("[secfac-monitoring-worker] Gracefully stopped.");
+}
+
+function setupShutdownHandlers(): void {
+  const shutdown = async (signal: string) => {
+    console.log(`[secfac-monitoring-worker] Received ${signal}. Shutting down...`);
+    isShuttingDown = true;
+    await releaseWorkerLock("secfac:worker:monitoring:security_guarding", WORKER_ID).catch(() => {});
+    await prisma.$disconnect();
+    process.exit(0);
+  };
+
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
+  process.on("SIGINT", () => shutdown("SIGINT"));
+}
+
+if (require.main === module) {
+  setupShutdownHandlers();
+  startWorkerLoop().catch((err) => {
+    console.error("[secfac-monitoring-worker] Fatal startup error:", err);
+    process.exit(1);
+  });
 }
 

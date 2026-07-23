@@ -15,6 +15,7 @@
     "build:workers": "tsc -p tsconfig.workers.json && npm run copy:workers-db",
     "start:secfac-notification-worker": "ts-node -T -P scripts/tsconfig.json apps/web/workers/secfac-notification-worker.ts",
     "start:secfac-evaluation-worker": "ts-node -T -P scripts/tsconfig.json apps/web/workers/secfac-evaluation-worker.ts",
+    "start:secfac-monitoring-worker": "ts-node -T -P scripts/tsconfig.json apps/web/workers/secfac-monitoring-worker.ts",
     "build": "npm run build --workspaces",
     "lint": "npm run lint --workspaces",
     "db:generate": "npm run db:generate --workspace=packages/database",
