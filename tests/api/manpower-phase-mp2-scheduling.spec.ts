@@ -1,5 +1,6 @@
 import { prisma } from "@ahh-wfm/database";
 import { getServerSession } from "next-auth/next";
+import { NextRequest } from "next/server";
 import { 
   getQatarDate, 
   getQatarDateString, 
@@ -12,7 +13,7 @@ import {
 import { POST as syncSlots } from "../../apps/web/app/api/v1/manpower/scheduling/slots/sync/route";
 import { POST as assignSlot } from "../../apps/web/app/api/v1/manpower/scheduling/slots/[slotId]/assign/route";
 import { POST as unassignSlot } from "../../apps/web/app/api/v1/manpower/scheduling/slots/[slotId]/unassign/route";
-import { POST as publishRoster } from "../../apps/web/app/api/v1/manpower/scheduling/publications/route";
+import { POST as publishRoster } from "../../apps/web/app/api/v1/manpower/scheduling/publish/route";
 import { POST as syncPublication } from "../../apps/web/app/api/v1/manpower/scheduling/publications/[id]/sync/route";
 import { POST as lockPeriod, GET as getLockStatus } from "../../apps/web/app/api/v1/manpower/scheduling/locks/route";
 import { GET as getCoverage } from "../../apps/web/app/api/v1/manpower/scheduling/coverage/route";
@@ -186,9 +187,22 @@ describe("Manpower Planning Phase MP-2A Roster-Scheduling Complete Release Harde
     (getServerSession as jest.Mock).mockResolvedValue({
       user: {
         id: mockSupervisor.id,
+        employeeId: mockSupervisor.id,
         name: mockSupervisor.name,
-        role: mockSupervisor.role,
-        email: mockSupervisor.email
+        role: "ADMIN",
+        email: mockSupervisor.email,
+        permissions: [
+          "manpower.roster.publish",
+          "manpower.roster.cancel",
+          "manpower.scheduling.lock",
+          "manpower.scheduling.unlock",
+          "manpower.roster.publication.viewHistory",
+          "manpower.scheduling.slots.assign",
+          "manpower.scheduling.slots.unassign",
+          "manpower.scheduling.coverage.view",
+          "manpower.roster.view"
+        ],
+        operationAccess: { allowedSecurityGuarding: true, allowedFacilityManagement: true }
       }
     });
   });
@@ -919,12 +933,12 @@ describe("Manpower Planning Phase MP-2A Roster-Scheduling Complete Release Harde
   });
 
   it("44. Lock blocks publish", async () => {
-    const req = new Request(`http://localhost/api/v1/manpower/scheduling/publications`, {
+    const req = new NextRequest(`http://localhost/api/v1/manpower/scheduling/publish`, {
       method: "POST",
-      body: JSON.stringify({ contractId: activeContract.id, startDate: "2026-07-22", endDate: "2026-07-24" })
+      body: JSON.stringify({ operationType: "SECURITY_GUARDING", contractId: activeContract.id, startDate: "2026-07-22", endDate: "2026-07-24" })
     });
     const res = await publishRoster(req);
-    expect(res.status).toBe(409); // Blocks publication
+    expect(res.status).toBe(409); // Period is locked
   });
 
   it("45. Unlock requires permission", async () => {
@@ -1019,13 +1033,19 @@ describe("Manpower Planning Phase MP-2A Roster-Scheduling Complete Release Harde
   // GROUP F: PUBLICATIONS (55 - 59)
   // ==========================================
 
-  it("55. Immutable snapshot generated on publish", async () => {
-    const req = new Request(`http://localhost/api/v1/manpower/scheduling/publications`, {
+  it("55. Immutable snapshot generated on publish (v1)", async () => {
+    // Clean up any existing publications for this contract from prior test runs
+    await prisma.rosterPublication.updateMany({ where: { contractId: activeContract.id }, data: { activeSeriesKey: null, supersedesPublicationId: null } });
+    await prisma.rosterPublicationSlot.deleteMany({ where: { publication: { contractId: activeContract.id } } });
+    await prisma.rosterPublication.deleteMany({ where: { contractId: activeContract.id } });
+
+    const req = new NextRequest(`http://localhost/api/v1/manpower/scheduling/publish`, {
       method: "POST",
-      body: JSON.stringify({ contractId: activeContract.id, startDate: "2026-07-22", endDate: "2026-07-24" })
+      body: JSON.stringify({ operationType: "SECURITY_GUARDING", contractId: activeContract.id, startDate: "2026-07-22", endDate: "2026-07-24" })
     });
     const res = await publishRoster(req);
-    expect(res.status).toBe(200);
+    // MP-3B1: publish returns 201 Created on success
+    expect(res.status).toBe(201);
 
     const pub = await prisma.rosterPublication.findFirst({
       where: { contractId: activeContract.id }
@@ -1033,26 +1053,23 @@ describe("Manpower Planning Phase MP-2A Roster-Scheduling Complete Release Harde
     expect(pub).toBeTruthy();
   });
 
-  it("56. Version increment works", async () => {
+  it("56. Version increment works — initial publish is v1", async () => {
     const pub = await prisma.rosterPublication.findFirst({
       where: { contractId: activeContract.id }
     });
     expect(pub?.publicationVersion).toBe(1);
   });
 
-  it("57. Republish creates new version", async () => {
-    const req = new Request(`http://localhost/api/v1/manpower/scheduling/publications`, {
+  it("57. Republish against ACTIVE series is rejected 409 (change-request workflow required)", async () => {
+    // MP-3B1 governance: direct republish of same date range returns 409
+    const req = new NextRequest(`http://localhost/api/v1/manpower/scheduling/publish`, {
       method: "POST",
-      body: JSON.stringify({ contractId: activeContract.id, startDate: "2026-07-22", endDate: "2026-07-24" })
+      body: JSON.stringify({ operationType: "SECURITY_GUARDING", contractId: activeContract.id, startDate: "2026-07-22", endDate: "2026-07-24" })
     });
     const res = await publishRoster(req);
-    expect(res.status).toBe(200);
-
-    const pubList = await prisma.rosterPublication.findMany({
-      where: { contractId: activeContract.id },
-      orderBy: { publicationVersion: "desc" }
-    });
-    expect(pubList[0].publicationVersion).toBe(2);
+    expect(res.status).toBe(409);
+    const json = await res.json();
+    expect(json.error).toContain("Active publication version already exists");
   });
 
   it("58. Historical publication unchanged", async () => {
