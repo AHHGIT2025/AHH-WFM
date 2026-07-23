@@ -14,7 +14,7 @@ import { POST as assignSlot } from "../../apps/web/app/api/v1/manpower/schedulin
 import { POST as unassignSlot } from "../../apps/web/app/api/v1/manpower/scheduling/slots/[slotId]/unassign/route";
 import { POST as publishRoster } from "../../apps/web/app/api/v1/manpower/scheduling/publications/route";
 import { POST as syncPublication } from "../../apps/web/app/api/v1/manpower/scheduling/publications/[id]/sync/route";
-import { POST as lockPeriod } from "../../apps/web/app/api/v1/manpower/scheduling/locks/route";
+import { POST as lockPeriod, GET as getLockStatus } from "../../apps/web/app/api/v1/manpower/scheduling/locks/route";
 import { GET as getCoverage } from "../../apps/web/app/api/v1/manpower/scheduling/coverage/route";
 import { GET as getRoster } from "../../apps/web/app/api/v1/manpower/scheduling/roster/route";
 
@@ -1117,5 +1117,221 @@ describe("Manpower Planning Phase MP-2A Roster-Scheduling Complete Release Harde
 
   it("70. Phase 5D monitors untouched", async () => {
     expect(true).toBe(true);
+  });
+
+  it("71. GET unlocked period", async () => {
+    await prisma.manpowerSchedulingPeriodLock.deleteMany({ where: { period: "2026-07" } });
+    const req = new Request("http://localhost/api/v1/manpower/scheduling/locks?operationType=SECURITY_GUARDING&period=2026-07");
+    const res = await getLockStatus(req);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.locked).toBe(false);
+  });
+
+  it("72. GET locked period", async () => {
+    await prisma.manpowerSchedulingPeriodLock.deleteMany({ where: { period: "2026-07" } });
+    await prisma.manpowerSchedulingPeriodLock.create({
+      data: { operationType: "SECURITY_GUARDING", period: "2026-07", locked: true }
+    });
+    const req = new Request("http://localhost/api/v1/manpower/scheduling/locks?operationType=SECURITY_GUARDING&period=2026-07");
+    const res = await getLockStatus(req);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.locked).toBe(true);
+  });
+
+  it("73. Lock an unlocked period", async () => {
+    await prisma.manpowerSchedulingPeriodLock.deleteMany({ where: { period: "2026-07" } });
+    const req = new Request("http://localhost/api/v1/manpower/scheduling/locks", {
+      method: "POST",
+      body: JSON.stringify({ operationType: "SECURITY_GUARDING", period: "2026-07", locked: true })
+    });
+    const res = await lockPeriod(req);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.locked).toBe(true);
+  });
+
+  it("74. Duplicate lock returns 409", async () => {
+    await prisma.manpowerSchedulingPeriodLock.deleteMany({ where: { period: "2026-07" } });
+    await prisma.manpowerSchedulingPeriodLock.create({
+      data: { operationType: "SECURITY_GUARDING", period: "2026-07", locked: true }
+    });
+    const req = new Request("http://localhost/api/v1/manpower/scheduling/locks", {
+      method: "POST",
+      body: JSON.stringify({ operationType: "SECURITY_GUARDING", period: "2026-07", locked: true })
+    });
+    const res = await lockPeriod(req);
+    expect(res.status).toBe(409);
+  });
+
+  it("75. Unlock requires reason", async () => {
+    await prisma.manpowerSchedulingPeriodLock.deleteMany({ where: { period: "2026-07" } });
+    await prisma.manpowerSchedulingPeriodLock.create({
+      data: { operationType: "SECURITY_GUARDING", period: "2026-07", locked: true }
+    });
+    const req = new Request("http://localhost/api/v1/manpower/scheduling/locks", {
+      method: "POST",
+      body: JSON.stringify({ operationType: "SECURITY_GUARDING", period: "2026-07", locked: false })
+    });
+    const res = await lockPeriod(req);
+    expect(res.status).toBe(400);
+  });
+
+  it("76. Whitespace reason rejected", async () => {
+    await prisma.manpowerSchedulingPeriodLock.deleteMany({ where: { period: "2026-07" } });
+    await prisma.manpowerSchedulingPeriodLock.create({
+      data: { operationType: "SECURITY_GUARDING", period: "2026-07", locked: true }
+    });
+    const req = new Request("http://localhost/api/v1/manpower/scheduling/locks", {
+      method: "POST",
+      body: JSON.stringify({ operationType: "SECURITY_GUARDING", period: "2026-07", locked: false, unlockReason: "   " })
+    });
+    const res = await lockPeriod(req);
+    expect(res.status).toBe(400);
+  });
+
+  it("77. Unauthorized lock rejected", async () => {
+    await prisma.manpowerSchedulingPeriodLock.deleteMany({ where: { period: "2026-07" } });
+    (getServerSession as jest.Mock).mockResolvedValue({
+      user: { id: "emp-regular-guard", role: "EMPLOYEE" }
+    });
+    const req = new Request("http://localhost/api/v1/manpower/scheduling/locks", {
+      method: "POST",
+      body: JSON.stringify({ operationType: "SECURITY_GUARDING", period: "2026-07", locked: true })
+    });
+    const res = await lockPeriod(req);
+    expect(res.status).toBe(403);
+  });
+
+  it("78. Unauthorized unlock rejected", async () => {
+    await prisma.manpowerSchedulingPeriodLock.deleteMany({ where: { period: "2026-07" } });
+    await prisma.manpowerSchedulingPeriodLock.create({
+      data: { operationType: "SECURITY_GUARDING", period: "2026-07", locked: true }
+    });
+    (getServerSession as jest.Mock).mockResolvedValue({
+      user: { id: "emp-regular-guard", role: "EMPLOYEE" }
+    });
+    const req = new Request("http://localhost/api/v1/manpower/scheduling/locks", {
+      method: "POST",
+      body: JSON.stringify({ operationType: "SECURITY_GUARDING", period: "2026-07", locked: false, unlockReason: "Reason" })
+    });
+    const res = await lockPeriod(req);
+    expect(res.status).toBe(403);
+  });
+
+  it("79. Authorized unlock succeeds", async () => {
+    (getServerSession as jest.Mock).mockResolvedValue({
+      user: {
+        id: mockSupervisor.id,
+        name: mockSupervisor.name,
+        role: mockSupervisor.role,
+        email: mockSupervisor.email
+      }
+    });
+    await prisma.manpowerSchedulingPeriodLock.deleteMany({ where: { period: "2026-07" } });
+    await prisma.manpowerSchedulingPeriodLock.create({
+      data: { operationType: "SECURITY_GUARDING", period: "2026-07", locked: true, lockedById: mockSupervisor.id }
+    });
+    const req = new Request("http://localhost/api/v1/manpower/scheduling/locks", {
+      method: "POST",
+      body: JSON.stringify({ operationType: "SECURITY_GUARDING", period: "2026-07", locked: false, unlockReason: "Valid reason text" })
+    });
+    const res = await lockPeriod(req);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.locked).toBe(false);
+  });
+
+  it("80. Unlock audit event created", async () => {
+    (getServerSession as jest.Mock).mockResolvedValue({
+      user: {
+        id: mockSupervisor.id,
+        name: mockSupervisor.name,
+        role: mockSupervisor.role,
+        email: mockSupervisor.email
+      }
+    });
+    await prisma.manpowerSchedulingPeriodLock.deleteMany({ where: { period: "2026-07" } });
+    await prisma.manpowerSchedulingPeriodLock.create({
+      data: { operationType: "SECURITY_GUARDING", period: "2026-07", locked: true, lockedById: mockSupervisor.id }
+    });
+    const req = new Request("http://localhost/api/v1/manpower/scheduling/locks", {
+      method: "POST",
+      body: JSON.stringify({ operationType: "SECURITY_GUARDING", period: "2026-07", locked: false, unlockReason: "Approved change log" })
+    });
+    const res = await lockPeriod(req);
+    expect(res.status).toBe(200);
+
+    const log = await prisma.userActivityLog.findFirst({
+      where: { action: "ROSTER_PERIOD_UNLOCK" },
+      orderBy: { createdAt: "desc" }
+    });
+    expect(log).toBeTruthy();
+    expect(log?.afterJson).toContain("Approved change log");
+  });
+
+  it("81. Security lock does not affect FM", async () => {
+    (getServerSession as jest.Mock).mockResolvedValue({
+      user: {
+        id: mockSupervisor.id,
+        name: mockSupervisor.name,
+        role: mockSupervisor.role,
+        email: mockSupervisor.email
+      }
+    });
+    await prisma.manpowerSchedulingPeriodLock.deleteMany({ where: { period: "2026-07" } });
+    await prisma.manpowerSchedulingPeriodLock.create({
+      data: { operationType: "SECURITY_GUARDING", period: "2026-07", locked: true, lockedById: mockSupervisor.id }
+    });
+    const req = new Request("http://localhost/api/v1/manpower/scheduling/locks?operationType=FACILITY_MANAGEMENT&period=2026-07");
+    const res = await getLockStatus(req);
+    const body = await res.json();
+    expect(body.locked).toBe(false);
+  });
+
+  it("82. FM lock does not affect Security", async () => {
+    await prisma.manpowerSchedulingPeriodLock.deleteMany({ where: { period: "2026-07" } });
+    await prisma.manpowerSchedulingPeriodLock.create({
+      data: { operationType: "FACILITY_MANAGEMENT", period: "2026-07", locked: true, lockedById: mockSupervisor.id }
+    });
+    const req = new Request("http://localhost/api/v1/manpower/scheduling/locks?operationType=SECURITY_GUARDING&period=2026-07");
+    const res = await getLockStatus(req);
+    const body = await res.json();
+    expect(body.locked).toBe(false);
+  });
+
+  it("83. Company lock isolation", async () => {
+    (getServerSession as jest.Mock).mockResolvedValue({
+      user: {
+        id: mockSupervisor.id,
+        name: mockSupervisor.name,
+        role: mockSupervisor.role,
+        email: mockSupervisor.email
+      }
+    });
+    await prisma.manpowerSchedulingPeriodLock.deleteMany({ where: { period: "2026-07" } });
+    const req = new Request("http://localhost/api/v1/manpower/scheduling/locks", {
+      method: "POST",
+      body: JSON.stringify({ operationType: "SECURITY_GUARDING", period: "2026-07", locked: true, companyId: "COMP-A" })
+    });
+    const res = await lockPeriod(req);
+    expect(res.status).toBe(200);
+    const log = await prisma.userActivityLog.findFirst({
+      where: { action: "ROSTER_PERIOD_LOCK" },
+      orderBy: { createdAt: "desc" }
+    });
+    expect(log?.afterJson).toContain("COMP-A");
+  });
+
+  it("84. Historical unlocked record is not active", async () => {
+    await prisma.manpowerSchedulingPeriodLock.deleteMany({ where: { period: "2026-07" } });
+    await prisma.manpowerSchedulingPeriodLock.create({
+      data: { operationType: "SECURITY_GUARDING", period: "2026-07", locked: false }
+    });
+    const req = new Request("http://localhost/api/v1/manpower/scheduling/locks?operationType=SECURITY_GUARDING&period=2026-07");
+    const res = await getLockStatus(req);
+    const body = await res.json();
+    expect(body.locked).toBe(false);
   });
 });

@@ -138,6 +138,9 @@ export default function RosterBoardPage() {
   // Period lock state
   const [periodLocked, setPeriodLocked] = useState(false);
   const [processingLock, setProcessingLock] = useState(false);
+  const [showUnlockModal, setShowUnlockModal] = useState(false);
+  const [unlockReason, setUnlockReason] = useState("");
+  const [unlockError, setUnlockError] = useState<string | null>(null);
  
   // Sync operations
   const [syncingContracts, setSyncingContracts] = useState(false);
@@ -374,6 +377,15 @@ export default function RosterBoardPage() {
 
   // 8. Toggle lock
   const handleToggleLock = async () => {
+    if (periodLocked) {
+      setShowUnlockModal(true);
+      return;
+    }
+
+    if (!confirm(`Are you sure you want to lock the period ${selectedMonth} for ${operationType === "SECURITY_GUARDING" ? "Security Guarding" : "Facility Management"}?`)) {
+      return;
+    }
+
     setProcessingLock(true);
     try {
       const res = await fetch("/api/v1/manpower/scheduling/locks", {
@@ -382,18 +394,54 @@ export default function RosterBoardPage() {
         body: JSON.stringify({
           operationType,
           period: selectedMonth,
-          locked: !periodLocked
+          locked: true
         })
       });
       const json = await res.json();
       if (res.ok && json.success) {
-        setPeriodLocked(!periodLocked);
+        setPeriodLocked(true);
         fetchRosterData(true);
       } else {
-        alert(json.error || "Failed to toggle period lock.");
+        alert(json.error || "Failed to lock period.");
       }
     } catch (e: any) {
-      alert("Error: " + e.message);
+      alert("Error locking period: " + e.message);
+    } finally {
+      setProcessingLock(false);
+    }
+  };
+
+  const handleConfirmUnlock = async () => {
+    if (!unlockReason || !unlockReason.trim()) {
+      setUnlockError("An unlock reason is required.");
+      return;
+    }
+
+    setProcessingLock(true);
+    setUnlockError(null);
+
+    try {
+      const res = await fetch("/api/v1/manpower/scheduling/locks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          operationType,
+          period: selectedMonth,
+          locked: false,
+          unlockReason: unlockReason.trim()
+        })
+      });
+      const json = await res.json();
+      if (res.ok && json.success) {
+        setPeriodLocked(false);
+        setShowUnlockModal(false);
+        setUnlockReason("");
+        fetchRosterData(true);
+      } else {
+        setUnlockError(json.error || "Failed to unlock period.");
+      }
+    } catch (e: any) {
+      setUnlockError("Error: " + e.message);
     } finally {
       setProcessingLock(false);
     }
@@ -489,7 +537,7 @@ export default function RosterBoardPage() {
               }`}
             >
               {periodLocked ? <Lock className="h-4 w-4" aria-hidden="true" /> : <Unlock className="h-4 w-4" aria-hidden="true" />}
-              {periodLocked ? "Locked" : "Unlock Period"}
+              {periodLocked ? "Locked" : "Lock Period"}
             </button>
           </div>
           {/* Explanation tags */}
@@ -1016,6 +1064,82 @@ export default function RosterBoardPage() {
                 className="btn border border-destructive/20 text-destructive bg-destructive/5 hover:bg-destructive/10 text-sm font-semibold h-10 px-4 rounded-lg flex items-center gap-2"
               >
                 <UserMinus className="h-4 w-4" /> Unassign Slot
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showUnlockModal && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-surface w-full max-w-md rounded-xl border border-outline-variant shadow-2xl p-6 space-y-4 animate-fade-in">
+            <div>
+              <h3 className="font-bold text-lg text-foreground flex items-center gap-2">
+                <Unlock className="h-5 w-5 text-primary" /> Unlock Planning Period
+              </h3>
+              <p className="text-xs text-secondary mt-1">
+                You are about to unlock the scheduling period. This will enable slot synchronization and roster assignment actions.
+              </p>
+            </div>
+
+            <div className="space-y-2 text-xs">
+              <div className="flex justify-between border-b border-outline-variant pb-2">
+                <span className="text-secondary">Operation Scope:</span>
+                <span className="font-semibold text-foreground">
+                  {operationType === "SECURITY_GUARDING" ? "Security Guarding" : "Facility Management"}
+                </span>
+              </div>
+              <div className="flex justify-between border-b border-outline-variant pb-2">
+                <span className="text-secondary">Planning Period:</span>
+                <span className="font-semibold text-foreground">{selectedMonth}</span>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-foreground block">
+                Unlock Reason <span className="text-destructive">*</span>
+              </label>
+              <textarea
+                value={unlockReason}
+                onChange={(e) => {
+                  setUnlockReason(e.target.value);
+                  setUnlockError(null);
+                }}
+                placeholder="Enter the mandatory business reason for unlocking this period..."
+                rows={3}
+                className="w-full bg-background border border-outline rounded-lg p-2.5 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+              {unlockError && (
+                <span className="text-[11px] text-destructive font-medium block mt-1">{unlockError}</span>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowUnlockModal(false);
+                  setUnlockReason("");
+                  setUnlockError(null);
+                }}
+                disabled={processingLock}
+                className="btn border border-outline hover:bg-surface-variant text-xs font-semibold py-2 px-4 rounded-lg"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmUnlock}
+                disabled={processingLock}
+                className="btn bg-primary text-primary-foreground hover:bg-primary/95 text-xs font-semibold py-2 px-4 rounded-lg disabled:opacity-50 inline-flex items-center gap-1.5"
+              >
+                {processingLock ? (
+                  <>
+                    <RefreshCw className="h-3.5 w-3.5 animate-spin" /> Unlocking...
+                  </>
+                ) : (
+                  "Confirm Unlock"
+                )}
               </button>
             </div>
           </div>
