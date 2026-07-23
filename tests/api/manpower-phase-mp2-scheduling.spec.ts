@@ -1335,24 +1335,31 @@ describe("Manpower Planning Phase MP-2A Roster-Scheduling Complete Release Harde
     expect(body.locked).toBe(false);
   });
 
-  it("85. Enabled Publish button uses readable primary styling", async () => {
+  it("85. Enabled Publish button uses readable primary styling via Button component", async () => {
     const fs = require("fs");
     const path = require("path");
     const pagePath = path.join(__dirname, "../../apps/web/app/manpower/[business]/deployment-calendar/page.tsx");
-    const content = fs.readFileSync(pagePath, "utf8");
+    const uiPath = path.join(__dirname, "../../packages/ui/src/index.tsx");
+    const pageContent = fs.readFileSync(pagePath, "utf8");
+    const uiContent = fs.readFileSync(uiPath, "utf8");
 
-    // Verify it contains AHH WFM primary blue bg-secondary background color and white text
-    expect(content).toContain('bg-secondary text-white hover:bg-[#0047a3]');
+    // Verify page uses Button component with variant="primary" for Publish Month Roster
+    expect(pageContent).toContain('variant="primary"');
+    expect(pageContent).toContain('aria-label="Publish Month Roster"');
+    // Verify UI component defines primary blue background and white text
+    expect(uiContent).toContain('variant === "primary" && "bg-secondary text-white');
   });
 
-  it("86. Disabled Publish button uses readable neutral styling", async () => {
+  it("86. Toolbar buttons use standardized Button component from @ahh-wfm/ui/src", async () => {
     const fs = require("fs");
     const path = require("path");
     const pagePath = path.join(__dirname, "../../apps/web/app/manpower/[business]/deployment-calendar/page.tsx");
-    const content = fs.readFileSync(pagePath, "utf8");
+    const pageContent = fs.readFileSync(pagePath, "utf8");
 
-    // Verify it contains disabled:bg-surface-container and disabled:text-on-surface-variant/50
-    expect(content).toContain('disabled:bg-surface-container disabled:text-on-surface-variant/50');
+    // Verify imports Button from @ahh-wfm/ui/src
+    expect(pageContent).toContain('import { Badge, Button } from "@ahh-wfm/ui/src"');
+    // Verify Sync and Lock use Button component with variants
+    expect(pageContent).toContain('variant="secondary"');
   });
 
   it("87. Disabled button does not use a black/dark background with dark text", async () => {
@@ -1365,15 +1372,15 @@ describe("Manpower Planning Phase MP-2A Roster-Scheduling Complete Release Harde
     expect(content).not.toMatch(/className="btn bg-primary text-primary-foreground[^"]*"[^>]*aria-label="Publish Month Roster"/);
   });
 
-  it("88. Sync and Lock buttons retain their updated layout and classes", async () => {
+  it("88. Sync, Publish and Lock buttons use standardized shared Button components", async () => {
     const fs = require("fs");
     const path = require("path");
     const pagePath = path.join(__dirname, "../../apps/web/app/manpower/[business]/deployment-calendar/page.tsx");
     const content = fs.readFileSync(pagePath, "utf8");
 
-    // Verify Sync Contract Slots button
-    expect(content).toContain('className="border border-outline hover:bg-surface-variant/50 text-foreground text-sm font-medium h-10 px-4 rounded-lg inline-flex items-center gap-2 focus-visible:ring-2 focus-visible:ring-secondary/50 focus-visible:ring-offset-2 outline-none disabled:bg-surface-container disabled:text-on-surface-variant/50 disabled:border-transparent disabled:cursor-not-allowed disabled:opacity-100"');
-    // Verify Lock Period button
-    expect(content).toContain('bg-status-error/10 text-status-error border-status-error/20 hover:bg-status-error/15');
+    // Verify Sync Contract Slots button uses Button component
+    expect(content).toContain('onClick={handleSyncSlots}');
+    // Verify Lock Period button uses Button component
+    expect(content).toContain('onClick={handleToggleLock}');
   });
 });

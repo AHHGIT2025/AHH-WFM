@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { hasPermission } from "../../../../lib/permissions";
-import { Badge } from "@ahh-wfm/ui/src";
+import { Badge, Button } from "@ahh-wfm/ui/src";
 import { 
   ArrowLeft, 
   RefreshCw, 
@@ -26,6 +26,14 @@ import {
   Info, 
   UserMinus 
 } from "lucide-react";
+
+import { DateRangeSelector } from "./components/DateRangeSelector";
+import { DayOffModal } from "./components/DayOffModal";
+import { LeaveEffectModal } from "./components/LeaveEffectModal";
+import { AbsenceModal } from "./components/AbsenceModal";
+import { CancelResolveModal } from "./components/CancelResolveModal";
+import { RelieverDrawer } from "./components/RelieverDrawer";
+import { CellActionMenu } from "./components/CellActionMenu";
 
 interface RosterSlot {
   id: string;
@@ -51,12 +59,15 @@ interface RosterSlot {
   site?: {
     name: string;
   } | null;
+  planningExceptions?: any[];
   assignments: Array<{
     id: string;
     employeeId: string;
     assignmentType: string;
     historyStatus: string;
     validationSnapshot: any;
+    planningException?: any;
+    replaces?: any;
     employee: {
       id: string;
       name: string;
@@ -99,12 +110,25 @@ export default function RosterBoardPage() {
   const operationType = isSecurity ? "SECURITY_GUARDING" : "FACILITY_MANAGEMENT";
   const businessLabel = isSecurity ? "Security Guarding" : "Facility Management";
 
+  // Planning view mode: "month" vs "custom"
+  const [viewMode, setViewMode] = useState<"month" | "custom">("month");
+
   // Roster month filter (format: YYYY-MM)
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const today = new Date();
     const y = today.getFullYear();
     const m = String(today.getMonth() + 1).padStart(2, "0");
     return `${y}-${m}`;
+  });
+
+  // Custom date range filter (format: YYYY-MM-DD)
+  const [startDate, setStartDate] = useState(() => {
+    const today = new Date();
+    return new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split("T")[0];
+  });
+  const [endDate, setEndDate] = useState(() => {
+    const today = new Date();
+    return new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().split("T")[0];
   });
 
   // Hierarchy filters
@@ -127,6 +151,13 @@ export default function RosterBoardPage() {
   const [activeDrawer, setActiveDrawer] = useState<"assign" | "details" | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<RosterSlot | null>(null);
   
+  // MP-3A Exception & Reliever Modals State
+  const [dayOffModalAssignment, setDayOffModalAssignment] = useState<any | null>(null);
+  const [leaveEffectModalAssignment, setLeaveEffectModalAssignment] = useState<any | null>(null);
+  const [absentModalAssignment, setAbsentModalAssignment] = useState<any | null>(null);
+  const [relieverDrawerData, setRelieverDrawerData] = useState<{ slot: any; exception: any; primaryAssignment: any } | null>(null);
+  const [cancelResolveModalData, setCancelResolveModalData] = useState<{ mode: "cancel" | "resolve"; exception: any } | null>(null);
+
   // Assignment state
   const [eligibleEmployees, setEligibleEmployees] = useState<EligibleEmployee[]>([]);
   const [eligibleSearch, setEligibleSearch] = useState("");
@@ -175,8 +206,14 @@ export default function RosterBoardPage() {
  
     try {
       const urlParams = new URLSearchParams();
-      urlParams.set("month", selectedMonth);
       urlParams.set("business", business);
+      if (viewMode === "month") {
+        urlParams.set("month", selectedMonth);
+      } else {
+        urlParams.set("startDate", startDate);
+        urlParams.set("endDate", endDate);
+      }
+
       if (selectedContract !== "all") urlParams.set("contractId", selectedContract);
       if (selectedSite !== "all") urlParams.set("siteId", selectedSite);
  
@@ -215,7 +252,7 @@ export default function RosterBoardPage() {
  
   useEffect(() => {
     fetchRosterData();
-  }, [selectedMonth, selectedContract, selectedSite, business]);
+  }, [viewMode, selectedMonth, startDate, endDate, selectedContract, selectedSite, business]);
 
   // 3. Load eligible employee pool when assign drawer is opened
   const loadEligibleEmployees = async (slotId: string) => {
@@ -471,18 +508,32 @@ export default function RosterBoardPage() {
     return Object.values(groups);
   }, [slots]);
 
-  // Days in month array
+  // Days array for grid (month or custom range)
   const daysInMonth = useMemo(() => {
-    if (!selectedMonth) return [];
-    const [year, month] = selectedMonth.split("-").map(Number);
-    const date = new Date(year, month - 1, 1);
-    const result: string[] = [];
-    while (date.getMonth() === month - 1) {
-      result.push(date.toISOString().split("T")[0]);
-      date.setDate(date.getDate() + 1);
+    if (viewMode === "month") {
+      if (!selectedMonth) return [];
+      const [year, month] = selectedMonth.split("-").map(Number);
+      const date = new Date(year, month - 1, 1);
+      const result: string[] = [];
+      while (date.getMonth() === month - 1) {
+        result.push(date.toISOString().split("T")[0]);
+        date.setDate(date.getDate() + 1);
+      }
+      return result;
+    } else {
+      if (!startDate || !endDate) return [];
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      if (start > end) return [];
+      const result: string[] = [];
+      const curr = new Date(start);
+      while (curr <= end) {
+        result.push(curr.toISOString().split("T")[0]);
+        curr.setDate(curr.getDate() + 1);
+      }
+      return result;
     }
-    return result;
-  }, [selectedMonth]);
+  }, [viewMode, selectedMonth, startDate, endDate]);
 
   const filteredEmployees = useMemo(() => {
     return eligibleEmployees.filter(item => 
@@ -508,37 +559,36 @@ export default function RosterBoardPage() {
 
         <div className="flex flex-col items-end gap-1 mt-4 md:mt-0">
           <div className="flex flex-wrap items-center gap-3">
-            <button
+            <Button
+              variant="secondary"
               onClick={handleSyncSlots}
               disabled={syncingContracts || selectedContract === "all" || periodLocked || (selectedContract !== "all" && !contracts.find(c => c.id === selectedContract)?.syncEligible)}
-              className="border border-outline hover:bg-surface-variant/50 text-foreground text-sm font-medium h-10 px-4 rounded-lg inline-flex items-center gap-2 focus-visible:ring-2 focus-visible:ring-secondary/50 focus-visible:ring-offset-2 outline-none disabled:bg-surface-container disabled:text-on-surface-variant/50 disabled:border-transparent disabled:cursor-not-allowed disabled:opacity-100"
+              className="h-10 gap-2"
             >
               <RefreshCw className={`h-4 w-4 ${syncingContracts ? "animate-spin" : ""}`} aria-hidden="true" />
               {syncingContracts ? "Syncing..." : "Sync Contract Slots"}
-            </button>
+            </Button>
             
-            <button
+            <Button
+              variant="primary"
               onClick={handlePublishRoster}
               disabled={publishingRoster || selectedContract === "all" || periodLocked}
-              className="bg-secondary text-white hover:bg-[#0047a3] text-sm font-medium h-10 px-4 rounded-lg inline-flex items-center gap-2 focus-visible:ring-2 focus-visible:ring-secondary/50 focus-visible:ring-offset-2 outline-none disabled:bg-surface-container disabled:text-on-surface-variant/50 disabled:cursor-not-allowed disabled:opacity-100"
+              className="h-10 gap-2"
               aria-label="Publish Month Roster"
             >
               <Upload className="h-4 w-4" aria-hidden="true" />
               {publishingRoster ? "Publishing..." : "Publish Month Roster"}
-            </button>
+            </Button>
 
-            <button
+            <Button
+              variant={periodLocked ? "error" : "secondary"}
               onClick={handleToggleLock}
               disabled={processingLock}
-              className={`text-sm font-medium h-10 px-4 rounded-lg inline-flex items-center gap-2 border focus-visible:ring-2 focus-visible:ring-secondary/50 focus-visible:ring-offset-2 outline-none disabled:bg-surface-container disabled:text-on-surface-variant/50 disabled:border-transparent disabled:cursor-not-allowed disabled:opacity-100 ${
-                periodLocked
-                  ? "bg-status-error/10 text-status-error border-status-error/20 hover:bg-status-error/15"
-                  : "border-outline hover:bg-surface-variant text-foreground"
-              }`}
+              className="h-10 gap-2"
             >
               {periodLocked ? <Lock className="h-4 w-4" aria-hidden="true" /> : <Unlock className="h-4 w-4" aria-hidden="true" />}
               {periodLocked ? "Locked" : "Lock Period"}
-            </button>
+            </Button>
           </div>
           {/* Explanation tags */}
           {selectedContract === "all" && (
@@ -598,18 +648,23 @@ export default function RosterBoardPage() {
         </div>
       )}
 
+      {/* Date Range & Planning View Selector */}
+      <DateRangeSelector
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
+        selectedMonth={selectedMonth}
+        onMonthChange={setSelectedMonth}
+        startDate={startDate}
+        onStartDateChange={setStartDate}
+        endDate={endDate}
+        onEndDateChange={setEndDate}
+        periodLocked={periodLocked}
+        onRefresh={() => fetchRosterData(true)}
+        refreshing={refreshing}
+      />
+
       {/* Filters bar */}
       <div className="bg-surface border border-outline-variant p-4 rounded-xl shadow-sm mb-6 flex flex-wrap items-center gap-4">
-        <div className="flex flex-col">
-          <label className="text-xs font-semibold text-secondary mb-1">Target Month</label>
-          <input
-            type="month"
-            value={selectedMonth}
-            onChange={(e) => setSelectedMonth(e.target.value)}
-            className="bg-background border border-outline rounded-lg h-10 px-3 text-sm focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
-          />
-        </div>
-
         <div className="flex flex-col flex-1 min-w-[200px]">
           <label className="text-xs font-semibold text-secondary mb-1">Contract Requirement</label>
           <select
@@ -638,13 +693,14 @@ export default function RosterBoardPage() {
           </select>
         </div>
 
-        <button
+        <Button
+          variant="secondary"
           onClick={() => fetchRosterData(true)}
-          className="btn border border-outline hover:bg-surface-variant h-10 w-10 rounded-lg inline-flex items-center justify-center self-end"
+          className="h-10 w-10 p-0 self-end"
           aria-label="Refresh Roster Board"
         >
           <RefreshCw className={`h-5 w-5 ${refreshing ? "animate-spin" : ""}`} />
-        </button>
+        </Button>
       </div>
 
       {/* Roster matrix grid */}
@@ -659,12 +715,13 @@ export default function RosterBoardPage() {
             <AlertCircle className="h-12 w-12 text-destructive mb-3" />
             <h3 className="text-lg font-bold">API Request Failed</h3>
             <p className="text-sm max-w-md mt-1 mb-4">{apiError}</p>
-            <button
+            <Button
+              variant="ghost"
               onClick={() => fetchRosterData(true)}
-              className="btn btn-outline border-destructive/20 text-destructive hover:bg-destructive/10 text-xs font-semibold py-2 px-4 rounded-lg inline-flex items-center gap-2"
+              className="border border-status-error/20 text-status-error hover:bg-status-error/10 text-xs font-semibold py-2 px-4 rounded-lg gap-2"
             >
               <RefreshCw className="h-3 w-3" /> Retry
-            </button>
+            </Button>
           </div>
         ) : contracts.length === 0 ? (
           <div className="p-12 text-center flex flex-col items-center justify-center">
@@ -772,70 +829,62 @@ export default function RosterBoardPage() {
                       const activeAssignment = slot.assignments[0];
                       const isVacant = slot.fulfillmentStatus === "VACANT";
                       const isCancelled = slot.fulfillmentStatus === "CANCELLED";
+                      const activeException = (slot as any).planningExceptions?.[0] || activeAssignment?.planningException;
 
-                      let cellBgClass = "bg-surface border border-dashed border-outline-variant hover:border-primary/50 cursor-pointer";
-                      let content = (
-                        <div className="flex flex-col items-center justify-center h-full text-secondary gap-1 select-none">
-                          <Plus className="h-3.5 w-3.5" />
-                          <span className="text-[10px] font-semibold">VACANT</span>
-                        </div>
-                      );
-
-                      if (activeAssignment) {
-                        const hasWarnings = activeAssignment.validationSnapshot?.checklist?.some((i: any) => i.status === "FAIL" || i.status === "WARN") || false;
-                        cellBgClass = `bg-emerald-500/10 border ${
-                          hasWarnings ? "border-amber-500/40 bg-amber-500/5" : "border-emerald-500/20"
-                        } hover:shadow-sm cursor-pointer p-2 rounded-lg`;
-                        content = (
-                          <div className="flex flex-col h-full text-left relative">
-                            <span className="font-semibold text-foreground truncate max-w-[80px]">{activeAssignment.employee.name}</span>
-                            <span className="text-[10px] text-secondary mt-0.5 truncate">{activeAssignment.employee.id}</span>
-                            {hasWarnings && (
-                              <span className="absolute top-0 right-0 h-2.5 w-2.5 bg-amber-500 rounded-full" title="Contains validation warnings/overrides"></span>
-                            )}
-                          </div>
+                      if (isCancelled) {
+                        return (
+                          <td key={dateStr} className="p-1 border-r border-outline-variant bg-destructive/5 text-center">
+                            <span className="text-[10px] font-bold text-destructive/50 uppercase tracking-wider">CANCELLED</span>
+                          </td>
                         );
-                      } else if (isCancelled) {
-                        cellBgClass = "bg-destructive/5 border border-destructive/10 text-destructive/50 p-2 rounded-lg pointer-events-none select-none text-center";
-                        content = <span className="text-[10px] font-bold uppercase tracking-wider">CANCELLED</span>;
                       }
 
-                      if (periodLocked && !isCancelled) {
-                        cellBgClass = "bg-surface-variant/40 border border-outline-variant text-secondary p-2 rounded-lg cursor-not-allowed select-none text-center flex items-center justify-center gap-1";
-                        if (activeAssignment) {
-                          content = (
-                            <div className="flex items-center justify-between w-full opacity-60">
-                              <div className="flex flex-col text-left truncate">
-                                <span className="font-semibold text-foreground truncate max-w-[70px]">{activeAssignment.employee.name}</span>
-                                <span className="text-[9px] text-secondary truncate">{activeAssignment.employee.id}</span>
-                              </div>
-                              <Lock className="h-3 w-3" />
-                            </div>
-                          );
-                        } else {
-                          content = (
-                            <div className="flex items-center gap-1 text-secondary opacity-40">
-                              <Lock className="h-3 w-3" />
-                              <span className="text-[9px] font-bold">LOCKED</span>
-                            </div>
-                          );
-                        }
+                      if (isVacant || !activeAssignment) {
+                        return (
+                          <td
+                            key={dateStr}
+                            className="p-1 border-r border-outline-variant"
+                          >
+                            <button
+                              type="button"
+                              disabled={periodLocked}
+                              onClick={() => !periodLocked && handleOpenAssign(slot)}
+                              className="w-full h-11 rounded-lg border border-dashed border-outline-variant hover:border-primary/50 flex flex-col items-center justify-center text-secondary gap-1 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              <Plus className="h-3.5 w-3.5" />
+                              <span className="text-[10px] font-semibold">VACANT</span>
+                            </button>
+                          </td>
+                        );
                       }
 
                       return (
-                        <td
-                          key={dateStr}
-                          className="p-1 border-r border-outline-variant"
-                          onClick={() => {
-                            if (periodLocked) return;
-                            if (isCancelled) return;
-                            if (isVacant) handleOpenAssign(slot);
-                            else handleOpenDetails(slot);
-                          }}
-                        >
-                          <div className={`h-11 rounded-lg transition-all flex flex-col justify-center ${cellBgClass}`}>
-                            {content}
-                          </div>
+                        <td key={dateStr} className="p-1 border-r border-outline-variant min-w-[130px]">
+                          <CellActionMenu
+                            slot={slot}
+                            assignment={activeAssignment}
+                            exception={activeException}
+                            periodLocked={periodLocked}
+                            onOpenDetails={() => handleOpenDetails(slot)}
+                            onOpenDayOff={() => setDayOffModalAssignment(activeAssignment)}
+                            onOpenLeaveEffect={() => setLeaveEffectModalAssignment(activeAssignment)}
+                            onOpenAbsent={() => setAbsentModalAssignment(activeAssignment)}
+                            onOpenAssignReliever={() => setRelieverDrawerData({ slot, exception: activeException, primaryAssignment: activeAssignment })}
+                            onOpenUnassignReliever={async () => {
+                              if (confirm("Are you sure you want to unassign this reliever?")) {
+                                try {
+                                  const res = await fetch(`/api/v1/manpower/scheduling/assignments/${activeAssignment.id}/unassign-reliever`, { method: "POST" });
+                                  const json = await res.json();
+                                  if (res.ok && json.success) fetchRosterData(true);
+                                  else alert(json.error || "Failed to unassign reliever");
+                                } catch (e: any) {
+                                  alert(e.message || "Failed to unassign reliever");
+                                }
+                              }
+                            }}
+                            onOpenCancelException={() => setCancelResolveModalData({ mode: "cancel", exception: activeException })}
+                            onOpenResolveException={() => setCancelResolveModalData({ mode: "resolve", exception: activeException })}
+                          />
                         </td>
                       );
                     })}
@@ -946,13 +995,14 @@ export default function RosterBoardPage() {
                           </div>
                         )}
 
-                        <button
+                        <Button
+                          variant={hasErrors ? "secondary" : hasWarnings ? "warning" : "primary"}
+                          disabled={hasErrors ? true : submittingAssign || !canClick}
                           onClick={() => handleAssign(item.employee.id, hasErrors)}
-                          disabled={submittingAssign || !canClick}
-                          className="btn btn-sm bg-primary text-primary-foreground hover:bg-primary/95 text-xs font-medium px-3 py-1.5 rounded-lg disabled:opacity-50"
+                          size="sm"
                         >
-                          {submittingAssign ? "Assigning..." : "Assign"}
-                        </button>
+                          {hasErrors ? "Not Eligible" : submittingAssign ? "Assigning..." : hasWarnings ? "Assign with Warning" : "Assign"}
+                        </Button>
                       </div>
                     </div>
                   );
@@ -1059,12 +1109,13 @@ export default function RosterBoardPage() {
 
             {/* Unassign action footer */}
             <div className="border-t border-outline-variant p-4 flex items-center justify-end">
-              <button
+              <Button
+                variant="error"
                 onClick={handleUnassign}
-                className="btn border border-destructive/20 text-destructive bg-destructive/5 hover:bg-destructive/10 text-sm font-semibold h-10 px-4 rounded-lg flex items-center gap-2"
+                className="h-10 gap-2"
               >
                 <UserMinus className="h-4 w-4" /> Unassign Slot
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -1115,7 +1166,8 @@ export default function RosterBoardPage() {
             </div>
 
             <div className="flex items-center justify-end gap-2 pt-2">
-              <button
+              <Button
+                variant="secondary"
                 type="button"
                 onClick={() => {
                   setShowUnlockModal(false);
@@ -1123,15 +1175,17 @@ export default function RosterBoardPage() {
                   setUnlockError(null);
                 }}
                 disabled={processingLock}
-                className="btn border border-outline hover:bg-surface-variant text-xs font-semibold py-2 px-4 rounded-lg"
+                size="sm"
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="primary"
                 type="button"
                 onClick={handleConfirmUnlock}
                 disabled={processingLock}
-                className="btn bg-primary text-primary-foreground hover:bg-primary/95 text-xs font-semibold py-2 px-4 rounded-lg disabled:opacity-50 inline-flex items-center gap-1.5"
+                size="sm"
+                className="gap-1.5"
               >
                 {processingLock ? (
                   <>
@@ -1140,11 +1194,55 @@ export default function RosterBoardPage() {
                 ) : (
                   "Confirm Unlock"
                 )}
-              </button>
+              </Button>
             </div>
           </div>
         </div>
       )}
+
+      {/* MP-3A Modals & Drawers */}
+      <DayOffModal
+        isOpen={!!dayOffModalAssignment}
+        onClose={() => setDayOffModalAssignment(null)}
+        primaryAssignment={dayOffModalAssignment}
+        onSuccess={() => fetchRosterData(true)}
+        periodLocked={periodLocked}
+      />
+
+      <LeaveEffectModal
+        isOpen={!!leaveEffectModalAssignment}
+        onClose={() => setLeaveEffectModalAssignment(null)}
+        primaryAssignment={leaveEffectModalAssignment}
+        onSuccess={() => fetchRosterData(true)}
+        periodLocked={periodLocked}
+      />
+
+      <AbsenceModal
+        isOpen={!!absentModalAssignment}
+        onClose={() => setAbsentModalAssignment(null)}
+        primaryAssignment={absentModalAssignment}
+        onSuccess={() => fetchRosterData(true)}
+        periodLocked={periodLocked}
+      />
+
+      <CancelResolveModal
+        isOpen={!!cancelResolveModalData}
+        mode={cancelResolveModalData?.mode || "cancel"}
+        onClose={() => setCancelResolveModalData(null)}
+        exception={cancelResolveModalData?.exception}
+        onSuccess={() => fetchRosterData(true)}
+        periodLocked={periodLocked}
+      />
+
+      <RelieverDrawer
+        isOpen={!!relieverDrawerData}
+        onClose={() => setRelieverDrawerData(null)}
+        slot={relieverDrawerData?.slot}
+        exception={relieverDrawerData?.exception}
+        primaryAssignment={relieverDrawerData?.primaryAssignment}
+        onSuccess={() => fetchRosterData(true)}
+        periodLocked={periodLocked}
+      />
     </div>
   );
 }
