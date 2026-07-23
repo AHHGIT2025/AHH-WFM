@@ -180,58 +180,22 @@ export async function GET() {
       const todayEnd = new Date();
       todayEnd.setHours(23, 59, 59, 999);
 
-      const activeAssignment = await prisma.manpowerDeploymentAssignment.findFirst({
+      // Check for active exceptions for today
+      const activeException = await prisma.rosterPlanningException.findFirst({
         where: {
           employeeId: employee.id,
-          deployment: {
-            date: { gte: todayStart, lte: todayEnd },
-            operationType: "SECURITY_GUARDING"
-          }
-        },
-        include: {
-          deployment: {
-            include: {
-              shiftRequirement: {
-                include: {
-                  site: {
-                    include: { project: true }
-                  }
-                }
-              }
-            }
-          }
+          businessDate: { gte: todayStart, lte: todayEnd },
+          status: { in: ["OPEN", "COVERAGE_REQUIRED", "RELIEVER_ASSIGNED"] }
         }
       });
 
-      if (activeAssignment && activeAssignment.deployment?.shiftRequirement?.site) {
-        const site = activeAssignment.deployment.shiftRequirement.site;
-        currentDutyStr = site.name;
-        currentLocationVal = site.name;
-        activeAssignmentObj = activeAssignment;
-        siteObj = site;
-
-        const displayName = site.project?.name
-          ? `${site.project.name} \u2014 ${site.name}`
-          : site.name;
-
-        currentDutyObj = {
-          source: "SHIFT_PLANNER",
-          locationId: null,
-          locationCode: site.code ?? null,
-          locationName: site.name,
-          worksiteName: site.project?.name ?? null,
-          siteName: site.name,
-          displayName
-        };
-        currentAssignment = {
-          name: site.project?.name || "Security Duty",
-          site: site.name,
-          type: "PROJECT_SITE"
-        };
-        assignmentType = "DEPLOYMENT";
-      } else {
-        currentDutyStr = "Not Assigned";
-        reason = "NO_ACTIVE_ASSIGNMENT";
+      if (activeException) {
+        const exceptionLabel = activeException.exceptionType === "DAY_OFF" ? "DAY_OFF" :
+                               activeException.exceptionType === "LEAVE_EFFECT" ? "LEAVE" : "ABSENT";
+        const displayName = activeException.exceptionType === "DAY_OFF" ? "Day Off" :
+                            activeException.exceptionType === "LEAVE_EFFECT" ? "Approved Leave" : "Absent";
+        currentDutyStr = exceptionLabel;
+        reason = activeException.exceptionType;
         currentDutyObj = {
           source: "SHIFT_PLANNER",
           locationId: null,
@@ -239,10 +203,80 @@ export async function GET() {
           locationName: null,
           worksiteName: null,
           siteName: null,
-          displayName: "Not Assigned"
+          displayName
         };
-        currentAssignment = null;
-        assignmentType = "OFFICE";
+        currentAssignment = {
+          name: displayName,
+          site: null,
+          type: "EXCEPTION"
+        };
+        assignmentType = exceptionLabel;
+      } else {
+        const activeAssignment = await prisma.manpowerDeploymentAssignment.findFirst({
+          where: {
+            employeeId: employee.id,
+            deployment: {
+              date: { gte: todayStart, lte: todayEnd },
+              operationType: "SECURITY_GUARDING"
+            },
+            deploymentType: { not: "CANCELLED" }
+          },
+          include: {
+            deployment: {
+              include: {
+                shiftRequirement: {
+                  include: {
+                    site: {
+                      include: { project: true }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        });
+
+        if (activeAssignment && activeAssignment.deployment?.shiftRequirement?.site) {
+          const site = activeAssignment.deployment.shiftRequirement.site;
+          currentDutyStr = site.name;
+          currentLocationVal = site.name;
+          activeAssignmentObj = activeAssignment;
+          siteObj = site;
+
+          const displayName = site.project?.name
+            ? `${site.project.name} \u2014 ${site.name}`
+            : site.name;
+
+          currentDutyObj = {
+            source: "SHIFT_PLANNER",
+            locationId: null,
+            locationCode: site.code ?? null,
+            locationName: site.name,
+            worksiteName: site.project?.name ?? null,
+            siteName: site.name,
+            displayName
+          };
+          currentAssignment = {
+            name: site.project?.name || "Security Duty",
+            site: site.name,
+            type: "PROJECT_SITE"
+          };
+          assignmentType = "DEPLOYMENT";
+        } else {
+          currentDutyStr = "Not Assigned";
+          reason = "NO_ACTIVE_ASSIGNMENT";
+          currentDutyObj = {
+            source: "SHIFT_PLANNER",
+            locationId: null,
+            locationCode: null,
+            locationName: null,
+            worksiteName: null,
+            siteName: null,
+            displayName: "Not Assigned"
+          };
+          currentAssignment = null;
+          assignmentType = "OFFICE";
+        }
       }
     } else {
       dutySource = "EMPLOYEE_DEPLOYMENT";

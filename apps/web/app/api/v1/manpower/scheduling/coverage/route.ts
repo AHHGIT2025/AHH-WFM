@@ -8,10 +8,12 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const contractId = searchParams.get("contractId");
   const monthStr = searchParams.get("month"); // Format: YYYY-MM
+  const startDateStr = searchParams.get("startDate");
+  const endDateStr = searchParams.get("endDate");
   const business = searchParams.get("business");
 
-  if (!monthStr) {
-    return NextResponse.json({ error: "Missing month query parameter" }, { status: 400 });
+  if (!monthStr && (!startDateStr || !endDateStr)) {
+    return NextResponse.json({ error: "Missing month or startDate/endDate query parameters" }, { status: 400 });
   }
 
   const auth = await checkApiAuth();
@@ -49,20 +51,51 @@ export async function GET(request: Request) {
   }
 
   try {
-    // Check if period is locked
-    const lock = await prisma.manpowerSchedulingPeriodLock.findFirst({
-      where: {
-        operationType,
-        period: monthStr,
-        locked: true
-      }
-    });
-    const periodLocked = !!lock;
+    let startDate: Date;
+    let endDate: Date;
+    let periodLocked = false;
 
-    // Parse year and month
-    const [year, month] = monthStr.split("-").map(Number);
-    const startDate = new Date(year, month - 1, 1);
-    const endDate = new Date(year, month, 0, 23, 59, 59, 999);
+    if (monthStr) {
+      const [year, month] = monthStr.split("-").map(Number);
+      startDate = new Date(year, month - 1, 1);
+      endDate = new Date(year, month, 0, 23, 59, 59, 999);
+      
+      const lock = await prisma.manpowerSchedulingPeriodLock.findFirst({
+        where: {
+          operationType,
+          period: monthStr,
+          locked: true
+        }
+      });
+      periodLocked = !!lock;
+    } else {
+      startDate = new Date(startDateStr!);
+      endDate = new Date(endDateStr!);
+      endDate.setHours(23, 59, 59, 999);
+
+      const periodsToCheck = new Set<string>();
+      let cursor = new Date(startDate.getTime());
+      while (cursor <= endDate) {
+        const yr = cursor.getFullYear();
+        const mo = String(cursor.getMonth() + 1).padStart(2, "0");
+        periodsToCheck.add(`${yr}-${mo}`);
+        cursor.setDate(cursor.getDate() + 1);
+      }
+
+      for (const p of periodsToCheck) {
+        const lock = await prisma.manpowerSchedulingPeriodLock.findFirst({
+          where: {
+            operationType,
+            period: p,
+            locked: true
+          }
+        });
+        if (lock) {
+          periodLocked = true;
+          break;
+        }
+      }
+    }
 
     const slots = await prisma.rosterRequirementSlot.findMany({
       where: {
@@ -77,14 +110,13 @@ export async function GET(request: Request) {
       }
     });
 
-    // Group by date
     const dailyMetrics: Record<string, { required: number; filled: number; vacant: number }> = {};
 
-    // Initialize all dates of the month
-    const totalDays = new Date(year, month, 0).getDate();
-    for (let day = 1; day <= totalDays; day++) {
-      const dateStr = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    let initCursor = new Date(startDate.getTime());
+    while (initCursor <= endDate) {
+      const dateStr = initCursor.toISOString().split("T")[0];
       dailyMetrics[dateStr] = { required: 0, filled: 0, vacant: 0 };
+      initCursor.setDate(initCursor.getDate() + 1);
     }
 
     for (const slot of slots) {

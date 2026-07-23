@@ -867,4 +867,95 @@ export async function checkEmployeeSchedulingEligibility(
   };
 }
 
+export async function transitionPlanningException(
+  exceptionId: string,
+  targetStatus: "COVERAGE_REQUIRED" | "RELIEVER_ASSIGNED" | "RESOLVED" | "CANCELLED",
+  auditData: {
+    actorId: string;
+    reason?: string;
+  },
+  tx: any
+): Promise<any> {
+  const exception = await tx.rosterPlanningException.findUnique({
+    where: { id: exceptionId },
+    include: {
+      relievers: {
+        where: { historyStatus: "ACTIVE" }
+      }
+    }
+  });
+
+  if (!exception) {
+    throw new Error(`Exception ${exceptionId} not found`);
+  }
+
+  const resolved = targetStatus === "RESOLVED";
+  const resolvedAt = resolved ? new Date() : exception.resolvedAt;
+  const resolvedById = resolved ? auditData.actorId : exception.resolvedById;
+
+  const cancelled = targetStatus === "CANCELLED";
+  const cancelledAt = cancelled ? new Date() : exception.cancelledAt;
+  const cancelledById = cancelled ? auditData.actorId : exception.cancelledById;
+  const cancellationReason = cancelled ? (auditData.reason || null) : exception.cancellationReason;
+
+  const activeExceptionKey = (targetStatus === "RESOLVED" || targetStatus === "CANCELLED")
+    ? null
+    : exception.primaryAssignmentId;
+
+  if (targetStatus === "CANCELLED") {
+    const activeRelievers = exception.relievers;
+    for (const reliever of activeRelievers) {
+      await tx.rosterSlotAssignment.update({
+        where: { id: reliever.id },
+        data: {
+          historyStatus: "CANCELLED",
+          activeCoverageKey: null,
+          unassignedById: auditData.actorId,
+          unassignedAt: new Date(),
+          unassignmentReason: auditData.reason || "Exception cancelled"
+        }
+      });
+      if (reliever.legacyShiftAssignmentId) {
+        await tx.shiftAssignment.updateMany({
+          where: { id: reliever.legacyShiftAssignmentId },
+          data: { assignmentStatus: "CANCELLED" }
+        });
+      }
+      if (reliever.legacyDeploymentId) {
+        await tx.manpowerDeploymentAssignment.updateMany({
+          where: { id: reliever.legacyDeploymentId },
+          data: { deploymentType: "CANCELLED" }
+        });
+      }
+    }
+  }
+
+  if (targetStatus === "RESOLVED") {
+    const activeRelievers = exception.relievers;
+    for (const reliever of activeRelievers) {
+      await tx.rosterSlotAssignment.update({
+        where: { id: reliever.id },
+        data: {
+          activeCoverageKey: null
+        }
+      });
+    }
+  }
+
+  return await tx.rosterPlanningException.update({
+    where: { id: exceptionId },
+    data: {
+      status: targetStatus,
+      resolved,
+      resolvedAt,
+      resolvedById,
+      cancelledAt,
+      cancelledById,
+      cancellationReason,
+      activeExceptionKey
+    }
+  });
+}
+
+
 

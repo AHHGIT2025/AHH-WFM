@@ -92,6 +92,29 @@ export async function GET(request: Request) {
                 employeeCategory: true,
                 designation: { select: { name: true, code: true } }
               }
+            },
+            planningException: {
+              include: {
+                leaveRequest: true,
+                relievers: {
+                  where: { historyStatus: "ACTIVE" },
+                  include: { employee: true }
+                }
+              }
+            },
+            replaces: {
+              include: { employee: true }
+            }
+          }
+        },
+        planningExceptions: {
+          where: { status: { in: ["OPEN", "COVERAGE_REQUIRED", "RELIEVER_ASSIGNED"] } },
+          include: {
+            employee: true,
+            leaveRequest: true,
+            relievers: {
+              where: { historyStatus: "ACTIVE" },
+              include: { employee: true }
             }
           }
         }

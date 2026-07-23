@@ -149,6 +149,9 @@ model Employee {
   rosterSlotsUnassigned         RosterSlotAssignment[]                 @relation("UnassignedByEmployee")
   publishedPublications         RosterPublication[]                    @relation("PublishedByEmployee")
   lockedSchedulingLocks         ManpowerSchedulingPeriodLock[]         @relation("LockedByEmployee")
+  rosterPlanningExceptions      RosterPlanningException[]              @relation("EmployeePlanningExceptions")
+  cancelledExceptions           RosterPlanningException[]              @relation("CancelledByEmployee")
+  resolvedExceptions            RosterPlanningException[]              @relation("ResolvedByEmployee")
 }
 
 model Department {
@@ -309,7 +312,7 @@ model LeaveBalanceLedger {
 }
 
 model LeaveRequest {
-  id                    String                 @id @default(uuid())
+  id                    String                    @id @default(uuid())
   employeeId            String
   employeeName          String
   type                  String
@@ -320,19 +323,20 @@ model LeaveRequest {
   endDate               DateTime?
   totalDays             Float?
   leaveTypeId           String?
-  leaveType             LeaveType?             @relation(fields: [leaveTypeId], references: [id], onDelete: Restrict)
-  employee              Employee               @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  currentStep           Int                    @default(1)
-  totalSteps            Int                    @default(1)
+  leaveType             LeaveType?                @relation(fields: [leaveTypeId], references: [id], onDelete: Restrict)
+  employee              Employee                  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  currentStep           Int                       @default(1)
+  totalSteps            Int                       @default(1)
   workflowId            String?
-  submittedAt           DateTime               @default(now())
+  submittedAt           DateTime                  @default(now())
   firstActionAt         DateTime?
   approvedAt            DateTime?
   approvalDurationHours Float?
-  escalationCount       Int                    @default(0)
-  relieverRequired      Boolean                @default(false)
+  escalationCount       Int                       @default(0)
+  relieverRequired      Boolean                   @default(false)
   relieverAssignmentId  String?
   approvalHistory       LeaveApprovalHistory[]
+  planningExceptions    RosterPlanningException[]
 }
 
 model LeaveApprovalWorkflow {
@@ -3095,6 +3099,7 @@ model RosterRequirementSlot {
   updatedAt             DateTime                    @updatedAt
   assignments           RosterSlotAssignment[]
   publicationSlots      RosterPublicationSlot[]
+  planningExceptions    RosterPlanningException[]
 
   @@index([contractId])
   @@index([projectId])
@@ -3126,6 +3131,14 @@ model RosterSlotAssignment {
   rowVersion              Int                   @default(1)
   createdAt               DateTime              @default(now())
   updatedAt               DateTime              @updatedAt
+
+  replacesAssignmentId String?
+  replaces             RosterSlotAssignment?     @relation("RosterAssignmentReplacements", fields: [replacesAssignmentId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  replacements         RosterSlotAssignment[]    @relation("RosterAssignmentReplacements")
+  planningExceptionId  String?
+  planningException    RosterPlanningException?  @relation("ExceptionRelievers", fields: [planningExceptionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  activeCoverageKey    String?                   @unique
+  primaryExceptions    RosterPlanningException[] @relation("PrimaryAssignmentExceptions")
 
   @@index([slotId])
   @@index([employeeId])
@@ -3180,11 +3193,36 @@ model RosterPlanningException {
   details       Json?
   resolved      Boolean          @default(false)
   resolvedById  String?
+  resolvedBy    Employee?        @relation("ResolvedByEmployee", fields: [resolvedById], references: [id], onDelete: SetNull)
   resolvedAt    DateTime?
   createdAt     DateTime         @default(now())
   updatedAt     DateTime         @updatedAt
 
+  // NEW AUDITED AUDITING FIELDS
+  status             String    @default("OPEN") // "OPEN", "COVERAGE_REQUIRED", "RELIEVER_ASSIGNED", "RESOLVED", "CANCELLED"
+  businessDate       DateTime? @db.Date
+  cancelledById      String?
+  cancelledBy        Employee? @relation("CancelledByEmployee", fields: [cancelledById], references: [id], onDelete: SetNull)
+  cancelledAt        DateTime?
+  cancellationReason String?   @db.Text
+
+  // NEW RELATIONS
+  slotId              String?
+  slot                RosterRequirementSlot? @relation(fields: [slotId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  employeeId          String?
+  employee            Employee?              @relation("EmployeePlanningExceptions", fields: [employeeId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  leaveRequestId      String?
+  leaveRequest        LeaveRequest?          @relation(fields: [leaveRequestId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  primaryAssignmentId String?
+  primaryAssignment   RosterSlotAssignment?  @relation("PrimaryAssignmentExceptions", fields: [primaryAssignmentId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  relievers           RosterSlotAssignment[] @relation("ExceptionRelievers")
+  activeExceptionKey  String?                @unique
+
   @@index([contractId])
+  @@index([slotId])
+  @@index([employeeId])
+  @@index([leaveRequestId])
+  @@index([primaryAssignmentId])
 }
 
 model ManpowerSchedulingPeriodLock {
