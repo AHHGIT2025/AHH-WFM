@@ -22,6 +22,7 @@
     "db:push": "npm run db:push --workspace=packages/database",
     "diagnose:users": "ts-node -T -P scripts/tsconfig.json scripts/diagnose-orphan-users.ts",
     "cleanup:users": "ts-node -T -P scripts/tsconfig.json scripts/cleanup-orphan-users.ts",
+    "data:local:light-demo": "ts-node -T -P scripts/tsconfig.json scripts/local-light-demo-cleanup.ts --confirm-local-cleanup",
     "test:e2e": "npx playwright test --config=tests/playwright.config.ts",
     "test:e2e:web": "npx playwright test --config=tests/playwright.config.ts --project=chromium tests/e2e/web",
     "test:e2e:mobile": "npx playwright test --config=tests/playwright.config.ts --project=mobile-chrome tests/e2e/mobile",
