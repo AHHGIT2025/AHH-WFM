@@ -60,7 +60,7 @@ export async function GET(request: Request, { params }: RouteParams) {
       fileBuffer = Buffer.from("MOCK_EVIDENCE_FILE_CONTENT");
     }
 
-    return new NextResponse(fileBuffer, {
+    return new NextResponse(new Uint8Array(fileBuffer), {
       headers: {
         "Content-Type": attachment.mimeType || "image/jpeg",
         "Content-Length": fileBuffer.length.toString(),

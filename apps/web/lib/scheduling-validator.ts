@@ -1,3 +1,5 @@
+import { resolveEmployeeTradePosition } from "./roster-display-utils";
+
 /**
  * Safely converts any date-like value to a YYYY-MM-DD string.
  * Handles strings (ISO or plain date), Date objects, and any other
@@ -117,7 +119,7 @@ export function isGenericOrInvalidDesignation(val: string | undefined | null): b
   const clean = val.trim();
   if (!clean || clean === "null" || clean === "undefined") return true;
 
-  // Raw IDs or codes like DES-001, DES-HRM, UUIDs
+  // Raw IDs or codes like DES-001, UUIDs
   if (/^DES-[A-Z0-9]+$/i.test(clean) || /^[0-9a-f-]{30,}$/i.test(clean)) return true;
 
   const lower = clean.toLowerCase();
@@ -126,17 +128,7 @@ export function isGenericOrInvalidDesignation(val: string | undefined | null): b
     lower === "worker" ||
     lower === "staff" ||
     lower === "employee" ||
-    lower === "operations" ||
-    lower === "guarding" ||
-    lower === "manned security" ||
-    lower === "engineering" ||
-    lower === "logistics" ||
-    lower === "sales" ||
-    lower.includes("hr manager") ||
-    lower.includes("human resource") ||
-    lower.includes("accountant") ||
-    lower.includes("admin") ||
-    lower.includes("department")
+    lower === "department"
   );
 }
 
@@ -144,7 +136,13 @@ export function computeDisplayDesignation(opOrEmp: any, sourceEmp?: any): string
   const op = opOrEmp;
   const emp = sourceEmp || opOrEmp;
 
-  // Priority 1: employee.tradePosition / tradeClassification.name
+  const cat = (emp?.employeeCategory || op?.employeeCategory || "").toUpperCase();
+  if (cat === "BLUE_COLLAR") {
+    const tradePos = resolveEmployeeTradePosition(emp) || resolveEmployeeTradePosition(op);
+    if (tradePos && tradePos !== "Not specified" && !isGenericOrInvalidDesignation(tradePos)) {
+      return tradePos;
+    }
+  }
   const empTrade = emp?.tradePosition || emp?.tradeClassification?.name || emp?.tradeClassification;
   if (empTrade && typeof empTrade === "string" && !isGenericOrInvalidDesignation(empTrade)) {
     return empTrade;
@@ -232,13 +230,13 @@ export function validateDeploymentEligibility(
   const masterOpType = employee.operationType;
   const snapOpType = employee.securityOperationalEmployee?.operationType || employee.securityOperationalEmployeeScope;
   const isHs01BlueCollar = (employee.companyCode === "HS01" || employee.company?.companyCode === "HS01" || employee.companyId === "COMP-002") && employee.employeeCategory === "BLUE_COLLAR";
-  const effectiveOperationType = snapOpType || (isHs01BlueCollar ? "SECURITY_GUARDING" : masterOpType);
+  const targetOperationType = deploymentSlot.operationType || "SECURITY_GUARDING";
+  const effectiveOperationType = snapOpType || masterOpType || (isHs01BlueCollar ? "SECURITY_GUARDING" : targetOperationType);
 
   if (masterOpType && snapOpType && masterOpType !== snapOpType) {
     console.warn(`Employee operational scope mismatch: master=${masterOpType}, securitySnapshot=${snapOpType}`);
   }
 
-  const targetOperationType = deploymentSlot.operationType || "SECURITY_GUARDING";
   if (effectiveOperationType !== targetOperationType) {
     result.canDeploy = false;
     result.severity = "BLOCKED";
@@ -368,29 +366,36 @@ export function validateDeploymentEligibility(
     addChecklist("Site Gate Pass Requirement", "INFO", "Not required for this site");
   }
 
-  // Rule 7: Designation match / Acting Duty Advisory
-  const reqDesig = siteRequirements.requiredDesignation;
+  // Rule 7: Position / Designation match / Acting Duty Advisory
+  const reqDesig = siteRequirements?.requiredDesignation || deploymentSlot?.snapshotPosition || deploymentSlot?.requiredPosition;
   if (reqDesig && reqDesig !== "any" && reqDesig !== "ANY") {
     const reqNorm = normalizeComparableValue(reqDesig);
-    const empDesigRaw = employee.displayDesignation || computeDisplayDesignation(employee);
-    const empNorm = normalizeComparableValue(empDesigRaw);
+    const empCategory = (employee?.employeeCategory || "").toUpperCase();
+    const isBlueCollar = empCategory === "BLUE_COLLAR" || (!empCategory && Boolean(employee?.positionCategory));
+
+    const empPosRaw = isBlueCollar
+      ? resolveEmployeeTradePosition(employee)
+      : (employee.displayDesignation || computeDisplayDesignation(employee));
+    const empNorm = normalizeComparableValue(empPosRaw);
 
     if (reqNorm && empNorm && reqNorm !== empNorm) {
+      const termLabel = isBlueCollar ? "Trade/Position" : "Designation";
       if (siteRequirements.strictDesignationMatch) {
         result.canDeploy = false;
         result.severity = "BLOCKED";
-        result.blockingIssues.push(`Strict Match failure: Site requires designation '${reqDesig}', but employee has '${empDesigRaw}'.`);
-        addChecklist("Designation Matching", "FAIL", `Required: ${reqDesig}, Got: ${empDesigRaw}`);
+        result.blockingIssues.push(`Strict Match failure: Site requires ${termLabel.toLowerCase()} '${reqDesig}', but employee has '${empPosRaw}'.`);
+        addChecklist(`${termLabel} Matching`, "FAIL", `Required: ${reqDesig}, Got: ${empPosRaw}`);
       } else {
-        result.warnings.push(`Designation mismatch: Site requires '${reqDesig}', employee designation is '${empDesigRaw}'.`);
-        result.payrollAdvisories.push("Acting duty advisory may apply. Employee designation differs from required post.");
-        addChecklist("Designation Matching", "WARN", "Designation mismatch (Acting Duty)");
+        result.warnings.push(`${termLabel} mismatch: Site requires '${reqDesig}', employee ${termLabel.toLowerCase()} is '${empPosRaw}'.`);
+        result.payrollAdvisories.push(`Acting duty advisory may apply. Employee ${termLabel.toLowerCase()} differs from required post.`);
+        addChecklist(`${termLabel} Matching`, "WARN", `${termLabel} mismatch (Acting Duty)`);
       }
     } else {
-      addChecklist("Designation Matching", "PASS", "Matched");
+      const termLabel = isBlueCollar ? "Trade/Position" : "Designation";
+      addChecklist(`${termLabel} Matching`, "PASS", "Matched");
     }
   } else {
-    addChecklist("Designation Matching", "INFO", "No designation requirement");
+    addChecklist("Position / Designation Matching", "INFO", "No position/designation requirement");
   }
 
   // Rule 8: Salary Grade mismatch / Grade advisory
@@ -476,11 +481,16 @@ export function validateDeploymentEligibility(
           reasonMsg = `QID expired (${new Date(qidExpiry).toISOString().split("T")[0]}) specified by instruction: '${title}'`;
         }
       } else if (type === "DESIGNATION") {
-        const empDesig = employee.designationName || (employee.designation && employee.designation.name) || employee.designationId;
+        const empCategory = (employee?.employeeCategory || "").toUpperCase();
+        const isBlueCollar = empCategory === "BLUE_COLLAR";
+        const empPos = isBlueCollar
+          ? resolveEmployeeTradePosition(employee)
+          : (employee.designationName || (employee.designation && employee.designation.name) || employee.designationId);
         const reqDesig = siteRequirements.requiredDesignation;
-        if (reqDesig && empDesig !== reqDesig) {
+        if (reqDesig && empPos !== reqDesig) {
           triggered = true;
-          reasonMsg = `Designation mismatch: post requires '${reqDesig}', guard has '${empDesig}' ('${title}')`;
+          const termLabel = isBlueCollar ? "Trade/Position" : "Designation";
+          reasonMsg = `${termLabel} mismatch: post requires '${reqDesig}', guard has '${empPos}' ('${title}')`;
         }
       } else if (type === "GRADE") {
         const empGrade = employee.salaryGrade || employee.grade;

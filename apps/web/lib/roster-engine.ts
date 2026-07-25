@@ -1,4 +1,5 @@
 import { prisma } from "@ahh-wfm/database";
+import { resolveEmployeeTradePosition } from "./roster-display-utils";
 
 export function getQatarDateString(date: Date | string): string {
   const d = typeof date === "string" ? new Date(date) : date;
@@ -704,6 +705,7 @@ export async function checkEmployeeSchedulingEligibility(
     where: { id: employeeId },
     include: {
       designation: true,
+      positionCategory: true,
       company: true
     }
   });
@@ -848,15 +850,76 @@ export async function checkEmployeeSchedulingEligibility(
     checklist.push({ rule: "SECURITY_LICENSE", status: "INFO", details: "Not applicable (FM)" });
   }
 
-  // 8. Designation Matching check
-  const requiredPosition = slot.snapshotPosition.toLowerCase();
-  const employeeDesignation = employee.designation?.name?.toLowerCase() || "";
+  // 8. Category-aware Position / Designation Matching check
+  const requiredPositionRaw = slot.snapshotPosition || "";
+  const requiredPositionNorm = requiredPositionRaw.toLowerCase().trim();
+  const empCategory = (employee?.employeeCategory || "").toUpperCase();
+  const isBlueCollar = empCategory === "BLUE_COLLAR" || (!empCategory && Boolean(employee?.positionCategory));
+  const isWhiteCollar = empCategory === "WHITE_COLLAR";
 
-  if (requiredPosition && employeeDesignation && !employeeDesignation.includes(requiredPosition) && !requiredPosition.includes(employeeDesignation)) {
-    warnings.push(`Designation mismatch: Slot requires '${slot.snapshotPosition}', employee designation is '${employee.designation?.name || "Staff"}'.`);
-    checklist.push({ rule: "DESIGNATION_MATCH", status: "WARN", details: `Expected ${slot.snapshotPosition}, got ${employee.designation?.name || "Staff"}` });
+  if (isBlueCollar) {
+    const empTradePosition = resolveEmployeeTradePosition(employee);
+    const empTradeNorm = empTradePosition.toLowerCase().trim();
+
+    const hasSlotPosId = slot.snapshotPositionCategoryId || slot.positionCategoryId;
+    const hasEmpPosId = employee.positionCategoryId;
+    let isMatch = false;
+
+    if (hasSlotPosId && hasEmpPosId) {
+      isMatch = hasSlotPosId === hasEmpPosId;
+    } else if (requiredPositionNorm && empTradeNorm && empTradePosition !== "Not specified") {
+      isMatch = requiredPositionNorm.includes(empTradeNorm) || empTradeNorm.includes(requiredPositionNorm);
+    } else if (!requiredPositionNorm) {
+      isMatch = true;
+    } else {
+      isMatch = false;
+    }
+
+    if (!isMatch && empTradePosition !== "Not specified") {
+      warnings.push(`Trade/Position mismatch: Slot requires '${requiredPositionRaw}', employee Trade/Position is '${empTradePosition}'.`);
+      checklist.push({
+        rule: "TRADE_POSITION_MATCH",
+        status: "WARN",
+        details: `Expected ${requiredPositionRaw}, got ${empTradePosition}`
+      });
+    } else if (empTradePosition === "Not specified") {
+      warnings.push(`Trade/Position missing: Employee operational Trade/Position is not specified.`);
+      checklist.push({
+        rule: "TRADE_POSITION_MATCH",
+        status: "WARN",
+        details: `Employee Trade/Position not specified`
+      });
+    } else {
+      checklist.push({
+        rule: "TRADE_POSITION_MATCH",
+        status: "PASS",
+        details: "Matched Trade/Position"
+      });
+    }
+  } else if (isWhiteCollar) {
+    const employeeDesignation = employee.designation?.name || "";
+    const empDesigNorm = employeeDesignation.toLowerCase().trim();
+
+    if (requiredPositionNorm && empDesigNorm && !empDesigNorm.includes(requiredPositionNorm) && !requiredPositionNorm.includes(empDesigNorm)) {
+      warnings.push(`Designation mismatch: Slot requires '${requiredPositionRaw}', employee designation is '${employeeDesignation || "Staff"}'.`);
+      checklist.push({
+        rule: "DESIGNATION_MATCH",
+        status: "WARN",
+        details: `Expected ${requiredPositionRaw}, got ${employeeDesignation || "Staff"}`
+      });
+    } else {
+      checklist.push({
+        rule: "DESIGNATION_MATCH",
+        status: "PASS",
+        details: "Matched designation"
+      });
+    }
   } else {
-    checklist.push({ rule: "DESIGNATION_MATCH", status: "PASS", details: "Matched designation" });
+    checklist.push({
+      rule: "POSITION_MATCH",
+      status: "INFO",
+      details: "Unknown employee category for position validation"
+    });
   }
 
   return {
