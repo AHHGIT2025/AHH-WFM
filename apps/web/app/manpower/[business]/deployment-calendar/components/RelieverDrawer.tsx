@@ -47,11 +47,19 @@ export const RelieverDrawer: React.FC<RelieverDrawerProps> = ({
   const [overrideReason, setOverrideReason] = useState("");
   const [submittingAssign, setSubmittingAssign] = useState(false);
 
+  // Authoritative Context Resolution
+  const resolvedSlot = slot ?? primaryAssignment?.slot ?? null;
+  const resolvedSlotId = resolvedSlot?.id ?? primaryAssignment?.slotId ?? null;
+  const resolvedPrimaryAssignmentId = primaryAssignment?.id ?? null;
+  const resolvedExceptionId = exception?.id ?? null;
+
+  const isContextReady = Boolean(resolvedSlotId && resolvedPrimaryAssignmentId && resolvedExceptionId);
+
   useEffect(() => {
-    if (isOpen && slot?.id) {
-      fetchEligibleEmployees(slot.id);
+    if (isOpen && resolvedSlotId) {
+      fetchEligibleEmployees(resolvedSlotId);
     }
-  }, [isOpen, slot]);
+  }, [isOpen, resolvedSlotId]);
 
   const fetchEligibleEmployees = async (slotId: string) => {
     setLoading(true);
@@ -73,12 +81,10 @@ export const RelieverDrawer: React.FC<RelieverDrawerProps> = ({
 
   if (!isOpen) return null;
 
-  const isContextReady = Boolean(slot?.id && primaryAssignment?.id && exception?.id);
-
   const primaryEmployee = primaryAssignment?.employee;
-  const primaryName = primaryEmployee?.name || "Primary Employee";
-  const positionName = resolveRosterDesignation(primaryEmployee, slot);
-  const formattedDate = resolveRosterDateStr(slot?.businessDate);
+  const primaryName = primaryEmployee?.name || primaryAssignment?.employeeName || "Primary Employee";
+  const positionName = resolveRosterDesignation(primaryEmployee, resolvedSlot);
+  const formattedDate = resolveRosterDateStr(resolvedSlot?.businessDate ?? primaryAssignment?.businessDate);
 
   const filteredEmployees = employees.filter((item) => {
     const empName = item?.employee?.name || "";
@@ -113,14 +119,14 @@ export const RelieverDrawer: React.FC<RelieverDrawerProps> = ({
     setError(null);
 
     try {
-      const res = await fetch(`/api/v1/manpower/scheduling/slots/${slot.id}/assign-reliever`, {
+      const res = await fetch(`/api/v1/manpower/scheduling/slots/${resolvedSlotId}/assign-reliever`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           employeeId: empId,
-          replacesAssignmentId: primaryAssignment.id,
-          exceptionId: exception.id,
-          expectedSlotVersion: slot.rowVersion,
+          replacesAssignmentId: resolvedPrimaryAssignmentId,
+          exceptionId: resolvedExceptionId,
+          expectedSlotVersion: resolvedSlot?.rowVersion,
           overrideReason: requiresOverride ? overrideReason.trim() : undefined
         })
       });

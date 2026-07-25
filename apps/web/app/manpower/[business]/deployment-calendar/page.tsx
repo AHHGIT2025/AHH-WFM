@@ -910,9 +910,9 @@ export default function RosterBoardPage() {
                             exception={activeException}
                             periodLocked={periodLocked}
                             onOpenDetails={() => handleOpenDetails(slot)}
-                            onOpenDayOff={() => setDayOffModalAssignment(activeAssignment)}
-                            onOpenLeaveEffect={() => setLeaveEffectModalAssignment(activeAssignment)}
-                            onOpenAbsent={() => setAbsentModalAssignment(activeAssignment)}
+                            onOpenDayOff={() => setDayOffModalAssignment({ assignment: activeAssignment, slot })}
+                            onOpenLeaveEffect={() => setLeaveEffectModalAssignment({ assignment: activeAssignment, slot })}
+                            onOpenAbsent={() => setAbsentModalAssignment({ assignment: activeAssignment, slot })}
                             onOpenAssignReliever={() => setRelieverDrawerData({ slot, exception: activeException, primaryAssignment: activeAssignment })}
                             onOpenUnassignReliever={async () => {
                               if (confirm("Are you sure you want to unassign this reliever?")) {
@@ -1248,7 +1248,9 @@ export default function RosterBoardPage() {
       <DayOffModal
         isOpen={!!dayOffModalAssignment}
         onClose={() => setDayOffModalAssignment(null)}
-        primaryAssignment={dayOffModalAssignment}
+        primaryAssignment={dayOffModalAssignment?.assignment || dayOffModalAssignment}
+        slot={dayOffModalAssignment?.slot}
+        employee={dayOffModalAssignment?.assignment?.employee || dayOffModalAssignment?.employee}
         onSuccess={() => fetchRosterData(true)}
         periodLocked={periodLocked}
       />
@@ -1256,7 +1258,9 @@ export default function RosterBoardPage() {
       <LeaveEffectModal
         isOpen={!!leaveEffectModalAssignment}
         onClose={() => setLeaveEffectModalAssignment(null)}
-        primaryAssignment={leaveEffectModalAssignment}
+        primaryAssignment={leaveEffectModalAssignment?.assignment || leaveEffectModalAssignment}
+        slot={leaveEffectModalAssignment?.slot}
+        employee={leaveEffectModalAssignment?.assignment?.employee || leaveEffectModalAssignment?.employee}
         onSuccess={() => fetchRosterData(true)}
         periodLocked={periodLocked}
       />
@@ -1264,7 +1268,9 @@ export default function RosterBoardPage() {
       <AbsenceModal
         isOpen={!!absentModalAssignment}
         onClose={() => setAbsentModalAssignment(null)}
-        primaryAssignment={absentModalAssignment}
+        primaryAssignment={absentModalAssignment?.assignment || absentModalAssignment}
+        slot={absentModalAssignment?.slot}
+        employee={absentModalAssignment?.assignment?.employee || absentModalAssignment?.employee}
         onSuccess={() => fetchRosterData(true)}
         periodLocked={periodLocked}
       />

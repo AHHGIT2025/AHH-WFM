@@ -12,6 +12,8 @@ interface LeaveEffectModalProps {
   isOpen: boolean;
   onClose: () => void;
   primaryAssignment: any;
+  slot?: any;
+  employee?: any;
   onSuccess: () => void;
   periodLocked: boolean;
 }
@@ -20,6 +22,8 @@ export const LeaveEffectModal: React.FC<LeaveEffectModalProps> = ({
   isOpen,
   onClose,
   primaryAssignment,
+  slot,
+  employee,
   onSuccess,
   periodLocked
 }) => {
@@ -30,17 +34,31 @@ export const LeaveEffectModal: React.FC<LeaveEffectModalProps> = ({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (isOpen && primaryAssignment?.employee?.id) {
-      fetchLeaves(primaryAssignment.employee.id);
-    }
-  }, [isOpen, primaryAssignment]);
+  // Authoritative Context Resolution
+  const resolvedEmployee = employee ?? primaryAssignment?.employee ?? null;
+  const resolvedSlot = slot ?? primaryAssignment?.slot ?? null;
+  const resolvedSlotId = resolvedSlot?.id ?? primaryAssignment?.slotId ?? null;
+  const resolvedEmployeeId = resolvedEmployee?.id ?? primaryAssignment?.employeeId ?? null;
+  const resolvedBusinessDate = resolvedSlot?.businessDate ?? primaryAssignment?.businessDate ?? null;
 
-  const fetchLeaves = async (employeeId: string) => {
+  const isContextReady = Boolean(
+    primaryAssignment?.id &&
+    resolvedSlotId &&
+    resolvedEmployeeId &&
+    resolvedBusinessDate
+  );
+
+  useEffect(() => {
+    if (isOpen && resolvedEmployeeId) {
+      fetchLeaves(resolvedEmployeeId);
+    }
+  }, [isOpen, resolvedEmployeeId]);
+
+  const fetchLeaves = async (empId: string) => {
     setLoadingLeaves(true);
     setError(null);
     try {
-      const res = await fetch(`/api/v1/manpower/leaves?employeeId=${employeeId}`);
+      const res = await fetch(`/api/v1/manpower/leaves?employeeId=${empId}`);
       const json = await res.json();
       if (res.ok && json.success) {
         setLeaveRequests(json.leaveRequests || []);
@@ -59,12 +77,9 @@ export const LeaveEffectModal: React.FC<LeaveEffectModalProps> = ({
 
   if (!isOpen) return null;
 
-  const employee = primaryAssignment?.employee;
-  const slot = primaryAssignment?.slot;
-  const isContextReady = Boolean(primaryAssignment?.id && employee?.id && slot?.id);
-
-  const designationName = resolveRosterDesignation(employee, slot);
-  const formattedDate = resolveRosterDateStr(slot?.businessDate);
+  const designationName = resolveRosterDesignation(resolvedEmployee, resolvedSlot);
+  const formattedDate = resolveRosterDateStr(resolvedBusinessDate);
+  const employeeName = resolvedEmployee?.name || primaryAssignment?.employeeName || "Employee";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -95,6 +110,9 @@ export const LeaveEffectModal: React.FC<LeaveEffectModalProps> = ({
         body: JSON.stringify({
           exceptionType: "LEAVE_EFFECT",
           primaryAssignmentIds: [primaryAssignment.id],
+          slotId: resolvedSlotId,
+          employeeId: resolvedEmployeeId,
+          businessDate: resolvedBusinessDate,
           leaveRequestId: selectedLeaveId,
           reason: reason.trim()
         })
@@ -153,7 +171,7 @@ export const LeaveEffectModal: React.FC<LeaveEffectModalProps> = ({
             <div className="bg-background border border-outline p-3 rounded-lg space-y-1.5">
               <div className="flex justify-between">
                 <span className="text-xs text-secondary font-medium">Employee:</span>
-                <span className="font-semibold">{employee?.name || "N/A"} ({employee?.id || "N/A"})</span>
+                <span className="font-semibold">{employeeName} ({resolvedEmployeeId})</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-xs text-secondary font-medium">Designation:</span>

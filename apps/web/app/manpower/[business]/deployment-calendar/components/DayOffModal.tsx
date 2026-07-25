@@ -14,6 +14,8 @@ interface DayOffModalProps {
   isOpen: boolean;
   onClose: () => void;
   primaryAssignment: any; // assignment object with slot, employee
+  slot?: any;
+  employee?: any;
   onSuccess: () => void;
   periodLocked: boolean;
 }
@@ -22,6 +24,8 @@ export const DayOffModal: React.FC<DayOffModalProps> = ({
   isOpen,
   onClose,
   primaryAssignment,
+  slot,
+  employee,
   onSuccess,
   periodLocked
 }) => {
@@ -31,14 +35,25 @@ export const DayOffModal: React.FC<DayOffModalProps> = ({
 
   if (!isOpen) return null;
 
-  const employee = primaryAssignment?.employee;
-  const slot = primaryAssignment?.slot;
-  const isContextReady = Boolean(primaryAssignment?.id && employee?.id && slot?.id);
+  // Authoritative Context Resolution
+  const resolvedEmployee = employee ?? primaryAssignment?.employee ?? null;
+  const resolvedSlot = slot ?? primaryAssignment?.slot ?? null;
+  const resolvedSlotId = resolvedSlot?.id ?? primaryAssignment?.slotId ?? null;
+  const resolvedEmployeeId = resolvedEmployee?.id ?? primaryAssignment?.employeeId ?? null;
+  const resolvedBusinessDate = resolvedSlot?.businessDate ?? primaryAssignment?.businessDate ?? null;
 
-  const designationName = resolveRosterDesignation(employee, slot);
-  const shiftName = resolveRosterShiftName(slot);
-  const shiftTimes = resolveRosterShiftTimes(slot);
-  const formattedDate = resolveRosterDateStr(slot?.businessDate);
+  const isContextReady = Boolean(
+    primaryAssignment?.id &&
+    resolvedSlotId &&
+    resolvedEmployeeId &&
+    resolvedBusinessDate
+  );
+
+  const designationName = resolveRosterDesignation(resolvedEmployee, resolvedSlot);
+  const shiftName = resolveRosterShiftName(resolvedSlot);
+  const shiftTimes = resolveRosterShiftTimes(resolvedSlot);
+  const formattedDate = resolveRosterDateStr(resolvedBusinessDate);
+  const employeeName = resolvedEmployee?.name || primaryAssignment?.employeeName || "Employee";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -65,6 +80,9 @@ export const DayOffModal: React.FC<DayOffModalProps> = ({
         body: JSON.stringify({
           exceptionType: "DAY_OFF",
           primaryAssignmentIds: [primaryAssignment.id],
+          slotId: resolvedSlotId,
+          employeeId: resolvedEmployeeId,
+          businessDate: resolvedBusinessDate,
           reason: reason.trim()
         })
       });
@@ -122,7 +140,7 @@ export const DayOffModal: React.FC<DayOffModalProps> = ({
             <div className="bg-background border border-outline p-3 rounded-lg space-y-1.5">
               <div className="flex justify-between">
                 <span className="text-xs text-secondary font-medium">Employee:</span>
-                <span className="font-semibold">{employee?.name || "N/A"} ({employee?.id || "N/A"})</span>
+                <span className="font-semibold">{employeeName} ({resolvedEmployeeId})</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-xs text-secondary font-medium">Designation:</span>
