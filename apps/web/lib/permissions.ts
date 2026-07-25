@@ -32,7 +32,9 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "secfac.evidence.verify", "secfac.worker.monitor",
     "manpower.roster.publish", "manpower.roster.cancel", "manpower.roster.changeRequest.submit", "manpower.roster.changeRequest.review",
     "manpower.roster.changeRequest.approve", "manpower.roster.changeRequest.reject", "manpower.roster.changeRequest.withdraw",
-    "manpower.roster.changeRequest.selfApprovalOverride", "manpower.roster.acknowledge", "manpower.roster.publication.viewHistory"
+    "manpower.roster.changeRequest.selfApprovalOverride", "manpower.roster.acknowledge", "manpower.roster.publication.viewHistory",
+    "manpower.reconciliation.view", "manpower.reconciliation.run", "manpower.reconciliation.review", "manpower.reconciliation.excuse",
+    "manpower.reconciliation.classifyUnexcused", "manpower.reconciliation.markSyncDelay", "manpower.reconciliation.manageConfig"
   ],
   ADMIN: [
     "dashboard.view", "employees.view", "employees.create", "employees.edit", "employees.bulkUpload", "employees.manage",
@@ -67,7 +69,9 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "secfac.evidence.verify", "secfac.worker.monitor",
     "manpower.roster.publish", "manpower.roster.cancel", "manpower.roster.changeRequest.submit", "manpower.roster.changeRequest.review",
     "manpower.roster.changeRequest.approve", "manpower.roster.changeRequest.reject", "manpower.roster.changeRequest.withdraw",
-    "manpower.roster.publication.viewHistory"
+    "manpower.roster.publication.viewHistory",
+    "manpower.reconciliation.view", "manpower.reconciliation.run", "manpower.reconciliation.review", "manpower.reconciliation.excuse",
+    "manpower.reconciliation.classifyUnexcused", "manpower.reconciliation.markSyncDelay", "manpower.reconciliation.manageConfig"
   ],
   SYSTEM_ADMIN: [
     "settings.view", "settings.manage", "users.view", "users.manage", "roles.view", "roles.manage",
@@ -104,7 +108,8 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "manpower.view", "manpower.manage",
     "manpower.security.view", "manpower.security.manage",
     "manpower.fm.view", "manpower.fm.manage",
-    "self.profile.view", "self.attendance.view", "self.attendance.punch", "self.leave.view", "self.leave.apply", "self.announcements.view", "self.password.change"
+    "self.profile.view", "self.attendance.view", "self.attendance.punch", "self.leave.view", "self.leave.apply", "self.announcements.view", "self.password.change",
+    "manpower.reconciliation.view", "manpower.reconciliation.review", "manpower.reconciliation.excuse", "manpower.reconciliation.classifyUnexcused", "manpower.reconciliation.markSyncDelay"
   ],
   HR_EXECUTIVE: [
     "dashboard.view", "employees.view", "attendance.view", "leaves.view", "shifts.view",
@@ -126,7 +131,8 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
   SUPERVISOR: [
     "dashboard.view", "employees.view", "attendance.view", "attendance.approveCorrection",
     "leaves.view", "leaves.approve", "shifts.view", "overtime.view",
-    "self.profile.view", "self.attendance.view", "self.attendance.punch", "self.leave.view", "self.leave.apply", "self.announcements.view", "self.password.change"
+    "self.profile.view", "self.attendance.view", "self.attendance.punch", "self.leave.view", "self.leave.apply", "self.announcements.view", "self.password.change",
+    "manpower.reconciliation.view", "manpower.reconciliation.review", "manpower.reconciliation.excuse", "manpower.reconciliation.markSyncDelay"
   ],
   EMPLOYEE: [
     "dashboard.view", "employees.view", "attendance.view", "leaves.view", "shifts.view",
@@ -151,7 +157,9 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "manpower.security.manpower.view", "manpower.security.manpower.manage", "manpower.security.shifts.view", "manpower.security.shifts.manage",
     "manpower.security.deployments.view", "manpower.security.deployments.manage", "manpower.security.relievers.view", "manpower.security.relievers.manage",
     "manpower.security.reports.view", "manpower.security.reports.export",
-    "secfac.alerts.view", "secfac.alerts.manage", "secfac.alerts.acknowledge", "secfac.alerts.resolve", "secfac.alerts.escalate", "secfac.alert.rules.view", "secfac.alert.rules.manage"
+    "secfac.alerts.view", "secfac.alerts.manage", "secfac.alerts.acknowledge", "secfac.alerts.resolve", "secfac.alerts.escalate", "secfac.alert.rules.view", "secfac.alert.rules.manage",
+    "manpower.reconciliation.view", "manpower.reconciliation.run", "manpower.reconciliation.review", "manpower.reconciliation.excuse",
+    "manpower.reconciliation.classifyUnexcused", "manpower.reconciliation.markSyncDelay", "manpower.reconciliation.manageConfig"
   ],
   SECURITY_OPERATIONS_MANAGER: [
     "dashboard.view", "manpower.security.view", "manpower.security.manage", "manpower.security.clients.view",
@@ -159,16 +167,20 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "manpower.security.manpower.view", "manpower.security.manpower.manage", "manpower.security.shifts.view", "manpower.security.shifts.manage",
     "manpower.security.deployments.view", "manpower.security.deployments.manage", "manpower.security.relievers.view", "manpower.security.relievers.manage",
     "manpower.security.reports.view", "manpower.security.reports.export",
-    "secfac.alerts.view", "secfac.alerts.manage", "secfac.alerts.acknowledge", "secfac.alerts.resolve", "secfac.alerts.escalate", "secfac.alert.rules.view"
+    "secfac.alerts.view", "secfac.alerts.manage", "secfac.alerts.acknowledge", "secfac.alerts.resolve", "secfac.alerts.escalate", "secfac.alert.rules.view",
+    "manpower.reconciliation.view", "manpower.reconciliation.run", "manpower.reconciliation.review", "manpower.reconciliation.excuse",
+    "manpower.reconciliation.classifyUnexcused", "manpower.reconciliation.markSyncDelay"
   ],
   SECURITY_PROJECT_MANAGER: [
     "dashboard.view", "manpower.security.view", "manpower.security.projects.view", "manpower.security.sites.view",
-    "manpower.security.zones.view", "manpower.security.manpower.view", "manpower.security.shifts.view", "manpower.security.deployments.view"
+    "manpower.security.zones.view", "manpower.security.manpower.view", "manpower.security.shifts.view", "manpower.security.deployments.view",
+    "manpower.reconciliation.view"
   ],
   SECURITY_SUPERVISOR: [
     "dashboard.view", "manpower.security.view", "manpower.security.manpower.view", "manpower.security.shifts.view",
     "manpower.security.deployments.manage",
-    "secfac.alerts.view", "secfac.alerts.acknowledge", "secfac.alerts.resolve"
+    "secfac.alerts.view", "secfac.alerts.acknowledge", "secfac.alerts.resolve",
+    "manpower.reconciliation.view", "manpower.reconciliation.review", "manpower.reconciliation.excuse", "manpower.reconciliation.markSyncDelay"
   ],
   SECURITY_HR_PAYROLL_VIEWER: [
     "dashboard.view", "manpower.security.view", "manpower.security.reports.view", "manpower.security.manpower.view"
@@ -191,7 +203,9 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "manpower.fm.manpower.view", "manpower.fm.manpower.manage", "manpower.fm.shifts.view", "manpower.fm.shifts.manage",
     "manpower.fm.deployments.view", "manpower.fm.deployments.manage", "manpower.fm.relievers.view", "manpower.fm.relievers.manage",
     "manpower.fm.reports.view", "manpower.fm.reports.export",
-    "secfac.alerts.view", "secfac.alerts.manage", "secfac.alerts.acknowledge", "secfac.alerts.resolve", "secfac.alerts.escalate", "secfac.alert.rules.view", "secfac.alert.rules.manage"
+    "secfac.alerts.view", "secfac.alerts.manage", "secfac.alerts.acknowledge", "secfac.alerts.resolve", "secfac.alerts.escalate", "secfac.alert.rules.view", "secfac.alert.rules.manage",
+    "manpower.reconciliation.view", "manpower.reconciliation.run", "manpower.reconciliation.review", "manpower.reconciliation.excuse",
+    "manpower.reconciliation.classifyUnexcused", "manpower.reconciliation.markSyncDelay", "manpower.reconciliation.manageConfig"
   ],
   FM_OPERATIONS_MANAGER: [
     "dashboard.view", "manpower.fm.view", "manpower.fm.manage", "manpower.fm.clients.view",
@@ -199,16 +213,20 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "manpower.fm.manpower.view", "manpower.fm.manpower.manage", "manpower.fm.shifts.view", "manpower.fm.shifts.manage",
     "manpower.fm.deployments.view", "manpower.fm.deployments.manage", "manpower.fm.relievers.view", "manpower.fm.relievers.manage",
     "manpower.fm.reports.view", "manpower.fm.reports.export",
-    "secfac.alerts.view", "secfac.alerts.manage", "secfac.alerts.acknowledge", "secfac.alerts.resolve", "secfac.alerts.escalate", "secfac.alert.rules.view"
+    "secfac.alerts.view", "secfac.alerts.manage", "secfac.alerts.acknowledge", "secfac.alerts.resolve", "secfac.alerts.escalate", "secfac.alert.rules.view",
+    "manpower.reconciliation.view", "manpower.reconciliation.run", "manpower.reconciliation.review", "manpower.reconciliation.excuse",
+    "manpower.reconciliation.classifyUnexcused", "manpower.reconciliation.markSyncDelay"
   ],
   FM_PROJECT_MANAGER: [
     "dashboard.view", "manpower.fm.view", "manpower.fm.projects.view", "manpower.fm.sites.view",
-    "manpower.fm.areas.view", "manpower.fm.manpower.view", "manpower.fm.shifts.view", "manpower.fm.deployments.view"
+    "manpower.fm.areas.view", "manpower.fm.manpower.view", "manpower.fm.shifts.view", "manpower.fm.deployments.view",
+    "manpower.reconciliation.view"
   ],
   FM_SUPERVISOR: [
     "dashboard.view", "manpower.fm.view", "manpower.fm.manpower.view", "manpower.fm.shifts.view",
     "manpower.fm.deployments.manage",
-    "secfac.alerts.view", "secfac.alerts.acknowledge", "secfac.alerts.resolve"
+    "secfac.alerts.view", "secfac.alerts.acknowledge", "secfac.alerts.resolve",
+    "manpower.reconciliation.view", "manpower.reconciliation.review", "manpower.reconciliation.excuse", "manpower.reconciliation.markSyncDelay"
   ],
   FM_HR_PAYROLL_VIEWER: [
     "dashboard.view", "manpower.fm.view", "manpower.fm.reports.view", "manpower.fm.manpower.view"
@@ -227,7 +245,8 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "manpower.view", "manpower.manage",
     "manpower.security.view", "manpower.security.manage",
     "manpower.fm.view", "manpower.fm.manage",
-    "security.view", "security.manage", "security.coordinators.view", "security.coordinators.manage",
+    "manpower.reconciliation.view", "manpower.reconciliation.run", "manpower.reconciliation.review", "manpower.reconciliation.excuse",
+    "manpower.reconciliation.classifyUnexcused", "manpower.reconciliation.markSyncDelay",
     "security.patrols.view", "security.patrols.create", "security.patrols.manage",
     "self.profile.view", "self.attendance.view", "self.leave.view", "self.password.change"
   ],
@@ -247,7 +266,8 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "manpower.fm.view", "manpower.fm.manage",
     "security.view", "security.manage", "security.coordinators.view", "security.coordinators.manage",
     "security.patrols.view", "security.patrols.create", "security.patrols.manage",
-    "self.profile.view", "self.attendance.view", "self.leave.view", "self.password.change"
+    "self.profile.view", "self.attendance.view", "self.leave.view", "self.password.change",
+    "manpower.reconciliation.view", "manpower.reconciliation.run", "manpower.reconciliation.review", "manpower.reconciliation.excuse", "manpower.reconciliation.markSyncDelay"
   ],
   PROJECT_SUPERVISOR: [
     "dashboard.view", "manpower.security.view", "manpower.security.manage",

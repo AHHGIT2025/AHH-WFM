@@ -258,6 +258,14 @@ export async function POST(request: Request) {
       }
     });
 
+    // Asynchronous non-blocking event-driven reconciliation refresh
+    try {
+      const { reconcileSingleEmployeeAttendance } = await import("../../../../../../web/lib/reconciliation-engine");
+      reconcileSingleEmployeeAttendance(employee.id, now, record.siteId || undefined).catch((err: any) => {
+        console.error("[Reconciliation Event Refresh] Failed:", err?.message);
+      });
+    } catch (e) {}
+
     return NextResponse.json({
       success: true,
       record,

@@ -82,6 +82,21 @@ module.exports = {
         SECFAC_MONITORING_WORKER_ENABLED: "true",
         SECFAC_MONITORING_INTERVAL_MS: "300000"
       }
+    },
+    {
+      name: "ahh-wfm-manpower-reconciliation-worker-dev",
+      script: "dist/workers/apps/web/workers/manpower-reconciliation-worker.js",
+      cwd: "D:\\Apps\\AHH-WFM\\dev",
+      instances: 1,
+      exec_mode: "fork",
+      autorestart: true,
+      watch: false,
+      max_memory_restart: "500M",
+      env: {
+        NODE_ENV: "development",
+        RECONCILIATION_WORKER_ENABLED: "true",
+        RECONCILIATION_WORKER_INTERVAL_MS: "300000"
+      }
     }
   ]
 };

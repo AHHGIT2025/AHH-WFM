@@ -127,6 +127,14 @@ export async function POST(request: Request) {
         }
     });
 
+    // Asynchronous non-blocking event-driven reconciliation refresh
+    try {
+      const { reconcileSingleEmployeeAttendance } = await import("@/lib/reconciliation-engine");
+      reconcileSingleEmployeeAttendance(employeeId, now, record.siteId || undefined).catch(e => {
+        console.error("[Reconciliation Event Refresh] Failed:", e.message);
+      });
+    } catch (e) {}
+
     return NextResponse.json({
         success: true,
         record,

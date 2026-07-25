@@ -157,6 +157,10 @@ model Employee {
   rosterPlanningExceptions      RosterPlanningException[]              @relation("EmployeePlanningExceptions")
   cancelledExceptions           RosterPlanningException[]              @relation("CancelledByEmployee")
   resolvedExceptions            RosterPlanningException[]              @relation("ResolvedByEmployee")
+  expectedReconciliations       AttendanceRosterReconciliation[]       @relation("ExpectedReconciliationEmployee")
+  reviewedReconciliations       AttendanceRosterReconciliation[]       @relation("ReconciliationReviewer")
+  createdReconciliationConfigs  ReconciliationGracePeriodConfig[]      @relation("ReconciliationConfigCreator")
+  updatedReconciliationConfigs  ReconciliationGracePeriodConfig[]      @relation("ReconciliationConfigUpdater")
 }
 
 model Department {
@@ -170,46 +174,47 @@ model Department {
 }
 
 model AttendanceRecord {
-  id                     String                 @id @default(uuid())
-  employeeId             String
-  employeeName           String
-  companyId              String?
-  company                Company?               @relation("CompanyAttendance", fields: [companyId], references: [id])
-  checkIn                DateTime               @default(now())
-  checkOut               DateTime?
-  originalCheckIn        DateTime               @default(now())
-  originalCheckOut       DateTime?
-  lat                    Float
-  lng                    Float
-  device                 String
-  status                 String // "ON_TIME" | "LATE" | "OUT_OF_ZONE" | "ABSENT" | "PENDING_CORRECTION" | "CORRECTED"
-  locationName           String
-  worksiteId             String?
-  worksite               Worksite?              @relation(fields: [worksiteId], references: [id], onDelete: SetNull)
-  shiftId                String?
-  shiftStartSnapshot     String?
-  shiftEndSnapshot       String?
-  lateMinutes            Int                    @default(0)
-  standardOtMinutes      Int                    @default(0)
-  weekendOtMinutes       Int                    @default(0)
-  holidayOtMinutes       Int                    @default(0)
-  nightOtMinutes         Int                    @default(0)
-  specialEventOtMinutes  Int                    @default(0)
-  otApprovedMinutes      Int                    @default(0)
-  overtimePayAmount      Float                  @default(0.0)
-  otStatus               String                 @default("PENDING") // "PENDING" | "APPROVED" | "REJECTED"
-  employee               Employee               @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  corrections            AttendanceCorrection[]
-  projectId              String?
-  siteId                 String?
-  deploymentId           String?
-  projectStatusFlag      String?
-  officeLocationId       String?
-  onCallAssignmentId     String?
-  onCallAssignment       OnCallAssignment?      @relation("OnCallAttendance", fields: [onCallAssignmentId], references: [id], onDelete: SetNull)
-  allowedPunchLocationId String?
-  allowedPunchLocation   AllowedPunchLocation?  @relation("AllowedLocationAttendance", fields: [allowedPunchLocationId], references: [id], onDelete: SetNull)
-  punchLocationType      String?
+  id                             String                           @id @default(uuid())
+  employeeId                     String
+  employeeName                   String
+  companyId                      String?
+  company                        Company?                         @relation("CompanyAttendance", fields: [companyId], references: [id])
+  checkIn                        DateTime                         @default(now())
+  checkOut                       DateTime?
+  originalCheckIn                DateTime                         @default(now())
+  originalCheckOut               DateTime?
+  lat                            Float
+  lng                            Float
+  device                         String
+  status                         String // "ON_TIME" | "LATE" | "OUT_OF_ZONE" | "ABSENT" | "PENDING_CORRECTION" | "CORRECTED"
+  locationName                   String
+  worksiteId                     String?
+  worksite                       Worksite?                        @relation(fields: [worksiteId], references: [id], onDelete: SetNull)
+  shiftId                        String?
+  shiftStartSnapshot             String?
+  shiftEndSnapshot               String?
+  lateMinutes                    Int                              @default(0)
+  standardOtMinutes              Int                              @default(0)
+  weekendOtMinutes               Int                              @default(0)
+  holidayOtMinutes               Int                              @default(0)
+  nightOtMinutes                 Int                              @default(0)
+  specialEventOtMinutes          Int                              @default(0)
+  otApprovedMinutes              Int                              @default(0)
+  overtimePayAmount              Float                            @default(0.0)
+  otStatus                       String                           @default("PENDING") // "PENDING" | "APPROVED" | "REJECTED"
+  employee                       Employee                         @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  corrections                    AttendanceCorrection[]
+  projectId                      String?
+  siteId                         String?
+  deploymentId                   String?
+  projectStatusFlag              String?
+  officeLocationId               String?
+  onCallAssignmentId             String?
+  onCallAssignment               OnCallAssignment?                @relation("OnCallAttendance", fields: [onCallAssignmentId], references: [id], onDelete: SetNull)
+  allowedPunchLocationId         String?
+  allowedPunchLocation           AllowedPunchLocation?            @relation("AllowedLocationAttendance", fields: [allowedPunchLocationId], references: [id], onDelete: SetNull)
+  punchLocationType              String?
+  AttendanceRosterReconciliation AttendanceRosterReconciliation[]
 }
 
 model Worksite {
@@ -1348,19 +1353,22 @@ model ManpowerContract {
   terminatedBy           String?
   terminationStatus      String? // e.g. "PENDING_APPROVAL", "APPROVED"
 
-  contractType        String                    @default("PERMANENT") // "PERMANENT", "FIXED_TERM", "TEMPORARY", "EVENT", "CALL_OFF", "HOURLY_SERVICE"
-  billingBasis        String? // "HOURLY", "DAILY", "MONTHLY"
-  serviceStartAt      DateTime?
-  serviceEndAt        DateTime?
-  eventVenue          String?
-  eventDetails        String?                   @db.Text
-  mobilisationStatus  String                    @default("NOT_REQUIRED") // "NOT_REQUIRED", "PENDING", "MOBILISED", "COMPLETED", "CLOSED"
-  siteId              String?
-  site                ManpowerSite?             @relation(fields: [siteId], references: [id], onDelete: SetNull)
-  rosterSlots         RosterRequirementSlot[]
-  rosterPublications  RosterPublication[]
-  rosterExceptions    RosterPlanningException[]
-  RosterChangeRequest RosterChangeRequest[]
+  contractType          String                            @default("PERMANENT") // "PERMANENT", "FIXED_TERM", "TEMPORARY", "EVENT", "CALL_OFF", "HOURLY_SERVICE"
+  billingBasis          String? // "HOURLY", "DAILY", "MONTHLY"
+  serviceStartAt        DateTime?
+  serviceEndAt          DateTime?
+  eventVenue            String?
+  eventDetails          String?                           @db.Text
+  mobilisationStatus    String                            @default("NOT_REQUIRED") // "NOT_REQUIRED", "PENDING", "MOBILISED", "COMPLETED", "CLOSED"
+  siteId                String?
+  site                  ManpowerSite?                     @relation(fields: [siteId], references: [id], onDelete: SetNull)
+  rosterSlots           RosterRequirementSlot[]
+  rosterPublications    RosterPublication[]
+  rosterExceptions      RosterPlanningException[]
+  RosterChangeRequest   RosterChangeRequest[]
+  reconciliations       AttendanceRosterReconciliation[]
+  reconciliationConfigs ReconciliationGracePeriodConfig[]
+  reconciliationRuns    ManpowerReconciliationRun[]
 }
 
 model ManpowerProject {
@@ -1384,6 +1392,8 @@ model ManpowerProject {
   secfacChecklistTemplates SecfacChecklistTemplate[]
   secfacAssignments        SecfacAssignment[]
   rosterSlots              RosterRequirementSlot[]
+  reconciliations          AttendanceRosterReconciliation[]
+  reconciliationConfigs    ReconciliationGracePeriodConfig[]
 }
 
 model ManpowerSite {
@@ -1424,6 +1434,9 @@ model ManpowerSite {
   rosterPublications        RosterPublication[]
   rosterExceptions          RosterPlanningException[]
   RosterChangeRequest       RosterChangeRequest[]
+  reconciliations           AttendanceRosterReconciliation[]
+  reconciliationConfigs     ReconciliationGracePeriodConfig[]
+  reconciliationRuns        ManpowerReconciliationRun[]
 }
 
 model SecuritySiteManpowerAllocation {
@@ -3070,44 +3083,45 @@ model SecFacWelfareCheck {
 }
 
 model RosterRequirementSlot {
-  id                    String                      @id @default(uuid())
+  id                    String                           @id @default(uuid())
   operationType         String // "SECURITY_GUARDING" | "FACILITY_MANAGEMENT"
   companyId             String?
-  company               Company?                    @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  company               Company?                         @relation(fields: [companyId], references: [id], onDelete: Restrict)
   contractId            String
-  contract              ManpowerContract            @relation(fields: [contractId], references: [id], onDelete: Restrict)
+  contract              ManpowerContract                 @relation(fields: [contractId], references: [id], onDelete: Restrict)
   projectId             String
-  project               ManpowerProject             @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  project               ManpowerProject                  @relation(fields: [projectId], references: [id], onDelete: Restrict)
   siteId                String?
-  site                  ManpowerSite?               @relation(fields: [siteId], references: [id], onDelete: Restrict)
-  externalVenueSnapshot String?                     @db.Text
+  site                  ManpowerSite?                    @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  externalVenueSnapshot String?                          @db.Text
   locationKey           String // E.g. "site:SITE-ID" or "venue:Grand Ballroom"
   contractRequirementId String // Direct relation to ContractManpowerRequirement
-  contractRequirement   ContractManpowerRequirement @relation(fields: [contractRequirementId], references: [id], onDelete: Restrict)
+  contractRequirement   ContractManpowerRequirement      @relation(fields: [contractRequirementId], references: [id], onDelete: Restrict)
   addendumId            String?
   addendumLineItemId    String?
   sourceType            String // "CONTRACT_REQUIREMENT" | "ADDENDUM_REQUIREMENT" | "TEMPORARY_EVENT_REQUIREMENT"
-  sourceEffectiveFrom   DateTime                    @db.Date
-  sourceEffectiveTo     DateTime?                   @db.Date
-  sourceVersion         Int                         @default(1)
-  businessDate          DateTime                    @db.Date
+  sourceEffectiveFrom   DateTime                         @db.Date
+  sourceEffectiveTo     DateTime?                        @db.Date
+  sourceVersion         Int                              @default(1)
+  businessDate          DateTime                         @db.Date
   shiftRequirementId    String? // References ContractShiftRequirement
   shiftKey              String // E.g. "shift:SHIFT-ID" or "custom:07:00-19:00"
   slotIndex             Int // 1-based index
-  generationKey         String                      @unique // "${contractRequirementId}:${businessDateStr}:${shiftKey}:${slotIndex}"
+  generationKey         String                           @unique // "${contractRequirementId}:${businessDateStr}:${shiftKey}:${slotIndex}"
   snapshotPosition      String
   snapshotShiftName     String
   snapshotStartTime     String
   snapshotEndTime       String
-  fulfillmentStatus     String                      @default("VACANT") // "VACANT", "FILLED", "CANCELLED"
-  scheduleStatus        String                      @default("DRAFT") // "DRAFT", "REVIEWED", "PUBLISHED", "LOCKED", "COMPLETED"
-  rowVersion            Int                         @default(1)
-  createdAt             DateTime                    @default(now())
-  updatedAt             DateTime                    @updatedAt
+  fulfillmentStatus     String                           @default("VACANT") // "VACANT", "FILLED", "CANCELLED"
+  scheduleStatus        String                           @default("DRAFT") // "DRAFT", "REVIEWED", "PUBLISHED", "LOCKED", "COMPLETED"
+  rowVersion            Int                              @default(1)
+  createdAt             DateTime                         @default(now())
+  updatedAt             DateTime                         @updatedAt
   assignments           RosterSlotAssignment[]
   publicationSlots      RosterPublicationSlot[]
   planningExceptions    RosterPlanningException[]
   RosterChangeRequest   RosterChangeRequest[]
+  reconciliations       AttendanceRosterReconciliation[]
 
   @@index([contractId])
   @@index([projectId])
@@ -3182,10 +3196,12 @@ model RosterPublication {
   createdAt               DateTime           @default(now())
   updatedAt               DateTime           @updatedAt
 
-  publicationSlots        RosterPublicationSlot[]
-  baseChangeRequests      RosterChangeRequest[]      @relation("BasePublicationChangeRequests")
-  resultingChangeRequests RosterChangeRequest[]      @relation("ResultingPublication")
-  acknowledgments         RosterSlotAcknowledgment[]
+  publicationSlots               RosterPublicationSlot[]
+  baseChangeRequests             RosterChangeRequest[]            @relation("BasePublicationChangeRequests")
+  resultingChangeRequests        RosterChangeRequest[]            @relation("ResultingPublication")
+  acknowledgments                RosterSlotAcknowledgment[]
+  ManpowerReconciliationRun      ManpowerReconciliationRun[]
+  AttendanceRosterReconciliation AttendanceRosterReconciliation[]
 
   @@unique([seriesKey, publicationVersion])
   @@index([contractId])
@@ -3216,8 +3232,9 @@ model RosterPublicationSlot {
   assignmentStatus          String
   createdAt                 DateTime              @default(now())
 
-  baseChangeRequests RosterChangeRequest[]      @relation("BasePublicationSlotChangeRequests")
-  acknowledgments    RosterSlotAcknowledgment[]
+  baseChangeRequests             RosterChangeRequest[]            @relation("BasePublicationSlotChangeRequests")
+  acknowledgments                RosterSlotAcknowledgment[]
+  AttendanceRosterReconciliation AttendanceRosterReconciliation[]
 
   @@unique([publicationId, snapshotKey])
   @@index([publicationId, slotId])
@@ -3368,4 +3385,181 @@ model ManpowerSchedulingPeriodLock {
   updatedAt     DateTime  @updatedAt
 
   @@unique([operationType, period])
+}
+
+model ReconciliationGracePeriodConfig {
+  id             String            @id @default(uuid())
+  scopeType      String // "OPERATION" | "CONTRACT" | "PROJECT" | "SITE" | "SHIFT"
+  scopeKey       String // "SCOPE:OPERATION:SECURITY_GUARDING" or "SCOPE:SITE:<siteId>"
+  configVersion  Int               @default(1)
+  activeScopeKey String?           @unique // Only ACTIVE configuration carries activeScopeKey
+  status         String            @default("ACTIVE") // "ACTIVE" | "SUPERSEDED" | "CANCELLED"
+  operationType  String // "SECURITY_GUARDING" | "FACILITY_MANAGEMENT"
+  contractId     String?
+  contract       ManpowerContract? @relation(fields: [contractId], references: [id], onDelete: Restrict)
+  projectId      String?
+  project        ManpowerProject?  @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  siteId         String?
+  site           ManpowerSite?     @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  shiftKey       String?
+
+  gracePeriodMinutes           Int     @default(15)
+  noCheckInThresholdMinutes    Int     @default(30)
+  earlyCheckInAllowanceMinutes Int     @default(60)
+  syncDelayThresholdMinutes    Int     @default(30)
+  attendanceExempt             Boolean @default(false)
+
+  effectiveFrom DateTime?
+  effectiveTo   DateTime?
+  createdById   String
+  createdBy     Employee  @relation("ReconciliationConfigCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  updatedById   String?
+  updatedBy     Employee? @relation("ReconciliationConfigUpdater", fields: [updatedById], references: [id], onDelete: SetNull)
+  supersededAt  DateTime?
+  cancelledAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  reconciliations AttendanceRosterReconciliation[]
+
+  @@unique([scopeKey, configVersion])
+  @@index([scopeType, status])
+  @@index([operationType])
+  @@index([contractId])
+  @@index([projectId])
+  @@index([siteId])
+}
+
+model ManpowerReconciliationRun {
+  id               String             @id @default(uuid())
+  operationType    String // "SECURITY_GUARDING" | "FACILITY_MANAGEMENT"
+  contractId       String?
+  contract         ManpowerContract?  @relation(fields: [contractId], references: [id], onDelete: SetNull)
+  siteId           String?
+  site             ManpowerSite?      @relation(fields: [siteId], references: [id], onDelete: SetNull)
+  businessDate     DateTime           @db.Date
+  windowStartUtc   DateTime
+  windowEndUtc     DateTime
+  runType          String // "SCHEDULED" | "MANUAL" | "ATTENDANCE_EVENT"
+  runStatus        String             @default("RUNNING") // "RUNNING" | "COMPLETED" | "PARTIAL" | "FAILED"
+  scopeOutcome     String             @default("PROCESSED") // "PROCESSED" | "NO_PUBLISHED_ROSTER" | "EXEMPT" | "NO_ELIGIBLE_SHIFTS"
+  publicationId    String?
+  publication      RosterPublication? @relation(fields: [publicationId], references: [id], onDelete: SetNull)
+  workerInstanceId String
+  watermarkBefore  DateTime?
+  watermarkAfter   DateTime?
+  processedCount   Int                @default(0)
+  onTimeCount      Int                @default(0)
+  lateCount        Int                @default(0)
+  noCheckInCount   Int                @default(0)
+  suppressedCount  Int                @default(0)
+  errorCount       Int                @default(0)
+  errorSummary     String?            @db.Text
+  startedAt        DateTime           @default(now())
+  completedAt      DateTime?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  @@index([operationType, businessDate])
+  @@index([runStatus])
+  @@index([scopeOutcome])
+}
+
+model AttendanceRosterReconciliation {
+  id            String           @id @default(uuid())
+  operationType String // "SECURITY_GUARDING" | "FACILITY_MANAGEMENT"
+  contractId    String
+  contract      ManpowerContract @relation(fields: [contractId], references: [id], onDelete: Restrict)
+  contractCode  String
+  contractTitle String
+  projectId     String?
+  project       ManpowerProject? @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  projectCode   String?
+  projectName   String?
+  siteId        String?
+  site          ManpowerSite?    @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  siteCode      String?
+  siteName      String?
+
+  slotId                     String
+  slot                       RosterRequirementSlot  @relation(fields: [slotId], references: [id], onDelete: Restrict)
+  expectedPublicationId      String?
+  expectedPublication        RosterPublication?     @relation(fields: [expectedPublicationId], references: [id], onDelete: Restrict)
+  expectedPublicationVersion Int?
+  expectedPublicationSlotId  String?
+  expectedPublicationSlot    RosterPublicationSlot? @relation(fields: [expectedPublicationSlotId], references: [id], onDelete: Restrict)
+  expectedSnapshotKey        String?
+
+  expectedAssignmentId   String?
+  expectedAssignmentRole String   @default("PRIMARY") // "PRIMARY" | "RELIEVER"
+  expectedEmployeeId     String
+  expectedEmployee       Employee @relation("ExpectedReconciliationEmployee", fields: [expectedEmployeeId], references: [id], onDelete: Restrict)
+  expectedEmployeeCode   String
+  expectedEmployeeName   String
+  expectedShiftCode      String?
+  expectedPosition       String?
+  expectedSourceType     String // "PUBLISHED_PRIMARY" | "PUBLISHED_RELIEVER"
+  suppressionSourceType  String? // "APPROVED_LEAVE" | "DAY_OFF" | "ACTIVE_RELIEVER" | "SITE_EXEMPTION" | "CANCELLED_PUBLICATION"
+
+  attendanceRecordId   String?
+  attendanceRecord     AttendanceRecord? @relation(fields: [attendanceRecordId], references: [id], onDelete: Restrict)
+  rawCheckInUtc        DateTime?
+  originalCheckInUtc   DateTime?
+  serverReceivedUtc    DateTime?
+  selectedPunchUtc     DateTime?
+  punchTimestampSource String? // "CHECK_IN" | "ORIGINAL_CHECK_IN" | "CORRECTION"
+
+  businessDate      DateTime  @db.Date
+  shiftKey          String
+  scheduledStartUtc DateTime
+  scheduledEndUtc   DateTime
+  actualCheckInUtc  DateTime?
+  actualCheckOutUtc DateTime?
+
+  resolvedConfigId                  String?
+  resolvedConfig                    ReconciliationGracePeriodConfig? @relation(fields: [resolvedConfigId], references: [id], onDelete: Restrict)
+  resolvedGracePeriodMinutes        Int
+  resolvedNoCheckInThresholdMinutes Int
+  resolvedEarlyAllowanceMinutes     Int
+  resolvedSyncThresholdMinutes      Int
+  lateMinutes                       Int                              @default(0)
+
+  detectionOutcome String // "ON_TIME" | "LATE" | "NO_CHECK_IN" | "LOCATION_MISMATCH" | "ROSTER_CONFLICT" | "SUPPRESSED"
+  workflowStatus   String @default("OPEN") // "OPEN" | "PENDING_REVIEW" | "UNDER_REVIEW" | "RESOLVED" | "CANCELLED"
+  resolution       String @default("NOT_APPLICABLE") // "NOT_APPLICABLE" | "EXCUSED" | "UNEXCUSED_ABSENCE" | "ATTENDANCE_SYNC_DELAY" | "ROSTER_ERROR"
+
+  suppressionReason String?
+  reviewedById      String?
+  reviewedBy        Employee? @relation("ReconciliationReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviewedAt        DateTime?
+  reviewNotes       String?   @db.Text
+
+  canonicalIdentity String   @db.Text
+  reconciliationKey String   @unique @db.VarChar(64) // SHA-256 hex string of canonical identity
+  rowVersion        Int      @default(1)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([operationType, businessDate])
+  @@index([contractId, businessDate])
+  @@index([siteId, businessDate])
+  @@index([expectedEmployeeId, businessDate], map: "AttendanceRosterRecon_employee_date_idx")
+  @@index([detectionOutcome])
+  @@index([workflowStatus])
+  @@index([resolution])
+}
+
+model ManpowerReconciliationScopeLock {
+  id            String    @id @default(uuid())
+  lockKey       String    @unique // "RECON_LOCK:<operationType>:<businessDate>"
+  ownerToken    String
+  leaseVersion  Int       @default(1)
+  operationType String // "SECURITY_GUARDING" | "FACILITY_MANAGEMENT"
+  businessDate  DateTime  @db.Date
+  acquiredAt    DateTime  @default(now())
+  renewedAt     DateTime?
+  expiresAt     DateTime
+  createdAt     DateTime  @default(now())
+
+  @@index([expiresAt])
 }
