@@ -90,7 +90,8 @@ export async function GET(request: Request) {
                 role: true,
                 status: true,
                 employeeCategory: true,
-                designation: { select: { name: true, code: true } }
+                designation: { select: { id: true, name: true, code: true } },
+                positionCategory: { select: { id: true, code: true, name: true } }
               }
             },
             planningException: {

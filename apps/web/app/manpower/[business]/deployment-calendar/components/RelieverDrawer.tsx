@@ -13,7 +13,7 @@ import {
   Info
 } from "lucide-react";
 import {
-  resolveRosterDesignation,
+  resolveEmployeeTradePosition,
   resolveRosterDateStr
 } from "@/lib/roster-display-utils";
 
@@ -83,7 +83,7 @@ export const RelieverDrawer: React.FC<RelieverDrawerProps> = ({
 
   const primaryEmployee = primaryAssignment?.employee;
   const primaryName = primaryEmployee?.name || primaryAssignment?.employeeName || "Primary Employee";
-  const positionName = resolveRosterDesignation(primaryEmployee, resolvedSlot);
+  const positionName = resolveEmployeeTradePosition(primaryEmployee);
   const formattedDate = resolveRosterDateStr(resolvedSlot?.businessDate ?? primaryAssignment?.businessDate);
 
   const filteredEmployees = employees.filter((item) => {
@@ -273,7 +273,7 @@ export const RelieverDrawer: React.FC<RelieverDrawerProps> = ({
                               <span className="text-xs text-secondary font-mono">({item.employee?.id || "N/A"})</span>
                             </h4>
                             <p className="text-xs text-secondary mt-0.5">
-                              {item.employee?.designation?.name || "Staff"} • {item.employee?.employeeCategory || "General"}
+                              {resolveEmployeeTradePosition(item.employee)} • {item.employee?.employeeCategory || "General"}
                             </p>
                           </div>
                           <Badge variant={isFullyEligible ? "success" : hasWarnings ? "warning" : "error"}>

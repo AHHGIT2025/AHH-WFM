@@ -37,6 +37,7 @@ import { AbsenceModal } from "./components/AbsenceModal";
 import { CancelResolveModal } from "./components/CancelResolveModal";
 import { RelieverDrawer } from "./components/RelieverDrawer";
 import { CellActionMenu } from "./components/CellActionMenu";
+import { resolveEmployeeTradePosition } from "@/lib/roster-display-utils";
 
 interface RosterSlot {
   id: string;
@@ -997,7 +998,7 @@ export default function RosterBoardPage() {
                       <div className="flex items-start justify-between">
                         <div>
                           <h4 className="font-bold text-sm text-foreground">{item.employee.name}</h4>
-                          <p className="text-xs text-secondary mt-0.5">{item.employee.id} • {item.employee.designation?.name || "Staff"}</p>
+                          <p className="text-xs text-secondary mt-0.5">{item.employee.id} • {resolveEmployeeTradePosition(item.employee)}</p>
                         </div>
                         {hasErrors ? (
                           <Badge className="bg-destructive/10 text-destructive border-destructive/20 text-[10px]">Blocked</Badge>

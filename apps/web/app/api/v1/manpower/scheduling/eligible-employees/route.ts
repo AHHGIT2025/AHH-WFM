@@ -3,6 +3,10 @@ import { prisma } from "@ahh-wfm/database";
 import { checkApiAuth } from "../../../../../../lib/api-guards";
 import { hasPermission } from "../../../../../../lib/permissions";
 import { checkEmployeeSchedulingEligibility } from "../../../../../../lib/roster-engine";
+import {
+  resolveEmployeeTradePosition,
+  resolveEmployeeTradePositionSource
+} from "../../../../../../lib/roster-display-utils";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -39,7 +43,8 @@ export async function GET(request: Request) {
         isActive: true
       },
       include: {
-        designation: true
+        designation: true,
+        positionCategory: true
       }
     });
 
@@ -55,8 +60,16 @@ export async function GET(request: Request) {
               email: emp.email,
               phone: emp.phone,
               employeeCategory: emp.employeeCategory,
-              designation: emp.designation ? { code: emp.designation.code, name: emp.designation.name } : null
+              designation: emp.designation ? { id: emp.designation.id, code: emp.designation.code, name: emp.designation.name } : null,
+              positionCategory: emp.positionCategory ? { id: emp.positionCategory.id, code: emp.positionCategory.code, name: emp.positionCategory.name } : null
             },
+            // Authoritative employee Trade/Position (Workforce Directory aligned)
+            employeeTradePosition: resolveEmployeeTradePosition(emp),
+            employeeTradePositionSource: resolveEmployeeTradePositionSource(emp),
+            // HR Designation (separate from Trade/Position — for White Collar/HR display only)
+            employeeDesignation: emp.designation?.name ?? null,
+            // Required position from the roster slot (NOT employee master data)
+            requiredPosition: slot.snapshotPosition ?? null,
             canDeploy: check.canDeploy,
             errors: check.errors,
             warnings: check.warnings,

@@ -7174,6 +7174,7 @@ export default function ManpowerMasterPage() {
                       <>
                         <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">ID</th>
                         <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Name</th>
+                        <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Trade/Position</th>
                         <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Email</th>
                         <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Category</th>
                         <th className="px-4 py-3 text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">Duty Status</th>
@@ -7616,6 +7617,7 @@ export default function ManpowerMasterPage() {
                         <>
                           <td className="px-4 py-3 text-xs font-bold text-primary">{item.id}</td>
                           <td className="px-4 py-3 text-xs text-on-surface">{item.name}</td>
+                          <td className="px-4 py-3 text-xs text-on-surface font-medium">{item.positionCategory?.name || item.designation?.name || "Not specified"}</td>
                           <td className="px-4 py-3 text-xs text-on-surface-variant">{item.email}</td>
                           <td className="px-4 py-3 text-xs text-on-surface">{item.manpowerCategoryId || "General"}</td>
                           <td className="px-4 py-3 text-xs">

@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { Button } from "@ahh-wfm/ui/src";
 import { AlertTriangle, Calendar, ShieldAlert } from "lucide-react";
 import {
-  resolveRosterDesignation,
+  resolveEmployeeTradePosition,
   resolveRosterDateStr
 } from "@/lib/roster-display-utils";
 
@@ -77,7 +77,7 @@ export const LeaveEffectModal: React.FC<LeaveEffectModalProps> = ({
 
   if (!isOpen) return null;
 
-  const designationName = resolveRosterDesignation(resolvedEmployee, resolvedSlot);
+  const designationName = resolveEmployeeTradePosition(resolvedEmployee);
   const formattedDate = resolveRosterDateStr(resolvedBusinessDate);
   const employeeName = resolvedEmployee?.name || primaryAssignment?.employeeName || "Employee";
 
@@ -174,7 +174,7 @@ export const LeaveEffectModal: React.FC<LeaveEffectModalProps> = ({
                 <span className="font-semibold">{employeeName} ({resolvedEmployeeId})</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-xs text-secondary font-medium">Designation:</span>
+                <span className="text-xs text-secondary font-medium">Trade/Position:</span>
                 <span>{designationName}</span>
               </div>
               <div className="flex justify-between">

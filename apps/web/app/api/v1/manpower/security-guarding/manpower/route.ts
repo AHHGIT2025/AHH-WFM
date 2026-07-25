@@ -80,13 +80,15 @@ export async function GET(request: Request) {
             isRelieverEligible: false,
             isActive: true
           } : e.designation,
+          positionCategory: (e as any).positionCategory,
           manpowerCategoryId: e.manpowerCategoryId
         };
       } else {
         return {
           ...e,
           operationType: "", // Set empty so UI shows "Operation Type Needs Sync"
-          syncStatus: "NEEDS_SYNC"
+          syncStatus: "NEEDS_SYNC",
+          positionCategory: (e as any).positionCategory
         };
       }
     });

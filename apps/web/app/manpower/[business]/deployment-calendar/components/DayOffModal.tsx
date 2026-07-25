@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import { Button } from "@ahh-wfm/ui/src";
 import { AlertTriangle, Calendar, ShieldAlert } from "lucide-react";
 import {
-  resolveRosterDesignation,
+  resolveEmployeeTradePosition,
   resolveRosterShiftName,
   resolveRosterShiftTimes,
   resolveRosterDateStr
@@ -49,7 +49,7 @@ export const DayOffModal: React.FC<DayOffModalProps> = ({
     resolvedBusinessDate
   );
 
-  const designationName = resolveRosterDesignation(resolvedEmployee, resolvedSlot);
+  const designationName = resolveEmployeeTradePosition(resolvedEmployee);
   const shiftName = resolveRosterShiftName(resolvedSlot);
   const shiftTimes = resolveRosterShiftTimes(resolvedSlot);
   const formattedDate = resolveRosterDateStr(resolvedBusinessDate);
@@ -143,7 +143,7 @@ export const DayOffModal: React.FC<DayOffModalProps> = ({
                 <span className="font-semibold">{employeeName} ({resolvedEmployeeId})</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-xs text-secondary font-medium">Designation:</span>
+                <span className="text-xs text-secondary font-medium">Trade/Position:</span>
                 <span>{designationName}</span>
               </div>
               <div className="flex justify-between">
