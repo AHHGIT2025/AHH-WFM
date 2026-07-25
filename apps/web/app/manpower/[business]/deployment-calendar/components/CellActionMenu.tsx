@@ -1,9 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect } from "react";
-import { Button, Badge } from "@ahh-wfm/ui/src";
 import { 
-  User, 
   Calendar, 
   UserX, 
   UserCheck, 
@@ -63,25 +61,22 @@ export const CellActionMenu: React.FC<CellActionMenuProps> = ({
 
   // Render cell badge / button
   let cellText = "Vacant Slot";
-  let cellBadgeVariant: "neutral" | "success" | "info" | "warning" | "error" | "primary" = "neutral";
+  const employeeName = assignment?.employee?.name || "Employee";
 
   if (assignment) {
     if (isReliever) {
-      cellText = `Reliever: ${assignment.employee.name}`;
-      cellBadgeVariant = "info";
+      cellText = `Reliever: ${employeeName}`;
     } else if (hasException) {
-      if (exception.exceptionType === "DAY_OFF") cellText = `Day Off: ${assignment.employee.name}`;
-      else if (exception.exceptionType === "LEAVE_EFFECT") cellText = `Leave: ${assignment.employee.name}`;
-      else if (exception.exceptionType === "ABSENT") cellText = `Absent: ${assignment.employee.name}`;
-      else cellText = `Exception: ${assignment.employee.name}`;
-
-      if (exceptionStatus === "RELIEVER_ASSIGNED") cellBadgeVariant = "info";
-      else cellBadgeVariant = exception.exceptionType === "ABSENT" ? "error" : "warning";
+      if (exception.exceptionType === "DAY_OFF") cellText = `Day Off: ${employeeName}`;
+      else if (exception.exceptionType === "LEAVE_EFFECT") cellText = `Leave: ${employeeName}`;
+      else if (exception.exceptionType === "ABSENT") cellText = `Absent: ${employeeName}`;
+      else cellText = `Exception: ${employeeName}`;
     } else {
-      cellText = assignment.employee.name;
-      cellBadgeVariant = "success";
+      cellText = employeeName;
     }
   }
+
+  const slotIndex = slot?.slotIndex ?? 1;
 
   return (
     <div className="relative inline-block text-left w-full" ref={menuRef}>
@@ -108,7 +103,7 @@ export const CellActionMenu: React.FC<CellActionMenuProps> = ({
       {isOpen && (
         <div className="origin-top-right absolute right-0 mt-1 w-56 rounded-xl shadow-2xl bg-surface border border-outline-variant z-50 py-1.5 focus:outline-none">
           <div className="px-3 py-1.5 border-b border-outline-variant text-[11px] text-secondary font-semibold uppercase tracking-wider">
-            Actions for Slot #{slot.slotIndex}
+            Actions for Slot #{slotIndex}
           </div>
 
           <button

@@ -1,8 +1,14 @@
 "use client";
 
 import React, { useState } from "react";
-import { Button, Badge } from "@ahh-wfm/ui/src";
+import { Button } from "@ahh-wfm/ui/src";
 import { AlertTriangle, ShieldAlert, UserX } from "lucide-react";
+import {
+  resolveRosterDesignation,
+  resolveRosterShiftName,
+  resolveRosterShiftTimes,
+  resolveRosterDateStr
+} from "@/lib/roster-display-utils";
 
 interface AbsenceModalProps {
   isOpen: boolean;
@@ -23,12 +29,23 @@ export const AbsenceModal: React.FC<AbsenceModalProps> = ({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  if (!isOpen || !primaryAssignment) return null;
+  if (!isOpen) return null;
 
-  const { employee, slot } = primaryAssignment;
+  const employee = primaryAssignment?.employee;
+  const slot = primaryAssignment?.slot;
+  const isContextReady = Boolean(primaryAssignment?.id && employee?.id && slot?.id);
+
+  const designationName = resolveRosterDesignation(employee, slot);
+  const shiftName = resolveRosterShiftName(slot);
+  const shiftTimes = resolveRosterShiftTimes(slot);
+  const formattedDate = resolveRosterDateStr(slot?.businessDate);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isContextReady) {
+      setError("Unable to load the employee or roster slot details. Please close this window and try again.");
+      return;
+    }
     if (!reason.trim()) {
       setError("Reason is mandatory for recording Absence.");
       return;
@@ -80,38 +97,47 @@ export const AbsenceModal: React.FC<AbsenceModalProps> = ({
         </header>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4 text-sm text-foreground">
-          {periodLocked && (
+          {!isContextReady && (
+            <div className="p-3 bg-destructive/10 border border-destructive/20 text-destructive rounded-lg flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 shrink-0" />
+              <span>Unable to load the employee or roster slot details. Please close this window and try again.</span>
+            </div>
+          )}
+
+          {periodLocked && isContextReady && (
             <div className="p-3 bg-destructive/10 border border-destructive/20 text-destructive rounded-lg flex items-center gap-2">
               <ShieldAlert className="h-5 w-5 shrink-0" />
               <span>This period is locked. Write actions are prohibited.</span>
             </div>
           )}
 
-          {error && (
+          {error && isContextReady && (
             <div className="p-3 bg-status-error/10 border border-status-error/20 text-status-error rounded-lg flex items-center gap-2">
               <AlertTriangle className="h-5 w-5 shrink-0" />
               <span>{error}</span>
             </div>
           )}
 
-          <div className="bg-background border border-outline p-3 rounded-lg space-y-1.5">
-            <div className="flex justify-between">
-              <span className="text-xs text-secondary font-medium">Employee:</span>
-              <span className="font-semibold">{employee.name} ({employee.id})</span>
+          {isContextReady && (
+            <div className="bg-background border border-outline p-3 rounded-lg space-y-1.5">
+              <div className="flex justify-between">
+                <span className="text-xs text-secondary font-medium">Employee:</span>
+                <span className="font-semibold">{employee?.name || "N/A"} ({employee?.id || "N/A"})</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-xs text-secondary font-medium">Designation:</span>
+                <span>{designationName}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-xs text-secondary font-medium">Shift:</span>
+                <span>{shiftName} {shiftTimes ? `(${shiftTimes})` : ""}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-xs text-secondary font-medium">Date:</span>
+                <span className="font-semibold text-destructive">{formattedDate}</span>
+              </div>
             </div>
-            <div className="flex justify-between">
-              <span className="text-xs text-secondary font-medium">Designation:</span>
-              <span>{employee.designation?.name || slot.snapshotPosition}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-xs text-secondary font-medium">Shift:</span>
-              <span>{slot.snapshotShiftName} ({slot.snapshotStartTime} - {slot.snapshotEndTime})</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-xs text-secondary font-medium">Date:</span>
-              <span className="font-semibold text-destructive">{new Date(slot.businessDate).toISOString().split("T")[0]}</span>
-            </div>
-          </div>
+          )}
 
           <div>
             <label className="block text-xs font-semibold text-secondary mb-1">
@@ -123,7 +149,7 @@ export const AbsenceModal: React.FC<AbsenceModalProps> = ({
               onChange={(e) => setReason(e.target.value)}
               placeholder="State reason for absence (e.g. Unannounced No-Show, Emergency Emergency)..."
               className="w-full bg-background border border-outline rounded-lg p-2.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-              disabled={submitting || periodLocked}
+              disabled={!isContextReady || submitting || periodLocked}
             />
           </div>
 
@@ -131,7 +157,7 @@ export const AbsenceModal: React.FC<AbsenceModalProps> = ({
             <Button variant="secondary" type="button" onClick={onClose} disabled={submitting}>
               Cancel
             </Button>
-            <Button variant="error" type="submit" disabled={submitting || periodLocked}>
+            <Button variant="error" type="submit" disabled={!isContextReady || submitting || periodLocked}>
               {submitting ? "Recording..." : "Confirm Absence"}
             </Button>
           </div>

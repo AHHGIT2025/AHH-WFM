@@ -25,12 +25,17 @@ export const CancelResolveModal: React.FC<CancelResolveModalProps> = ({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  if (!isOpen || !exception) return null;
+  if (!isOpen) return null;
 
+  const isContextReady = Boolean(exception?.id);
   const isCancel = mode === "cancel";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isContextReady) {
+      setError("Unable to load exception details. Please close this window and try again.");
+      return;
+    }
     if (isCancel && !reason.trim()) {
       setError("Cancellation reason is required.");
       return;
@@ -84,35 +89,44 @@ export const CancelResolveModal: React.FC<CancelResolveModalProps> = ({
         </header>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4 text-sm text-foreground">
-          {periodLocked && (
+          {!isContextReady && (
+            <div className="p-3 bg-destructive/10 border border-destructive/20 text-destructive rounded-lg flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 shrink-0" />
+              <span>Unable to load exception details. Please close this window and try again.</span>
+            </div>
+          )}
+
+          {periodLocked && isContextReady && (
             <div className="p-3 bg-destructive/10 border border-destructive/20 text-destructive rounded-lg flex items-center gap-2">
               <ShieldAlert className="h-5 w-5 shrink-0" />
               <span>This period is locked. Write actions are prohibited.</span>
             </div>
           )}
 
-          {error && (
+          {error && isContextReady && (
             <div className="p-3 bg-status-error/10 border border-status-error/20 text-status-error rounded-lg flex items-center gap-2">
               <AlertTriangle className="h-5 w-5 shrink-0" />
               <span>{error}</span>
             </div>
           )}
 
-          <div className="bg-background border border-outline p-3 rounded-lg space-y-1">
-            <div className="flex justify-between">
-              <span className="text-xs text-secondary font-medium">Exception Type:</span>
-              <Badge variant="warning">{exception.exceptionType}</Badge>
+          {isContextReady && (
+            <div className="bg-background border border-outline p-3 rounded-lg space-y-1">
+              <div className="flex justify-between">
+                <span className="text-xs text-secondary font-medium">Exception Type:</span>
+                <Badge variant="warning">{exception?.exceptionType || "N/A"}</Badge>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-xs text-secondary font-medium">Status:</span>
+                <span className="font-semibold">{exception?.status || "N/A"}</span>
+              </div>
+              <div className="text-xs text-secondary mt-2">
+                {exception?.message || ""}
+              </div>
             </div>
-            <div className="flex justify-between">
-              <span className="text-xs text-secondary font-medium">Status:</span>
-              <span className="font-semibold">{exception.status}</span>
-            </div>
-            <div className="text-xs text-secondary mt-2">
-              {exception.message}
-            </div>
-          </div>
+          )}
 
-          {isCancel && (
+          {isContextReady && isCancel && (
             <div>
               <label className="block text-xs font-semibold text-secondary mb-1">
                 Reason for Cancellation <span className="text-destructive">*</span>
@@ -135,7 +149,7 @@ export const CancelResolveModal: React.FC<CancelResolveModalProps> = ({
             <Button
               variant={isCancel ? "error" : "success"}
               type="submit"
-              disabled={submitting || periodLocked}
+              disabled={!isContextReady || submitting || periodLocked}
             >
               {submitting ? "Processing..." : isCancel ? "Confirm Cancellation" : "Confirm Resolve"}
             </Button>
