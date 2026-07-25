@@ -6,7 +6,7 @@ module.exports = {
     '^.+\\.tsx?$': ['ts-jest', { tsconfig: 'tests/tsconfig.test.json' }]
   },
   moduleNameMapper: {
-    '^@/(.*)$': '<rootDir>/apps/mobile/$1',
+    '^@/(.*)$': '<rootDir>/apps/web/$1',
     '^@ahh-wfm/types$': '<rootDir>/packages/types/src',
     '^@ahh-wfm/mock-data$': '<rootDir>/packages/mock-data/src'
   },
