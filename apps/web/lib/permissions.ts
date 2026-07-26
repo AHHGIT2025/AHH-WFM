@@ -34,7 +34,8 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "manpower.roster.changeRequest.approve", "manpower.roster.changeRequest.reject", "manpower.roster.changeRequest.withdraw",
     "manpower.roster.changeRequest.selfApprovalOverride", "manpower.roster.acknowledge", "manpower.roster.publication.viewHistory",
     "manpower.reconciliation.view", "manpower.reconciliation.run", "manpower.reconciliation.review", "manpower.reconciliation.excuse",
-    "manpower.reconciliation.classifyUnexcused", "manpower.reconciliation.markSyncDelay", "manpower.reconciliation.manageConfig"
+    "manpower.reconciliation.classifyUnexcused", "manpower.reconciliation.markSyncDelay", "manpower.reconciliation.manageConfig",
+    "manpower.advisory.view", "manpower.advisory.calculate", "manpower.advisory.review", "manpower.advisory.lock", "manpower.advisory.export", "manpower.calendars.manage", "manpower.calendars.approve"
   ],
   ADMIN: [
     "dashboard.view", "employees.view", "employees.create", "employees.edit", "employees.bulkUpload", "employees.manage",
@@ -57,6 +58,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "self.profile.view", "self.attendance.view", "self.attendance.punch", "self.leave.view", "self.leave.apply", "self.announcements.view", "self.password.change",
     "settings.manage", "system.config.view", "system.config.manage", "masterdata.view", "masterdata.manage", "audit.export", "integration.view", "integration.manage",
     "settings.audit.view", "settings.backup.view", "settings.backup.manage", "settings.productionReadiness.view", "settings.integration.view", "settings.integration.manage",
+    "manpower.advisory.view", "manpower.advisory.calculate", "manpower.advisory.review", "manpower.advisory.lock", "manpower.advisory.export", "manpower.calendars.manage", "manpower.calendars.approve",
     "secfac.alerts.view", "secfac.alerts.manage", "secfac.alerts.acknowledge", "secfac.alerts.resolve", "secfac.alerts.escalate", "secfac.alert.rules.view", "secfac.alert.rules.manage",
     "secfac.notifications.view", "secfac.notifications.manage", "secfac.notifications.retry", "secfac.notifications.configure", "secfac.workers.view", "secfac.workers.manage",
     "secfac.checkpoints.view", "secfac.checkpoints.create", "secfac.checkpoints.edit", "secfac.checkpoints.delete",

@@ -33,7 +33,10 @@ export async function resolveEmployeeCalendarContext(params: {
       workerCategory: params.workerCategory,
       approvalStatus: "APPROVED",
       effectiveFrom: { lte: targetDate },
-      effectiveTo: { gte: targetDate },
+      OR: [
+        { effectiveTo: null },
+        { effectiveTo: { gte: targetDate } }
+      ],
       ...(params.companyId ? { companyId: params.companyId } : {})
     },
     orderBy: { version: "desc" }
@@ -53,12 +56,13 @@ export async function resolveEmployeeCalendarContext(params: {
     };
   }
 
-  // Verify completeness of minute thresholds in APPROVED profile
+  // Verify completeness of minute thresholds and weekly rest in APPROVED profile
   if (
     profile.ordinaryDailyMinutes == null ||
     profile.ordinaryWeeklyMinutes == null ||
     profile.ramadanDailyMinutes == null ||
-    profile.ramadanWeeklyMinutes == null
+    profile.ramadanWeeklyMinutes == null ||
+    !profile.weeklyRestConfigType
   ) {
     return {
       profile,
@@ -69,7 +73,7 @@ export async function resolveEmployeeCalendarContext(params: {
       isWeeklyRestDay: false,
       dailyThresholdMinutes: null,
       weeklyThresholdMinutes: null,
-      missingProfileReason: "DATA_INCOMPLETE: Approved profile is missing daily/weekly minute thresholds"
+      missingProfileReason: "DATA_INCOMPLETE: Approved profile is missing daily/weekly minute thresholds or weekly rest configuration"
     };
   }
 
@@ -87,7 +91,7 @@ export async function resolveEmployeeCalendarContext(params: {
 
   const isRamadanActive = !!ramadanPeriod;
 
-  // 3. Resolve Approved Holiday Date
+  // 3. Resolve Approved Holiday Date (checking company-specific or global calendar)
   const holidayDate = await prisma.manpowerHolidayDate.findFirst({
     where: {
       holidayDate: targetDate,
@@ -96,7 +100,8 @@ export async function resolveEmployeeCalendarContext(params: {
       calendar: {
         year,
         approvalStatus: "APPROVED",
-        scope: { in: [params.operationType as any, "BOTH"] }
+        scope: { in: [params.operationType as any, "BOTH"] },
+        ...(params.companyId ? { OR: [{ companyId: params.companyId }, { companyId: null }] } : {})
       }
     }
   });
@@ -108,13 +113,22 @@ export async function resolveEmployeeCalendarContext(params: {
   const dayOfWeekNames = ["SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"];
   const dayName = dayOfWeekNames[targetDate.getDay()];
 
+  const targetRestDay = profile.weeklyRestFixedDay
+    ? profile.weeklyRestFixedDay.toUpperCase()
+    : params.employeeWeeklyRestDay
+    ? params.employeeWeeklyRestDay.toUpperCase()
+    : null;
+
   if (profile.weeklyRestConfigType === "FIXED_DAY") {
-    const fixedRestDay = (profile.weeklyRestFixedDay || params.employeeWeeklyRestDay || "FRIDAY").toUpperCase();
-    isWeeklyRestDay = dayName === fixedRestDay;
+    if (targetRestDay) {
+      isWeeklyRestDay = dayName === targetRestDay;
+    }
   } else if (profile.weeklyRestConfigType === "ROTATING" || profile.weeklyRestConfigType === "CUSTOM_SCHEDULE") {
     const restDays: string[] = Array.isArray((profile.weeklyRestCustomSchedule as any)?.restDays)
       ? (profile.weeklyRestCustomSchedule as any).restDays.map((d: string) => d.toUpperCase())
-      : [params.employeeWeeklyRestDay?.toUpperCase() || "FRIDAY"];
+      : targetRestDay
+      ? [targetRestDay]
+      : [];
     isWeeklyRestDay = restDays.includes(dayName);
   }
 
@@ -142,7 +156,7 @@ export async function validateProfileOverlap(params: {
   operationType: string;
   workerCategory: string;
   effectiveFrom: Date;
-  effectiveTo: Date;
+  effectiveTo?: Date | null;
   companyId?: string | null;
 }): Promise<{ hasOverlap: boolean; overlappingProfileId?: string }> {
   const existing = await prisma.manpowerWorkCalendarProfile.findFirst({
@@ -152,11 +166,10 @@ export async function validateProfileOverlap(params: {
       workerCategory: params.workerCategory,
       approvalStatus: "APPROVED",
       ...(params.companyId ? { companyId: params.companyId } : {}),
+      effectiveFrom: params.effectiveTo ? { lte: params.effectiveTo } : undefined,
       OR: [
-        {
-          effectiveFrom: { lte: params.effectiveTo },
-          effectiveTo: { gte: params.effectiveFrom }
-        }
+        { effectiveTo: null },
+        { effectiveTo: { gte: params.effectiveFrom } }
       ]
     }
   });
@@ -166,3 +179,4 @@ export async function validateProfileOverlap(params: {
     overlappingProfileId: existing?.id
   };
 }
+

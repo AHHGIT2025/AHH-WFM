@@ -9,6 +9,9 @@ export interface BillingSupportCalculationParams {
   siteId?: string;
   companyId?: string;
   calculatedBy: string;
+  idempotencyKey?: string;
+  requestHash?: string;
+  correlationId?: string;
 }
 
 export interface CalculatedBillingLine {
@@ -21,8 +24,19 @@ export interface CalculatedBillingLine {
   projectNameSnapshot: string;
   siteId: string | null;
   siteNameSnapshot: string;
+  shiftRequirementId?: string | null;
+  requirementSeriesId?: string | null;
   requirementSlotId: string | null;
+  locationUnitId?: string | null;
+  postId?: string | null;
+  zoneId?: string | null;
+  requiredPositionCategoryId?: string | null;
   positionCategory: string | null;
+  slotIndex?: number | null;
+  publicationId?: string | null;
+  assignmentId?: string | null;
+  attendanceId?: string | null;
+  reconciliationId?: string | null;
   plannedManpower: number;
   plannedPostMinutes: number;
   assignedManpower: number;
@@ -34,6 +48,8 @@ export interface CalculatedBillingLine {
   approvedExtraCount: number;
   relieverSubstitutionCount: number;
   focRelieverMinutes: number;
+  baseBillableAdvisoryQty: number;
+  additionalRelieverAdvisoryQty: number;
   billableAdvisoryQuantity: number;
   billingBasis: string;
   warningCodes: string[];
@@ -45,11 +61,47 @@ export interface CalculatedBillingLine {
  */
 export async function calculateBillingSupportData(
   params: BillingSupportCalculationParams
-): Promise<{ lines: CalculatedBillingLine[]; summary: any }> {
+): Promise<{ lines: CalculatedBillingLine[]; summary: any; sourceVersionJson: any }> {
   const year = parseInt(params.period.split("-")[0]);
   const month = parseInt(params.period.split("-")[1]);
   const start = new Date(year, month - 1, 1, 0, 0, 0, 0);
   const end = new Date(year, month, 0, 23, 59, 59, 999);
+
+  // Fetch active profiles and calendar versions for source tracking
+  const activeProfile = await prisma.manpowerWorkCalendarProfile.findFirst({
+    where: {
+      operationType: params.operationType,
+      approvalStatus: "APPROVED",
+      ...(params.companyId ? { companyId: params.companyId } : {})
+    },
+    orderBy: { version: "desc" }
+  });
+
+  const activeRamadan = await prisma.manpowerRamadanPeriod.findFirst({
+    where: { year, approvalStatus: "APPROVED" },
+    orderBy: { version: "desc" }
+  });
+
+  const activeHolidayCal = await prisma.manpowerHolidayCalendar.findFirst({
+    where: {
+      year,
+      approvalStatus: "APPROVED",
+      scope: { in: [params.operationType as any, "BOTH"] },
+      ...(params.companyId ? { OR: [{ companyId: params.companyId }, { companyId: null }] } : {})
+    },
+    orderBy: { version: "desc" }
+  });
+
+  const sourceVersionJson = {
+    workCalendarProfileId: activeProfile?.id || null,
+    workCalendarProfileVersion: activeProfile?.version || 1,
+    ramadanPeriodId: activeRamadan?.id || null,
+    ramadanPeriodVersion: activeRamadan?.version || 1,
+    holidayCalendarId: activeHolidayCal?.id || null,
+    holidayCalendarVersion: activeHolidayCal?.version || 1,
+    calculationEngineVersion: 2,
+    calculatedAt: new Date().toISOString()
+  };
 
   // 1. Fetch Requirements & Contracts
   const requirements = await prisma.contractManpowerRequirement.findMany({
@@ -137,11 +189,18 @@ export async function calculateBillingSupportData(
     let verifiedAttendedMinutes = 0;
     let relieverSubstitutionCount = 0;
     let focRelieverMinutes = 0;
+    let firstAssignmentId: string | null = null;
+    let firstAttendanceId: string | null = null;
     const warnings: string[] = [];
 
     asgs.forEach((asg: any) => {
+      if (!firstAssignmentId) firstAssignmentId = asg.id;
       if (asg.assignmentType === "RELIEVER") {
         relieverSubstitutionCount++;
+        // If contract specifies requirement is FOC or reliever is FOC
+        if (slot?.contract?.isFoc || (asg.notes && asg.notes.includes("FOC"))) {
+          focRelieverMinutes += plannedPostMinutes;
+        }
       } else {
         assignedManpower++;
       }
@@ -151,10 +210,12 @@ export async function calculateBillingSupportData(
       );
 
       if (att && att.checkIn && att.checkOut) {
+        if (!firstAttendanceId) firstAttendanceId = att.id;
         verifiedPresentManpower++;
         const mins = Math.round((att.checkOut.getTime() - att.checkIn.getTime()) / (1000 * 60));
         verifiedAttendedMinutes += mins;
       } else if (att) {
+        if (!firstAttendanceId) firstAttendanceId = att.id;
         verifiedPresentManpower++;
         verifiedAttendedMinutes += plannedPostMinutes;
       }
@@ -168,8 +229,14 @@ export async function calculateBillingSupportData(
 
     if (shortageCount > 0) warnings.push("UNDER_DEPLOYMENT_SHORTAGE");
     if (unapprovedExtraCount > 0) warnings.push("UNAPPROVED_EXTRA_DEPLOYMENT");
+    if (focRelieverMinutes > 0) warnings.push("FOC_RELIEVER_APPLIED");
 
-    const billableAdvisoryQuantity = Math.min(plannedManpower, verifiedPresentManpower);
+    // Correct FOC Reliever Business Rule:
+    // Base planned post covered by a reliever remains Contract-covered billable quantity (1).
+    // Additional reliever advisory quantity equals 0 (relievers do NOT produce extra billable quantity).
+    const baseBillableAdvisoryQty = Math.min(plannedManpower, verifiedPresentManpower);
+    const additionalRelieverAdvisoryQty = 0;
+    const billableAdvisoryQuantity = baseBillableAdvisoryQty + additionalRelieverAdvisoryQty;
 
     totalPlannedManpower += plannedManpower;
     totalAssignedManpower += assignedManpower;
@@ -186,8 +253,19 @@ export async function calculateBillingSupportData(
       projectNameSnapshot: slot?.site?.project?.name || "Project",
       siteId: slot?.siteId || null,
       siteNameSnapshot: slot?.site?.name || "Site",
+      shiftRequirementId: slot?.shiftRequirementId || null,
+      requirementSeriesId: slot?.requirementSeriesId || null,
       requirementSlotId: slot?.id || null,
+      locationUnitId: slot?.locationUnitId || null,
+      postId: slot?.postId || null,
+      zoneId: slot?.zoneId || null,
+      requiredPositionCategoryId: slot?.requiredPositionCategoryId || null,
       positionCategory: slot?.snapshotPosition || "Guard/Staff",
+      slotIndex: slot?.slotIndex || 1,
+      publicationId: slot?.publicationId || null,
+      assignmentId: firstAssignmentId,
+      attendanceId: firstAttendanceId,
+      reconciliationId: null,
       plannedManpower,
       plannedPostMinutes,
       assignedManpower,
@@ -199,8 +277,10 @@ export async function calculateBillingSupportData(
       approvedExtraCount,
       relieverSubstitutionCount,
       focRelieverMinutes,
+      baseBillableAdvisoryQty,
+      additionalRelieverAdvisoryQty,
       billableAdvisoryQuantity,
-      billingBasis: "PLANNED_VS_ACTUAL_ATTENDANCE",
+      billingBasis: slot?.contract?.billingBasis || "PLANNED_VS_ACTUAL_ATTENDANCE",
       warningCodes: warnings,
       notes: shortageCount > 0 ? "Under-deployment detected" : "Full post covered"
     });
@@ -214,7 +294,8 @@ export async function calculateBillingSupportData(
       totalVerifiedPresent,
       totalBillableQuantity,
       lineCount: lines.length
-    }
+    },
+    sourceVersionJson
   };
 }
 
@@ -223,6 +304,25 @@ export async function calculateBillingSupportData(
  * Retains immutability for LOCKED or EXPORTED runs by creating a new version.
  */
 export async function createDurableBillingRun(params: BillingSupportCalculationParams): Promise<any> {
+  if (params.idempotencyKey) {
+    const existingKeyRun = await prisma.manpowerBillingSupportRun.findUnique({
+      where: { idempotencyKey: params.idempotencyKey },
+      include: { lines: true }
+    });
+    if (existingKeyRun) {
+      if (params.requestHash && existingKeyRun.requestHash !== params.requestHash) {
+        const err: any = new Error("IDEMPOTENCY_KEY_REUSED: Idempotency key reused with different request payload");
+        err.statusCode = 409;
+        throw err;
+      }
+      return existingKeyRun;
+    }
+  }
+
+  const year = parseInt(params.period.split("-")[0]);
+  const month = parseInt(params.period.split("-")[1]);
+  const fromDate = new Date(year, month - 1, 1);
+  const toDate = new Date(year, month, 0);
   const runCode = `BILL-${params.operationType}-${params.period}-${Date.now().toString(36)}`;
 
   const existingRun = await prisma.manpowerBillingSupportRun.findFirst({
@@ -243,15 +343,26 @@ export async function createDurableBillingRun(params: BillingSupportCalculationP
     });
   }
 
-  const { lines, summary } = await calculateBillingSupportData(params);
+  const { lines, summary, sourceVersionJson } = await calculateBillingSupportData(params);
 
   const run = await prisma.manpowerBillingSupportRun.create({
     data: {
       runCode,
+      idempotencyKey: params.idempotencyKey || null,
+      requestHash: params.requestHash || null,
+      correlationId: params.correlationId || null,
       operationType: params.operationType,
       period: params.period,
+      companyId: params.companyId || null,
+      fromDate,
+      toDate,
       status: "CALCULATED",
       version: nextVersion,
+      calculationVersion: 2,
+      workCalendarProfileId: sourceVersionJson.workCalendarProfileId,
+      ramadanPeriodId: sourceVersionJson.ramadanPeriodId,
+      holidayCalendarId: sourceVersionJson.holidayCalendarId,
+      sourceVersionJson,
       supersedesRunId: existingRun?.id || null,
       calculatedBy: params.calculatedBy,
       resultSummary: summary,
@@ -266,8 +377,19 @@ export async function createDurableBillingRun(params: BillingSupportCalculationP
           projectNameSnapshot: line.projectNameSnapshot,
           siteId: line.siteId,
           siteNameSnapshot: line.siteNameSnapshot,
+          shiftRequirementId: line.shiftRequirementId,
+          requirementSeriesId: line.requirementSeriesId,
           requirementSlotId: line.requirementSlotId,
+          locationUnitId: line.locationUnitId,
+          postId: line.postId,
+          zoneId: line.zoneId,
+          requiredPositionCategoryId: line.requiredPositionCategoryId,
           positionCategory: line.positionCategory,
+          slotIndex: line.slotIndex,
+          publicationId: line.publicationId,
+          assignmentId: line.assignmentId,
+          attendanceId: line.attendanceId,
+          reconciliationId: line.reconciliationId,
           plannedManpower: line.plannedManpower,
           plannedPostMinutes: line.plannedPostMinutes,
           assignedManpower: line.assignedManpower,
@@ -279,6 +401,8 @@ export async function createDurableBillingRun(params: BillingSupportCalculationP
           approvedExtraCount: line.approvedExtraCount,
           relieverSubstitutionCount: line.relieverSubstitutionCount,
           focRelieverMinutes: line.focRelieverMinutes,
+          baseBillableAdvisoryQty: line.baseBillableAdvisoryQty,
+          additionalRelieverAdvisoryQty: line.additionalRelieverAdvisoryQty,
           billableAdvisoryQuantity: line.billableAdvisoryQuantity,
           billingBasis: line.billingBasis,
           warningCodes: line.warningCodes,
@@ -291,3 +415,5 @@ export async function createDurableBillingRun(params: BillingSupportCalculationP
 
   return run;
 }
+
+

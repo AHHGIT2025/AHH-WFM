@@ -101,12 +101,14 @@ export async function exportBillingSupportRunCsv(params: {
     });
   } catch (e) {}
 
-  if (run.status === "LOCKED" || run.status === "REVIEWED") {
-    await prisma.manpowerBillingSupportRun.update({
-      where: { id: run.id },
-      data: { status: "EXPORTED" }
-    });
-  }
+  await prisma.manpowerBillingSupportRun.update({
+    where: { id: run.id },
+    data: {
+      exportedById: params.actorId,
+      exportedAt: new Date(),
+      ...(run.status === "LOCKED" || run.status === "REVIEWED" ? { status: "EXPORTED" } : {})
+    }
+  });
 
   return { csv: csvContent, run };
 }
@@ -206,12 +208,14 @@ export async function exportPayrollAdvisoryRunCsv(params: {
     });
   } catch (e) {}
 
-  if (run.status === "LOCKED" || run.status === "REVIEWED") {
-    await prisma.manpowerPayrollAdvisoryRun.update({
-      where: { id: run.id },
-      data: { status: "EXPORTED" }
-    });
-  }
+  await prisma.manpowerPayrollAdvisoryRun.update({
+    where: { id: run.id },
+    data: {
+      exportedById: params.actorId,
+      exportedAt: new Date(),
+      ...(run.status === "LOCKED" || run.status === "REVIEWED" ? { status: "EXPORTED" } : {})
+    }
+  });
 
   return { csv: csvContent, run };
 }

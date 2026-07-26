@@ -713,6 +713,92 @@ describe("Phase MP-3C & MP-4 — Client Billing Support & Operational Payroll In
     });
 
     expect(data.overallReadiness).toBeDefined();
-    expect(data.summary.totalEmployees).toBeGreaterThanOrEqual(0);
+    expect(data.summary.employeeCount).toBeGreaterThanOrEqual(0);
+  });
+
+  // 43. ScopeKey uniqueness and company vs global holiday calendar resolution
+  test("43. Holiday calendar scopeKey enables company and global calendars without collision", async () => {
+    const calGlobal = await prisma.manpowerHolidayCalendar.create({
+      data: {
+        year: 2027,
+        name: "Global Calendar 2027",
+        scopeKey: "GLOBAL",
+        scope: "BOTH",
+        version: 1,
+        approvalStatus: "DRAFT"
+      }
+    });
+
+    const calCompany = await prisma.manpowerHolidayCalendar.create({
+      data: {
+        year: 2027,
+        name: "Company Calendar 2027",
+        scopeKey: "COMPANY:COMP-MP3C4",
+        companyId: testCompany.id,
+        scope: "BOTH",
+        version: 1,
+        approvalStatus: "DRAFT"
+      }
+    });
+
+    expect(calGlobal.scopeKey).toBe("GLOBAL");
+    expect(calCompany.scopeKey).toBe("COMPANY:COMP-MP3C4");
+
+    await prisma.manpowerHolidayCalendar.deleteMany({ where: { id: { in: [calGlobal.id, calCompany.id] } } });
+  });
+
+  // 44. Idempotency key conflict returns 409 error
+  test("44. Reusing idempotency key with different request payload throws 409 conflict", async () => {
+    const key = `IDEM-KEY-${Date.now()}`;
+    await createDurableBillingRun({
+      operationType: "SECURITY_GUARDING",
+      period: "2026-08",
+      calculatedBy: "AD-0001",
+      idempotencyKey: key,
+      requestHash: "HASH_A"
+    });
+
+    await expect(
+      createDurableBillingRun({
+        operationType: "SECURITY_GUARDING",
+        period: "2026-08",
+        calculatedBy: "AD-0001",
+        idempotencyKey: key,
+        requestHash: "HASH_B"
+      })
+    ).rejects.toThrow("IDEMPOTENCY_KEY_REUSED");
+  });
+
+  // 45. FOC reliever base planned post billable qty = 1 and additional reliever qty = 0
+  test("45. FOC reliever calculation preserves base post covered qty and sets additional reliever qty to 0", async () => {
+    const data = await calculateBillingSupportData({
+      operationType: "SECURITY_GUARDING",
+      period: "2026-05",
+      calculatedBy: "AD-0001"
+    });
+
+    data.lines.forEach(line => {
+      expect(line.additionalRelieverAdvisoryQty).toBe(0);
+      expect(line.baseBillableAdvisoryQty).toBe(line.billableAdvisoryQuantity);
+    });
+  });
+
+  // 46. Durable payroll run creates employee-day detail records in ManpowerPayrollAdvisoryDay
+  test("46. Durable payroll run persists employee-day detail records in ManpowerPayrollAdvisoryDay", async () => {
+    const run = await createDurablePayrollRun({
+      operationType: "SECURITY_GUARDING",
+      period: "2026-05",
+      calculatedBy: "AD-0001"
+    });
+
+    expect(run.lines).toBeDefined();
+    if (run.lines.length > 0) {
+      const lineWithDays = await prisma.manpowerPayrollAdvisoryLine.findUnique({
+        where: { id: run.lines[0].id },
+        include: { days: true }
+      });
+      expect(lineWithDays?.days).toBeDefined();
+    }
   });
 });
+

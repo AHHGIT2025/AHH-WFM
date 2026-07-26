@@ -43,17 +43,54 @@ export interface CalculatedPayrollLine {
  */
 export async function calculatePayrollInputData(
   params: PayrollInputCalculationParams
-): Promise<{ lines: CalculatedPayrollLine[]; overallReadiness: string; summary: any }> {
+): Promise<{ lines: CalculatedPayrollLine[]; overallReadiness: string; summary: any; sourceVersionJson: any }> {
   const year = parseInt(params.period.split("-")[0]);
   const month = parseInt(params.period.split("-")[1]);
   const start = new Date(year, month - 1, 1, 0, 0, 0, 0);
   const end = new Date(year, month, 0, 23, 59, 59, 999);
+
+  // Fetch active profiles and calendar versions for source tracking
+  const activeProfile = await prisma.manpowerWorkCalendarProfile.findFirst({
+    where: {
+      operationType: params.operationType,
+      approvalStatus: "APPROVED",
+      ...(params.companyId ? { companyId: params.companyId } : {})
+    },
+    orderBy: { version: "desc" }
+  });
+
+  const activeRamadan = await prisma.manpowerRamadanPeriod.findFirst({
+    where: { year, approvalStatus: "APPROVED" },
+    orderBy: { version: "desc" }
+  });
+
+  const activeHolidayCal = await prisma.manpowerHolidayCalendar.findFirst({
+    where: {
+      year,
+      approvalStatus: "APPROVED",
+      scope: { in: [params.operationType as any, "BOTH"] },
+      ...(params.companyId ? { OR: [{ companyId: params.companyId }, { companyId: null }] } : {})
+    },
+    orderBy: { version: "desc" }
+  });
+
+  const sourceVersionJson = {
+    workCalendarProfileId: activeProfile?.id || null,
+    workCalendarProfileVersion: activeProfile?.version || 1,
+    ramadanPeriodId: activeRamadan?.id || null,
+    ramadanPeriodVersion: activeRamadan?.version || 1,
+    holidayCalendarId: activeHolidayCal?.id || null,
+    holidayCalendarVersion: activeHolidayCal?.version || 1,
+    calculationEngineVersion: 2,
+    calculatedAt: new Date().toISOString()
+  };
 
   // 1. Fetch Target Employees
   const employees = await prisma.employee.findMany({
     where: {
       operationType: params.operationType,
       isActive: true,
+      ...(params.companyId ? { companyId: params.companyId } : {}),
       ...(params.employeeId ? { id: params.employeeId } : {})
     },
     include: { company: true }
@@ -62,7 +99,7 @@ export async function calculatePayrollInputData(
   // 2. Fetch Assignments
   const assignments = await prisma.rosterSlotAssignment.findMany({
     where: {
-      employee: { operationType: params.operationType },
+      employee: { operationType: params.operationType, ...(params.companyId ? { companyId: params.companyId } : {}) },
       slot: { businessDate: { gte: start, lte: end } }
     },
     include: {
@@ -74,13 +111,13 @@ export async function calculatePayrollInputData(
   const attendanceRecords = await prisma.attendanceRecord.findMany({
     where: {
       checkIn: { gte: start, lte: end },
-      employee: { operationType: params.operationType }
+      employee: { operationType: params.operationType, ...(params.companyId ? { companyId: params.companyId } : {}) }
     }
   });
 
   const leaves = await prisma.leaveRequest.findMany({
     where: {
-      employee: { operationType: params.operationType },
+      employee: { operationType: params.operationType, ...(params.companyId ? { companyId: params.companyId } : {}) },
       status: "APPROVED",
       startDate: { lte: end },
       endDate: { gte: start }
@@ -120,141 +157,144 @@ export async function calculatePayrollInputData(
     let siteAllowanceCandidateDays = 0;
     let leaveDays = 0;
     let absenceDays = 0;
-    let empSiteId: string | null = null;
-    let empSiteName = "Default Location";
 
-    const empClassifications = new Set<string>();
-    const empWarnings: string[] = [];
-    const evidenceRefs: any = { dates: [] };
+    const advisoryClassifications: string[] = [];
+    const advisoryWarnings: string[] = [];
+    const evidenceList: any[] = [];
+    let primarySiteName = emp.defaultSiteId || "Default Site";
 
-    const totalDaysInMonth = new Date(year, month, 0).getDate();
-    for (let day = 1; day <= totalDaysInMonth; day++) {
-      const d = new Date(year, month - 1, day);
-      const dStr = d.toISOString().split("T")[0];
+    const empAsgs = assignments.filter(a => a.employeeId === emp.id);
+    const empAtts = attendanceRecords.filter(a => a.employeeId === emp.id);
+    const empLeaves = leaves.filter(l => l.employeeId === emp.id);
+    const empRecons = reconciliations.filter(r => r.expectedEmployeeId === emp.id);
 
-      const calCtx = await resolveEmployeeCalendarContext({
+    let hasUnconfiguredRule = false;
+    let hasUnresolvedRecon = false;
+
+    // Process daily assignments and attendance
+    const dayMap = new Map<string, { asg?: any; att?: any }>();
+    empAsgs.forEach(a => {
+      const dStr = a.slot.businessDate.toISOString().split("T")[0];
+      if (!dayMap.has(dStr)) dayMap.set(dStr, {});
+      dayMap.get(dStr)!.asg = a;
+      if (a.slot.site?.name) primarySiteName = a.slot.site.name;
+    });
+    empAtts.forEach(att => {
+      const dStr = att.checkIn.toISOString().split("T")[0];
+      if (!dayMap.has(dStr)) dayMap.set(dStr, {});
+      dayMap.get(dStr)!.att = att;
+    });
+
+    for (const [dStr, { asg, att }] of dayMap.entries()) {
+      const dObj = new Date(dStr);
+      const ctx = await resolveEmployeeCalendarContext({
         employeeId: emp.id,
         workerCategory,
-        operationType: params.operationType,
+        operationType: emp.operationType,
         companyId: emp.companyId,
-        date: d,
-        employeeWeeklyRestDay: "FRIDAY"
+        date: dObj
       });
 
-      if (!calCtx.profile) {
+      if (!ctx.profile) {
+        hasUnconfiguredRule = true;
         globalHasUnconfiguredRule = true;
-        empWarnings.push("RAMADAN_RULE_NOT_CONFIGURED");
+        advisoryWarnings.push("RAMADAN_RULE_NOT_CONFIGURED");
       }
 
-      // Check Leave
-      const onLeave = leaves.some((l: any) => {
-        const lStart = l.startDate ? new Date(l.startDate) : null;
-        const lEnd = l.endDate ? new Date(l.endDate) : null;
-        return lStart && lEnd && lStart <= d && lEnd >= d && l.employeeId === emp.id;
-      });
-
-      if (onLeave) {
-        leaveDays++;
-        empClassifications.add("APPROVED_LEAVE");
-        continue;
+      let minsWorked = 0;
+      if (att && att.checkIn && att.checkOut) {
+        minsWorked = Math.round((att.checkOut.getTime() - att.checkIn.getTime()) / (1000 * 60));
+      } else if (asg && att) {
+        minsWorked = 480;
       }
 
-      // Find Slot Assignment
-      const asg = assignments.find(
-        a => a.employeeId === emp.id && a.slot.businessDate.toISOString().split("T")[0] === dStr
-      );
-
-      if (asg && asg.slot?.siteId) {
-        empSiteId = asg.slot.siteId;
-        empSiteName = asg.slot.site?.name || "Site";
-      }
-
-      const att = attendanceRecords.find(
-        a => a.employeeId === emp.id && a.checkIn.toISOString().split("T")[0] === dStr
-      );
-
-      const actualMinutes = att && att.checkIn && att.checkOut
-        ? Math.round((att.checkOut.getTime() - att.checkIn.getTime()) / (1000 * 60))
-        : att ? 480 : 0;
-
-      if (calCtx.isPublicHoliday && asg) {
-        publicHolidayWorkedDays++;
-        publicHolidayWorkedMinutes += actualMinutes;
-        empClassifications.add("PUBLIC_HOLIDAY_WORKED");
-      }
-
-      if (calCtx.isWeeklyRestDay && actualMinutes > 0) {
-        weeklyRestWorkedDays++;
-        weeklyRestWorkedMinutes += actualMinutes;
-        empClassifications.add("WEEKLY_REST_WORKED");
-      }
-
-      if (actualMinutes > 0 && !calCtx.isPublicHoliday && !calCtx.isWeeklyRestDay) {
+      if (minsWorked > 0) {
         regularWorkedDays++;
-        if (calCtx.isRamadanActive) {
-          ramadanWorkedMinutes += Math.min(actualMinutes, calCtx.dailyThresholdMinutes || 360);
-          if (calCtx.dailyThresholdMinutes && actualMinutes > calCtx.dailyThresholdMinutes) {
-            ramadanExcessCandidateMinutes += actualMinutes - calCtx.dailyThresholdMinutes;
-            empClassifications.add("RAMADAN_EXCESS_HOURS_CANDIDATE");
+        regularVerifiedMinutes += minsWorked;
+
+        evidenceList.push({
+          date: dStr,
+          assignmentId: asg?.id || null,
+          attendanceId: att?.id || null,
+          minsWorked,
+          isRamadan: ctx.isRamadanActive,
+          isHoliday: ctx.isPublicHoliday,
+          isRestDay: ctx.isWeeklyRestDay
+        });
+
+        if (ctx.isRamadanActive) {
+          ramadanWorkedMinutes += minsWorked;
+          const thresh = ctx.dailyThresholdMinutes || 360;
+          if (minsWorked > thresh) {
+            ramadanExcessCandidateMinutes += (minsWorked - thresh);
           }
-          empClassifications.add("RAMADAN_REGULAR_WORK");
-        } else {
-          regularVerifiedMinutes += Math.min(actualMinutes, calCtx.dailyThresholdMinutes || 480);
-          if (calCtx.dailyThresholdMinutes && actualMinutes > calCtx.dailyThresholdMinutes) {
-            overtimeCandidateMinutes += actualMinutes - calCtx.dailyThresholdMinutes;
-            empClassifications.add("OVERTIME_CANDIDATE");
-          }
-          empClassifications.add("REGULAR_WORK");
+        } else if (ctx.dailyThresholdMinutes && minsWorked > ctx.dailyThresholdMinutes) {
+          overtimeCandidateMinutes += (minsWorked - ctx.dailyThresholdMinutes);
         }
-      }
 
-      if (asg && !att && !onLeave) {
-        absenceDays++;
-        empClassifications.add("UNAPPROVED_ABSENCE");
-      }
+        if (ctx.isPublicHoliday) {
+          publicHolidayWorkedDays++;
+          publicHolidayWorkedMinutes += minsWorked;
+        }
 
-      if (asg && asg.slot) {
-        const empTrade = emp.positionCategoryId || emp.designationId;
-        const reqTrade = asg.slot.snapshotPosition;
-        if (empTrade && reqTrade && empTrade !== reqTrade) {
+        if (ctx.isWeeklyRestDay) {
+          weeklyRestWorkedDays++;
+          weeklyRestWorkedMinutes += minsWorked;
+        }
+
+        if (asg && asg.slot?.snapshotPosition && (emp as any).positionCategory?.categoryName && asg.slot.snapshotPosition !== (emp as any).positionCategory.categoryName) {
           actingDutyCandidateDays++;
-          actingDutyCandidateMinutes += actualMinutes || 480;
-          empClassifications.add("ACTING_DUTY_CANDIDATE");
+          actingDutyCandidateMinutes += minsWorked;
         }
-      }
 
-      if (empSiteId) {
-        const hasSiteAllowance = siteAllowances.some(
-          (sa: any) => sa.siteId === empSiteId && sa.siteAllowanceEnabled === true
-        );
-        if (hasSiteAllowance && actualMinutes > 0) {
+        const siteAllow = siteAllowances.find(s => s.siteId === asg?.slot?.siteId);
+        if (siteAllow) {
           siteAllowanceCandidateDays++;
-          empClassifications.add("SITE_ALLOWANCE_CANDIDATE");
         }
+      } else if (asg && !att) {
+        // Unapproved absence
+        absenceDays++;
       }
     }
 
-    const empRecons = reconciliations.filter(r => r.expectedEmployeeId === emp.id);
-    const hasPendingRecon = empRecons.some(r => r.workflowStatus === "OPEN");
-    if (hasPendingRecon) globalHasUnresolvedRecon = true;
+    // Process Leaves safely
+    empLeaves.forEach(l => {
+      const lStart = l.startDate ? (l.startDate < start ? start : l.startDate) : start;
+      const lEnd = l.endDate ? (l.endDate > end ? end : l.endDate) : end;
+      const days = Math.max(1, Math.round((lEnd.getTime() - lStart.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+      leaveDays += days;
+    });
+
+    let reconStatus = "MATCHED";
+    empRecons.forEach(r => {
+      if (r.detectionOutcome !== "ON_TIME" && r.resolution !== "EXCUSED") {
+        hasUnresolvedRecon = true;
+        globalHasUnresolvedRecon = true;
+        reconStatus = r.detectionOutcome || "UNRESOLVED";
+      }
+    });
 
     let readinessStatus = "READY_FOR_PAYROLL_REVIEW";
-    if (empWarnings.includes("RAMADAN_RULE_NOT_CONFIGURED")) {
+    if (hasUnconfiguredRule) {
       readinessStatus = "RAMADAN_RULE_NOT_CONFIGURED";
-    } else if (hasPendingRecon) {
+    } else if (hasUnresolvedRecon) {
       readinessStatus = "NEEDS_ATTENDANCE_RECONCILIATION";
     } else if (overtimeCandidateMinutes > 0) {
       readinessStatus = "NEEDS_OVERTIME_APPROVAL";
-    } else if (actingDutyCandidateDays > 0) {
-      readinessStatus = "NEEDS_ACTING_DUTY_APPROVAL";
     }
+
+    if (ramadanWorkedMinutes > 0) advisoryClassifications.push("RAMADAN_WORK");
+    if (publicHolidayWorkedDays > 0) advisoryClassifications.push("PUBLIC_HOLIDAY_WORKED");
+    if (weeklyRestWorkedDays > 0) advisoryClassifications.push("WEEKLY_REST_WORKED");
+    if (actingDutyCandidateDays > 0) advisoryClassifications.push("ACTING_DUTY_CANDIDATE");
+    if (siteAllowanceCandidateDays > 0) advisoryClassifications.push("SITE_ALLOWANCE_CANDIDATE");
 
     lines.push({
       employeeId: emp.id,
       employeeCodeSnapshot: emp.id,
       employeeNameSnapshot: emp.name,
-      siteId: empSiteId,
-      siteNameSnapshot: empSiteName,
+      siteId: emp.defaultSiteId || null,
+      siteNameSnapshot: primarySiteName,
       regularWorkedDays,
       regularVerifiedMinutes,
       ramadanWorkedMinutes,
@@ -269,11 +309,11 @@ export async function calculatePayrollInputData(
       siteAllowanceCandidateDays,
       leaveDays,
       absenceDays,
-      reconciliationStatus: hasPendingRecon ? "NEEDS_RECONCILIATION" : "MATCHED",
+      reconciliationStatus: reconStatus,
       readinessStatus,
-      advisoryClassifications: Array.from(empClassifications),
-      advisoryWarnings: empWarnings,
-      evidenceReferences: evidenceRefs
+      advisoryClassifications,
+      advisoryWarnings,
+      evidenceReferences: evidenceList
     });
   }
 
@@ -288,18 +328,51 @@ export async function calculatePayrollInputData(
     lines,
     overallReadiness,
     summary: {
-      totalEmployees: lines.length,
-      readyCount: lines.filter(l => l.readinessStatus === "READY_FOR_PAYROLL_REVIEW").length,
-      needsReviewCount: lines.filter(l => l.readinessStatus !== "READY_FOR_PAYROLL_REVIEW").length
-    }
+      employeeCount: lines.length,
+      totalRegularDays: lines.reduce((acc, l) => acc + l.regularWorkedDays, 0),
+      totalOvertimeCandidateMinutes: lines.reduce((acc, l) => acc + l.overtimeCandidateMinutes, 0),
+      totalRamadanExcessCandidateMinutes: lines.reduce((acc, l) => acc + l.ramadanExcessCandidateMinutes, 0)
+    },
+    sourceVersionJson
   };
 }
 
+export interface PayrollInputCalculationParams {
+  operationType: string; // "SECURITY_GUARDING" | "FACILITY_MANAGEMENT"
+  period: string;        // "YYYY-MM"
+  siteId?: string;
+  employeeId?: string;
+  companyId?: string;
+  calculatedBy: string;
+  idempotencyKey?: string;
+  requestHash?: string;
+  correlationId?: string;
+}
+
 /**
- * Creates a durable ManpowerPayrollAdvisoryRun and saves its lines.
+ * Creates a durable ManpowerPayrollAdvisoryRun and saves its lines and employee-day detail records.
  * Retains immutability for LOCKED or EXPORTED runs by creating a new version.
  */
 export async function createDurablePayrollRun(params: PayrollInputCalculationParams): Promise<any> {
+  if (params.idempotencyKey) {
+    const existingKeyRun = await prisma.manpowerPayrollAdvisoryRun.findUnique({
+      where: { idempotencyKey: params.idempotencyKey },
+      include: { lines: { include: { days: true } } }
+    });
+    if (existingKeyRun) {
+      if (params.requestHash && existingKeyRun.requestHash !== params.requestHash) {
+        const err: any = new Error("IDEMPOTENCY_KEY_REUSED: Idempotency key reused with different request payload");
+        err.statusCode = 409;
+        throw err;
+      }
+      return existingKeyRun;
+    }
+  }
+
+  const year = parseInt(params.period.split("-")[0]);
+  const month = parseInt(params.period.split("-")[1]);
+  const fromDate = new Date(year, month - 1, 1);
+  const toDate = new Date(year, month, 0);
   const runCode = `PAY-${params.operationType}-${params.period}-${Date.now().toString(36)}`;
 
   const existingRun = await prisma.manpowerPayrollAdvisoryRun.findFirst({
@@ -320,17 +393,30 @@ export async function createDurablePayrollRun(params: PayrollInputCalculationPar
     });
   }
 
-  const { lines, overallReadiness, summary } = await calculatePayrollInputData(params);
+  const { lines, overallReadiness, summary, sourceVersionJson } = await calculatePayrollInputData(params);
 
   const run = await prisma.manpowerPayrollAdvisoryRun.create({
     data: {
       runCode,
+      idempotencyKey: params.idempotencyKey || null,
+      requestHash: params.requestHash || null,
+      correlationId: params.correlationId || null,
       operationType: params.operationType,
       period: params.period,
+      companyId: params.companyId || null,
+      fromDate,
+      toDate,
       status: "CALCULATED",
       readiness: overallReadiness as any,
       version: nextVersion,
+      calculationVersion: 2,
+      workCalendarProfileId: sourceVersionJson.workCalendarProfileId,
+      ramadanPeriodId: sourceVersionJson.ramadanPeriodId,
+      holidayCalendarId: sourceVersionJson.holidayCalendarId,
+      sourceVersionJson,
       supersedesRunId: existingRun?.id || null,
+      workCalendarProfileVersion: sourceVersionJson.workCalendarProfileVersion,
+      holidayCalendarVersion: sourceVersionJson.holidayCalendarVersion,
       calculatedBy: params.calculatedBy,
       resultSummary: summary,
       lines: {
@@ -358,12 +444,33 @@ export async function createDurablePayrollRun(params: PayrollInputCalculationPar
           readinessStatus: line.readinessStatus as any,
           advisoryClassifications: line.advisoryClassifications,
           advisoryWarnings: line.advisoryWarnings,
-          evidenceReferences: line.evidenceReferences
+          evidenceReferences: line.evidenceReferences,
+          days: {
+            create: (Array.isArray(line.evidenceReferences) ? line.evidenceReferences : []).map((ev: any) => ({
+              businessDate: new Date(ev.date),
+              assignmentId: ev.assignmentId || null,
+              requirementSlotId: ev.requirementSlotId || null,
+              siteId: ev.siteId || line.siteId,
+              regularMinutes: ev.minsWorked || 0,
+              ramadanMinutes: ev.isRamadan ? (ev.minsWorked || 0) : 0,
+              overtimeCandidateMinutes: ev.overtimeMins || 0,
+              publicHolidayMinutes: ev.isHoliday ? (ev.minsWorked || 0) : 0,
+              weeklyRestMinutes: ev.isRestDay ? (ev.minsWorked || 0) : 0,
+              actingDutyCandidateMinutes: ev.actingDutyMins || 0,
+              siteAllowanceCandidate: !!ev.siteAllowance,
+              leaveClassification: ev.leaveClass || null,
+              absenceClassification: ev.absenceClass || null,
+              attendanceEvidenceJson: ev.attendanceId ? { attendanceId: ev.attendanceId } : undefined,
+              reconciliationEvidenceJson: ev.reconciliationId ? { reconciliationId: ev.reconciliationId } : undefined,
+              warningCodes: ev.warnings || []
+            }))
+          }
         }))
       }
     },
-    include: { lines: true }
+    include: { lines: { include: { days: true } } }
   });
 
   return run;
 }
+
