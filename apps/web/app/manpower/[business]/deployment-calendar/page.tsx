@@ -39,6 +39,8 @@ import { RelieverDrawer } from "./components/RelieverDrawer";
 import { CellActionMenu } from "./components/CellActionMenu";
 import { resolveEmployeeTradePosition } from "@/lib/roster-display-utils";
 import { BulkDeploymentModal } from "./bulk-deployment/BulkDeploymentModal";
+import { SlotDetailsDrawer } from "./components/SlotDetailsDrawer";
+import { BulkUnassignmentModal } from "./bulk-unassignment/BulkUnassignmentModal";
 
 interface RosterSlot {
   id: string;
@@ -156,6 +158,13 @@ export default function RosterBoardPage() {
   const [activeDrawer, setActiveDrawer] = useState<"assign" | "details" | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<RosterSlot | null>(null);
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
+
+  // Slot Details & Bulk Unassignment state
+  const [detailsSlotId, setDetailsSlotId] = useState<string | null>(null);
+  const [isDetailsDrawerOpen, setIsDetailsDrawerOpen] = useState<boolean>(false);
+  const [unassignAssignmentId, setUnassignAssignmentId] = useState<string | null>(null);
+  const [unassignMode, setUnassignMode] = useState<"SINGLE_DAY" | "ENTIRE_ASSIGNMENT_PERIOD">("SINGLE_DAY");
+  const [isUnassignModalOpen, setIsUnassignModalOpen] = useState<boolean>(false);
   
   // MP-3A Exception & Reliever Modals State
   const [dayOffModalAssignment, setDayOffModalAssignment] = useState<any | null>(null);
@@ -304,7 +313,8 @@ export default function RosterBoardPage() {
 
   const handleOpenDetails = (slot: RosterSlot) => {
     setSelectedSlot(slot);
-    setActiveDrawer("details");
+    setDetailsSlotId(slot.id);
+    setIsDetailsDrawerOpen(true);
   };
 
   // 4. Assign slot
@@ -1356,6 +1366,37 @@ export default function RosterBoardPage() {
         slots={slots}
         employees={eligibleEmployees.map(e => e.employee)}
         onSuccess={(summaryText) => {
+          fetchRosterData(true);
+        }}
+      />
+
+      <SlotDetailsDrawer
+        isOpen={isDetailsDrawerOpen}
+        onClose={() => setIsDetailsDrawerOpen(false)}
+        slotId={detailsSlotId}
+        onTriggerUnassign={async (mode) => {
+          setIsDetailsDrawerOpen(false);
+          if (!detailsSlotId) return;
+          try {
+            const res = await fetch(`/api/v1/manpower/scheduling/slots/${detailsSlotId}/details`);
+            const data = await res.json();
+            if (data.currentAssignment?.id) {
+              setUnassignAssignmentId(data.currentAssignment.id);
+              setUnassignMode(mode);
+              setIsUnassignModalOpen(true);
+            }
+          } catch (e) {
+            console.error("Failed to fetch assignment for unassignment", e);
+          }
+        }}
+      />
+
+      <BulkUnassignmentModal
+        isOpen={isUnassignModalOpen}
+        onClose={() => setIsUnassignModalOpen(false)}
+        assignmentId={unassignAssignmentId}
+        mode={unassignMode}
+        onSuccess={() => {
           fetchRosterData(true);
         }}
       />

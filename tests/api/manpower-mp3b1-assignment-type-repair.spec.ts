@@ -41,8 +41,8 @@ describe("MP-3B1 Post-Deployment Repair — Schema Drift & assignmentType Verifi
     try { await prisma.manpowerSite.deleteMany({ where: { code: "RPRS" } }); } catch (e) {}
     try { await prisma.manpowerProject.deleteMany({ where: { code: "RPRP" } }); } catch (e) {}
     try { await prisma.contractManpowerRequirement.deleteMany({ where: { contractId: "REPAIR-CON-01" } }); } catch (e) {}
-    try { await prisma.contractShiftRequirement.deleteMany({ where: { contractId: "REPAIR-CON-01" } }); } catch (e) {}
-    try { await prisma.manpowerContract.deleteMany({ where: { id: "REPAIR-CON-01" } }); } catch (e) {}
+    try { await prisma.shiftAssignment.deleteMany({ where: { employeeId: { in: ["emp-guard-rpr-p", "emp-guard-rpr-r"] } } }); } catch (e) {}
+    try { await prisma.manpowerDeploymentAssignment.deleteMany({ where: { employeeId: { in: ["emp-guard-rpr-p", "emp-guard-rpr-r"] } } }); } catch (e) {}
     try { await prisma.employee.deleteMany({ where: { id: { in: ["emp-guard-rpr-p", "emp-guard-rpr-r", "emp-sup-rpr"] } } }); } catch (e) {}
   }
 
@@ -104,9 +104,16 @@ describe("MP-3B1 Post-Deployment Repair — Schema Drift & assignmentType Verifi
       data: { siteId: testSite.id }
     });
 
+    let posCat = await prisma.blueCollarPositionCategory.findFirst();
+    if (!posCat) {
+      posCat = await prisma.blueCollarPositionCategory.create({
+        data: { name: "Security Guard Position", code: "SGPOS" }
+      });
+    }
+
     primaryGuard = await prisma.employee.upsert({
       where: { id: "emp-guard-rpr-p" },
-      update: { name: "Primary Guard Repair", isActive: true },
+      update: { name: "Primary Guard Repair", isActive: true, status: "Offline", employeeCategory: "BLUE_COLLAR", positionCategoryId: posCat?.id },
       create: {
         id: "emp-guard-rpr-p",
         name: "Primary Guard Repair",
@@ -115,13 +122,15 @@ describe("MP-3B1 Post-Deployment Repair — Schema Drift & assignmentType Verifi
         department: "Security",
         status: "Offline",
         isActive: true,
-        operationType: "SECURITY_GUARDING"
+        operationType: "SECURITY_GUARDING",
+        employeeCategory: "BLUE_COLLAR",
+        positionCategoryId: posCat?.id
       }
     });
 
     relieverGuard = await prisma.employee.upsert({
       where: { id: "emp-guard-rpr-r" },
-      update: { name: "Reliever Guard Repair", isActive: true },
+      update: { name: "Reliever Guard Repair", isActive: true, status: "Offline", employeeCategory: "BLUE_COLLAR", positionCategoryId: posCat?.id },
       create: {
         id: "emp-guard-rpr-r",
         name: "Reliever Guard Repair",
@@ -130,7 +139,9 @@ describe("MP-3B1 Post-Deployment Repair — Schema Drift & assignmentType Verifi
         department: "Security",
         status: "Offline",
         isActive: true,
-        operationType: "SECURITY_GUARDING"
+        operationType: "SECURITY_GUARDING",
+        employeeCategory: "BLUE_COLLAR",
+        positionCategoryId: posCat?.id
       }
     });
 
@@ -264,6 +275,9 @@ describe("MP-3B1 Post-Deployment Repair — Schema Drift & assignmentType Verifi
       })
     });
     const relRes = await assignReliever(relReq, { params: { slotId: slot!.id } });
+    if (relRes.status !== 200) {
+      console.error("assignReliever 422 error:", await relRes.json());
+    }
     expect(relRes.status).toBe(200);
 
     const relieverAsg = await prisma.rosterSlotAssignment.findFirst({

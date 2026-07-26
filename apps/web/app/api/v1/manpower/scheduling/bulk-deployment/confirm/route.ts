@@ -218,14 +218,23 @@ export async function POST(request: Request) {
           data: { historyStatus: "ENDED" }
         });
 
-        // Create new primary RosterSlotAssignment
+        const fromDateStr = opLog.fromDate ? new Date(opLog.fromDate).toISOString().split("T")[0] : "";
+        const toDateStr = opLog.toDate ? new Date(opLog.toDate).toISOString().split("T")[0] : "";
+        const locationUnitId = slot.siteId || "none";
+        const rawGroupStr = `${opLog.id}:${item.employeeId}:${slot.operationType}:${slot.contractId}:${slot.projectId}:${slot.siteId}:${locationUnitId}:${slot.shiftRequirementId}:${slot.slotIndex}:${fromDateStr}:${toDateStr}`;
+        const groupHash = crypto.createHash("sha256").update(rawGroupStr).digest("hex").substring(0, 32);
+        const assignmentGroupKey = `grp_${groupHash}`;
+
+        // Create new primary RosterSlotAssignment with durable group linkage
         const newAsg = await tx.rosterSlotAssignment.create({
           data: {
             slotId: item.slotId,
             employeeId: item.employeeId,
             assignmentType: "PRIMARY",
             historyStatus: "ACTIVE",
-            assignedById: user.id
+            assignedById: user.id,
+            bulkOperationId: opLog.id,
+            assignmentGroupKey
           }
         });
 

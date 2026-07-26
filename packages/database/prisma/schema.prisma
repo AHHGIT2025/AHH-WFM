@@ -3154,6 +3154,10 @@ model RosterSlotAssignment {
   createdAt               DateTime              @default(now())
   updatedAt               DateTime              @updatedAt
 
+  bulkOperationId    String?
+  bulkOperation      ManpowerBulkOperationLog? @relation(fields: [bulkOperationId], references: [id], onDelete: SetNull)
+  assignmentGroupKey String?
+
   replacesAssignmentId     String?
   replaces                 RosterSlotAssignment?      @relation("RosterAssignmentReplacements", fields: [replacesAssignmentId], references: [id], onDelete: Restrict, onUpdate: Restrict)
   replacements             RosterSlotAssignment[]     @relation("RosterAssignmentReplacements")
@@ -3166,6 +3170,10 @@ model RosterSlotAssignment {
 
   @@index([slotId])
   @@index([employeeId])
+  @@index([bulkOperationId])
+  @@index([assignmentGroupKey])
+  @@index([bulkOperationId, assignmentGroupKey])
+  @@index([employeeId, assignmentGroupKey])
 }
 
 model RosterPublication {
@@ -3565,37 +3573,41 @@ model ManpowerReconciliationScopeLock {
 }
 
 model ManpowerBulkOperationLog {
-  id                  String    @id @default(uuid())
-  previewTokenHash    String    @unique
-  idempotencyKey      String?   @unique
-  requestHash         String
-  actorId             String
-  operationType       String
-  mode                String // "SINGLE_DATE" | "DATE_RANGE" | "FULL_MONTH"
-  strategy            String // "MANUAL_MAPPING" | "AUTO_FILL"
-  policy              String // "PARTIAL" | "STRICT"
-  status              String // "PREVIEWED" | "PROCESSING" | "COMPLETED" | "FAILED" | "EXPIRED"
-  period              String
-  fromDate            DateTime  @db.Date
-  toDate              DateTime  @db.Date
-  requestedCount      Int       @default(0)
-  createdCount        Int       @default(0)
-  skippedCount        Int       @default(0)
-  failedCount         Int       @default(0)
-  unfilledSeriesCount Int       @default(0)
-  unusedEmployeeCount Int       @default(0)
-  requestJson         Json?
-  previewJson         Json?
-  resultJson          Json?
-  errorJson           Json?
-  expiresAt           DateTime
-  startedAt           DateTime?
-  completedAt         DateTime?
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
+  id                   String                 @id @default(uuid())
+  previewTokenHash     String                 @unique
+  idempotencyKey       String?                @unique
+  requestHash          String
+  actorId              String
+  actionType           String                 @default("DEPLOYMENT") // "DEPLOYMENT" | "UNASSIGNMENT"
+  operationType        String
+  mode                 String // "SINGLE_DATE" | "DATE_RANGE" | "FULL_MONTH"
+  strategy             String // "MANUAL_MAPPING" | "AUTO_FILL"
+  policy               String // "PARTIAL" | "STRICT"
+  status               String // "PREVIEWED" | "PROCESSING" | "COMPLETED" | "FAILED" | "EXPIRED"
+  period               String
+  fromDate             DateTime               @db.Date
+  toDate               DateTime               @db.Date
+  requestedCount       Int                    @default(0)
+  createdCount         Int                    @default(0)
+  skippedCount         Int                    @default(0)
+  failedCount          Int                    @default(0)
+  unfilledSeriesCount  Int                    @default(0)
+  unusedEmployeeCount  Int                    @default(0)
+  requestJson          Json?
+  previewJson          Json?
+  resultJson           Json?
+  errorJson            Json?
+  expiresAt            DateTime
+  startedAt            DateTime?
+  completedAt          DateTime?
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+
+  assignments          RosterSlotAssignment[]
 
   @@index([actorId])
   @@index([status])
   @@index([expiresAt])
   @@index([operationType])
+  @@index([actionType])
 }
