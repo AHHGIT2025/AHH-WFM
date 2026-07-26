@@ -1585,22 +1585,73 @@ export default function ManpowerMasterPage() {
         {/* Tab Content Panels */}
         {siteActiveTab === "overview" && (
           <div className="space-y-4">
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-4 gap-4">
               <div className="bg-surface border border-outline-variant p-4 rounded-xl text-center space-y-1">
                 <p className="text-[10px] text-on-surface-variant font-bold uppercase">Required Manpower</p>
-                <p className="text-2xl font-black text-primary">{siteSummary.site.requiredManpower || 0}</p>
+                <p className="text-2xl font-black text-primary">{siteSummary.site.requiredManpower || siteSummary.todaySummary?.requiredManpower || 0}</p>
+              </div>
+              <div className="bg-surface border border-outline-variant p-4 rounded-xl text-center space-y-1">
+                <p className="text-[10px] text-on-surface-variant font-bold uppercase">Roster Slots</p>
+                <p className="text-2xl font-black text-secondary">{siteSummary.site.rosterSlotsCount ?? siteSummary.todaySummary?.rosterSlotsCount ?? 0}</p>
               </div>
               <div className="bg-surface border border-outline-variant p-4 rounded-xl text-center space-y-1">
                 <p className="text-[10px] text-on-surface-variant font-bold uppercase">Deployed Guards</p>
-                <p className="text-2xl font-black text-status-success">{siteSummary.site.assignedManpower || 0}</p>
+                <p className="text-2xl font-black text-status-success">{siteSummary.site.assignedManpower ?? siteSummary.todaySummary?.assignedManpower ?? 0}</p>
               </div>
               <div className="bg-surface border border-outline-variant p-4 rounded-xl text-center space-y-1">
                 <p className="text-[10px] text-on-surface-variant font-bold uppercase">Vacant Slots</p>
-                <p className={`text-2xl font-black ${siteSummary.site.remainingVacant > 0 ? "text-status-error" : "text-status-success"}`}>
-                  {siteSummary.site.remainingVacant || 0}
+                <p className={`text-2xl font-black ${(siteSummary.site.remainingVacant ?? siteSummary.todaySummary?.vacantPosts ?? 0) > 0 ? "text-status-error" : "text-status-success"}`}>
+                  {siteSummary.site.remainingVacant ?? siteSummary.todaySummary?.vacantPosts ?? 0}
                 </p>
               </div>
             </div>
+
+            {/* Status Badges & Explanatory Banners */}
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              <span className="text-[10px] font-bold text-on-surface-variant uppercase">Roster Status:</span>
+              <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
+                (siteSummary.site.rosterStatus || siteSummary.todaySummary?.rosterStatus) === "GENERATED"
+                  ? "bg-status-success/15 text-status-success border-status-success/30"
+                  : "bg-status-warning/15 text-status-warning border-status-warning/30"
+              }`}>
+                {siteSummary.site.rosterStatus || siteSummary.todaySummary?.rosterStatus || "NOT_GENERATED"}
+              </span>
+
+              <span className="text-[10px] font-bold text-on-surface-variant uppercase ml-2">Site Status:</span>
+              <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
+                siteSummary.site.isActive
+                  ? "bg-status-success/15 text-status-success border-status-success/30"
+                  : "bg-status-error/15 text-status-error border-status-error/30"
+              }`}>
+                {siteSummary.site.isActive ? "ACTIVE" : "INACTIVE"}
+              </span>
+            </div>
+
+            {/* Operational State Explanatory Banners */}
+            {siteSummary.site.isActive === false && (
+              <div className="p-3 bg-status-error/10 border border-status-error/30 rounded-xl text-xs text-status-error font-semibold flex items-center gap-2">
+                <span className="material-symbols-outlined text-[18px]">block</span>
+                <span>SITE_INACTIVE: Activate the site before roster generation or deployment.</span>
+              </div>
+            )}
+            {siteSummary.site.isActive !== false && (siteSummary.site.allocatedSiteManpower === 0 || (siteSummary.site.requiredManpower === 0 && siteAllocations.length === 0)) && (
+              <div className="p-3 bg-status-warning/10 border border-status-warning/30 rounded-xl text-xs text-status-warning font-semibold flex items-center gap-2">
+                <span className="material-symbols-outlined text-[18px]">info</span>
+                <span>SITE_NOT_ALLOCATED: Project manpower has not been allocated to this site.</span>
+              </div>
+            )}
+            {siteSummary.site.isActive !== false && (siteSummary.site.allocatedSiteManpower > 0 || siteSummary.site.requiredManpower > 0) && (siteSummary.siteShifts?.length === 0) && (
+              <div className="p-3 bg-status-warning/10 border border-status-warning/30 rounded-xl text-xs text-status-warning font-semibold flex items-center gap-2">
+                <span className="material-symbols-outlined text-[18px]">schedule</span>
+                <span>SHIFTS_NOT_CONFIGURED: Site manpower is allocated, but shift requirements are not configured.</span>
+              </div>
+            )}
+            {siteSummary.site.isActive !== false && (siteSummary.siteShifts?.length > 0) && (siteSummary.site.rosterSlotsCount === 0) && (
+              <div className="p-3 bg-status-info/10 border border-status-info/30 rounded-xl text-xs text-primary font-semibold flex items-center gap-2">
+                <span className="material-symbols-outlined text-[18px]">event_note</span>
+                <span>ROSTER_NOT_GENERATED: Roster requirements have not been generated.</span>
+              </div>
+            )}
 
             {/* Allowance Summary Card */}
             <div className="bg-surface border border-outline-variant p-4 rounded-xl space-y-2">

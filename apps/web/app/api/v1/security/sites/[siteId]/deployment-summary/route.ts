@@ -76,8 +76,30 @@ export async function GET(
     siteAllowance = (db.siteAllowances || []).find((sa: any) => sa.siteId === siteId && sa.isActive !== false);
     projectInstructions = (db.projectInstructions || []).filter((pi: any) => pi.projectId === site.projectId && pi.isActive !== false);
 
-    // Compute required manpower
-    const requiredManpower = siteShifts.reduce((sum, ss) => sum + (ss.requiredCount || 0), 0);
+    // Compute site allocations and required manpower
+    let siteAllocations: any[] = [];
+    let rosterSlotsCount = 0;
+    if (isDb) {
+      siteAllocations = await prisma.securitySiteManpowerAllocation.findMany({
+        where: { siteId }
+      });
+      rosterSlotsCount = await prisma.rosterRequirementSlot.count({
+        where: { siteId }
+      });
+    } else {
+      siteAllocations = (db.siteManpowerAllocations || []).filter((sa: any) => sa.siteId === siteId);
+      rosterSlotsCount = (db.rosterSlots || []).filter((rs: any) => rs.siteId === siteId).length;
+    }
+
+    const allocatedSiteManpower = siteAllocations
+      .filter((sa: any) => sa.deploymentType === "PERMANENT")
+      .reduce((sum: number, sa: any) => sum + (sa.quantity || 0), 0);
+
+    const requiredManpower = allocatedSiteManpower > 0
+      ? allocatedSiteManpower
+      : siteShifts.reduce((sum, ss) => sum + (ss.requiredCount || 0), 0);
+
+    const rosterStatus = rosterSlotsCount === 0 ? "NOT_GENERATED" : "GENERATED";
 
     // Fetch live assignments for today
     const todayStr = new Date().toISOString().split("T")[0];
@@ -108,6 +130,10 @@ export async function GET(
       assignmentsCount = rawAsgs.length;
     }
 
+    const remainingVacant = rosterSlotsCount > 0
+      ? Math.max(0, rosterSlotsCount - assignmentsCount)
+      : Math.max(0, requiredManpower - assignmentsCount);
+
     return NextResponse.json({
       success: true,
       site: {
@@ -117,7 +143,13 @@ export async function GET(
         projectId: site.projectId,
         isActive: site.isActive !== false,
         radiusMeters: site.radiusMeters || 100,
-        gatePassRequired: !!site.gatePassRequired
+        gatePassRequired: !!site.gatePassRequired,
+        requiredManpower,
+        allocatedSiteManpower,
+        rosterSlotsCount,
+        rosterStatus,
+        assignedManpower: assignmentsCount,
+        remainingVacant
       },
       project: project ? {
         id: project.id,
@@ -144,8 +176,11 @@ export async function GET(
       projectInstructions,
       todaySummary: {
         requiredManpower,
+        allocatedSiteManpower,
+        rosterSlotsCount,
+        rosterStatus,
         assignedManpower: assignmentsCount,
-        vacantPosts: Math.max(0, requiredManpower - assignmentsCount)
+        vacantPosts: remainingVacant
       }
     });
 
