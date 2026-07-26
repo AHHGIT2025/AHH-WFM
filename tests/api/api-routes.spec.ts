@@ -2971,4 +2971,102 @@ describe('AHH WFM API Routes Verification', () => {
     });
     expect(crossScopeRes.status).toBe(403);
   });
+
+  test('MP-3C & MP-4: Billing Support & Operational Payroll Advisory HTTP APIs', async () => {
+    const loginUser = async (email: string) => {
+      try {
+        const csrfRes = await axios.get(`${WEB_URL}/api/auth/csrf`);
+        const csrfToken = csrfRes.data.csrfToken;
+        const csrfCookie = csrfRes.headers['set-cookie']?.map(c => c.split(';')[0]).join('; ');
+        const loginRes = await axios.post(
+          `${WEB_URL}/api/auth/callback/credentials`,
+          new URLSearchParams({ csrfToken, email, password: 'Password123!', json: 'true' }).toString(),
+          { headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Cookie': csrfCookie }, validateStatus: () => true }
+        );
+        const cookies = loginRes.headers['set-cookie'];
+        return cookies ? cookies.map(c => c.split(';')[0]).join('; ') : '';
+      } catch (e) { return ''; }
+    };
+
+    const adminCookie = await loginUser('admin@alhattab.qa');
+    const sgUserCookie = await loginUser('sarah.kim@alhattab.qa');
+    const fmSuperCookie = await loginUser('fm.supervisor@alhattab.qa');
+
+    const adminHeaders = adminCookie ? { Cookie: adminCookie } : {};
+    const sgHeaders = sgUserCookie ? { Cookie: sgUserCookie } : {};
+    const fmHeaders = fmSuperCookie ? { Cookie: fmSuperCookie } : {};
+
+    // 1. Unauthenticated requests return 401
+    const unauthRes = await axios.get(`${WEB_URL}/api/v1/manpower/billing-support`, { validateStatus: () => true });
+    expect(unauthRes.status).toBe(401);
+
+    // 2. GET /api/v1/manpower/billing-support (preview)
+    const billRes = await axios.get(`${WEB_URL}/api/v1/manpower/billing-support?operationType=SECURITY_GUARDING&period=2026-05`, {
+      headers: adminHeaders,
+      validateStatus: () => true
+    });
+    expect(billRes.status).toBe(200);
+    expect(billRes.data.success).toBe(true);
+    expect(billRes.data.billingLines).toBeDefined();
+
+    // 3. POST /api/v1/manpower/billing-support/runs
+    const billRunRes = await axios.post(`${WEB_URL}/api/v1/manpower/billing-support/runs`, {
+      operationType: 'SECURITY_GUARDING',
+      period: '2026-05'
+    }, { headers: adminHeaders, validateStatus: () => true });
+    expect(billRunRes.status).toBe(201);
+    expect(billRunRes.data.run.id).toBeDefined();
+
+    // 4. GET /api/v1/manpower/payroll-advisory (preview)
+    const payRes = await axios.get(`${WEB_URL}/api/v1/manpower/payroll-advisory?operationType=SECURITY_GUARDING&period=2026-05`, {
+      headers: adminHeaders,
+      validateStatus: () => true
+    });
+    expect(payRes.status).toBe(200);
+    expect(payRes.data.success).toBe(true);
+    expect(payRes.data.notice).toContain('Operational Payroll Advisory Only');
+
+    // 5. POST /api/v1/manpower/payroll-advisory/runs
+    const payRunRes = await axios.post(`${WEB_URL}/api/v1/manpower/payroll-advisory/runs`, {
+      operationType: 'SECURITY_GUARDING',
+      period: '2026-05'
+    }, { headers: adminHeaders, validateStatus: () => true });
+    expect(payRunRes.status).toBe(201);
+    expect(payRunRes.data.run.id).toBeDefined();
+
+    // 6. Work Calendar Profiles & Holiday Calendars GET routes
+    const profRes = await axios.get(`${WEB_URL}/api/v1/manpower/work-calendar-profiles`, {
+      headers: adminHeaders,
+      validateStatus: () => true
+    });
+    expect(profRes.status).toBe(200);
+
+    const holRes = await axios.get(`${WEB_URL}/api/v1/manpower/holiday-calendars`, {
+      headers: adminHeaders,
+      validateStatus: () => true
+    });
+    expect(holRes.status).toBe(200);
+
+    // 7. Legacy Security compatibility routes
+    const legBillRes = await axios.get(`${WEB_URL}/api/v1/security/scheduling/billing-support?period=2026-05`, {
+      headers: adminHeaders,
+      validateStatus: () => true
+    });
+    expect(legBillRes.status).toBe(200);
+
+    const legPayRes = await axios.get(`${WEB_URL}/api/v1/security/scheduling/payroll-advisory?period=2026-05`, {
+      headers: adminHeaders,
+      validateStatus: () => true
+    });
+    expect(legPayRes.status).toBe(200);
+    expect(legPayRes.data.notice).toContain('Operational Payroll Advisory Only');
+
+    // 8. Scope Isolation: FM Supervisor requesting Security Guarding scope gets 403
+    const crossScopeRes = await axios.get(`${WEB_URL}/api/v1/manpower/billing-support?operationType=SECURITY_GUARDING`, {
+      headers: fmHeaders,
+      validateStatus: () => true
+    });
+    expect(crossScopeRes.status).toBe(403);
+  });
 });
+

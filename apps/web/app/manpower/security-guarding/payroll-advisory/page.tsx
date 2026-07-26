@@ -154,6 +154,10 @@ export default function PayrollAdvisoryPage() {
             Payroll Advisory Preparation board
           </h1>
           <p className="text-[11px] text-on-surface-variant">Review acting duties, allowance advisories, and timesheet remarks for HR sync</p>
+          <div className="mt-2 bg-amber-50 border border-amber-300 text-amber-900 text-[11px] px-3 py-1 rounded inline-flex items-center gap-1.5 font-semibold">
+            <span className="material-symbols-outlined text-[14px]">warning</span>
+            Operational Payroll Advisory Only — No Payroll Posting
+          </div>
         </div>
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
