@@ -3563,3 +3563,39 @@ model ManpowerReconciliationScopeLock {
 
   @@index([expiresAt])
 }
+
+model ManpowerBulkOperationLog {
+  id                  String    @id @default(uuid())
+  previewTokenHash    String    @unique
+  idempotencyKey      String?   @unique
+  requestHash         String
+  actorId             String
+  operationType       String
+  mode                String // "SINGLE_DATE" | "DATE_RANGE" | "FULL_MONTH"
+  strategy            String // "MANUAL_MAPPING" | "AUTO_FILL"
+  policy              String // "PARTIAL" | "STRICT"
+  status              String // "PREVIEWED" | "PROCESSING" | "COMPLETED" | "FAILED" | "EXPIRED"
+  period              String
+  fromDate            DateTime  @db.Date
+  toDate              DateTime  @db.Date
+  requestedCount      Int       @default(0)
+  createdCount        Int       @default(0)
+  skippedCount        Int       @default(0)
+  failedCount         Int       @default(0)
+  unfilledSeriesCount Int       @default(0)
+  unusedEmployeeCount Int       @default(0)
+  requestJson         Json?
+  previewJson         Json?
+  resultJson          Json?
+  errorJson           Json?
+  expiresAt           DateTime
+  startedAt           DateTime?
+  completedAt         DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@index([actorId])
+  @@index([status])
+  @@index([expiresAt])
+  @@index([operationType])
+}

@@ -38,6 +38,7 @@ import { CancelResolveModal } from "./components/CancelResolveModal";
 import { RelieverDrawer } from "./components/RelieverDrawer";
 import { CellActionMenu } from "./components/CellActionMenu";
 import { resolveEmployeeTradePosition } from "@/lib/roster-display-utils";
+import { BulkDeploymentModal } from "./bulk-deployment/BulkDeploymentModal";
 
 interface RosterSlot {
   id: string;
@@ -154,6 +155,7 @@ export default function RosterBoardPage() {
   // Selected drawer objects
   const [activeDrawer, setActiveDrawer] = useState<"assign" | "details" | null>(null);
   const [selectedSlot, setSelectedSlot] = useState<RosterSlot | null>(null);
+  const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
   
   // MP-3A Exception & Reliever Modals State
   const [dayOffModalAssignment, setDayOffModalAssignment] = useState<any | null>(null);
@@ -607,6 +609,16 @@ export default function RosterBoardPage() {
             >
               <RefreshCw className={`h-4 w-4 ${syncingContracts ? "animate-spin" : ""}`} aria-hidden="true" />
               {syncingContracts ? "Syncing..." : "Sync Contract Slots"}
+            </Button>
+
+            <Button
+              variant="primary"
+              onClick={() => setIsBulkModalOpen(true)}
+              disabled={periodLocked}
+              className="h-10 gap-2"
+            >
+              <UserPlus className="h-4 w-4" aria-hidden="true" />
+              Bulk Deploy Manpower
             </Button>
             
             <Button
@@ -1333,6 +1345,19 @@ export default function RosterBoardPage() {
         currentUserEmployeeId={(session?.user as any)?.employeeId || (session?.user as any)?.id}
         currentUserRole={(session?.user as any)?.role}
         onReviewSuccess={() => fetchRosterData(true)}
+      />
+
+      <BulkDeploymentModal
+        isOpen={isBulkModalOpen}
+        onClose={() => setIsBulkModalOpen(false)}
+        operationType={business === "security-guarding" ? "SECURITY_GUARDING" : "FACILITY_MANAGEMENT"}
+        contractId={selectedContract}
+        selectedMonth={selectedMonth}
+        slots={slots}
+        employees={eligibleEmployees.map(e => e.employee)}
+        onSuccess={(summaryText) => {
+          fetchRosterData(true);
+        }}
       />
     </div>
   );
