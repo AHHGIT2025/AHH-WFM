@@ -509,16 +509,33 @@ export default function RosterBoardPage() {
 
   // Group slots for the grid view
   const groupedRows = useMemo(() => {
-    const groups: { [key: string]: { label: string; slotsByDate: { [dateStr: string]: RosterSlot[] } } } = {};
+    const groups: { [key: string]: { 
+      label: string; 
+      line1: string; 
+      line2: string; 
+      siteName: string; 
+      postOrZone: string; 
+      slotsByDate: { [dateStr: string]: RosterSlot[] } 
+    } } = {};
+
+    const targetSlots = selectedSite === "all" ? slots : slots.filter(s => s.siteId === selectedSite);
     
-    slots.forEach(slot => {
-      // Grouping key: Site - Position - Shift - Slot Index
-      const siteName = slot.site?.name || "Event / Temporary Venue";
-      const key = `${slot.contractId}-${slot.siteId}-${slot.snapshotPosition}-${slot.snapshotShiftName}-${slot.slotIndex}`;
-      const label = `${siteName} • ${slot.snapshotPosition} (${slot.snapshotShiftName}) #Slot ${slot.slotIndex}`;
+    targetSlots.forEach(slot => {
+      const siteName = slot.site?.name || (slot as any).project?.name || "Site Not Specified";
+      const locationUnit = (slot as any).shiftRequirement?.locationUnit;
+      let postOrZone = "Post Not Specified";
+
+      if (locationUnit && locationUnit.name) {
+        postOrZone = locationUnit.name;
+      }
+      
+      const line1 = `${siteName} • ${postOrZone}`;
+      const line2 = `${slot.snapshotPosition} • ${slot.snapshotShiftName} • Slot ${slot.slotIndex}`;
+      const key = `${slot.contractId}-${slot.siteId || 'none'}-${slot.snapshotPosition}-${slot.snapshotShiftName}-${slot.slotIndex}`;
+      const label = `${line1} | ${line2}`;
       
       if (!groups[key]) {
-        groups[key] = { label, slotsByDate: {} };
+        groups[key] = { label, line1, line2, siteName, postOrZone, slotsByDate: {} };
       }
       
       const dateStr = slot.businessDate.split("T")[0];
@@ -529,7 +546,7 @@ export default function RosterBoardPage() {
     });
     
     return Object.values(groups);
-  }, [slots]);
+  }, [slots, selectedSite]);
 
   // Days array for grid (month or custom range)
   const daysInMonth = useMemo(() => {
@@ -862,7 +879,10 @@ export default function RosterBoardPage() {
                 {groupedRows.map(row => (
                   <tr key={row.label} className="hover:bg-surface-variant/20 transition-colors">
                     <td className="p-3 border-r border-outline-variant font-medium text-foreground sticky left-0 bg-surface shadow-sm z-10">
-                      {row.label}
+                      <div className="flex flex-col">
+                        <span className="font-bold text-xs text-foreground tracking-tight">{row.line1}</span>
+                        <span className="text-[11px] text-secondary font-normal mt-0.5">{row.line2}</span>
+                      </div>
                     </td>
                     {daysInMonth.map(dateStr => {
                       const matchedSlots = row.slotsByDate[dateStr] || [];

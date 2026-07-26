@@ -74,8 +74,23 @@ export async function GET(request: Request) {
       include: {
         contract: {
           select: {
+            id: true,
             title: true,
             contractNumber: true
+          }
+        },
+        project: {
+          select: {
+            id: true,
+            name: true,
+            code: true
+          }
+        },
+        site: {
+          select: {
+            id: true,
+            name: true,
+            code: true
           }
         },
         assignments: {
@@ -127,7 +142,21 @@ export async function GET(request: Request) {
       ]
     });
 
-    return NextResponse.json({ success: true, slots });
+    const shiftReqIds = Array.from(new Set(slots.map((s) => s.shiftRequirementId).filter(Boolean))) as string[];
+    const shiftReqs = shiftReqIds.length > 0
+      ? await prisma.manpowerShiftRequirement.findMany({
+          where: { id: { in: shiftReqIds } },
+          include: { locationUnit: true }
+        })
+      : [];
+    const shiftReqMap = new Map(shiftReqs.map((sr) => [sr.id, sr]));
+
+    const enrichedSlots = slots.map((slot) => ({
+      ...slot,
+      shiftRequirement: slot.shiftRequirementId ? shiftReqMap.get(slot.shiftRequirementId) || null : null
+    }));
+
+    return NextResponse.json({ success: true, slots: enrichedSlots });
   } catch (error: any) {
     console.error("[GET /api/v1/manpower/scheduling/roster Error]", error);
     const userMessage = typeof error?.message === "string" && !error.message.includes("prisma") && !error.message.includes("invocation") && !error.message.includes("database")

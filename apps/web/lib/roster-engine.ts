@@ -714,6 +714,20 @@ export async function checkEmployeeSchedulingEligibility(
     throw new Error(`Employee ${employeeId} not found`);
   }
 
+  // 0. Scheduling Period Lock check
+  const dateStr = getQatarDateString(slot.businessDate);
+  const qatarDate = new Date(dateStr);
+  const periodStr = `${qatarDate.getFullYear()}-${String(qatarDate.getMonth() + 1).padStart(2, '0')}`;
+  const periodLock = await tx.manpowerSchedulingPeriodLock.findUnique({
+    where: { operationType_period: { operationType: slot.operationType, period: periodStr } }
+  });
+  if (slot.scheduleStatus === "LOCKED" || (periodLock && periodLock.locked)) {
+    errors.push(`Period locked: Scheduling period ${periodStr} is locked.`);
+    checklist.push({ rule: "PERIOD_LOCK", status: "FAIL", details: `Period ${periodStr} is locked` });
+  } else {
+    checklist.push({ rule: "PERIOD_LOCK", status: "PASS", details: "Unlocked" });
+  }
+
   // 1. Workforce status check
   if (employee.isActive === false || employee.employmentStatus === "INACTIVE" || employee.employmentStatus === "DELETED") {
     errors.push("Employee is inactive or deactivated in Workforce Directory.");
@@ -732,9 +746,6 @@ export async function checkEmployeeSchedulingEligibility(
   }
 
   // 3. Approved Leave overlap check
-  const dateStr = getQatarDateString(slot.businessDate);
-  const qatarDate = new Date(dateStr);
-
   const leaves = await tx.leaveRequest.findMany({
     where: {
       employeeId,
