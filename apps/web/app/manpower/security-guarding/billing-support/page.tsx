@@ -118,6 +118,10 @@ export default function BillingSupportPage() {
             Billing-Support Reports
           </h1>
           <p className="text-[11px] text-on-surface-variant">Review client contract service delivery records, planned vs actual hours, and delivery anomalies</p>
+          <div className="mt-2 bg-blue-50 border border-blue-200 text-blue-800 text-[11px] px-3 py-1 rounded inline-flex items-center gap-1.5 font-semibold">
+            <span className="material-symbols-outlined text-[14px]">info</span>
+            Operational Commercial Billing Support Only — No Invoices Generated
+          </div>
         </div>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
