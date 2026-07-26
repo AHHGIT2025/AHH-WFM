@@ -10,6 +10,24 @@ describe("SECFAC Phase 5C — Controlled Evaluation Worker Activation Suite", ()
     await prisma.secFacWorkerLock.deleteMany({
       where: { lockKey: { contains: "evaluation" } }
     });
+    // Remove any FM test-fixture alerts that preceding suites may have left behind.
+    // Identified by alertCode=TASK_OVERDUE + sourceType=TASK — a combination exclusive to
+    // secfac-alerts-rollout.spec.ts fixtures; never present in live Phase 5D pilot records.
+    // Child rows are deleted before the parent to satisfy foreign-key constraints.
+    const residualFmFixtures = await prisma.secFacOperationalAlert.findMany({
+      where: {
+        operationType: "FACILITY_MANAGEMENT",
+        alertCode: "TASK_OVERDUE",
+        sourceType: "TASK"
+      },
+      select: { id: true }
+    });
+    if (residualFmFixtures.length > 0) {
+      const ids = residualFmFixtures.map((a: { id: string }) => a.id);
+      await prisma.secFacAlertEvent.deleteMany({ where: { alertId: { in: ids } } });
+      await prisma.secFacAlertNotification.deleteMany({ where: { alertId: { in: ids } } });
+      await prisma.secFacOperationalAlert.deleteMany({ where: { id: { in: ids } } });
+    }
   });
 
   describe("Evaluation Worker Execution & Locking", () => {

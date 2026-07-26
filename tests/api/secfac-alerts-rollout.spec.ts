@@ -164,6 +164,23 @@ describe("SECFAC Phase 5B — Rollout Hardening, SLA & Analytics Engine", () => 
   });
 
   describe("Alert Fatigue Indicators", () => {
+    // Capture IDs of records created in this block for deterministic cleanup.
+    // Using exact IDs ensures we never touch pilot records or unrelated fixtures.
+    let noisyRuleId: string | null = null;
+    const noisyAlertIds: string[] = [];
+
+    afterAll(async () => {
+      // Delete dependent child rows first (FK cascade not guaranteed for all relations)
+      if (noisyAlertIds.length > 0) {
+        await prisma.secFacAlertEvent.deleteMany({ where: { alertId: { in: noisyAlertIds } } });
+        await prisma.secFacAlertNotification.deleteMany({ where: { alertId: { in: noisyAlertIds } } });
+        await prisma.secFacOperationalAlert.deleteMany({ where: { id: { in: noisyAlertIds } } });
+      }
+      if (noisyRuleId) {
+        await prisma.secFacAlertRule.delete({ where: { id: noisyRuleId } });
+      }
+    });
+
     it("flags rule as HIGH_NOISE when dismissal rate exceeds 40%", async () => {
       const rule = await prisma.secFacAlertRule.create({
         data: {
@@ -175,11 +192,12 @@ describe("SECFAC Phase 5B — Rollout Hardening, SLA & Analytics Engine", () => 
           isActive: true
         }
       });
+      noisyRuleId = rule.id;
 
       const bDate = new Date();
       // Create 10 alerts: 5 dismissed, 5 open
       for (let i = 0; i < 10; i++) {
-        await prisma.secFacOperationalAlert.create({
+        const alert = await prisma.secFacOperationalAlert.create({
           data: {
             operationType: "FACILITY_MANAGEMENT",
             ruleId: rule.id,
@@ -198,6 +216,7 @@ describe("SECFAC Phase 5B — Rollout Hardening, SLA & Analytics Engine", () => 
             dismissalReason: i < 5 ? "Routine noise" : null
           }
         });
+        noisyAlertIds.push(alert.id);
       }
 
       const health = await calculateAlertRuleHealth(rule.id, 30);
