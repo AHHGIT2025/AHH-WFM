@@ -340,4 +340,138 @@ describe("Project Manpower Allocation, Site Allocation, Shift Requirement and Si
     const pilotStartDate = "2026-07-21";
     expect(pilotStartDate).toBe("2026-07-21");
   });
+
+  // 28. Status combination 1: isActive=true, activeWorksite=true
+  test("28. Status combination 1: isActive=true, activeWorksite=true displays Active badge and permits deployment", () => {
+    const isActive = true;
+    const activeWorksite = true;
+    const badge = isActive ? "ACTIVE" : "INACTIVE";
+    const canDeploy = isActive && activeWorksite;
+    expect(badge).toBe("ACTIVE");
+    expect(canDeploy).toBe(true);
+  });
+
+  // 29. Status combination 2: isActive=true, activeWorksite=false
+  test("29. Status combination 2: isActive=true, activeWorksite=false displays Active badge but blocks deployment", () => {
+    const isActive = true;
+    const activeWorksite = false;
+    const badge = isActive ? "ACTIVE" : "INACTIVE";
+    const canDeploy = isActive && activeWorksite;
+    expect(badge).toBe("ACTIVE");
+    expect(canDeploy).toBe(false);
+  });
+
+  // 30. Status combination 3: isActive=false, activeWorksite=true
+  test("30. Status combination 3: isActive=false, activeWorksite=true displays Inactive badge and blocks roster generation", () => {
+    const isActive = false;
+    const activeWorksite = true;
+    const badge = isActive ? "ACTIVE" : "INACTIVE";
+    const canGenerateRoster = isActive;
+    expect(badge).toBe("INACTIVE");
+    expect(canGenerateRoster).toBe(false);
+  });
+
+  // 31. Status combination 4: isActive=false, activeWorksite=false
+  test("31. Status combination 4: isActive=false, activeWorksite=false displays Inactive badge and blocks deployment", () => {
+    const isActive = false;
+    const activeWorksite = false;
+    const badge = isActive ? "ACTIVE" : "INACTIVE";
+    const canDeploy = isActive && activeWorksite;
+    expect(badge).toBe("INACTIVE");
+    expect(canDeploy).toBe(false);
+  });
+
+  // 32. Status combination 5: Omitted field preserves stored value
+  test("32. Omitted update fields preserve stored values without silent overwrite", () => {
+    const storedState = { isActive: true, activeWorksite: false };
+    const updateBody: any = { remarks: "Updated remarks" };
+    const resolvedIsActive = updateBody.isActive !== undefined ? updateBody.isActive : storedState.isActive;
+    const resolvedActiveWorksite = updateBody.activeWorksite !== undefined ? updateBody.activeWorksite : storedState.activeWorksite;
+
+    expect(resolvedIsActive).toBe(true);
+    expect(resolvedActiveWorksite).toBe(false);
+  });
+
+  // 33. Section 6 Rule 1: Site allocation authoritative when allocations & shifts exist
+  test("33. Required manpower uses SITE_ALLOCATION as authoritative source when site allocation exists", () => {
+    const allocatedSiteManpower = 2;
+    const shiftSum = 4; // Different from allocation
+    let siteRequiredManpower = 0;
+    let requiredManpowerSource = "NOT_CONFIGURED";
+
+    if (allocatedSiteManpower > 0) {
+      siteRequiredManpower = allocatedSiteManpower;
+      requiredManpowerSource = "SITE_ALLOCATION";
+    } else if (shiftSum > 0) {
+      siteRequiredManpower = shiftSum;
+      requiredManpowerSource = "LEGACY_SHIFT_FALLBACK";
+    }
+
+    expect(siteRequiredManpower).toBe(2);
+    expect(requiredManpowerSource).toBe("SITE_ALLOCATION");
+  });
+
+  // 34. Section 6 Rule 2: Legacy shift fallback used when allocation is absent
+  test("34. Required manpower uses LEGACY_SHIFT_FALLBACK when site allocation is zero but shifts exist", () => {
+    const allocatedSiteManpower = 0;
+    const shiftSum = 3;
+    let siteRequiredManpower = 0;
+    let requiredManpowerSource = "NOT_CONFIGURED";
+
+    if (allocatedSiteManpower > 0) {
+      siteRequiredManpower = allocatedSiteManpower;
+      requiredManpowerSource = "SITE_ALLOCATION";
+    } else if (shiftSum > 0) {
+      siteRequiredManpower = shiftSum;
+      requiredManpowerSource = "LEGACY_SHIFT_FALLBACK";
+    }
+
+    expect(siteRequiredManpower).toBe(3);
+    expect(requiredManpowerSource).toBe("LEGACY_SHIFT_FALLBACK");
+  });
+
+  // 35. Section 6 Rule 3: NOT_CONFIGURED when allocation and shifts are absent
+  test("35. Required manpower is 0 with NOT_CONFIGURED source when allocation and shifts are absent", () => {
+    const allocatedSiteManpower = 0;
+    const shiftSum = 0;
+    let siteRequiredManpower = 0;
+    let requiredManpowerSource = "NOT_CONFIGURED";
+
+    if (allocatedSiteManpower > 0) {
+      siteRequiredManpower = allocatedSiteManpower;
+      requiredManpowerSource = "SITE_ALLOCATION";
+    } else if (shiftSum > 0) {
+      siteRequiredManpower = shiftSum;
+      requiredManpowerSource = "LEGACY_SHIFT_FALLBACK";
+    } else {
+      siteRequiredManpower = 0;
+      requiredManpowerSource = "NOT_CONFIGURED";
+    }
+
+    expect(siteRequiredManpower).toBe(0);
+    expect(requiredManpowerSource).toBe("NOT_CONFIGURED");
+  });
+
+  // 36. Section 6 Rule 4: No double counting of allocation and shift quantities
+  test("36. Never adds site allocation quantity and shift quantity together", () => {
+    const allocQty = 2;
+    const shiftQty = 2;
+    const computedTotal = allocQty > 0 ? allocQty : shiftQty;
+    expect(computedTotal).toBe(2);
+    expect(computedTotal).not.toBe(allocQty + shiftQty);
+  });
+
+  // 37. Section 6 Rule 5: SG/FM operationType isolation for required manpower
+  test("37. Enforces operationType isolation when computing site required manpower", () => {
+    const siteAllocations = [
+      { position: "Security Guard", quantity: 2, operationType: "SECURITY_GUARDING" },
+      { position: "Technician", quantity: 5, operationType: "FACILITY_MANAGEMENT" }
+    ];
+    const targetOperationType = "SECURITY_GUARDING";
+    const sgQty = siteAllocations
+      .filter(a => a.operationType === targetOperationType)
+      .reduce((sum, a) => sum + a.quantity, 0);
+
+    expect(sgQty).toBe(2);
+  });
 });

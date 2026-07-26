@@ -76,10 +76,25 @@ export async function GET(
     siteAllowance = (db.siteAllowances || []).find((sa: any) => sa.siteId === siteId && sa.isActive !== false);
     projectInstructions = (db.projectInstructions || []).filter((pi: any) => pi.projectId === site.projectId && pi.isActive !== false);
 
-    // Compute site allocations and required manpower
+    // Compute contract, project, and site manpower metrics
+    let effectiveContractManpower = 0;
+    let projectAllocatedManpower = 0;
     let siteAllocations: any[] = [];
     let rosterSlotsCount = 0;
+
     if (isDb) {
+      if (contract?.id) {
+        const contractReqs = await prisma.contractManpowerRequirement.findMany({
+          where: { contractId: contract.id }
+        });
+        effectiveContractManpower = contractReqs.reduce((sum, r) => sum + (r.quantity || 0), 0);
+      }
+      if (project?.id) {
+        const projectAllocs = await prisma.securityProjectManpowerAllocation.findMany({
+          where: { projectId: project.id }
+        });
+        projectAllocatedManpower = projectAllocs.reduce((sum, a) => sum + (a.quantity || 0), 0);
+      }
       siteAllocations = await prisma.securitySiteManpowerAllocation.findMany({
         where: { siteId }
       });
@@ -87,17 +102,37 @@ export async function GET(
         where: { siteId }
       });
     } else {
+      if (contract?.id) {
+        const contractReqs = (db.contractManpowerRequirements || []).filter((r: any) => r.contractId === contract.id);
+        effectiveContractManpower = contractReqs.reduce((sum: number, r: any) => sum + (r.quantity || 0), 0);
+      }
+      if (project?.id) {
+        const projectAllocs = (db.projectManpowerAllocations || []).filter((a: any) => a.projectId === project.id);
+        projectAllocatedManpower = projectAllocs.reduce((sum: number, a: any) => sum + (a.quantity || 0), 0);
+      }
       siteAllocations = (db.siteManpowerAllocations || []).filter((sa: any) => sa.siteId === siteId);
       rosterSlotsCount = (db.rosterSlots || []).filter((rs: any) => rs.siteId === siteId).length;
     }
 
-    const allocatedSiteManpower = siteAllocations
+    const siteAllocatedManpower = siteAllocations
       .filter((sa: any) => sa.deploymentType === "PERMANENT")
       .reduce((sum: number, sa: any) => sum + (sa.quantity || 0), 0);
 
-    const requiredManpower = allocatedSiteManpower > 0
-      ? allocatedSiteManpower
-      : siteShifts.reduce((sum, ss) => sum + (ss.requiredCount || 0), 0);
+    const shiftSum = siteShifts.reduce((sum, ss) => sum + (ss.requiredCount || 0), 0);
+
+    let siteRequiredManpower = 0;
+    let requiredManpowerSource: "SITE_ALLOCATION" | "LEGACY_SHIFT_FALLBACK" | "NOT_CONFIGURED" = "NOT_CONFIGURED";
+
+    if (siteAllocatedManpower > 0) {
+      siteRequiredManpower = siteAllocatedManpower;
+      requiredManpowerSource = "SITE_ALLOCATION";
+    } else if (shiftSum > 0) {
+      siteRequiredManpower = shiftSum;
+      requiredManpowerSource = "LEGACY_SHIFT_FALLBACK";
+    } else {
+      siteRequiredManpower = 0;
+      requiredManpowerSource = "NOT_CONFIGURED";
+    }
 
     const rosterStatus = rosterSlotsCount === 0 ? "NOT_GENERATED" : "GENERATED";
 
@@ -132,22 +167,43 @@ export async function GET(
 
     const remainingVacant = rosterSlotsCount > 0
       ? Math.max(0, rosterSlotsCount - assignmentsCount)
-      : Math.max(0, requiredManpower - assignmentsCount);
+      : Math.max(0, siteRequiredManpower - assignmentsCount);
 
     return NextResponse.json({
       success: true,
+      effectiveContractManpower,
+      projectAllocatedManpower,
+      siteAllocatedManpower,
+      siteRequiredManpower,
+      requiredManpowerSource,
+      rosterRequiredSlots: rosterSlotsCount,
+      rosterAssignedSlots: assignmentsCount,
+      rosterVacantSlots: remainingVacant,
+      rosterStatus,
+      siteStatus: site.isActive ? "ACTIVE" : "INACTIVE",
+      activeWorksite: site.isActive !== false,
       site: {
         id: site.id,
         name: site.name,
         code: site.code || site.id.substring(0, 8).toUpperCase(),
         projectId: site.projectId,
         isActive: site.isActive !== false,
+        activeWorksite: site.isActive !== false,
+        siteStatus: site.isActive ? "ACTIVE" : "INACTIVE",
         radiusMeters: site.radiusMeters || 100,
         gatePassRequired: !!site.gatePassRequired,
-        requiredManpower,
-        allocatedSiteManpower,
-        rosterSlotsCount,
+        effectiveContractManpower,
+        projectAllocatedManpower,
+        siteAllocatedManpower,
+        siteRequiredManpower,
+        requiredManpowerSource,
+        rosterRequiredSlots: rosterSlotsCount,
+        rosterAssignedSlots: assignmentsCount,
+        rosterVacantSlots: remainingVacant,
         rosterStatus,
+        requiredManpower: siteRequiredManpower,
+        allocatedSiteManpower: siteAllocatedManpower,
+        rosterSlotsCount,
         assignedManpower: assignmentsCount,
         remainingVacant
       },
@@ -175,12 +231,20 @@ export async function GET(
       } : null,
       projectInstructions,
       todaySummary: {
-        requiredManpower,
-        allocatedSiteManpower,
+        effectiveContractManpower,
+        projectAllocatedManpower,
+        siteAllocatedManpower,
+        siteRequiredManpower,
+        requiredManpowerSource,
+        requiredManpower: siteRequiredManpower,
+        allocatedSiteManpower: siteAllocatedManpower,
         rosterSlotsCount,
-        rosterStatus,
+        rosterRequiredSlots: rosterSlotsCount,
+        rosterAssignedSlots: assignmentsCount,
+        rosterVacantSlots: remainingVacant,
         assignedManpower: assignmentsCount,
-        vacantPosts: remainingVacant
+        vacantPosts: remainingVacant,
+        rosterStatus
       }
     });
 

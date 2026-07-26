@@ -67,9 +67,7 @@ export async function POST(request: Request) {
 
     const resolvedIsActive = isActive !== undefined
       ? !!isActive
-      : (activeWorksite !== undefined
-        ? !!activeWorksite
-        : (status !== undefined ? status !== "INACTIVE" : true));
+      : (status !== undefined ? status !== "INACTIVE" : true);
 
     if (!projectId || !name) {
       return NextResponse.json({ error: "Project and Site Name are required" }, { status: 400 });
@@ -404,9 +402,7 @@ export async function PATCH(request: Request) {
 
     const resolvedIsActive = isActive !== undefined
       ? !!isActive
-      : (activeWorksite !== undefined
-        ? !!activeWorksite
-        : (status !== undefined ? status !== "INACTIVE" : undefined));
+      : (status !== undefined ? status !== "INACTIVE" : undefined);
 
     if (!id) {
       return NextResponse.json({ error: "Site ID is required" }, { status: 400 });
