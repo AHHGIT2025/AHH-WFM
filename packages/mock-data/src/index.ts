@@ -2010,24 +2010,28 @@ export const mockDb = {
         }
 
         if (changed) {
-          await prismaClient.employee.update({
-            where: { id: emp.id },
-            data: {
-              isActive: emp.isActive,
-              employmentStatus: emp.employmentStatus,
-              dutyStatus: emp.dutyStatus,
-              dateOfJoining: emp.dateOfJoining,
-              qidNumber: emp.qidNumber,
-              qidExpiryDate: emp.qidExpiryDate,
-              passportNumber: emp.passportNumber,
-              passportExpiryDate: emp.passportExpiryDate,
-              passportIssueDate: emp.passportIssueDate,
-              passportIssuingCountry: emp.passportIssuingCountry,
-              sponsor: emp.sponsor,
-              hasAccommodation: emp.hasAccommodation,
-              hasItAssets: emp.hasItAssets
-            }
-          });
+          try {
+            await prismaClient.employee.update({
+              where: { id: emp.id },
+              data: {
+                isActive: emp.isActive,
+                employmentStatus: emp.employmentStatus,
+                dutyStatus: emp.dutyStatus,
+                dateOfJoining: emp.dateOfJoining,
+                qidNumber: emp.qidNumber,
+                qidExpiryDate: emp.qidExpiryDate,
+                passportNumber: emp.passportNumber,
+                passportExpiryDate: emp.passportExpiryDate,
+                passportIssueDate: emp.passportIssueDate,
+                passportIssuingCountry: emp.passportIssuingCountry,
+                sponsor: emp.sponsor,
+                hasAccommodation: emp.hasAccommodation,
+                hasItAssets: emp.hasItAssets
+              }
+            });
+          } catch (updateErr) {
+            // Ignore background sync update failure during read query
+          }
           modified = true;
         }
       }

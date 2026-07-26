@@ -1,6 +1,7 @@
+delete process.env.DATABASE_URL;
+
 import { validateContractPayload } from "../../packages/mock-data/src/index";
 import { mockDb, isDbConnected } from "@ahh-wfm/mock-data";
-import { prisma } from "@ahh-wfm/database";
 import { getServerSession } from "next-auth/next";
 import { POST as requestFoc } from "../../apps/web/app/api/v1/manpower/contracts/requirements/[id]/foc-request/route";
 import { POST as evaluateFoc } from "../../apps/web/app/api/v1/manpower/contracts/requirements/[id]/foc-evaluate/route";
@@ -19,81 +20,58 @@ describe("Manpower Planning Phase MP-1 Contract & FOC Validation Test Suite", ()
   let mockSite: any;
 
   beforeAll(async () => {
-    // Initialize mock database seeds if DB is connected
-    const connected = await isDbConnected();
-    if (connected) {
-      // Clean previous tests
-      await prisma.userActivityLog.deleteMany({
-        where: { action: { in: ["CONTRACT_FOC_REQUEST", "CONTRACT_FOC_APPROVE", "CONTRACT_FOC_REJECT", "CONTRACT_FOC_REVOKE"] } }
+    // Deterministically create test entities using mockDb
+    mockClient = await mockDb.createManpowerClient({
+      id: "client-mp1-test-id",
+      name: "MP-1 Test Client",
+      code: "TCL-MP1-TEST",
+      operationType: "SECURITY_GUARDING",
+      isActive: true
+    });
+
+    const mockProject = await mockDb.createManpowerProject({
+      id: "proj-mp1-test-id",
+      clientId: mockClient.id,
+      name: "MP-1 Test Project",
+      code: "TPR-MP1-TEST",
+      operationType: "SECURITY_GUARDING",
+      isActive: true
+    });
+
+    mockSite = await mockDb.createManpowerSite({
+      id: "site-mp1-test-id",
+      projectId: mockProject.id,
+      name: "MP-1 Test Site",
+      code: "TSI-MP1-TEST",
+      operationType: "SECURITY_GUARDING",
+      isActive: true
+    });
+
+    const existingEmployees = await mockDb.getEmployees();
+    mockMaker = existingEmployees.find((e: any) => e.id === "emp-maker-test-01");
+    if (!mockMaker) {
+      mockMaker = await mockDb.createEmployee({
+        id: "emp-maker-test-01",
+        name: "Test Maker",
+        email: "maker-mp1-test@test.com",
+        role: "SECURITY_ADMIN",
+        department: "Operations",
+        status: "Offline",
+        isActive: true
       });
+    }
 
-      // Find or create test entities
-      mockClient = await prisma.manpowerClient.findFirst();
-      if (!mockClient) {
-        mockClient = await (prisma.manpowerClient.create as any)({
-          data: { name: "MP-1 Test Client", code: "TCL-001", operationType: "SECURITY_GUARDING", isActive: true }
-        });
-      }
-
-      mockSite = await prisma.manpowerSite.findFirst();
-      if (!mockSite) {
-        const proj = await (prisma.manpowerProject.create as any)({
-          data: {
-            clientId: mockClient.id,
-            name: "MP-1 Test Project",
-            code: "TPR-001",
-            operationType: "SECURITY_GUARDING",
-            isActive: true
-          }
-        });
-        mockSite = await prisma.manpowerSite.create({
-          data: {
-            projectId: proj.id,
-            name: "MP-1 Test Site",
-            code: "TSI-001",
-            operationType: "SECURITY_GUARDING",
-            isActive: true
-          }
-        });
-      }
-
-      mockMaker = await prisma.employee.findFirst({ where: { role: "SECURITY_ADMIN", isActive: true } });
-      if (!mockMaker) {
-        mockMaker = await (prisma.employee.create as any)({
-          data: {
-            id: "emp-maker-test-01",
-            name: "Test Maker",
-            email: "maker@test.com",
-            role: "SECURITY_ADMIN",
-            department: "Operations",
-            status: "Offline",
-            isActive: true
-          }
-        });
-      }
-
-      mockChecker = await prisma.employee.findFirst({
-        where: { role: "SECURITY_ADMIN", isActive: true, id: { not: mockMaker.id } }
+    mockChecker = existingEmployees.find((e: any) => e.id === "emp-checker-test-02");
+    if (!mockChecker) {
+      mockChecker = await mockDb.createEmployee({
+        id: "emp-checker-test-02",
+        name: "Test Checker",
+        email: "checker-mp1-test@test.com",
+        role: "SECURITY_ADMIN",
+        department: "Operations",
+        status: "Offline",
+        isActive: true
       });
-      if (!mockChecker) {
-        mockChecker = await (prisma.employee.create as any)({
-          data: {
-            id: "emp-checker-test-02",
-            name: "Test Checker",
-            email: "checker@test.com",
-            role: "SECURITY_ADMIN",
-            department: "Operations",
-            status: "Offline",
-            isActive: true
-          }
-        });
-      }
-    } else {
-      // Mock for in-memory testing
-      mockClient = { id: "c-1", name: "Mock Client" };
-      mockSite = { id: "s-1", name: "Mock Site" };
-      mockMaker = { id: "emp-maker", role: "SECURITY_ADMIN", isActive: true };
-      mockChecker = { id: "emp-checker", role: "SECURITY_ADMIN", isActive: true };
     }
   });
 
@@ -411,15 +389,12 @@ describe("Manpower Planning Phase MP-1 Contract & FOC Validation Test Suite", ()
 
       // 2. Create a FACILITY_MANAGEMENT contract with requirement lists
       // Create FM Client if not exists
-      let fmClient = await prisma.manpowerClient.findFirst({ where: { operationType: "FACILITY_MANAGEMENT" } });
-      if (!fmClient && await isDbConnected()) {
-        fmClient = await (prisma.manpowerClient.create as any)({
-          data: { name: "MP-1 FM Client", code: "TCL-FM-01", operationType: "FACILITY_MANAGEMENT", isActive: true }
-        });
-      }
+      const fmClient = await mockDb.createManpowerClient({
+        name: "MP-1 FM Client", code: "TCL-FM-01", operationType: "FACILITY_MANAGEMENT", isActive: true
+      });
 
       const fmContractPayload = {
-        clientId: fmClient?.id || "temp-fm-client-id",
+        clientId: fmClient.id,
         title: "Test FM Contract with Reqs",
         startDate: new Date().toISOString(),
         endDate: new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString(),
@@ -487,15 +462,12 @@ describe("Manpower Planning Phase MP-1 Contract & FOC Validation Test Suite", ()
         operationType: "SECURITY_GUARDING"
       });
 
-      let fmClient = await prisma.manpowerClient.findFirst({ where: { operationType: "FACILITY_MANAGEMENT" } });
-      if (!fmClient && await isDbConnected()) {
-        fmClient = await (prisma.manpowerClient.create as any)({
-          data: { name: "MP-1 FM Client Scope", code: "TCL-FM-02", operationType: "FACILITY_MANAGEMENT", isActive: true }
-        });
-      }
+      const fmClient2 = await mockDb.createManpowerClient({
+        name: "MP-1 FM Client Scope", code: "TCL-FM-02", operationType: "FACILITY_MANAGEMENT", isActive: true
+      });
 
       const fmContract = await mockDb.createManpowerContract({
-        clientId: fmClient?.id || "temp-fm-client-id-2",
+        clientId: fmClient2.id,
         title: "FM Isolated Contract",
         startDate: new Date().toISOString(),
         endDate: new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString(),

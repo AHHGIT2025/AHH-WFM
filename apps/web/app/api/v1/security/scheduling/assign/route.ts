@@ -50,6 +50,21 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "employeeId, shiftRequirementId, and date/startDate/endDate are required" }, { status: 400 });
     }
 
+    if (isRangeMode) {
+      const sDate = new Date(startDate);
+      const eDate = new Date(endDate);
+      if (isNaN(sDate.getTime()) || isNaN(eDate.getTime())) {
+        return NextResponse.json({ error: "Invalid startDate or endDate format" }, { status: 400 });
+      }
+      if (sDate > eDate) {
+        return NextResponse.json({ error: "startDate must be on or before endDate" }, { status: 400 });
+      }
+      const diffDays = Math.round((eDate.getTime() - sDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+      if (diffDays > 62) {
+        return NextResponse.json({ error: "Range assignment cannot exceed 62 days" }, { status: 400 });
+      }
+    }
+
     const isDb = isDbConnected();
     const userEmail = auth.session?.user?.email || "system-scheduler";
 
