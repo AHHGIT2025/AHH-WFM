@@ -22,7 +22,6 @@ ALTER TABLE `ManpowerHolidayCalendar`
   ADD COLUMN `sourceReference` VARCHAR(191) NULL,
   ADD COLUMN `approvedById` VARCHAR(191) NULL,
   ADD COLUMN `createdById` VARCHAR(191) NULL,
-  ADD COLUMN `supersedesCalendarId` VARCHAR(191) NULL,
   ADD UNIQUE INDEX `ManpowerHolidayCalendar_scopeKey_year_scope_version_key` (`scopeKey`, `year`, `scope`, `version`);
 
 UPDATE `ManpowerHolidayCalendar`
