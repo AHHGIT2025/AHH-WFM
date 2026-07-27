@@ -1,7 +1,7 @@
 import { prisma } from "@ahh-wfm/database";
 
 export interface BillingSupportCalculationParams {
-  operationType: string; // "SECURITY_GUARDING" | "FACILITY_MANAGEMENT"
+  operationType: "SECURITY_GUARDING" | "FACILITY_MANAGEMENT";
   period: string;        // "YYYY-MM"
   clientId?: string;
   contractId?: string;
@@ -51,13 +51,44 @@ export interface CalculatedBillingLine {
   baseBillableAdvisoryQty: number;
   additionalRelieverAdvisoryQty: number;
   billableAdvisoryQuantity: number;
-  billingBasis: string;
+  billingBasis: "PLANNED_VS_ACTUAL_ATTENDANCE" | "PLANNED_POST_CONTRACT" | "SHIFT_RATE" | "HOURLY_RATE" | "MONTHLY_LUMP_SUM" | "COMMERCIAL_RULE_NOT_CONFIGURED";
   warningCodes: string[];
   notes: string;
+  contractEvidenceJson?: any;
 }
 
 /**
- * Calculates MP-3C Client Billing Support Advisory data from relational identity and verified evidence.
+ * Validates scope key consistency with companyId.
+ */
+export function calculateRunScopeKey(companyId?: string | null): string {
+  return companyId ? `COMPANY:${companyId}` : "GLOBAL";
+}
+
+export function validateScopeKeyConsistency(runScopeKey: string, companyId?: string | null): void {
+  if (runScopeKey === "GLOBAL" && companyId) {
+    throw new Error("INVALID_SCOPE_KEY: GLOBAL scopeKey requires companyId to be null");
+  }
+  if (runScopeKey.startsWith("COMPANY:") && runScopeKey !== `COMPANY:${companyId}`) {
+    throw new Error("INVALID_SCOPE_KEY: COMPANY scopeKey must match companyId exactly");
+  }
+}
+
+/**
+ * Maps contract billing basis string to ManpowerBillingBasis enum.
+ */
+export function resolveBillingBasis(basis?: string | null): "PLANNED_VS_ACTUAL_ATTENDANCE" | "PLANNED_POST_CONTRACT" | "SHIFT_RATE" | "HOURLY_RATE" | "MONTHLY_LUMP_SUM" | "COMMERCIAL_RULE_NOT_CONFIGURED" {
+  if (!basis) return "COMMERCIAL_RULE_NOT_CONFIGURED";
+  const b = basis.toUpperCase();
+  if (b.includes("PLANNED_POST")) return "PLANNED_POST_CONTRACT";
+  if (b.includes("SHIFT")) return "SHIFT_RATE";
+  if (b.includes("HOURLY")) return "HOURLY_RATE";
+  if (b.includes("MONTHLY") || b.includes("LUMP")) return "MONTHLY_LUMP_SUM";
+  if (b.includes("PLANNED_VS_ACTUAL") || b.includes("ATTENDANCE")) return "PLANNED_VS_ACTUAL_ATTENDANCE";
+  return "COMMERCIAL_RULE_NOT_CONFIGURED";
+}
+
+/**
+ * Calculates MP-3C Client Billing Support Advisory data.
  */
 export async function calculateBillingSupportData(
   params: BillingSupportCalculationParams
@@ -68,7 +99,7 @@ export async function calculateBillingSupportData(
   const end = new Date(year, month, 0, 23, 59, 59, 999);
 
   // Fetch active profiles and calendar versions for source tracking
-  const activeProfile = await prisma.manpowerWorkCalendarProfile.findFirst({
+  const activeProfiles = await prisma.manpowerWorkCalendarProfile.findMany({
     where: {
       operationType: params.operationType,
       approvalStatus: "APPROVED",
@@ -93,13 +124,10 @@ export async function calculateBillingSupportData(
   });
 
   const sourceVersionJson = {
-    workCalendarProfileId: activeProfile?.id || null,
-    workCalendarProfileVersion: activeProfile?.version || 1,
-    ramadanPeriodId: activeRamadan?.id || null,
-    ramadanPeriodVersion: activeRamadan?.version || 1,
-    holidayCalendarId: activeHolidayCal?.id || null,
-    holidayCalendarVersion: activeHolidayCal?.version || 1,
-    calculationEngineVersion: 2,
+    workCalendarProfiles: activeProfiles.map(p => ({ id: p.id, code: p.code, version: p.version, workerCategory: p.workerCategory })),
+    ramadanPeriod: activeRamadan ? { id: activeRamadan.id, version: activeRamadan.version, year: activeRamadan.year } : null,
+    holidayCalendar: activeHolidayCal ? { id: activeHolidayCal.id, version: activeHolidayCal.version, year: activeHolidayCal.year } : null,
+    calculationEngineVersion: 3,
     calculatedAt: new Date().toISOString()
   };
 
@@ -197,7 +225,6 @@ export async function calculateBillingSupportData(
       if (!firstAssignmentId) firstAssignmentId = asg.id;
       if (asg.assignmentType === "RELIEVER") {
         relieverSubstitutionCount++;
-        // If contract specifies requirement is FOC or reliever is FOC
         if (slot?.contract?.isFoc || (asg.notes && asg.notes.includes("FOC"))) {
           focRelieverMinutes += plannedPostMinutes;
         }
@@ -231,12 +258,14 @@ export async function calculateBillingSupportData(
     if (unapprovedExtraCount > 0) warnings.push("UNAPPROVED_EXTRA_DEPLOYMENT");
     if (focRelieverMinutes > 0) warnings.push("FOC_RELIEVER_APPLIED");
 
-    // Correct FOC Reliever Business Rule:
-    // Base planned post covered by a reliever remains Contract-covered billable quantity (1).
-    // Additional reliever advisory quantity equals 0 (relievers do NOT produce extra billable quantity).
     const baseBillableAdvisoryQty = Math.min(plannedManpower, verifiedPresentManpower);
     const additionalRelieverAdvisoryQty = 0;
     const billableAdvisoryQuantity = baseBillableAdvisoryQty + additionalRelieverAdvisoryQty;
+
+    const bBasis = resolveBillingBasis(slot?.contract?.billingBasis);
+    if (bBasis === "COMMERCIAL_RULE_NOT_CONFIGURED") {
+      warnings.push("COMMERCIAL_RULE_NOT_CONFIGURED");
+    }
 
     totalPlannedManpower += plannedManpower;
     totalAssignedManpower += assignedManpower;
@@ -280,9 +309,17 @@ export async function calculateBillingSupportData(
       baseBillableAdvisoryQty,
       additionalRelieverAdvisoryQty,
       billableAdvisoryQuantity,
-      billingBasis: slot?.contract?.billingBasis || "PLANNED_VS_ACTUAL_ATTENDANCE",
+      billingBasis: bBasis,
       warningCodes: warnings,
-      notes: shortageCount > 0 ? "Under-deployment detected" : "Full post covered"
+      notes: shortageCount > 0 ? "Under-deployment detected" : "Full post covered",
+      contractEvidenceJson: {
+        contractId: slot?.contractId || null,
+        contractCode: slot?.contract?.contractNumber || null,
+        siteId: slot?.siteId || null,
+        requirementSeriesId: slot?.requirementSeriesId || null,
+        publicationId: slot?.publicationId || null,
+        assignmentsCount: asgs.length
+      }
     });
   });
 
@@ -300,13 +337,19 @@ export async function calculateBillingSupportData(
 }
 
 /**
- * Creates a durable ManpowerBillingSupportRun and saves its lines.
- * Retains immutability for LOCKED or EXPORTED runs by creating a new version.
+ * Creates a durable ManpowerBillingSupportRun with scoped idempotency.
  */
 export async function createDurableBillingRun(params: BillingSupportCalculationParams): Promise<any> {
+  const runScopeKey = calculateRunScopeKey(params.companyId);
+  validateScopeKeyConsistency(runScopeKey, params.companyId);
+
   if (params.idempotencyKey) {
-    const existingKeyRun = await prisma.manpowerBillingSupportRun.findUnique({
-      where: { idempotencyKey: params.idempotencyKey },
+    const existingKeyRun = await prisma.manpowerBillingSupportRun.findFirst({
+      where: {
+        runScopeKey,
+        operationType: params.operationType,
+        idempotencyKey: params.idempotencyKey
+      },
       include: { lines: true }
     });
     if (existingKeyRun) {
@@ -327,9 +370,9 @@ export async function createDurableBillingRun(params: BillingSupportCalculationP
 
   const existingRun = await prisma.manpowerBillingSupportRun.findFirst({
     where: {
-      operationType: params.operationType,
+      operationType: params.operationType as any,
       period: params.period,
-      status: { in: ["LOCKED", "EXPORTED"] }
+      status: { in: ["LOCKED", "EXPORTED"] as any }
     },
     orderBy: { version: "desc" }
   });
@@ -339,29 +382,32 @@ export async function createDurableBillingRun(params: BillingSupportCalculationP
   if (existingRun) {
     await prisma.manpowerBillingSupportRun.update({
       where: { id: existingRun.id },
-      data: { status: "SUPERSEDED", supersededAt: new Date() }
+      data: { status: "SUPERSEDED" as any, supersededAt: new Date() }
     });
   }
 
   const { lines, summary, sourceVersionJson } = await calculateBillingSupportData(params);
 
+  const primaryProfile = sourceVersionJson.workCalendarProfiles?.[0];
+
   const run = await prisma.manpowerBillingSupportRun.create({
     data: {
       runCode,
+      runScopeKey,
       idempotencyKey: params.idempotencyKey || null,
       requestHash: params.requestHash || null,
       correlationId: params.correlationId || null,
-      operationType: params.operationType,
+      operationType: params.operationType as any,
       period: params.period,
       companyId: params.companyId || null,
       fromDate,
       toDate,
-      status: "CALCULATED",
+      status: "CALCULATED" as any,
       version: nextVersion,
-      calculationVersion: 2,
-      workCalendarProfileId: sourceVersionJson.workCalendarProfileId,
-      ramadanPeriodId: sourceVersionJson.ramadanPeriodId,
-      holidayCalendarId: sourceVersionJson.holidayCalendarId,
+      calculationVersion: 3,
+      workCalendarProfileId: primaryProfile?.id || null,
+      ramadanPeriodId: sourceVersionJson.ramadanPeriod?.id || null,
+      holidayCalendarId: sourceVersionJson.holidayCalendar?.id || null,
       sourceVersionJson,
       supersedesRunId: existingRun?.id || null,
       calculatedBy: params.calculatedBy,
@@ -404,7 +450,8 @@ export async function createDurableBillingRun(params: BillingSupportCalculationP
           baseBillableAdvisoryQty: line.baseBillableAdvisoryQty,
           additionalRelieverAdvisoryQty: line.additionalRelieverAdvisoryQty,
           billableAdvisoryQuantity: line.billableAdvisoryQuantity,
-          billingBasis: line.billingBasis,
+          billingBasis: line.billingBasis as any,
+          contractEvidenceJson: line.contractEvidenceJson,
           warningCodes: line.warningCodes,
           notes: line.notes
         }))
@@ -415,5 +462,3 @@ export async function createDurableBillingRun(params: BillingSupportCalculationP
 
   return run;
 }
-
-

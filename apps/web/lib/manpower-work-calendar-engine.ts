@@ -29,9 +29,9 @@ export async function resolveEmployeeCalendarContext(params: {
   // 1. Resolve Approved Work Calendar Profile
   const profile = await prisma.manpowerWorkCalendarProfile.findFirst({
     where: {
-      operationType: params.operationType,
-      workerCategory: params.workerCategory,
-      approvalStatus: "APPROVED",
+      operationType: params.operationType as any,
+      workerCategory: params.workerCategory as any,
+      approvalStatus: "APPROVED" as any,
       effectiveFrom: { lte: targetDate },
       OR: [
         { effectiveTo: null },
@@ -162,9 +162,9 @@ export async function validateProfileOverlap(params: {
   const existing = await prisma.manpowerWorkCalendarProfile.findFirst({
     where: {
       ...(params.id ? { id: { not: params.id } } : {}),
-      operationType: params.operationType,
-      workerCategory: params.workerCategory,
-      approvalStatus: "APPROVED",
+      operationType: params.operationType as any,
+      workerCategory: params.workerCategory as any,
+      approvalStatus: "APPROVED" as any,
       ...(params.companyId ? { companyId: params.companyId } : {}),
       effectiveFrom: params.effectiveTo ? { lte: params.effectiveTo } : undefined,
       OR: [

@@ -20,7 +20,7 @@ export async function GET(request: Request) {
 
   try {
     const { lines, summary } = await calculateBillingSupportData({
-      operationType,
+      operationType: operationType as any,
       period,
       clientId: clientId === "all" ? undefined : clientId,
       contractId,

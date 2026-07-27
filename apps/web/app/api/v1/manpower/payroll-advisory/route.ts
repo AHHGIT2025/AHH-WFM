@@ -18,7 +18,7 @@ export async function GET(request: Request) {
 
   try {
     const { lines, overallReadiness, summary } = await calculatePayrollInputData({
-      operationType,
+      operationType: operationType as any,
       period,
       siteId,
       employeeId,

@@ -1,4 +1,4 @@
-import { PrismaClient, Prisma } from "./generated/client2/index.js";
+import { PrismaClient, Prisma } from "./generated/client/index.js";
 
 declare global {
   var prismaGlobal: PrismaClient | undefined;
@@ -11,4 +11,4 @@ if (process.env.NODE_ENV !== "production") {
 }
 
 export { PrismaClient, Prisma };
-export type * from "./generated/client2/index.js";
+export type * from "./generated/client/index.js";

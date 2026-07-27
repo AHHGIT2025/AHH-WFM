@@ -13,8 +13,8 @@ export async function GET(request: Request) {
 
   const profiles = await prisma.manpowerWorkCalendarProfile.findMany({
     where: {
-      ...(operationType ? { operationType } : {}),
-      ...(workerCategory ? { workerCategory } : {})
+      ...(operationType ? { operationType: operationType as any } : {}),
+      ...(workerCategory ? { workerCategory: workerCategory as any } : {})
     },
     orderBy: { createdAt: "desc" }
   });

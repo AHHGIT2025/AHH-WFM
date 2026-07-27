@@ -5,7 +5,7 @@ datasource db {
 
 generator client {
   provider = "prisma-client-js"
-  output   = "../src/generated/client2"
+  output   = "../src/generated/client"
 }
 
 model Employee {
@@ -974,21 +974,23 @@ model Company {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  employees             Employee[]
-  departments           Department[]
-  costCenters           CostCenter[]
-  projects              Project[]
-  sites                 ProjectSite[]
-  locations             LocationMaster[]
-  attendancePolicies    CompanyAttendancePolicy[]
-  allowedPunchLocations AllowedPunchLocation[]
-  shiftAssignments      ShiftAssignment[]
-  attendanceRecords     AttendanceRecord[]            @relation("CompanyAttendance")
-  onCallAssignments     OnCallAssignment[]
-  clearanceRequests     ClearanceRequest[]
-  RosterRequirementSlot RosterRequirementSlot[]
-  workCalendarProfiles  ManpowerWorkCalendarProfile[]
-  holidayCalendars      ManpowerHolidayCalendar[]
+  employees                  Employee[]
+  departments                Department[]
+  costCenters                CostCenter[]
+  projects                   Project[]
+  sites                      ProjectSite[]
+  locations                  LocationMaster[]
+  attendancePolicies         CompanyAttendancePolicy[]
+  allowedPunchLocations      AllowedPunchLocation[]
+  shiftAssignments           ShiftAssignment[]
+  attendanceRecords          AttendanceRecord[]            @relation("CompanyAttendance")
+  onCallAssignments          OnCallAssignment[]
+  clearanceRequests          ClearanceRequest[]
+  RosterRequirementSlot      RosterRequirementSlot[]
+  workCalendarProfiles       ManpowerWorkCalendarProfile[]
+  holidayCalendars           ManpowerHolidayCalendar[]
+  ManpowerBillingSupportRun  ManpowerBillingSupportRun[]
+  ManpowerPayrollAdvisoryRun ManpowerPayrollAdvisoryRun[]
 }
 
 model CompanyAttendancePolicy {
@@ -3606,18 +3608,64 @@ model ManpowerBulkOperationLog {
   updatedAt           DateTime  @updatedAt
 
   assignments RosterSlotAssignment[]
+}
 
-  @@index([actorId])
-  @@index([status])
-  @@index([expiresAt])
-  @@index([operationType])
-  @@index([actionType])
+// ==========================================
+// MANPOWER ADVISORY & CALENDAR ENUMS & MODELS
+// ==========================================
+
+enum ManpowerOperationType {
+  SECURITY_GUARDING
+  FACILITY_MANAGEMENT
+}
+
+enum ManpowerWorkerCategory {
+  GENERAL
+  SECURITY_GUARDING
+  CLEANING
+  OTHER_FACILITY_MANAGEMENT
+  WHITE_COLLAR
+}
+
+enum ManpowerWeeklyRestConfigType {
+  FIXED_DAY
+  ROTATING
+  CUSTOM_SCHEDULE
+}
+
+enum ManpowerApprovalStatus {
+  DRAFT
+  APPROVED
+  REJECTED
+  SUPERSEDED
 }
 
 enum ManpowerHolidayScope {
   SECURITY_GUARDING
   FACILITY_MANAGEMENT
   BOTH
+}
+
+enum ManpowerHolidayType {
+  NATIONAL
+  RELIGIOUS
+  EMPLOYER_DESIGNATED
+  SPECIAL
+}
+
+enum ManpowerReconciliationStatus {
+  MATCHED
+  UNMATCHED
+  PENDING_RECONCILIATION
+}
+
+enum ManpowerBillingBasis {
+  PLANNED_VS_ACTUAL_ATTENDANCE
+  PLANNED_POST_CONTRACT
+  SHIFT_RATE
+  HOURLY_RATE
+  MONTHLY_LUMP_SUM
+  COMMERCIAL_RULE_NOT_CONFIGURED
 }
 
 enum ManpowerAdvisoryRunStatus {
@@ -3642,85 +3690,99 @@ enum ManpowerAdvisoryReadiness {
 }
 
 model ManpowerWorkCalendarProfile {
-  id                       String    @id @default(uuid())
-  code                     String    @unique
+  id                       String                        @id @default(uuid())
+  code                     String                        @unique
   name                     String
   companyId                String?
-  company                  Company?  @relation(fields: [companyId], references: [id], onDelete: SetNull)
-  operationType            String // "SECURITY_GUARDING" | "FACILITY_MANAGEMENT"
-  workerCategory           String // "GENERAL" | "SECURITY_GUARDING" | "CLEANING" | "OTHER_FACILITY_MANAGEMENT" | "WHITE_COLLAR"
+  company                  Company?                      @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  operationType            ManpowerOperationType
+  workerCategory           ManpowerWorkerCategory
   ordinaryDailyMinutes     Int?
   ordinaryWeeklyMinutes    Int?
   ramadanDailyMinutes      Int?
   ramadanWeeklyMinutes     Int?
-  weeklyRestConfigType     String    @default("FIXED_DAY") // "FIXED_DAY" | "ROTATING" | "CUSTOM_SCHEDULE"
+  weeklyRestConfigType     ManpowerWeeklyRestConfigType  @default(FIXED_DAY)
   weeklyRestFixedDay       String? // "FRIDAY" | "SUNDAY" | etc.
   weeklyRestCustomSchedule Json?
-  effectiveFrom            DateTime  @db.Date
-  effectiveTo              DateTime? @db.Date
+  effectiveFrom            DateTime                      @db.Date
+  effectiveTo              DateTime?                     @db.Date
   sourceReference          String?
-  approvalStatus           String    @default("DRAFT") // "DRAFT" | "APPROVED" | "REJECTED"
+  approvalStatus           ManpowerApprovalStatus        @default(DRAFT)
   approvedBy               String?
   approvedAt               DateTime?
   createdById              String?
-  version                  Int       @default(1)
+  version                  Int                           @default(1)
   supersedesProfileId      String?
+  supersedesProfile        ManpowerWorkCalendarProfile?  @relation("ProfileSupersession", fields: [supersedesProfileId], references: [id], onDelete: Restrict)
+  supersededByProfiles     ManpowerWorkCalendarProfile[] @relation("ProfileSupersession")
   supersededAt             DateTime?
-  notes                    String?   @db.Text
-  createdAt                DateTime  @default(now())
-  updatedAt                DateTime  @updatedAt
+  notes                    String?                       @db.Text
+  createdAt                DateTime                      @default(now())
+  updatedAt                DateTime                      @updatedAt
+
+  billingSupportRuns  ManpowerBillingSupportRun[]
+  payrollAdvisoryRuns ManpowerPayrollAdvisoryRun[]
 
   @@index([operationType, workerCategory, approvalStatus])
   @@index([effectiveFrom, effectiveTo])
 }
 
 model ManpowerRamadanPeriod {
-  id                 String    @id @default(uuid())
-  year               Int
-  name               String
-  startDate          DateTime  @db.Date
-  endDate            DateTime  @db.Date
-  version            Int       @default(1)
-  sourceReference    String?
-  approvalStatus     String    @default("DRAFT") // "DRAFT" | "APPROVED" | "REJECTED"
-  approvedBy         String?
-  approvedAt         DateTime?
-  approvedById       String?
-  createdById        String?
-  supersedesPeriodId String?
-  supersededAt       DateTime?
-  notes              String?   @db.Text
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
+  id                  String                  @id @default(uuid())
+  year                Int
+  name                String
+  startDate           DateTime                @db.Date
+  endDate             DateTime                @db.Date
+  version             Int                     @default(1)
+  sourceReference     String?
+  approvalStatus      ManpowerApprovalStatus  @default(DRAFT)
+  approvedBy          String?
+  approvedAt          DateTime?
+  approvedById        String?
+  createdById         String?
+  supersedesPeriodId  String?
+  supersedesPeriod    ManpowerRamadanPeriod?  @relation("RamadanSupersession", fields: [supersedesPeriodId], references: [id], onDelete: Restrict)
+  supersededByPeriods ManpowerRamadanPeriod[] @relation("RamadanSupersession")
+  supersededAt        DateTime?
+  notes               String?                 @db.Text
+  createdAt           DateTime                @default(now())
+  updatedAt           DateTime                @updatedAt
+
+  billingSupportRuns  ManpowerBillingSupportRun[]
+  payrollAdvisoryRuns ManpowerPayrollAdvisoryRun[]
 
   @@unique([year, version])
   @@index([year, approvalStatus])
 }
 
 model ManpowerHolidayCalendar {
-  id                   String               @id @default(uuid())
-  year                 Int
-  name                 String
-  companyId            String?
-  company              Company?             @relation(fields: [companyId], references: [id], onDelete: SetNull)
-  scopeKey             String               @default("GLOBAL")
-  scope                ManpowerHolidayScope @default(BOTH)
-  version              Int                  @default(1)
-  effectiveFrom        DateTime?            @db.Date
-  effectiveTo          DateTime?            @db.Date
-  sourceReference      String?
-  approvalStatus       String               @default("DRAFT") // "DRAFT" | "APPROVED" | "REJECTED"
-  approvedBy           String?
-  approvedById         String?
-  approvedAt           DateTime?
-  createdById          String?
-  supersedesCalendarId String?
-  supersededAt         DateTime?
-  notes                String?              @db.Text
-  createdAt            DateTime             @default(now())
-  updatedAt            DateTime             @updatedAt
+  id                    String                    @id @default(uuid())
+  year                  Int
+  name                  String
+  companyId             String?
+  company               Company?                  @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  scopeKey              String                    @default("GLOBAL")
+  scope                 ManpowerHolidayScope      @default(BOTH)
+  version               Int                       @default(1)
+  effectiveFrom         DateTime?                 @db.Date
+  effectiveTo           DateTime?                 @db.Date
+  sourceReference       String?
+  approvalStatus        ManpowerApprovalStatus    @default(DRAFT)
+  approvedBy            String?
+  approvedById          String?
+  approvedAt            DateTime?
+  createdById           String?
+  supersedesCalendarId  String?
+  supersedesCalendar    ManpowerHolidayCalendar?  @relation("HolidaySupersession", fields: [supersedesCalendarId], references: [id], onDelete: Restrict)
+  supersededByCalendars ManpowerHolidayCalendar[] @relation("HolidaySupersession")
+  supersededAt          DateTime?
+  notes                 String?                   @db.Text
+  createdAt             DateTime                  @default(now())
+  updatedAt             DateTime                  @updatedAt
 
-  dates ManpowerHolidayDate[]
+  dates               ManpowerHolidayDate[]
+  billingSupportRuns  ManpowerBillingSupportRun[]
+  payrollAdvisoryRuns ManpowerPayrollAdvisoryRun[]
 
   @@unique([scopeKey, year, scope, version])
   @@index([year, scope, approvalStatus])
@@ -3733,11 +3795,11 @@ model ManpowerHolidayDate {
   holidayDate              DateTime                @db.Date
   holidayCode              String
   holidayName              String
-  holidayType              String                  @default("NATIONAL") // "NATIONAL" | "RELIGIOUS" | "EMPLOYER_DESIGNATED" | "SPECIAL"
+  holidayType              ManpowerHolidayType     @default(NATIONAL)
   operationType            String                  @default("BOTH") // "SECURITY_GUARDING" | "FACILITY_MANAGEMENT" | "BOTH"
   rosterOperational        Boolean                 @default(true)
   payrollAdvisoryTreatment String                  @default("PUBLIC_HOLIDAY_WORKED")
-  approvalStatus           String                  @default("DRAFT") // "DRAFT" | "APPROVED" | "REJECTED"
+  approvalStatus           ManpowerApprovalStatus  @default(DRAFT)
   sourceReference          String?
   createdById              String?
   createdAt                DateTime                @default(now())
@@ -3748,27 +3810,34 @@ model ManpowerHolidayDate {
 }
 
 model ManpowerBillingSupportRun {
-  id                    String                    @id @default(uuid())
-  runCode               String                    @unique
-  idempotencyKey        String?                   @unique
+  id                    String                       @id @default(uuid())
+  runCode               String                       @unique
+  runScopeKey           String                       @default("GLOBAL")
+  idempotencyKey        String?
   requestHash           String?
   correlationId         String?
-  operationType         String // "SECURITY_GUARDING" | "FACILITY_MANAGEMENT"
+  operationType         ManpowerOperationType
   period                String // "YYYY-MM"
   companyId             String?
-  fromDate              DateTime?                 @db.Date
-  toDate                DateTime?                 @db.Date
-  status                ManpowerAdvisoryRunStatus @default(DRAFT)
-  version               Int                       @default(1)
-  calculationVersion    Int                       @default(1)
+  company               Company?                     @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  fromDate              DateTime?                    @db.Date
+  toDate                DateTime?                    @db.Date
+  status                ManpowerAdvisoryRunStatus    @default(DRAFT)
+  version               Int                          @default(1)
+  calculationVersion    Int                          @default(1)
   workCalendarProfileId String?
+  workCalendarProfile   ManpowerWorkCalendarProfile? @relation(fields: [workCalendarProfileId], references: [id], onDelete: Restrict)
   ramadanPeriodId       String?
+  ramadanPeriod         ManpowerRamadanPeriod?       @relation(fields: [ramadanPeriodId], references: [id], onDelete: Restrict)
   holidayCalendarId     String?
+  holidayCalendar       ManpowerHolidayCalendar?     @relation(fields: [holidayCalendarId], references: [id], onDelete: Restrict)
   sourceVersionJson     Json?
   supersedesRunId       String?
+  supersedesRun         ManpowerBillingSupportRun?   @relation("BillingRunSupersession", fields: [supersedesRunId], references: [id], onDelete: Restrict)
+  supersededByRuns      ManpowerBillingSupportRun[]  @relation("BillingRunSupersession")
   supersededAt          DateTime?
   calculatedBy          String
-  calculatedAt          DateTime                  @default(now())
+  calculatedAt          DateTime                     @default(now())
   reviewedBy            String?
   reviewedAt            DateTime?
   lockedBy              String?
@@ -3777,14 +3846,15 @@ model ManpowerBillingSupportRun {
   exportedAt            DateTime?
   filters               Json?
   resultSummary         Json?
-  notes                 String?                   @db.Text
-  createdAt             DateTime                  @default(now())
-  updatedAt             DateTime                  @updatedAt
+  notes                 String?                      @db.Text
+  createdAt             DateTime                     @default(now())
+  updatedAt             DateTime                     @updatedAt
 
   lines ManpowerBillingSupportLine[]
 
+  @@unique([runScopeKey, operationType, idempotencyKey], map: "ManpowerBillingSupportRun_scope_op_idemp_key")
   @@index([operationType, period, status])
-  @@index([idempotencyKey])
+  @@index([runScopeKey, operationType])
 }
 
 model ManpowerBillingSupportLine {
@@ -3829,7 +3899,7 @@ model ManpowerBillingSupportLine {
   billableAdvisoryQuantity         Int                       @default(0)
   relieverCommercialClassification String?
   contractEvidenceJson             Json?
-  billingBasis                     String                    @default("PLANNED_VS_ACTUAL")
+  billingBasis                     ManpowerBillingBasis      @default(PLANNED_VS_ACTUAL_ATTENDANCE)
   warningCodes                     Json?
   notes                            String?                   @db.Text
   createdAt                        DateTime                  @default(now())
@@ -3839,30 +3909,37 @@ model ManpowerBillingSupportLine {
 }
 
 model ManpowerPayrollAdvisoryRun {
-  id                         String                    @id @default(uuid())
-  runCode                    String                    @unique
-  idempotencyKey             String?                   @unique
+  id                         String                       @id @default(uuid())
+  runCode                    String                       @unique
+  runScopeKey                String                       @default("GLOBAL")
+  idempotencyKey             String?
   requestHash                String?
   correlationId              String?
-  operationType              String // "SECURITY_GUARDING" | "FACILITY_MANAGEMENT"
+  operationType              ManpowerOperationType
   period                     String // "YYYY-MM"
   companyId                  String?
-  fromDate                   DateTime?                 @db.Date
-  toDate                     DateTime?                 @db.Date
-  status                     ManpowerAdvisoryRunStatus @default(DRAFT)
-  readiness                  ManpowerAdvisoryReadiness @default(DATA_INCOMPLETE)
-  version                    Int                       @default(1)
-  calculationVersion         Int                       @default(1)
+  company                    Company?                     @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  fromDate                   DateTime?                    @db.Date
+  toDate                     DateTime?                    @db.Date
+  status                     ManpowerAdvisoryRunStatus    @default(DRAFT)
+  readiness                  ManpowerAdvisoryReadiness    @default(DATA_INCOMPLETE)
+  version                    Int                          @default(1)
+  calculationVersion         Int                          @default(1)
   workCalendarProfileId      String?
+  workCalendarProfile        ManpowerWorkCalendarProfile? @relation(fields: [workCalendarProfileId], references: [id], onDelete: Restrict)
   ramadanPeriodId            String?
+  ramadanPeriod              ManpowerRamadanPeriod?       @relation(fields: [ramadanPeriodId], references: [id], onDelete: Restrict)
   holidayCalendarId          String?
+  holidayCalendar            ManpowerHolidayCalendar?     @relation(fields: [holidayCalendarId], references: [id], onDelete: Restrict)
   sourceVersionJson          Json?
   supersedesRunId            String?
+  supersedesRun              ManpowerPayrollAdvisoryRun?  @relation("PayrollRunSupersession", fields: [supersedesRunId], references: [id], onDelete: Restrict)
+  supersededByRuns           ManpowerPayrollAdvisoryRun[] @relation("PayrollRunSupersession")
   supersededAt               DateTime?
-  workCalendarProfileVersion Int                       @default(1)
-  holidayCalendarVersion     Int                       @default(1)
+  workCalendarProfileVersion Int                          @default(1)
+  holidayCalendarVersion     Int                          @default(1)
   calculatedBy               String
-  calculatedAt               DateTime                  @default(now())
+  calculatedAt               DateTime                     @default(now())
   reviewedBy                 String?
   reviewedAt                 DateTime?
   lockedBy                   String?
@@ -3871,45 +3948,46 @@ model ManpowerPayrollAdvisoryRun {
   exportedAt                 DateTime?
   filters                    Json?
   resultSummary              Json?
-  notes                      String?                   @db.Text
-  createdAt                  DateTime                  @default(now())
-  updatedAt                  DateTime                  @updatedAt
+  notes                      String?                      @db.Text
+  createdAt                  DateTime                     @default(now())
+  updatedAt                  DateTime                     @updatedAt
 
   lines ManpowerPayrollAdvisoryLine[]
 
+  @@unique([runScopeKey, operationType, idempotencyKey], map: "ManpowerPayrollAdvisoryRun_scope_op_idemp_key")
   @@index([operationType, period, status, readiness])
-  @@index([idempotencyKey])
+  @@index([runScopeKey, operationType])
 }
 
 model ManpowerPayrollAdvisoryLine {
-  id                            String                     @id @default(uuid())
+  id                            String                       @id @default(uuid())
   runId                         String
-  run                           ManpowerPayrollAdvisoryRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  run                           ManpowerPayrollAdvisoryRun   @relation(fields: [runId], references: [id], onDelete: Cascade)
   employeeId                    String
   employeeCodeSnapshot          String
   employeeNameSnapshot          String
   siteId                        String?
   siteNameSnapshot              String?
-  regularWorkedDays             Int                        @default(0)
-  regularVerifiedMinutes        Int                        @default(0)
-  ramadanWorkedMinutes          Int                        @default(0)
-  ramadanExcessCandidateMinutes Int                        @default(0)
-  overtimeCandidateMinutes      Int                        @default(0)
-  publicHolidayWorkedDays       Int                        @default(0)
-  publicHolidayWorkedMinutes    Int                        @default(0)
-  weeklyRestWorkedDays          Int                        @default(0)
-  weeklyRestWorkedMinutes       Int                        @default(0)
-  actingDutyCandidateDays       Int                        @default(0)
-  actingDutyCandidateMinutes    Int                        @default(0)
-  siteAllowanceCandidateDays    Int                        @default(0)
-  leaveDays                     Int                        @default(0)
-  absenceDays                   Int                        @default(0)
-  reconciliationStatus          String                     @default("MATCHED")
-  readinessStatus               ManpowerAdvisoryReadiness  @default(DATA_INCOMPLETE)
+  regularWorkedDays             Int                          @default(0)
+  regularVerifiedMinutes        Int                          @default(0)
+  ramadanWorkedMinutes          Int                          @default(0)
+  ramadanExcessCandidateMinutes Int                          @default(0)
+  overtimeCandidateMinutes      Int                          @default(0)
+  publicHolidayWorkedDays       Int                          @default(0)
+  publicHolidayWorkedMinutes    Int                          @default(0)
+  weeklyRestWorkedDays          Int                          @default(0)
+  weeklyRestWorkedMinutes       Int                          @default(0)
+  actingDutyCandidateDays       Int                          @default(0)
+  actingDutyCandidateMinutes    Int                          @default(0)
+  siteAllowanceCandidateDays    Int                          @default(0)
+  leaveDays                     Int                          @default(0)
+  absenceDays                   Int                          @default(0)
+  reconciliationStatus          ManpowerReconciliationStatus @default(MATCHED)
+  readinessStatus               ManpowerAdvisoryReadiness    @default(DATA_INCOMPLETE)
   advisoryClassifications       Json?
   advisoryWarnings              Json?
   evidenceReferences            Json?
-  createdAt                     DateTime                   @default(now())
+  createdAt                     DateTime                     @default(now())
 
   days ManpowerPayrollAdvisoryDay[]
 
@@ -3922,6 +4000,7 @@ model ManpowerPayrollAdvisoryDay {
   lineId                     String
   line                       ManpowerPayrollAdvisoryLine @relation(fields: [lineId], references: [id], onDelete: Cascade)
   businessDate               DateTime                    @db.Date
+  evidenceGroupKey           String                      @default("PRIMARY")
   assignmentId               String?
   requirementSlotId          String?
   siteId                     String?
@@ -3939,6 +4018,7 @@ model ManpowerPayrollAdvisoryDay {
   warningCodes               Json?
   createdAt                  DateTime                    @default(now())
 
+  @@unique([lineId, businessDate, evidenceGroupKey], map: "ManpowerPayrollAdvisoryDay_line_date_group_key")
   @@index([lineId, businessDate, assignmentId])
   @@index([siteId, businessDate])
 }
