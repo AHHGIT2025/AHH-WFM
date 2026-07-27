@@ -34,9 +34,7 @@ async function runPreMigrationAudit() {
     }
 
     // 2. Scan & Classify Work Calendar Profiles
-    const profiles = await prisma.manpowerWorkCalendarProfile.findMany({
-      include: { company: true }
-    });
+    const profiles = await prisma.manpowerWorkCalendarProfile.findMany({});
     auditReport.profileSummary.total = profiles.length;
 
     for (const p of profiles) {
@@ -48,8 +46,8 @@ async function runPreMigrationAudit() {
       if (isWC && !isBC) deterministicClass = "WHITE_COLLAR";
       if (isBC && !isWC) deterministicClass = "BLUE_COLLAR";
 
-      let ownerCompanyId = p.companyId || (auditReport.holdingCompany ? auditReport.holdingCompany.id : null);
-      let applicability = p.companyId ? "COMPANY" : "GROUP_WIDE";
+      let ownerCompanyId = (p as any).companyId || (p as any).ownerCompanyId || (auditReport.holdingCompany ? auditReport.holdingCompany.id : null);
+      let applicability = (p as any).companyId || (p as any).applicableCompanyId ? "COMPANY" : "GROUP_WIDE";
       let restSource = deterministicClass === "WHITE_COLLAR" ? "PROFILE_FIXED_DAYS" : "ROSTER_MANAGED";
 
       const profileAudit = {
