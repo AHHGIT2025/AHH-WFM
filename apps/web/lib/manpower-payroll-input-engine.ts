@@ -40,6 +40,24 @@ export interface CalculatedPayrollLine {
   evidenceReferences: any;
 }
 
+export function resolveWorkerCategory(employeeCategory?: string | null, operationType?: string | null): string {
+  if (!employeeCategory) return "DATA_INCOMPLETE";
+  const cat = employeeCategory.toUpperCase().trim();
+  if (cat === "WHITE_COLLAR") return "WHITE_COLLAR";
+  if (cat === "SECURITY_GUARDING") return "SECURITY_GUARDING";
+  if (cat === "CLEANING") return "CLEANING";
+  if (cat === "HOSPITALITY") return "HOSPITALITY";
+  if (cat === "MAINTENANCE") return "MAINTENANCE";
+  if (cat === "ROPE_ACCESS") return "ROPE_ACCESS";
+  if (cat === "LANDSCAPING") return "LANDSCAPING";
+  if (cat === "OTHER_FACILITY_MANAGEMENT") return "OTHER_FACILITY_MANAGEMENT";
+  if (cat === "GENERAL") return "GENERAL";
+  if (cat === "BLUE_COLLAR") {
+    return operationType === "SECURITY_GUARDING" ? "SECURITY_GUARDING" : "CLEANING";
+  }
+  return "DATA_INCOMPLETE";
+}
+
 /**
  * Calculates MP-4 Operational Payroll Input Advisory data for employees.
  * NO MONETARY PAYROLL AMOUNTS OR SALARY CALCULATIONS.
@@ -150,7 +168,12 @@ export async function calculatePayrollInputData(
     const advisoryWarnings: string[] = [];
     const evidenceList: any[] = [];
 
-    const profileForEmp = activeProfiles.find(p => p.workerCategory === emp.employeeCategory) || activeProfiles[0];
+    const resolvedCat = resolveWorkerCategory(emp.employeeCategory, emp.operationType);
+    if (resolvedCat === "DATA_INCOMPLETE") {
+      advisoryWarnings.push("DATA_INCOMPLETE");
+    }
+
+    const profileForEmp = activeProfiles.find(p => p.workerCategory === resolvedCat) || activeProfiles[0];
 
     const daysInMonth = new Date(year, month, 0).getDate();
     for (let day = 1; day <= daysInMonth; day++) {

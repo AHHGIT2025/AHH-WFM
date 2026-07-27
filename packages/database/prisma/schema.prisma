@@ -3812,7 +3812,7 @@ model ManpowerHolidayDate {
 model ManpowerBillingSupportRun {
   id                    String                       @id @default(uuid())
   runCode               String                       @unique
-  runScopeKey           String                       @default("GLOBAL")
+  runScopeKey           String
   idempotencyKey        String?
   requestHash           String?
   correlationId         String?
@@ -3911,7 +3911,7 @@ model ManpowerBillingSupportLine {
 model ManpowerPayrollAdvisoryRun {
   id                         String                       @id @default(uuid())
   runCode                    String                       @unique
-  runScopeKey                String                       @default("GLOBAL")
+  runScopeKey                String
   idempotencyKey             String?
   requestHash                String?
   correlationId              String?
@@ -4000,7 +4000,7 @@ model ManpowerPayrollAdvisoryDay {
   lineId                     String
   line                       ManpowerPayrollAdvisoryLine @relation(fields: [lineId], references: [id], onDelete: Cascade)
   businessDate               DateTime                    @db.Date
-  evidenceGroupKey           String                      @default("PRIMARY")
+  evidenceGroupKey           String
   assignmentId               String?
   requirementSlotId          String?
   siteId                     String?

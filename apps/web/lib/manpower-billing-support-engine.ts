@@ -78,12 +78,12 @@ export function validateScopeKeyConsistency(runScopeKey: string, companyId?: str
  */
 export function resolveBillingBasis(basis?: string | null): "PLANNED_VS_ACTUAL_ATTENDANCE" | "PLANNED_POST_CONTRACT" | "SHIFT_RATE" | "HOURLY_RATE" | "MONTHLY_LUMP_SUM" | "COMMERCIAL_RULE_NOT_CONFIGURED" {
   if (!basis) return "COMMERCIAL_RULE_NOT_CONFIGURED";
-  const b = basis.toUpperCase();
-  if (b.includes("PLANNED_POST")) return "PLANNED_POST_CONTRACT";
-  if (b.includes("SHIFT")) return "SHIFT_RATE";
-  if (b.includes("HOURLY")) return "HOURLY_RATE";
-  if (b.includes("MONTHLY") || b.includes("LUMP")) return "MONTHLY_LUMP_SUM";
-  if (b.includes("PLANNED_VS_ACTUAL") || b.includes("ATTENDANCE")) return "PLANNED_VS_ACTUAL_ATTENDANCE";
+  const b = basis.toUpperCase().trim();
+  if (b.includes("PLANNED_POST") || b.includes("POST-MONTH")) return "PLANNED_POST_CONTRACT";
+  if (b.includes("SHIFT") || b.includes("MAN-DAYS") || b.includes("MAN_DAYS") || b === "DAILY") return "SHIFT_RATE";
+  if (b.includes("HOURLY") || b.includes("ATTENDANCE HOURS")) return "HOURLY_RATE";
+  if (b.includes("MONTHLY") || b.includes("LUMP") || b.includes("FIXED MONTHLY")) return "MONTHLY_LUMP_SUM";
+  if (b.includes("PLANNED_VS_ACTUAL") || b.includes("ATTENDANCE") || b.includes("VERIFIED ATTENDANCE")) return "PLANNED_VS_ACTUAL_ATTENDANCE";
   return "COMMERCIAL_RULE_NOT_CONFIGURED";
 }
 
