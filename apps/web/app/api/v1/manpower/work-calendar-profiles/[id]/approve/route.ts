@@ -36,12 +36,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   // Validate overlap
   const overlap = await validateProfileOverlap({
-    id: profile.id,
     operationType: profile.operationType,
     workerCategory: profile.workerCategory,
     effectiveFrom: profile.effectiveFrom,
-    effectiveTo: profile.effectiveTo,
-    companyId: profile.companyId
+    effectiveTo: profile.effectiveTo || new Date("2099-12-31"),
+    companyId: profile.applicableCompanyId
   });
 
   if (overlap.hasOverlap) {

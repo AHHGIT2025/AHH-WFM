@@ -29,6 +29,7 @@ vibe.config.json
 
 # Test artifacts
 test-results/
+tests/results/
 playwright-report/
 .env.test
 .k6/

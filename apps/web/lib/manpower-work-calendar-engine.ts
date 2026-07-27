@@ -1,45 +1,252 @@
 import { prisma } from "@ahh-wfm/database";
+import { getHoldingCompany } from "./server/master-data-service";
 
 export interface ResolvedCalendarContext {
   profile: any | null;
   ramadanPeriod: any | null;
   holidayDate: any | null;
+  seasonalRule: any | null;
   isRamadanActive: boolean;
   isPublicHoliday: boolean;
   isWeeklyRestDay: boolean;
   dailyThresholdMinutes: number | null;
   weeklyThresholdMinutes: number | null;
   missingProfileReason?: string;
+  seasonalViolations?: string[];
 }
 
 /**
- * Resolves work calendar rules for a specific employee category, operation scope, and date.
+ * Resolves Blue Collar authoritative Roster Rest Day status.
+ * Queries ManpowerRosterDayClassification persistence table.
+ * Returns WEEKLY_REST ONLY when an explicit WEEKLY_REST record exists.
+ * Never infers WEEKLY_REST from missing assignments.
+ */
+export async function resolveBlueCollarRosterRestDay(params: {
+  employeeId: string;
+  businessDate: Date | string;
+}): Promise<"WORKING_DAY" | "WEEKLY_REST" | "UNASSIGNED" | "NOT_SCHEDULED"> {
+  const targetDate = new Date(params.businessDate);
+
+  const classification = await (prisma as any).manpowerRosterDayClassification.findUnique({
+    where: {
+      employeeId_businessDate: {
+        employeeId: params.employeeId,
+        businessDate: targetDate
+      }
+    }
+  });
+
+  if (classification) {
+    return classification.classification;
+  }
+
+  // Check requirement slot / assignment fallback
+  const assignment = await prisma.rosterSlotAssignment.findFirst({
+    where: {
+      employeeId: params.employeeId,
+      slot: {
+        businessDate: targetDate
+      }
+    }
+  });
+
+  if (assignment) {
+    return "WORKING_DAY";
+  }
+
+  return "UNASSIGNED";
+}
+
+/**
+ * Resolves Work Calendar Profile according to White Collar & Blue Collar precedence rules.
+ */
+export async function resolveApplicableWorkCalendarProfile(params: {
+  workerClass: "WHITE_COLLAR" | "BLUE_COLLAR";
+  companyId?: string | null;
+  departmentId?: string | null;
+  positionCategoryId?: string | null;
+  operationType?: string | null;
+  workerCategory?: string | null;
+  businessDate: Date | string;
+}) {
+  const targetDate = new Date(params.businessDate);
+
+  if (params.workerClass === "WHITE_COLLAR") {
+    // 1. Department Override
+    if (params.departmentId && params.companyId) {
+      const deptProfile = await prisma.manpowerWorkCalendarProfile.findFirst({
+        where: {
+          workerClass: "WHITE_COLLAR",
+          applicability: "DEPARTMENT",
+          applicableCompanyId: params.companyId,
+          departmentId: params.departmentId,
+          approvalStatus: "APPROVED",
+          effectiveFrom: { lte: targetDate },
+          OR: [{ effectiveTo: null }, { effectiveTo: { gte: targetDate } }]
+        },
+        include: { restDays: true },
+        orderBy: { version: "desc" }
+      });
+      if (deptProfile) return deptProfile;
+    }
+
+    // 2. Company Override
+    if (params.companyId) {
+      const compProfile = await prisma.manpowerWorkCalendarProfile.findFirst({
+        where: {
+          workerClass: "WHITE_COLLAR",
+          applicability: "COMPANY",
+          applicableCompanyId: params.companyId,
+          approvalStatus: "APPROVED",
+          effectiveFrom: { lte: targetDate },
+          OR: [{ effectiveTo: null }, { effectiveTo: { gte: targetDate } }]
+        },
+        include: { restDays: true },
+        orderBy: { version: "desc" }
+      });
+      if (compProfile) return compProfile;
+    }
+
+    // 3. Group-wide Holding Profile
+    const groupProfile = await prisma.manpowerWorkCalendarProfile.findFirst({
+      where: {
+        workerClass: "WHITE_COLLAR",
+        applicability: "GROUP_WIDE",
+        approvalStatus: "APPROVED",
+        effectiveFrom: { lte: targetDate },
+        OR: [{ effectiveTo: null }, { effectiveTo: { gte: targetDate } }]
+      },
+      include: { restDays: true },
+      orderBy: { version: "desc" }
+    });
+    if (groupProfile) return groupProfile;
+
+    return null;
+  } else {
+    // Blue Collar Resolution: Position Normal Profile -> Company Normal Profile
+    if (params.companyId && params.positionCategoryId) {
+      const posProfile = await prisma.manpowerWorkCalendarProfile.findFirst({
+        where: {
+          workerClass: "BLUE_COLLAR",
+          applicableCompanyId: params.companyId,
+          positionCategoryId: params.positionCategoryId,
+          appliesToAllPositionCategories: false,
+          approvalStatus: "APPROVED",
+          effectiveFrom: { lte: targetDate },
+          OR: [{ effectiveTo: null }, { effectiveTo: { gte: targetDate } }]
+        },
+        orderBy: { version: "desc" }
+      });
+      if (posProfile) return posProfile;
+    }
+
+    if (params.companyId) {
+      const compProfile = await prisma.manpowerWorkCalendarProfile.findFirst({
+        where: {
+          workerClass: "BLUE_COLLAR",
+          applicableCompanyId: params.companyId,
+          appliesToAllPositionCategories: true,
+          approvalStatus: "APPROVED",
+          ...(params.operationType ? { operationType: params.operationType as any } : {}),
+          ...(params.workerCategory ? { workerCategory: params.workerCategory as any } : {}),
+          effectiveFrom: { lte: targetDate },
+          OR: [{ effectiveTo: null }, { effectiveTo: { gte: targetDate } }]
+        },
+        orderBy: { version: "desc" }
+      });
+      if (compProfile) return compProfile;
+    }
+
+    return null;
+  }
+}
+
+/**
+ * Resolves Seasonal Work Rule according to Blue Collar precedence rules:
+ * Position Seasonal Rule -> Company Seasonal Rule.
+ */
+export async function resolveApplicableSeasonalRule(params: {
+  companyId: string;
+  positionCategoryId?: string | null;
+  profileId?: string | null;
+  businessDate: Date | string;
+}) {
+  const targetDate = new Date(params.businessDate);
+
+  // 1. Profile specific seasonal rule
+  if (params.profileId) {
+    const profRule = await (prisma as any).manpowerSeasonalWorkRule.findFirst({
+      where: {
+        ruleScope: "PROFILE_SPECIFIC",
+        profileId: params.profileId,
+        approvalStatus: "APPROVED",
+        effectiveFrom: { lte: targetDate },
+        effectiveTo: { gte: targetDate }
+      },
+      orderBy: { version: "desc" }
+    });
+    if (profRule) return profRule;
+  }
+
+  // 2. Position Category seasonal rule
+  if (params.companyId && params.positionCategoryId) {
+    const posRule = await (prisma as any).manpowerSeasonalWorkRule.findFirst({
+      where: {
+        ruleScope: "POSITION_CATEGORY",
+        companyId: params.companyId,
+        positionCategoryId: params.positionCategoryId,
+        approvalStatus: "APPROVED",
+        effectiveFrom: { lte: targetDate },
+        effectiveTo: { gte: targetDate }
+      },
+      orderBy: { version: "desc" }
+    });
+    if (posRule) return posRule;
+  }
+
+  // 3. Company-wide seasonal rule
+  if (params.companyId) {
+    const compRule = await (prisma as any).manpowerSeasonalWorkRule.findFirst({
+      where: {
+        ruleScope: "COMPANY_WIDE",
+        companyId: params.companyId,
+        approvalStatus: "APPROVED",
+        effectiveFrom: { lte: targetDate },
+        effectiveTo: { gte: targetDate }
+      },
+      orderBy: { version: "desc" }
+    });
+    if (compRule) return compRule;
+  }
+
+  return null;
+}
+
+/**
+ * Main resolution engine combining profile, seasonal rule, Ramadan, holiday, and roster day status.
  */
 export async function resolveEmployeeCalendarContext(params: {
-  employeeId: string;
-  workerCategory: string; // "GENERAL" | "SECURITY_GUARDING" | "CLEANING" | "OTHER_FACILITY_MANAGEMENT" | "WHITE_COLLAR"
-  operationType: string;  // "SECURITY_GUARDING" | "FACILITY_MANAGEMENT"
+  employeeId?: string;
+  workerClass?: "WHITE_COLLAR" | "BLUE_COLLAR";
+  workerCategory?: string;
+  operationType?: string;
   companyId?: string | null;
+  departmentId?: string | null;
+  positionCategoryId?: string | null;
   date: Date | string;
-  employeeWeeklyRestDay?: string | null; // e.g. "FRIDAY" or "SUNDAY"
 }): Promise<ResolvedCalendarContext> {
   const targetDate = new Date(params.date);
-  const dateStr = targetDate.toISOString().split("T")[0];
+  const resolvedClass = params.workerClass || (params.workerCategory === "WHITE_COLLAR" || params.operationType === "WHITE_COLLAR" ? "WHITE_COLLAR" : "BLUE_COLLAR");
 
-  // 1. Resolve Approved Work Calendar Profile
-  const profile = await prisma.manpowerWorkCalendarProfile.findFirst({
-    where: {
-      operationType: params.operationType as any,
-      workerCategory: params.workerCategory as any,
-      approvalStatus: "APPROVED" as any,
-      effectiveFrom: { lte: targetDate },
-      OR: [
-        { effectiveTo: null },
-        { effectiveTo: { gte: targetDate } }
-      ],
-      ...(params.companyId ? { companyId: params.companyId } : {})
-    },
-    orderBy: { version: "desc" }
+  // 1. Resolve Profile
+  const profile = await resolveApplicableWorkCalendarProfile({
+    workerClass: resolvedClass,
+    companyId: params.companyId,
+    departmentId: params.departmentId,
+    positionCategoryId: params.positionCategoryId,
+    operationType: params.operationType,
+    workerCategory: params.workerCategory,
+    businessDate: targetDate
   });
 
   if (!profile) {
@@ -47,37 +254,17 @@ export async function resolveEmployeeCalendarContext(params: {
       profile: null,
       ramadanPeriod: null,
       holidayDate: null,
+      seasonalRule: null,
       isRamadanActive: false,
       isPublicHoliday: false,
       isWeeklyRestDay: false,
       dailyThresholdMinutes: null,
       weeklyThresholdMinutes: null,
-      missingProfileReason: `RAMADAN_RULE_NOT_CONFIGURED: No approved profile for category ${params.workerCategory} and scope ${params.operationType}`
+      missingProfileReason: `DATA_INCOMPLETE: No approved Work Calendar Profile found for class ${resolvedClass}`
     };
   }
 
-  // Verify completeness of minute thresholds and weekly rest in APPROVED profile
-  if (
-    profile.ordinaryDailyMinutes == null ||
-    profile.ordinaryWeeklyMinutes == null ||
-    profile.ramadanDailyMinutes == null ||
-    profile.ramadanWeeklyMinutes == null ||
-    !profile.weeklyRestConfigType
-  ) {
-    return {
-      profile,
-      ramadanPeriod: null,
-      holidayDate: null,
-      isRamadanActive: false,
-      isPublicHoliday: false,
-      isWeeklyRestDay: false,
-      dailyThresholdMinutes: null,
-      weeklyThresholdMinutes: null,
-      missingProfileReason: "DATA_INCOMPLETE: Approved profile is missing daily/weekly minute thresholds or weekly rest configuration"
-    };
-  }
-
-  // 2. Resolve Annual Approved Ramadan Period
+  // 2. Resolve Ramadan Period
   const year = targetDate.getFullYear();
   const ramadanPeriod = await prisma.manpowerRamadanPeriod.findFirst({
     where: {
@@ -88,58 +275,49 @@ export async function resolveEmployeeCalendarContext(params: {
     },
     orderBy: { version: "desc" }
   });
-
   const isRamadanActive = !!ramadanPeriod;
 
-  // 3. Resolve Approved Holiday Date (checking company-specific or global calendar)
+  // 3. Resolve Holiday
   const holidayDate = await prisma.manpowerHolidayDate.findFirst({
     where: {
       holidayDate: targetDate,
-      approvalStatus: "APPROVED",
-      operationType: { in: [params.operationType, "BOTH"] },
-      calendar: {
-        year,
-        approvalStatus: "APPROVED",
-        scope: { in: [params.operationType as any, "BOTH"] },
-        ...(params.companyId ? { OR: [{ companyId: params.companyId }, { companyId: null }] } : {})
-      }
+      approvalStatus: "APPROVED"
     }
   });
-
   const isPublicHoliday = !!holidayDate;
 
   // 4. Resolve Weekly Rest Day
   let isWeeklyRestDay = false;
-  const dayOfWeekNames = ["SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"];
-  const dayName = dayOfWeekNames[targetDate.getDay()];
-
-  const targetRestDay = profile.weeklyRestFixedDay
-    ? profile.weeklyRestFixedDay.toUpperCase()
-    : params.employeeWeeklyRestDay
-    ? params.employeeWeeklyRestDay.toUpperCase()
-    : null;
-
-  if (profile.weeklyRestConfigType === "FIXED_DAY") {
-    if (targetRestDay) {
-      isWeeklyRestDay = dayName === targetRestDay;
-    }
-  } else if (profile.weeklyRestConfigType === "ROTATING" || profile.weeklyRestConfigType === "CUSTOM_SCHEDULE") {
-    const restDays: string[] = Array.isArray((profile.weeklyRestCustomSchedule as any)?.restDays)
-      ? (profile.weeklyRestCustomSchedule as any).restDays.map((d: string) => d.toUpperCase())
-      : targetRestDay
-      ? [targetRestDay]
-      : [];
-    isWeeklyRestDay = restDays.includes(dayName);
+  if (resolvedClass === "WHITE_COLLAR") {
+    const dayName = ["SUNDAY", "MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"][targetDate.getDay()];
+    isWeeklyRestDay = (profile as any).restDays ? (profile as any).restDays.some((rd: any) => rd.dayOfWeek === dayName) : false;
+  } else if (params.employeeId) {
+    const rosterStatus = await resolveBlueCollarRosterRestDay({
+      employeeId: params.employeeId,
+      businessDate: targetDate
+    });
+    isWeeklyRestDay = rosterStatus === "WEEKLY_REST";
   }
 
-  // 5. Select Threshold Minutes (Ramadan vs Ordinary)
-  const dailyThresholdMinutes = isRamadanActive ? profile.ramadanDailyMinutes : profile.ordinaryDailyMinutes;
-  const weeklyThresholdMinutes = isRamadanActive ? profile.ramadanWeeklyMinutes : profile.ordinaryWeeklyMinutes;
+  // 5. Resolve Seasonal Rule
+  let seasonalRule = null;
+  if (params.companyId) {
+    seasonalRule = await resolveApplicableSeasonalRule({
+      companyId: params.companyId,
+      positionCategoryId: params.positionCategoryId,
+      profileId: profile.id,
+      businessDate: targetDate
+    });
+  }
+
+  const dailyThresholdMinutes = isRamadanActive && profile.ramadanDailyMinutes ? profile.ramadanDailyMinutes : profile.ordinaryDailyMinutes;
+  const weeklyThresholdMinutes = isRamadanActive && profile.ramadanWeeklyMinutes ? profile.ramadanWeeklyMinutes : profile.ordinaryWeeklyMinutes;
 
   return {
     profile,
     ramadanPeriod,
     holidayDate,
+    seasonalRule,
     isRamadanActive,
     isPublicHoliday,
     isWeeklyRestDay,
@@ -148,25 +326,18 @@ export async function resolveEmployeeCalendarContext(params: {
   };
 }
 
-/**
- * Validates whether a proposed Work Calendar Profile overlaps with an existing APPROVED profile.
- */
 export async function validateProfileOverlap(params: {
-  id?: string;
-  operationType: string;
-  workerCategory: string;
+  operationType?: string | null;
+  workerCategory?: string | null;
   effectiveFrom: Date;
-  effectiveTo?: Date | null;
+  effectiveTo: Date;
   companyId?: string | null;
 }): Promise<{ hasOverlap: boolean; overlappingProfileId?: string }> {
   const existing = await prisma.manpowerWorkCalendarProfile.findFirst({
     where: {
-      ...(params.id ? { id: { not: params.id } } : {}),
-      operationType: params.operationType as any,
-      workerCategory: params.workerCategory as any,
-      approvalStatus: "APPROVED" as any,
-      ...(params.companyId ? { companyId: params.companyId } : {}),
-      effectiveFrom: params.effectiveTo ? { lte: params.effectiveTo } : undefined,
+      approvalStatus: "APPROVED",
+      ...(params.companyId ? { applicableCompanyId: params.companyId } : {}),
+      effectiveFrom: { lte: params.effectiveTo },
       OR: [
         { effectiveTo: null },
         { effectiveTo: { gte: params.effectiveFrom } }
@@ -174,9 +345,8 @@ export async function validateProfileOverlap(params: {
     }
   });
 
-  return {
-    hasOverlap: !!existing,
-    overlappingProfileId: existing?.id
-  };
+  if (existing) {
+    return { hasOverlap: true, overlappingProfileId: existing.id };
+  }
+  return { hasOverlap: false };
 }
-

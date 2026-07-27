@@ -2,19 +2,30 @@ import { NextResponse } from "next/server";
 import { checkApiAuth } from "@/lib/api-guards";
 import { prisma } from "@ahh-wfm/database";
 import { validateProfileOverlap } from "@/lib/manpower-work-calendar-engine";
+import { validateCompanyDepartment, validatePositionApplicability, validateRestDayLifecycle } from "@/lib/master-data-validator";
+import { getHoldingCompany } from "@/lib/server/master-data-service";
 
 export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const operationType = searchParams.get("operationType") || undefined;
-  const workerCategory = searchParams.get("workerCategory") || undefined;
-
   const auth = await checkApiAuth();
   if (auth.error) return auth.error;
 
+  const { searchParams } = new URL(request.url);
+  const workerClass = searchParams.get("workerClass") || undefined;
+  const applicability = searchParams.get("applicability") || undefined;
+  const companyId = searchParams.get("companyId") || undefined;
+
   const profiles = await prisma.manpowerWorkCalendarProfile.findMany({
     where: {
-      ...(operationType ? { operationType: operationType as any } : {}),
-      ...(workerCategory ? { workerCategory: workerCategory as any } : {})
+      ...(workerClass ? { workerClass: workerClass as any } : {}),
+      ...(applicability ? { applicability: applicability as any } : {}),
+      ...(companyId ? { ownerCompanyId: companyId } : {})
+    },
+    include: {
+      ownerCompany: true,
+      applicableCompany: true,
+      department: true,
+      positionCategory: true,
+      restDays: true
     },
     orderBy: { createdAt: "desc" }
   });
@@ -23,7 +34,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const auth = await checkApiAuth();
+  const auth = await checkApiAuth(undefined, { requiredPermission: "manpower.calendars.manage" });
   if (auth.error) return auth.error;
 
   let body: any = {};
@@ -32,85 +43,131 @@ export async function POST(request: Request) {
   const {
     code,
     name,
+    ownerCompanyId,
+    workerClass,
+    applicability,
+    applicableCompanyId,
+    departmentId,
     operationType,
     workerCategory,
+    appliesToAllPositionCategories,
+    positionCategoryId,
     ordinaryDailyMinutes,
     ordinaryWeeklyMinutes,
     ramadanDailyMinutes,
     ramadanWeeklyMinutes,
-    weeklyRestConfigType,
-    weeklyRestFixedDay,
-    weeklyRestCustomSchedule,
+    ramadanExcessCreatesOtCandidate,
     effectiveFrom,
     effectiveTo,
     approvalStatus,
-    companyId,
+    restDays, // Array of day names e.g. ["FRIDAY", "SATURDAY"]
     notes
   } = body;
 
   const userId = auth.session?.user?.id || "AD-0001";
 
-  if (!code || !name || !operationType || !workerCategory || !effectiveFrom || !effectiveTo) {
+  // Enforce mandatory ownerCompanyId or fallback to Holding Company
+  let resolvedOwnerCompanyId = ownerCompanyId;
+  if (!resolvedOwnerCompanyId) {
+    try {
+      const holding = await getHoldingCompany();
+      resolvedOwnerCompanyId = holding.id;
+    } catch (e: any) {
+      return NextResponse.json({ success: false, error: e.message }, { status: 400 });
+    }
+  }
+
+  const resolvedWorkerClass = workerClass || (workerCategory === "WHITE_COLLAR" || operationType === "WHITE_COLLAR" ? "WHITE_COLLAR" : "BLUE_COLLAR");
+  const resolvedApplicability = applicability || (applicableCompanyId ? "COMPANY" : "GROUP_WIDE");
+  const weeklyRestSource = resolvedWorkerClass === "WHITE_COLLAR" ? "PROFILE_FIXED_DAYS" : "ROSTER_MANAGED";
+
+  if (!code || !name || !effectiveFrom) {
     return NextResponse.json({ success: false, error: "Missing required profile fields" }, { status: 400 });
   }
 
-  const targetStatus = approvalStatus || "DRAFT";
-  if (targetStatus === "APPROVED") {
-    if (
-      ordinaryDailyMinutes == null ||
-      ordinaryWeeklyMinutes == null ||
-      ramadanDailyMinutes == null ||
-      ramadanWeeklyMinutes == null
-    ) {
-      return NextResponse.json({
-        success: false,
-        error: "All daily and weekly minute thresholds are required before approving a Work Calendar Profile."
-      }, { status: 400 });
+  try {
+    // Perform validators
+    if (applicableCompanyId && departmentId) {
+      await validateCompanyDepartment(applicableCompanyId, departmentId);
     }
 
-    const overlap = await validateProfileOverlap({
-      operationType,
-      workerCategory,
-      effectiveFrom: new Date(effectiveFrom),
-      effectiveTo: new Date(effectiveTo),
-      companyId
+    validatePositionApplicability({
+      workerClass: resolvedWorkerClass,
+      appliesToAllPositionCategories,
+      positionCategoryId
     });
 
-    if (overlap.hasOverlap) {
-      return NextResponse.json({
-        success: false,
-        error: `Profile overlaps with existing approved profile ID: ${overlap.overlappingProfileId}`
-      }, { status: 409 });
-    }
-  }
+    validateRestDayLifecycle({
+      workerClass: resolvedWorkerClass,
+      approvalStatus: approvalStatus || "DRAFT",
+      restDays
+    });
 
-  try {
+    const targetStatus = approvalStatus || "DRAFT";
+    if (targetStatus === "APPROVED") {
+      if (
+        ordinaryDailyMinutes == null ||
+        ordinaryWeeklyMinutes == null ||
+        ramadanDailyMinutes == null ||
+        ramadanWeeklyMinutes == null
+      ) {
+        return NextResponse.json({
+          success: false,
+          error: "All daily and weekly minute thresholds are required before approving a Work Calendar Profile."
+        }, { status: 400 });
+      }
+
+      const overlap = await validateProfileOverlap({
+        operationType,
+        workerCategory,
+        effectiveFrom: new Date(effectiveFrom),
+        effectiveTo: effectiveTo ? new Date(effectiveTo) : new Date("2099-12-31"),
+        companyId: applicableCompanyId
+      });
+
+      if (overlap.hasOverlap) {
+        return NextResponse.json({
+          success: false,
+          error: `Profile overlaps with existing approved profile ID: ${overlap.overlappingProfileId}`
+        }, { status: 409 });
+      }
+    }
+
     const profile = await prisma.manpowerWorkCalendarProfile.create({
       data: {
         code,
         name,
-        operationType,
-        workerCategory,
+        ownerCompanyId: resolvedOwnerCompanyId,
+        workerClass: resolvedWorkerClass,
+        applicability: resolvedApplicability,
+        applicableCompanyId: applicableCompanyId || null,
+        departmentId: departmentId || null,
+        operationType: operationType || null,
+        workerCategory: workerCategory || null,
+        appliesToAllPositionCategories: appliesToAllPositionCategories ?? null,
+        positionCategoryId: positionCategoryId || null,
         ordinaryDailyMinutes: ordinaryDailyMinutes != null ? parseInt(ordinaryDailyMinutes) : null,
         ordinaryWeeklyMinutes: ordinaryWeeklyMinutes != null ? parseInt(ordinaryWeeklyMinutes) : null,
         ramadanDailyMinutes: ramadanDailyMinutes != null ? parseInt(ramadanDailyMinutes) : null,
         ramadanWeeklyMinutes: ramadanWeeklyMinutes != null ? parseInt(ramadanWeeklyMinutes) : null,
-        weeklyRestConfigType: weeklyRestConfigType || "FIXED_DAY",
-        weeklyRestFixedDay: weeklyRestFixedDay || "FRIDAY",
-        weeklyRestCustomSchedule,
+        ramadanExcessCreatesOtCandidate: !!ramadanExcessCreatesOtCandidate,
+        weeklyRestSource: weeklyRestSource as any,
         effectiveFrom: new Date(effectiveFrom),
-        effectiveTo: new Date(effectiveTo),
+        effectiveTo: effectiveTo ? new Date(effectiveTo) : null,
         approvalStatus: targetStatus,
         approvedBy: targetStatus === "APPROVED" ? userId : null,
         approvedAt: targetStatus === "APPROVED" ? new Date() : null,
-        companyId: companyId || null,
-        notes
-      }
+        createdById: userId,
+        notes: notes || null,
+        restDays: resolvedWorkerClass === "WHITE_COLLAR" && restDays && Array.isArray(restDays) ? {
+          create: restDays.map((day: string) => ({ dayOfWeek: day as any }))
+        } : undefined
+      },
+      include: { restDays: true }
     });
 
-    return NextResponse.json({ success: true, profile }, { status: 201 });
-  } catch (error: any) {
-    console.error("Failed to create Work Calendar Profile:", error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return NextResponse.json({ success: true, profile });
+  } catch (err: any) {
+    return NextResponse.json({ success: false, error: err.message }, { status: 400 });
   }
 }

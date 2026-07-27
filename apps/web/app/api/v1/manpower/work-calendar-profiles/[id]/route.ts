@@ -10,7 +10,11 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
   const profile = await prisma.manpowerWorkCalendarProfile.findUnique({
     where: { id: params.id },
     include: {
-      company: true,
+      ownerCompany: true,
+      applicableCompany: true,
+      department: true,
+      positionCategory: true,
+      restDays: true,
       supersedesProfile: true,
       supersededByProfiles: true
     }
@@ -84,9 +88,8 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       data: {
         code: code || `${profile.code}-V${nextVersion}`,
         name: name || `${profile.name} (V${nextVersion})`,
-        operationType: profile.operationType,
-        workerCategory: profile.workerCategory,
-        companyId: profile.companyId,
+        ownerCompanyId: profile.ownerCompanyId,
+        applicableCompanyId: profile.applicableCompanyId,
         ordinaryDailyMinutes: ordinaryDailyMinutes != null ? parseInt(ordinaryDailyMinutes) : profile.ordinaryDailyMinutes,
         ordinaryWeeklyMinutes: ordinaryWeeklyMinutes != null ? parseInt(ordinaryWeeklyMinutes) : profile.ordinaryWeeklyMinutes,
         ramadanDailyMinutes: ramadanDailyMinutes != null ? parseInt(ramadanDailyMinutes) : profile.ramadanDailyMinutes,
@@ -158,19 +161,41 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
-  const auth = await checkApiAuth();
+  const auth = await checkApiAuth(undefined, { requiredPermission: "manpower.calendars.manage" });
   if (auth.error) return auth.error;
 
   const profile = await prisma.manpowerWorkCalendarProfile.findUnique({
-    where: { id: params.id }
+    where: { id: params.id },
+    include: {
+      supersededByProfiles: true,
+      seasonalRules: true,
+      payrollAdvisoryRuns: true,
+      billingSupportRuns: true
+    }
   });
 
   if (!profile) {
     return NextResponse.json({ success: false, error: "Work calendar profile not found" }, { status: 404 });
   }
 
-  if (profile.approvalStatus === "APPROVED") {
-    return NextResponse.json({ success: false, error: "Approved work calendar profiles cannot be deleted" }, { status: 400 });
+  // Hard deletion allowed ONLY for dependency-free DRAFT records
+  if (profile.approvalStatus !== "DRAFT") {
+    return NextResponse.json({
+      success: false,
+      error: `PROFILE_LIFECYCLE_PROTECTION: Only DRAFT profiles can be deleted. Current status is ${profile.approvalStatus}.`
+    }, { status: 400 });
+  }
+
+  if (
+    profile.supersededByProfiles.length > 0 ||
+    profile.seasonalRules.length > 0 ||
+    profile.payrollAdvisoryRuns.length > 0 ||
+    profile.billingSupportRuns.length > 0
+  ) {
+    return NextResponse.json({
+      success: false,
+      error: "PROFILE_DEPENDENCY_PROTECTION: Cannot delete profile referenced by superseded versions, seasonal rules, or advisory runs."
+    }, { status: 400 });
   }
 
   try {

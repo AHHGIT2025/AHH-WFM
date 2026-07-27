@@ -6,6 +6,7 @@ module.exports = {
     '^.+\\.tsx?$': ['ts-jest', { tsconfig: 'tests/tsconfig.test.json' }]
   },
   moduleNameMapper: {
+    '^server-only$': '<rootDir>/tests/api/setup.ts',
     '^@/(.*)$': '<rootDir>/apps/web/$1',
     '^@ahh-wfm/types$': '<rootDir>/packages/types/src',
     '^@ahh-wfm/mock-data$': '<rootDir>/packages/mock-data/src'

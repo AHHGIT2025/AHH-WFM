@@ -112,65 +112,68 @@ model Employee {
   clearanceApprovals ClearanceApprovalStep[] @relation("Approver")
 
   // --- Manpower Operations Additions ---
-  operationType                 String                                 @default("WHITE_COLLAR") // "WHITE_COLLAR" | "SECURITY_GUARDING" | "FACILITY_MANAGEMENT"
-  manpowerCategoryId            String?
-  manpowerCategory              ManpowerCategory?                      @relation(fields: [manpowerCategoryId], references: [id], onDelete: SetNull)
-  userOperationAccess           UserOperationAccess?
-  manpowerAssignments           ManpowerDeploymentAssignment[]
-  manpowerRelievers             ManpowerRelieverAssignment[]
-  securityLicense               SecurityLicense?
-  securityGatePasses            SecurityGatePass[]
-  relieverAssignments           SecurityProjectRelieverAssignment[]
-  coordinatorAssignments        SecurityProjectCoordinatorAssignment[]
-  siteInspections               SecuritySiteInspection[]
-  securityOperationalEmployee   SecurityOperationalEmployee?
-  secfacEmployeeAssignments     SecfacAssignment[]                     @relation("SecfacEmployeeAssignments")
-  secfacSupervisorAssignments   SecfacAssignment[]                     @relation("SecfacSupervisorAssignments")
-  secfacChecklistExecutions     SecfacChecklistExecution[]             @relation("SecfacEmployeeExecutions")
-  secfacExecutionReviews        SecfacChecklistExecution[]             @relation("SecfacExecutionReviewer")
-  secfacExecutionHistories      SecfacChecklistExecutionHistory[]      @relation("SecfacExecutionHistoryPerformer")
-  secfacEvidenceAttachments     SecfacEvidenceAttachment[]             @relation("SecfacEmployeeEvidence")
-  secfacEvidenceUploadedBy      SecfacEvidenceAttachment[]             @relation("SecfacEvidenceUploadedBy")
-  secfacScanProofs              SecfacScanProof[]                      @relation("SecfacEmployeeScanProofs")
-  secfacReviewedScanProofs      SecfacScanProof[]                      @relation("SecfacScanProofReviewedBy")
-  secfacPatrolExecutions        SecfacPatrolExecution[]                @relation("SecfacPatrolExecutionEmployee")
-  secfacSyncConflicts           SecfacSyncConflict[]                   @relation("SecfacEmployeeSyncConflicts")
-  secfacDispatchResponders      SecFacDispatchAssignment[]             @relation("SecFacDispatchResponder")
-  secfacDispatchedByAssignments SecFacDispatchAssignment[]             @relation("SecFacDispatcherUser")
-  welfareSettingsCreated        SecFacWelfareSetting[]                 @relation("WelfareSettingCreatedBy")
-  secfacWelfareChecks           SecFacWelfareCheck[]                   @relation("SecFacWelfareCheckEmployee")
-  secfacFieldAudits             SecfacFieldExecutionAudit[]            @relation("SecfacFieldAuditEmployee")
-  focRequestedRequirements      ContractManpowerRequirement[]          @relation("FocRequester")
-  focApprovedRequirements       ContractManpowerRequirement[]          @relation("FocApprover")
-  focRejectedRequirements       ContractManpowerRequirement[]          @relation("FocRejector")
-  focRevokedRequirements        ContractManpowerRequirement[]          @relation("FocRevoker")
-  assignedRosterSlots           RosterSlotAssignment[]                 @relation("EmployeeRosterAssignments")
-  rosterSlotsAssigned           RosterSlotAssignment[]                 @relation("AssignedByEmployee")
-  rosterSlotsUnassigned         RosterSlotAssignment[]                 @relation("UnassignedByEmployee")
-  publishedPublications         RosterPublication[]                    @relation("PublishedByEmployee")
-  cancelledPublications         RosterPublication[]                    @relation("CancelledPublicationByEmployee")
-  requestedChangeRequests       RosterChangeRequest[]                  @relation("ChangeRequestedByEmployee")
-  reviewedChangeRequests        RosterChangeRequest[]                  @relation("ChangeReviewedByEmployee")
-  targetChangeRequests          RosterChangeRequest[]                  @relation("ChangeRequestTargetEmployee")
-  slotAcknowledgments           RosterSlotAcknowledgment[]             @relation("EmployeeSlotAcknowledgments")
-  lockedSchedulingLocks         ManpowerSchedulingPeriodLock[]         @relation("LockedByEmployee")
-  rosterPlanningExceptions      RosterPlanningException[]              @relation("EmployeePlanningExceptions")
-  cancelledExceptions           RosterPlanningException[]              @relation("CancelledByEmployee")
-  resolvedExceptions            RosterPlanningException[]              @relation("ResolvedByEmployee")
-  expectedReconciliations       AttendanceRosterReconciliation[]       @relation("ExpectedReconciliationEmployee")
-  reviewedReconciliations       AttendanceRosterReconciliation[]       @relation("ReconciliationReviewer")
-  createdReconciliationConfigs  ReconciliationGracePeriodConfig[]      @relation("ReconciliationConfigCreator")
-  updatedReconciliationConfigs  ReconciliationGracePeriodConfig[]      @relation("ReconciliationConfigUpdater")
+  operationType                   String                                 @default("WHITE_COLLAR") // "WHITE_COLLAR" | "SECURITY_GUARDING" | "FACILITY_MANAGEMENT"
+  manpowerCategoryId              String?
+  manpowerCategory                ManpowerCategory?                      @relation(fields: [manpowerCategoryId], references: [id], onDelete: SetNull)
+  userOperationAccess             UserOperationAccess?
+  manpowerAssignments             ManpowerDeploymentAssignment[]
+  manpowerRelievers               ManpowerRelieverAssignment[]
+  securityLicense                 SecurityLicense?
+  securityGatePasses              SecurityGatePass[]
+  relieverAssignments             SecurityProjectRelieverAssignment[]
+  coordinatorAssignments          SecurityProjectCoordinatorAssignment[]
+  siteInspections                 SecuritySiteInspection[]
+  securityOperationalEmployee     SecurityOperationalEmployee?
+  secfacEmployeeAssignments       SecfacAssignment[]                     @relation("SecfacEmployeeAssignments")
+  secfacSupervisorAssignments     SecfacAssignment[]                     @relation("SecfacSupervisorAssignments")
+  secfacChecklistExecutions       SecfacChecklistExecution[]             @relation("SecfacEmployeeExecutions")
+  secfacExecutionReviews          SecfacChecklistExecution[]             @relation("SecfacExecutionReviewer")
+  secfacExecutionHistories        SecfacChecklistExecutionHistory[]      @relation("SecfacExecutionHistoryPerformer")
+  secfacEvidenceAttachments       SecfacEvidenceAttachment[]             @relation("SecfacEmployeeEvidence")
+  secfacEvidenceUploadedBy        SecfacEvidenceAttachment[]             @relation("SecfacEvidenceUploadedBy")
+  secfacScanProofs                SecfacScanProof[]                      @relation("SecfacEmployeeScanProofs")
+  secfacReviewedScanProofs        SecfacScanProof[]                      @relation("SecfacScanProofReviewedBy")
+  secfacPatrolExecutions          SecfacPatrolExecution[]                @relation("SecfacPatrolExecutionEmployee")
+  secfacSyncConflicts             SecfacSyncConflict[]                   @relation("SecfacEmployeeSyncConflicts")
+  secfacDispatchResponders        SecFacDispatchAssignment[]             @relation("SecFacDispatchResponder")
+  secfacDispatchedByAssignments   SecFacDispatchAssignment[]             @relation("SecFacDispatcherUser")
+  welfareSettingsCreated          SecFacWelfareSetting[]                 @relation("WelfareSettingCreatedBy")
+  secfacWelfareChecks             SecFacWelfareCheck[]                   @relation("SecFacWelfareCheckEmployee")
+  secfacFieldAudits               SecfacFieldExecutionAudit[]            @relation("SecfacFieldAuditEmployee")
+  focRequestedRequirements        ContractManpowerRequirement[]          @relation("FocRequester")
+  focApprovedRequirements         ContractManpowerRequirement[]          @relation("FocApprover")
+  focRejectedRequirements         ContractManpowerRequirement[]          @relation("FocRejector")
+  focRevokedRequirements          ContractManpowerRequirement[]          @relation("FocRevoker")
+  assignedRosterSlots             RosterSlotAssignment[]                 @relation("EmployeeRosterAssignments")
+  rosterSlotsAssigned             RosterSlotAssignment[]                 @relation("AssignedByEmployee")
+  rosterSlotsUnassigned           RosterSlotAssignment[]                 @relation("UnassignedByEmployee")
+  publishedPublications           RosterPublication[]                    @relation("PublishedByEmployee")
+  cancelledPublications           RosterPublication[]                    @relation("CancelledPublicationByEmployee")
+  requestedChangeRequests         RosterChangeRequest[]                  @relation("ChangeRequestedByEmployee")
+  reviewedChangeRequests          RosterChangeRequest[]                  @relation("ChangeReviewedByEmployee")
+  targetChangeRequests            RosterChangeRequest[]                  @relation("ChangeRequestTargetEmployee")
+  slotAcknowledgments             RosterSlotAcknowledgment[]             @relation("EmployeeSlotAcknowledgments")
+  lockedSchedulingLocks           ManpowerSchedulingPeriodLock[]         @relation("LockedByEmployee")
+  rosterPlanningExceptions        RosterPlanningException[]              @relation("EmployeePlanningExceptions")
+  cancelledExceptions             RosterPlanningException[]              @relation("CancelledByEmployee")
+  resolvedExceptions              RosterPlanningException[]              @relation("ResolvedByEmployee")
+  expectedReconciliations         AttendanceRosterReconciliation[]       @relation("ExpectedReconciliationEmployee")
+  reviewedReconciliations         AttendanceRosterReconciliation[]       @relation("ReconciliationReviewer")
+  createdReconciliationConfigs    ReconciliationGracePeriodConfig[]      @relation("ReconciliationConfigCreator")
+  updatedReconciliationConfigs    ReconciliationGracePeriodConfig[]      @relation("ReconciliationConfigUpdater")
+  ManpowerRosterDayClassification ManpowerRosterDayClassification[]
 }
 
 model Department {
-  id        String     @id @default(uuid())
-  companyId String?
-  company   Company?   @relation(fields: [companyId], references: [id])
-  name      String     @unique
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
-  employees Employee[]
+  id                        String                             @id @default(uuid())
+  companyId                 String?
+  company                   Company?                           @relation(fields: [companyId], references: [id])
+  name                      String                             @unique
+  createdAt                 DateTime                           @default(now())
+  updatedAt                 DateTime                           @updatedAt
+  employees                 Employee[]
+  workCalendarProfiles      ManpowerWorkCalendarProfile[]
+  departmentOperationScopes ManpowerDepartmentOperationScope[]
 }
 
 model AttendanceRecord {
@@ -788,15 +791,17 @@ model UserRoleAssignment {
 }
 
 model BlueCollarPositionCategory {
-  id          String               @id @default(uuid())
-  code        String               @unique
-  name        String
-  description String?              @db.Text
-  isActive    Boolean              @default(true)
-  createdAt   DateTime             @default(now())
-  updatedAt   DateTime             @updatedAt
-  employees   Employee[]
-  deployments EmployeeDeployment[]
+  id                          String                        @id @default(uuid())
+  code                        String                        @unique
+  name                        String
+  description                 String?                       @db.Text
+  isActive                    Boolean                       @default(true)
+  createdAt                   DateTime                      @default(now())
+  updatedAt                   DateTime                      @updatedAt
+  employees                   Employee[]
+  deployments                 EmployeeDeployment[]
+  ManpowerWorkCalendarProfile ManpowerWorkCalendarProfile[]
+  ManpowerSeasonalWorkRule    ManpowerSeasonalWorkRule[]
 }
 
 model Project {
@@ -967,12 +972,13 @@ model RelieverStandbyRule {
 }
 
 model Company {
-  id          String   @id @default(uuid())
-  companyCode String   @unique
-  companyName String
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id               String   @id @default(uuid())
+  companyCode      String   @unique
+  companyName      String
+  isHoldingCompany Boolean  @default(false)
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   employees                  Employee[]
   departments                Department[]
@@ -983,11 +989,14 @@ model Company {
   attendancePolicies         CompanyAttendancePolicy[]
   allowedPunchLocations      AllowedPunchLocation[]
   shiftAssignments           ShiftAssignment[]
-  attendanceRecords          AttendanceRecord[]            @relation("CompanyAttendance")
+  attendanceRecords          AttendanceRecord[]              @relation("CompanyAttendance")
   onCallAssignments          OnCallAssignment[]
   clearanceRequests          ClearanceRequest[]
   RosterRequirementSlot      RosterRequirementSlot[]
-  workCalendarProfiles       ManpowerWorkCalendarProfile[]
+  ownedProfiles              ManpowerWorkCalendarProfile[]   @relation("ProfileOwnerCompany")
+  applicableProfiles         ManpowerWorkCalendarProfile[]   @relation("ProfileApplicableCompany")
+  seasonalWorkRules          ManpowerSeasonalWorkRule[]
+  companyOperationScopes     ManpowerCompanyOperationScope[]
   holidayCalendars           ManpowerHolidayCalendar[]
   ManpowerBillingSupportRun  ManpowerBillingSupportRun[]
   ManpowerPayrollAdvisoryRun ManpowerPayrollAdvisoryRun[]
@@ -3625,6 +3634,62 @@ enum ManpowerWorkerCategory {
   CLEANING
   OTHER_FACILITY_MANAGEMENT
   WHITE_COLLAR
+  HOSPITALITY
+  MAINTENANCE
+  ROPE_ACCESS
+  LANDSCAPING
+}
+
+enum ManpowerWorkerClass {
+  WHITE_COLLAR
+  BLUE_COLLAR
+}
+
+enum ManpowerProfileApplicability {
+  GROUP_WIDE
+  COMPANY
+  DEPARTMENT
+}
+
+enum ManpowerWeeklyRestSource {
+  PROFILE_FIXED_DAYS
+  ROSTER_MANAGED
+}
+
+enum ManpowerSeasonalRuleScope {
+  COMPANY_WIDE
+  POSITION_CATEGORY
+  PROFILE_SPECIFIC
+}
+
+enum ManpowerSeasonalRuleType {
+  SUMMER_WORKING_HOURS
+  OTHER_APPROVED_CONDITION
+}
+
+enum ManpowerDayOfWeek {
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+  SUNDAY
+}
+
+enum ManpowerRosterDayStatus {
+  WORKING_DAY
+  WEEKLY_REST
+  UNASSIGNED
+  NOT_SCHEDULED
+}
+
+enum ManpowerRosterSourceType {
+  ROSTER_PUBLICATION
+  REQUIREMENT_SLOT
+  SLOT_ASSIGNMENT
+  AUTHORIZED_CORRECTION
+  MIGRATION_BACKFILL
 }
 
 enum ManpowerWeeklyRestConfigType {
@@ -3635,6 +3700,7 @@ enum ManpowerWeeklyRestConfigType {
 
 enum ManpowerApprovalStatus {
   DRAFT
+  SUBMITTED
   APPROVED
   REJECTED
   SUPERSEDED
@@ -3689,42 +3755,166 @@ enum ManpowerAdvisoryReadiness {
   DATA_INCOMPLETE
 }
 
-model ManpowerWorkCalendarProfile {
-  id                       String                        @id @default(uuid())
-  code                     String                        @unique
-  name                     String
-  companyId                String?
-  company                  Company?                      @relation(fields: [companyId], references: [id], onDelete: Restrict)
-  operationType            ManpowerOperationType
-  workerCategory           ManpowerWorkerCategory
-  ordinaryDailyMinutes     Int?
-  ordinaryWeeklyMinutes    Int?
-  ramadanDailyMinutes      Int?
-  ramadanWeeklyMinutes     Int?
-  weeklyRestConfigType     ManpowerWeeklyRestConfigType  @default(FIXED_DAY)
-  weeklyRestFixedDay       String? // "FRIDAY" | "SUNDAY" | etc.
-  weeklyRestCustomSchedule Json?
-  effectiveFrom            DateTime                      @db.Date
-  effectiveTo              DateTime?                     @db.Date
-  sourceReference          String?
-  approvalStatus           ManpowerApprovalStatus        @default(DRAFT)
-  approvedBy               String?
-  approvedAt               DateTime?
-  createdById              String?
-  version                  Int                           @default(1)
-  supersedesProfileId      String?
-  supersedesProfile        ManpowerWorkCalendarProfile?  @relation("ProfileSupersession", fields: [supersedesProfileId], references: [id], onDelete: Restrict)
-  supersededByProfiles     ManpowerWorkCalendarProfile[] @relation("ProfileSupersession")
-  supersededAt             DateTime?
-  notes                    String?                       @db.Text
-  createdAt                DateTime                      @default(now())
-  updatedAt                DateTime                      @updatedAt
+model ManpowerCompanyOperationScope {
+  id            String                @id @default(uuid())
+  companyId     String
+  company       Company               @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  operationType ManpowerOperationType
+  isActive      Boolean               @default(true)
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
 
+  @@unique([companyId, operationType])
+  @@index([companyId, isActive])
+}
+
+model ManpowerDepartmentOperationScope {
+  id            String                @id @default(uuid())
+  departmentId  String
+  department    Department            @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  operationType ManpowerOperationType
+  isActive      Boolean               @default(true)
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+
+  @@unique([departmentId, operationType])
+  @@index([departmentId, isActive])
+}
+
+model ManpowerWorkCalendarProfile {
+  id                              String                        @id @default(uuid())
+  code                            String                        @unique
+  name                            String
+  ownerCompanyId                  String? // Made mandatory after backfill
+  ownerCompany                    Company?                      @relation("ProfileOwnerCompany", fields: [ownerCompanyId], references: [id], onDelete: Restrict)
+  workerClass                     ManpowerWorkerClass?
+  applicability                   ManpowerProfileApplicability?
+  applicableCompanyId             String?
+  applicableCompany               Company?                      @relation("ProfileApplicableCompany", fields: [applicableCompanyId], references: [id], onDelete: Restrict)
+  departmentId                    String?
+  department                      Department?                   @relation(fields: [departmentId], references: [id], onDelete: Restrict)
+  operationType                   ManpowerOperationType?
+  workerCategory                  ManpowerWorkerCategory?
+  appliesToAllPositionCategories  Boolean?
+  positionCategoryId              String?
+  positionCategory                BlueCollarPositionCategory?   @relation(fields: [positionCategoryId], references: [id], onDelete: Restrict)
+  ordinaryDailyMinutes            Int?
+  ordinaryWeeklyMinutes           Int?
+  ramadanDailyMinutes             Int?
+  ramadanWeeklyMinutes            Int?
+  ramadanExcessCreatesOtCandidate Boolean                       @default(false)
+  weeklyRestSource                ManpowerWeeklyRestSource?
+  weeklyRestConfigType            ManpowerWeeklyRestConfigType  @default(FIXED_DAY)
+  weeklyRestFixedDay              String?
+  weeklyRestCustomSchedule        Json?
+  effectiveFrom                   DateTime                      @db.Date
+  effectiveTo                     DateTime?                     @db.Date
+  sourceReference                 String?
+  approvalStatus                  ManpowerApprovalStatus        @default(DRAFT)
+  approvedBy                      String?
+  approvedAt                      DateTime?
+  createdById                     String?
+  version                         Int                           @default(1)
+  supersedesProfileId             String?
+  supersedesProfile               ManpowerWorkCalendarProfile?  @relation("ProfileSupersession", fields: [supersedesProfileId], references: [id], onDelete: Restrict)
+  supersededByProfiles            ManpowerWorkCalendarProfile[] @relation("ProfileSupersession")
+  supersededAt                    DateTime?
+  notes                           String?                       @db.Text
+  createdAt                       DateTime                      @default(now())
+  updatedAt                       DateTime                      @updatedAt
+
+  restDays            ManpowerWorkCalendarRestDay[]
+  seasonalRules       ManpowerSeasonalWorkRule[]
   billingSupportRuns  ManpowerBillingSupportRun[]
   payrollAdvisoryRuns ManpowerPayrollAdvisoryRun[]
 
-  @@index([operationType, workerCategory, approvalStatus])
+  @@index([workerClass, applicability, approvalStatus])
+  @@index([applicableCompanyId, departmentId])
   @@index([effectiveFrom, effectiveTo])
+}
+
+model ManpowerWorkCalendarRestDay {
+  id        String                      @id @default(uuid())
+  profileId String
+  profile   ManpowerWorkCalendarProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  dayOfWeek ManpowerDayOfWeek
+
+  @@unique([profileId, dayOfWeek])
+}
+
+model ManpowerSeasonalWorkRule {
+  id                         String                       @id @default(uuid())
+  profileId                  String?
+  profile                    ManpowerWorkCalendarProfile? @relation(fields: [profileId], references: [id], onDelete: Restrict)
+  companyId                  String
+  company                    Company                      @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  positionCategoryId         String?
+  positionCategory           BlueCollarPositionCategory?  @relation(fields: [positionCategoryId], references: [id], onDelete: Restrict)
+  ruleScope                  ManpowerSeasonalRuleScope
+  ruleType                   ManpowerSeasonalRuleType
+  effectiveFrom              DateTime                     @db.Date
+  effectiveTo                DateTime                     @db.Date
+  morningStartMinutes        Int
+  morningEndMinutes          Int
+  mandatoryBreakStartMinutes Int
+  mandatoryBreakEndMinutes   Int
+  eveningStartMinutes        Int?
+  eveningEndMinutes          Int?
+  allowedDailyMinutes        Int
+  sourceReference            String?
+  approvalStatus             ManpowerApprovalStatus       @default(DRAFT)
+  approvedBy                 String?
+  approvedAt                 DateTime?
+  createdById                String?
+  version                    Int                          @default(1)
+  supersedesRuleId           String?
+  supersedesRule             ManpowerSeasonalWorkRule?    @relation("SeasonalRuleSupersession", fields: [supersedesRuleId], references: [id], onDelete: Restrict)
+  supersededByRules          ManpowerSeasonalWorkRule[]   @relation("SeasonalRuleSupersession")
+  supersededAt               DateTime?
+  notes                      String?                      @db.Text
+  createdAt                  DateTime                     @default(now())
+  updatedAt                  DateTime                     @updatedAt
+
+  @@index([companyId, ruleType, effectiveFrom, effectiveTo])
+}
+
+model ManpowerRosterDayClassification {
+  id                      String                   @id @default(uuid())
+  employeeId              String
+  employee                Employee                 @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  businessDate            DateTime                 @db.Date
+  classification          ManpowerRosterDayStatus
+  publicationId           String?
+  publicationVersion      Int                      @default(1)
+  sourceType              ManpowerRosterSourceType
+  sourceVersion           Int
+  creatorId               String?
+  sourceRequirementSlotId String?
+  sourceSlotAssignmentId  String?
+  notes                   String?                  @db.Text
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
+
+  history ManpowerRosterDayClassificationHistory[]
+
+  @@unique([employeeId, businessDate])
+  @@index([businessDate, classification])
+}
+
+model ManpowerRosterDayClassificationHistory {
+  id                String                          @id @default(uuid())
+  classificationId  String
+  classificationRef ManpowerRosterDayClassification @relation(fields: [classificationId], references: [id], onDelete: Cascade)
+  employeeId        String
+  businessDate      DateTime                        @db.Date
+  classification    ManpowerRosterDayStatus
+  sourceType        ManpowerRosterSourceType
+  sourceVersion     Int
+  archivedAt        DateTime                        @default(now())
+  archivedBy        String?
+  notes             String?                         @db.Text
+
+  @@index([employeeId, businessDate])
 }
 
 model ManpowerRamadanPeriod {
