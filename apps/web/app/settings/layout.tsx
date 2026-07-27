@@ -10,7 +10,8 @@ interface SettingsSidebarItem {
   label: string;
   path: string;
   icon: string;
-  permission: string;
+  permission?: string;
+  permissions?: string[];
 }
 
 const SIDEBAR_ITEMS: SettingsSidebarItem[] = [
@@ -25,6 +26,12 @@ const SIDEBAR_ITEMS: SettingsSidebarItem[] = [
     path: "/settings/masters",
     icon: "database",
     permission: "masterdata.view",
+  },
+  {
+    label: "Work Calendars & Holidays",
+    path: "/settings/manpower-calendars",
+    icon: "calendar_month",
+    permissions: ["manpower.calendars.manage", "manpower.calendars.approve"],
   },
   {
     label: "Workflow Setup",
@@ -85,7 +92,10 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
   const allowedItems = SIDEBAR_ITEMS.filter((item) => {
     if (!user) return false;
     if (isAdminUser(user)) return true;
-    return hasPermission(user, item.permission);
+    if (item.permissions && item.permissions.length > 0) {
+      return item.permissions.some((p) => hasPermission(user, p));
+    }
+    return item.permission ? hasPermission(user, item.permission) : false;
   });
 
   return (
