@@ -155,9 +155,8 @@ export default function ManpowerCalendarsPage() {
   };
 
   const userRole = user?.role || "GUEST";
-  const userPermissions = user?.permissions || [];
-  const canManage = hasPermission(userPermissions, "manpower.calendars.manage") || isAdminUser(userRole);
-  const canApprove = hasPermission(userPermissions, "manpower.calendars.approve") || isAdminUser(userRole);
+  const canManage = hasPermission(user, "manpower.calendars.manage");
+  const canApprove = hasPermission(user, "manpower.calendars.approve");
   const canAccessPage = canManage || canApprove;
 
   // Load Master Data
