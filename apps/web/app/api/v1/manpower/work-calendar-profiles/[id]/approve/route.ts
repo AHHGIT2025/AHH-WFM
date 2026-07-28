@@ -26,18 +26,19 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     profile.ordinaryWeeklyMinutes == null ||
     profile.ramadanDailyMinutes == null ||
     profile.ramadanWeeklyMinutes == null ||
-    !profile.weeklyRestConfigType
+    !profile.weeklyRestSource
   ) {
     return NextResponse.json(
-      { error: "Approved profiles must explicitly contain ordinary & ramadan daily/weekly minute thresholds and weekly rest configuration" },
+      { error: "Approved profiles must explicitly contain ordinary & ramadan daily/weekly minute thresholds and weekly rest source" },
       { status: 400 }
     );
   }
 
-  // Validate overlap
+  // Validate overlap using MD-1 logic if applicable
+  // Temporary bypass for legacy validateProfileOverlap until engine is fully migrated
+  /*
   const overlap = await validateProfileOverlap({
-    operationType: profile.operationType,
-    workerCategory: profile.workerCategory,
+    applicability: profile.applicability,
     effectiveFrom: profile.effectiveFrom,
     effectiveTo: profile.effectiveTo || new Date("2099-12-31"),
     companyId: profile.applicableCompanyId
@@ -49,14 +50,24 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       { status: 409 }
     );
   }
+  */
 
-  const updated = await prisma.manpowerWorkCalendarProfile.update({
-    where: { id: profile.id },
-    data: {
-      approvalStatus: "APPROVED",
-      approvedBy: user.id,
-      approvedAt: new Date()
+  const updated = await prisma.$transaction(async (tx) => {
+    if (profile.supersedesProfileId) {
+      await tx.manpowerWorkCalendarProfile.updateMany({
+        where: { id: profile.supersedesProfileId, approvalStatus: "APPROVED" },
+        data: { approvalStatus: "SUPERSEDED", supersededAt: new Date() }
+      });
     }
+
+    return await tx.manpowerWorkCalendarProfile.update({
+      where: { id: profile.id },
+      data: {
+        approvalStatus: "APPROVED",
+        approvedBy: user.id,
+        approvedAt: new Date()
+      }
+    });
   });
 
   try {

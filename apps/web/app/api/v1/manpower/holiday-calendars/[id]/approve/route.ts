@@ -21,6 +21,14 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   }
 
   const updated = await prisma.$transaction(async (tx) => {
+    // Supersede old version if exists
+    if (calendar.supersedesCalendarId) {
+      await tx.manpowerHolidayCalendar.updateMany({
+        where: { id: calendar.supersedesCalendarId, approvalStatus: "APPROVED" },
+        data: { approvalStatus: "SUPERSEDED" }
+      });
+    }
+
     // Approve dates
     await tx.manpowerHolidayDate.updateMany({
       where: { calendarId: calendar.id },
