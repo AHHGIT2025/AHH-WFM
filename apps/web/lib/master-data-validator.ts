@@ -104,3 +104,39 @@ export function validateRestDayLifecycle(params: {
     throw new Error("WHITE_COLLAR_REST_DAY_REQUIRED: White Collar profiles require at least one fixed weekly rest day.");
   }
 }
+
+export function normalizeProfilePayload(body: any) {
+  const payload = { ...body };
+
+  // 1. Worker Class constraints
+  if (payload.workerClass === "WHITE_COLLAR") {
+    payload.appliesToAllPositionCategories = null;
+    payload.positionCategoryId = null;
+    payload.operationType = null;
+    payload.workerCategory = null;
+    payload.weeklyRestSource = "PROFILE_FIXED_DAYS";
+  } else if (payload.workerClass === "BLUE_COLLAR") {
+    payload.restDays = undefined;
+    payload.weeklyRestSource = "ROSTER_MANAGED";
+    
+    // Blue Collar applicability restriction
+    if (payload.applicability === "DEPARTMENT") {
+      throw new Error("BLUE_COLLAR_APPLICABILITY_INVALID: Blue Collar profiles cannot use DEPARTMENT applicability.");
+    }
+    // Blue collar usually requires COMPANY applicability (or GROUP_WIDE if allowed)
+    if (payload.applicability !== "COMPANY" && payload.applicability !== "GROUP_WIDE") {
+      // We'll default to COMPANY if not group wide
+      payload.applicability = "COMPANY";
+    }
+  }
+
+  // 2. Applicability constraints
+  if (payload.applicability === "GROUP_WIDE") {
+    payload.applicableCompanyId = null;
+    payload.departmentId = null;
+  } else if (payload.applicability === "COMPANY") {
+    payload.departmentId = null;
+  }
+
+  return payload;
+}

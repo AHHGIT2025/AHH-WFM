@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { checkApiAuth } from "@/lib/api-guards";
 import { prisma } from "@ahh-wfm/database";
 import { validateProfileOverlap } from "@/lib/manpower-work-calendar-engine";
-import { validateCompanyDepartment, validatePositionApplicability, validateRestDayLifecycle } from "@/lib/master-data-validator";
+import { validateCompanyDepartment, validatePositionApplicability, validateRestDayLifecycle, normalizeProfilePayload } from "@/lib/master-data-validator";
 import { getHoldingCompany } from "@/lib/server/master-data-service";
 
 export async function GET(request: Request) {
@@ -40,6 +40,13 @@ export async function POST(request: Request) {
   let body: any = {};
   try { body = await request.json(); } catch (e) {}
 
+  let normalizedPayload;
+  try {
+    normalizedPayload = normalizeProfilePayload(body);
+  } catch (err: any) {
+    return NextResponse.json({ success: false, error: err.message }, { status: 400 });
+  }
+
   const {
     code,
     name,
@@ -62,7 +69,7 @@ export async function POST(request: Request) {
     approvalStatus,
     restDays, // Array of day names e.g. ["FRIDAY", "SATURDAY"]
     notes
-  } = body;
+  } = normalizedPayload;
 
   const userId = auth.session?.user?.id || "AD-0001";
 

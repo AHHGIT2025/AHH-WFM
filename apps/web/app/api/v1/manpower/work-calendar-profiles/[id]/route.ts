@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@ahh-wfm/database";
 import { checkApiAuth } from "@/lib/api-guards";
 import { validateProfileOverlap } from "@/lib/manpower-work-calendar-engine";
-import { validateCompanyDepartment, validatePositionApplicability, validateRestDayLifecycle } from "@/lib/master-data-validator";
+import { validateCompanyDepartment, validatePositionApplicability, validateRestDayLifecycle, normalizeProfilePayload } from "@/lib/master-data-validator";
 import { getHoldingCompany } from "@/lib/server/master-data-service";
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
@@ -72,6 +72,13 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   // Handle supersede action (create next version)
   if (action === "supersede") {
     const nextVersion = profile.version + 1;
+    let normalizedPayload;
+    try {
+      normalizedPayload = normalizeProfilePayload({ ...profile, ...body, action: undefined });
+    } catch (err: any) {
+      return NextResponse.json({ success: false, error: err.message }, { status: 400 });
+    }
+
     const {
       code,
       name,
@@ -93,7 +100,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       effectiveFrom,
       effectiveTo,
       notes
-    } = body;
+    } = normalizedPayload;
 
     let resolvedOwnerCompanyId = ownerCompanyId || profile.ownerCompanyId;
     if (!resolvedOwnerCompanyId) {
@@ -132,7 +139,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
         supersedesProfileId: profile.id,
         notes: notes !== undefined ? notes : profile.notes,
         restDays: resolvedWorkerClass === "WHITE_COLLAR" && restDays && Array.isArray(restDays) ? {
-          create: restDays.map((day: string) => ({ dayOfWeek: day as any }))
+          create: restDays.map((day: any) => ({ dayOfWeek: day.dayOfWeek || day }))
         } : undefined
       }
     });
@@ -143,6 +150,13 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   // General edit: Approved records are immutable
   if (profile.approvalStatus === "APPROVED" || profile.approvalStatus === "SUPERSEDED") {
     return NextResponse.json({ success: false, error: "Approved or Superseded profiles are immutable and cannot be edited directly" }, { status: 400 });
+  }
+
+  let normalizedPayload;
+  try {
+    normalizedPayload = normalizeProfilePayload({ ...profile, ...body, action: undefined });
+  } catch (err: any) {
+    return NextResponse.json({ success: false, error: err.message }, { status: 400 });
   }
 
   const {
@@ -166,7 +180,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     effectiveFrom,
     effectiveTo,
     notes
-  } = body;
+  } = normalizedPayload;
 
   try {
     const resolvedWorkerClass = workerClass || profile.workerClass;

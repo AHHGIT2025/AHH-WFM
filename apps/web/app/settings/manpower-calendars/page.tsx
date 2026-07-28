@@ -255,6 +255,24 @@ export default function ManpowerCalendarsPage() {
         restDays: editingProfile.restDays?.map(r => r.dayOfWeek) || []
       };
 
+      if (payload.workerClass === "WHITE_COLLAR") {
+        delete payload.appliesToAllPositionCategories;
+        delete payload.positionCategoryId;
+        delete payload.operationType;
+        delete payload.workerCategory;
+        payload.weeklyRestSource = "PROFILE_FIXED_DAYS";
+      } else if (payload.workerClass === "BLUE_COLLAR") {
+        delete payload.restDays;
+        payload.weeklyRestSource = "ROSTER_MANAGED";
+      }
+
+      if (payload.applicability === "GROUP_WIDE") {
+        delete payload.applicableCompanyId;
+        delete payload.departmentId;
+      } else if (payload.applicability === "COMPANY") {
+        delete payload.departmentId;
+      }
+
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
@@ -590,7 +608,6 @@ export default function ManpowerCalendarsPage() {
                   name: "",
                   workerClass: "WHITE_COLLAR",
                   applicability: "GROUP_WIDE",
-                  appliesToAllPositionCategories: true,
                   ordinaryDailyMinutes: 480,
                   ordinaryWeeklyMinutes: 2880,
                   ramadanDailyMinutes: 360,
