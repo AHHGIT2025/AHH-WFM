@@ -1031,5 +1031,39 @@ export async function transitionPlanningException(
   });
 }
 
+export function generateActiveExceptionKey(slotId: string, employeeId: string): string {
+  return `${slotId}-${employeeId}-EXCEPTION`;
+}
 
-
+export async function createAbsenceException(
+  tx: any,
+  assignment: any,
+  exceptionType: "DAY_OFF" | "LEAVE" | "SICK_LEAVE" | "ABSENT",
+  leaveRequestId?: string
+) {
+  const activeExceptionKey = generateActiveExceptionKey(assignment.slotId, assignment.employeeId);
+  return await tx.rosterPlanningException.upsert({
+    where: { activeExceptionKey },
+    create: {
+      operationType: assignment.slot.operationType,
+      contractId: assignment.slot.contractId,
+      siteId: assignment.slot.siteId,
+      exceptionType,
+      severity: "CRITICAL",
+      message: `${exceptionType} recorded for assigned slot. Coverage required.`,
+      status: "COVERAGE_REQUIRED",
+      businessDate: assignment.slot.businessDate,
+      slotId: assignment.slotId,
+      employeeId: assignment.employeeId,
+      primaryAssignmentId: assignment.id,
+      leaveRequestId: leaveRequestId || null,
+      activeExceptionKey,
+      resolved: false
+    },
+    update: {
+      exceptionType,
+      status: "COVERAGE_REQUIRED",
+      leaveRequestId: leaveRequestId || null
+    }
+  });
+}

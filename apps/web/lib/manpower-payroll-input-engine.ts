@@ -70,6 +70,27 @@ export async function calculatePayrollInputData(
   const start = new Date(year, month - 1, 1, 0, 0, 0, 0);
   const end = new Date(year, month, 0, 23, 59, 59, 999);
 
+  // Check MP-3C closures for readiness
+  const requiredClosures = await prisma.manpowerDailyClosure.findMany({
+    where: {
+      operationType: params.operationType,
+      businessDate: { gte: start, lte: end },
+      ...(params.companyId ? { companyId: params.companyId } : {})
+    }
+  });
+
+  const daysInMonthTotal = end.getDate();
+  const closedDays = requiredClosures.filter(c => c.status === "CLOSED").length;
+  
+  if (closedDays < daysInMonthTotal) {
+     return {
+       lines: [],
+       overallReadiness: "BLOCKED",
+       summary: { error: "Missing or OPEN Daily Closures for the requested period. Resolve coverage exceptions and close all days." },
+       sourceVersionJson: {}
+     };
+  }
+
   // Fetch all active profiles across worker categories (SG, Cleaning, White Collar) for multi-profile source tracking
   const activeProfiles = await prisma.manpowerWorkCalendarProfile.findMany({
     where: {

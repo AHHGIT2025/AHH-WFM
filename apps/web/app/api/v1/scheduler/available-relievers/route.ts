@@ -1,27 +1,25 @@
 import { NextResponse } from "next/server";
-import { mockDb } from "@ahh-wfm/mock-data";
 import { checkApiAuth } from "@/lib/api-guards";
+import { validateRelieverEligibility } from "@/lib/reliever-engine";
 
 export async function GET(request: Request) {
-  const auth = await checkApiAuth(["ADMIN", "SUPERVISOR", "EMPLOYEE"]);
+  const auth = await checkApiAuth(["ADMIN", "SUPERVISOR", "EMPLOYEE", "HR_MANAGER"]);
   if (auth.error) return auth.error;
 
   const url = new URL(request.url);
-  const date = url.searchParams.get("date") || undefined;
-  const designationId = url.searchParams.get("designationId") || undefined;
-  const tradeClassificationId = url.searchParams.get("tradeClassificationId") || undefined;
-  const projectId = url.searchParams.get("projectId") || undefined;
-  const siteId = url.searchParams.get("siteId") || undefined;
+  const slotId = url.searchParams.get("slotId");
+  const targetDate = url.searchParams.get("date");
+
+  if (!slotId || !targetDate) {
+    return NextResponse.json({ error: "slotId and date are required" }, { status: 400 });
+  }
 
   try {
-    const relievers = await mockDb.getAvailableRelievers({
-      date,
-      designationId,
-      tradeClassificationId,
-      projectId,
-      siteId
+    const relievers = await validateRelieverEligibility({
+      slotId,
+      targetDate
     });
-    return NextResponse.json(relievers);
+    return NextResponse.json({ success: true, data: relievers });
   } catch (e: any) {
     return NextResponse.json({ error: e.message || "Failed to fetch available relievers" }, { status: 500 });
   }

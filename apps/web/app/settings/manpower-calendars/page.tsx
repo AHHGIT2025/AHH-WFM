@@ -255,21 +255,21 @@ export default function ManpowerCalendarsPage() {
       };
 
       if (payload.workerClass === "WHITE_COLLAR") {
-        delete payload.appliesToAllPositionCategories;
-        delete payload.positionCategoryId;
-        delete payload.operationType;
-        delete payload.workerCategory;
+        delete (payload as any).appliesToAllPositionCategories;
+        delete (payload as any).positionCategoryId;
+        delete (payload as any).operationType;
+        delete (payload as any).workerCategory;
         payload.weeklyRestSource = "PROFILE_FIXED_DAYS";
       } else if (payload.workerClass === "BLUE_COLLAR") {
-        delete payload.restDays;
+        delete (payload as any).restDays;
         payload.weeklyRestSource = "ROSTER_MANAGED";
       }
 
       if (payload.applicability === "GROUP_WIDE") {
-        delete payload.applicableCompanyId;
-        delete payload.departmentId;
+        delete (payload as any).applicableCompanyId;
+        delete (payload as any).departmentId;
       } else if (payload.applicability === "COMPANY") {
-        delete payload.departmentId;
+        delete (payload as any).departmentId;
       }
 
       const res = await fetch(url, {

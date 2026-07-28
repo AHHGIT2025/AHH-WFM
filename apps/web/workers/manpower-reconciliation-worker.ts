@@ -7,6 +7,72 @@ const WORKER_ENABLED = process.env.RECONCILIATION_WORKER_ENABLED !== "false";
 
 let isShuttingDown = false;
 
+import { prisma } from "@ahh-wfm/database";
+import { createAbsenceException } from "../lib/roster-engine";
+
+async function detectApprovedLeavesForFutureSlots(operationType: "SECURITY_GUARDING" | "FACILITY_MANAGEMENT") {
+  console.log(`[Manpower Reconciliation Worker] Scanning for overlapping approved leaves for ${operationType}...`);
+  const targetDate = new Date();
+  targetDate.setHours(0, 0, 0, 0);
+
+  const leaves = await prisma.leaveRequest.findMany({
+    where: {
+      status: "APPROVED",
+      endDate: { gte: targetDate },
+      employee: { operationType }
+    }
+  });
+
+  for (const leave of leaves) {
+    const assignments = await prisma.rosterSlotAssignment.findMany({
+      where: {
+        employeeId: leave.employeeId,
+        historyStatus: "ACTIVE",
+        slot: {
+          businessDate: { gte: leave.startDate as Date, lte: leave.endDate as Date },
+          scheduleStatus: { notIn: ["CANCELLED"] }
+        }
+      },
+      include: { slot: true }
+    });
+
+    for (const asg of assignments) {
+      const existingException = await prisma.rosterPlanningException.findFirst({
+        where: { slotId: asg.slotId, employeeId: asg.employeeId }
+      });
+      if (!existingException) {
+        await prisma.$transaction(async (tx) => {
+          await createAbsenceException(tx, asg, "LEAVE", leave.id);
+        });
+      }
+    }
+  }
+}
+
+async function recalculateDraftMP4Runs(operationType: "SECURITY_GUARDING" | "FACILITY_MANAGEMENT") {
+  console.log(`[Manpower Reconciliation Worker] Recalculating MP-4 readiness for ${operationType}...`);
+  const draftRuns = await prisma.manpowerPayrollAdvisoryRun.findMany({
+    where: {
+      operationType,
+      status: { in: ["DRAFT", "CALCULATED", "SUPERSEDED"] as any }
+    }
+  });
+
+  for (const run of draftRuns) {
+    // If closure snapshots have changed, downgrade readiness
+    const closures = await prisma.manpowerDailyClosure.findMany({
+      where: { operationType, businessDate: { gte: run.fromDate as Date, lte: run.toDate as Date } }
+    });
+    const reopened = closures.some(c => c.status === "REOPENED" || c.status === "OPEN" || c.status === "UNDER_REVIEW");
+    if (reopened && run.readiness !== "NEEDS_ATTENDANCE_RECONCILIATION") {
+      await prisma.manpowerPayrollAdvisoryRun.update({
+        where: { id: run.id },
+        data: { readiness: "NEEDS_ATTENDANCE_RECONCILIATION" as any }
+      });
+    }
+  }
+}
+
 async function runReconciliationCycle(): Promise<void> {
   if (isShuttingDown) return;
 
@@ -24,6 +90,9 @@ async function runReconciliationCycle(): Promise<void> {
         runType: "SCHEDULED",
         workerInstanceId: WORKER_ID
       });
+      
+      await detectApprovedLeavesForFutureSlots(operationType);
+      await recalculateDraftMP4Runs(operationType);
 
       console.log(`[Manpower Reconciliation Worker] Completed cycle for ${operationType}:`, result);
     } catch (error: any) {
