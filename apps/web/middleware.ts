@@ -1,6 +1,11 @@
 import { withAuth } from "next-auth/middleware";
 import { NextResponse } from "next/server";
 
+// Bounded local fallback limiter (Token Bucket)
+const rateLimitMap = new Map<string, { count: number, resetTime: number }>();
+const MAX_REQUESTS = 60; // per window
+const WINDOW_MS = 60000; // 1 minute
+
 export default withAuth(
   function middleware(req) {
     const token = req.nextauth.token;
@@ -9,6 +14,34 @@ export default withAuth(
       return NextResponse.redirect(new URL("/change-password", req.url));
     }
 
+    // Rate Limiting Logic for Sensitive MP-4 / Reliever routes
+    if (req.nextUrl.pathname.startsWith("/api/v1/scheduler/relievers") || 
+        req.nextUrl.pathname.startsWith("/api/v1/manpower/payroll-advisory") ||
+        req.nextUrl.pathname.startsWith("/api/v1/manpower/billing-support")) {
+        
+        const ip = req.headers.get("x-forwarded-for")?.split(',')[0].trim() || req.ip || "127.0.0.1";
+        const userId = token?.id as string || ip;
+        const identityKey = `${userId}:${req.nextUrl.pathname}`;
+        
+        const now = Date.now();
+        const record = rateLimitMap.get(identityKey) || { count: 0, resetTime: now + WINDOW_MS };
+        
+        if (now > record.resetTime) {
+            record.count = 0;
+            record.resetTime = now + WINDOW_MS;
+        }
+        
+        record.count++;
+        rateLimitMap.set(identityKey, record);
+        
+        if (record.count > MAX_REQUESTS) {
+            const retryAfter = Math.ceil((record.resetTime - now) / 1000);
+            const res = new NextResponse(JSON.stringify({ error: "Too Many Requests", correlationId: crypto.randomUUID() }), { status: 429 });
+            res.headers.set("Retry-After", retryAfter.toString());
+            res.headers.set("Content-Type", "application/json");
+            return res;
+        }
+    }
   },
   {
     callbacks: {
@@ -20,5 +53,8 @@ export default withAuth(
 export const config = {
   matcher: [
     "/((?!api|login|_next/static|_next/image|favicon.ico).*)",
+    "/api/v1/scheduler/relievers/:path*",
+    "/api/v1/manpower/payroll-advisory/:path*",
+    "/api/v1/manpower/billing-support/:path*"
   ],
 };
