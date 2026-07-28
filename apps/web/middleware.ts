@@ -14,12 +14,27 @@ export default withAuth(
       return NextResponse.redirect(new URL("/change-password", req.url));
     }
 
+    // CSRF Protection: Strict Same-Origin Validation for State-Changing Requests
+    const isStateChanging = ["POST", "PUT", "PATCH", "DELETE"].includes(req.method);
+    if (isStateChanging && req.nextUrl.pathname.startsWith("/api/")) {
+      const origin = req.headers.get("origin");
+      const host = req.headers.get("host");
+      // Require origin to match host exactly (strict same-origin)
+      // Note: Mobile APIs using bearer tokens might not send origin, but web sessions do.
+      if (!origin || new URL(origin).host !== host) {
+          const res = new NextResponse(JSON.stringify({ error: "Forbidden: CSRF / Origin Validation Failed", correlationId: crypto.randomUUID() }), { status: 403 });
+          res.headers.set("Content-Type", "application/json");
+          return res;
+      }
+    }
+
     // Rate Limiting Logic for Sensitive MP-4 / Reliever routes
     if (req.nextUrl.pathname.startsWith("/api/v1/scheduler/relievers") || 
         req.nextUrl.pathname.startsWith("/api/v1/manpower/payroll-advisory") ||
         req.nextUrl.pathname.startsWith("/api/v1/manpower/billing-support")) {
         
-        const ip = req.headers.get("x-forwarded-for")?.split(',')[0].trim() || req.ip || "127.0.0.1";
+        // Ignore X-Forwarded-For for security decisions since proxy trust cannot be proven from repo
+        const ip = req.ip || "127.0.0.1";
         const userId = token?.id as string || ip;
         const identityKey = `${userId}:${req.nextUrl.pathname}`;
         
