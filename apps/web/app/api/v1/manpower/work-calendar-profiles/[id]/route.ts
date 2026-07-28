@@ -62,6 +62,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
   // Handle reject action
   if (action === "reject") {
+    if (profile.approvalStatus !== "SUBMITTED") {
+      return NextResponse.json({ success: false, error: "Only SUBMITTED profiles can be rejected" }, { status: 400 });
+    }
     const updated = await prisma.manpowerWorkCalendarProfile.update({
       where: { id: params.id },
       data: { approvalStatus: "REJECTED" as any }
