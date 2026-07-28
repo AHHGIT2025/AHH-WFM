@@ -4212,3 +4212,90 @@ model ManpowerPayrollAdvisoryDay {
   @@index([lineId, businessDate, assignmentId])
   @@index([siteId, businessDate])
 }
+
+// ==========================================
+// MP-3C Daily Operational Closure
+// ==========================================
+
+enum ManpowerClosureStatus {
+  OPEN
+  UNDER_REVIEW
+  EXCEPTION_PENDING
+  CLOSED
+  REOPENED
+}
+
+enum ManpowerClosureAuditAction {
+  REVIEW_STARTED
+  EXCEPTION_BLOCKED
+  CLOSE
+  REOPEN
+  RECLOSE
+  OVERDUE_WARNING
+  ESCALATION
+}
+
+model ManpowerDailyClosure {
+  id                    String                @id @default(uuid())
+  workerClass           String // "WHITE_COLLAR" | "BLUE_COLLAR"
+  scopeType             String // e.g. "COMPANY", "DEPARTMENT", "SITE"
+  scopeKey              String // e.g. "COMPANY:COMP1", "DEPARTMENT:DEPT1", "SITE:SITE1"
+  companyId             String
+  departmentId          String?
+  siteId                String?
+  operationType         String? // "SECURITY_GUARDING" | "FACILITY_MANAGEMENT"
+  businessDate          DateTime              @db.Date
+  status                ManpowerClosureStatus @default(OPEN)
+  currentRevisionNumber Int                   @default(0)
+  version               Int                   @default(1) // concurrency protection
+  createdAt             DateTime              @default(now())
+  createdById           String?
+  updatedAt             DateTime              @updatedAt
+  lastClosedAt          DateTime?
+  lastClosedById        String?
+  reopenedAt            DateTime?
+  reopenedById          String?
+
+  snapshots ManpowerDailyClosureSnapshot[]
+  auditLogs ManpowerClosureAuditLog[]
+
+  @@unique([businessDate, scopeKey])
+  @@index([companyId, businessDate])
+}
+
+model ManpowerDailyClosureSnapshot {
+  id                      String               @id @default(uuid())
+  closureId               String
+  closure                 ManpowerDailyClosure @relation(fields: [closureId], references: [id], onDelete: Cascade)
+  revisionNumber          Int
+  snapshotJson            String               @db.LongText
+  snapshotHash            String
+  sourceCutoffAt          DateTime
+  readiness               String               @default("READY")
+  rosterCounts            Json?
+  attendanceCounts        Json?
+  reconciliationCounts    Json?
+  exceptionCounts         Json?
+  overtimeCandidateCounts Json?
+  absenceCandidateCounts  Json?
+  closedAt                DateTime             @default(now())
+  closedById              String
+
+  @@unique([closureId, revisionNumber])
+}
+
+model ManpowerClosureAuditLog {
+  id             String                     @id @default(uuid())
+  closureId      String
+  closure        ManpowerDailyClosure       @relation(fields: [closureId], references: [id], onDelete: Cascade)
+  snapshotId     String?
+  action         ManpowerClosureAuditAction
+  previousStatus String?
+  newStatus      String
+  reason         String?                    @db.Text
+  actorId        String
+  metadataJson   Json?
+  createdAt      DateTime                   @default(now())
+
+  @@index([closureId])
+}
