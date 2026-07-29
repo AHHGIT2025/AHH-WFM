@@ -1,14 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@ahh-wfm/database';
 import { checkApiAuth } from '@/lib/api-guards';
-import { z } from 'zod';
-
-const createSchema = z.object({
-  title: z.string().min(1),
-  description: z.string().optional(),
-  companyId: z.string().nullable().optional(),
-  operationScope: z.enum(['SECURITY_GUARDING', 'FACILITY_MANAGEMENT']).nullable().optional(),
-});
 
 export async function GET(request: NextRequest) {
   try {

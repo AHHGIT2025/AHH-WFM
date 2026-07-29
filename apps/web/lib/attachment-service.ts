@@ -46,14 +46,15 @@ export class AttachmentService {
     const attachment = await prisma.systemAttachment.create({
       data: {
         id: fileId,
+        fileName: sanitizedName,
         originalName: sanitizedName,
-        serverPath: storagePath,
+        storagePath: storagePath,
         mimeType,
-        sizeBytes: fileBuffer.length,
-        sha256: hex,
-        uploadedBy,
+        fileSizeBytes: fileBuffer.length,
+        serverFileHash: hex,
+        uploadedById: uploadedBy,
         companyId,
-        operationScope
+        operationType: operationScope
       }
     });
 
@@ -73,12 +74,12 @@ export class AttachmentService {
       throw new Error('Unauthorized company access.');
     }
     
-    if (attachment.operationScope && userScope && attachment.operationScope !== userScope) {
+    if (attachment.operationType && userScope && attachment.operationType !== userScope) {
       throw new Error('Unauthorized scope access.');
     }
 
     // Prevent directory traversal attacks on retrieval just in case
-    const safePath = path.resolve(attachment.serverPath);
+    const safePath = path.resolve(attachment.storagePath);
     if (!safePath.startsWith(path.resolve(STORAGE_DIR))) {
         throw new Error('Invalid storage path detected.');
     }

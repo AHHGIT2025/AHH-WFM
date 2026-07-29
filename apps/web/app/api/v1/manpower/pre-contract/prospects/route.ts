@@ -1,22 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@ahh-wfm/database';
 import { checkApiAuth } from '@/lib/api-guards';
-import { z } from 'zod';
-
-const createSchema = z.object({
-  clientName: z.string().min(1),
-  contactPerson: z.string().min(1),
-  contactEmail: z.string().email(),
-  contactPhone: z.string().min(1),
-  companyId: z.string().nullable().optional(),
-  operationScope: z.enum(['SECURITY_GUARDING', 'FACILITY_MANAGEMENT']).nullable().optional(),
-});
-
 export async function POST(request: NextRequest) {
   try {
     const user = await checkApiAuth(request, ['precontract.prospectClient.manage']);
     const body = await request.json();
-    const data = createSchema.parse(body);
+    const data = {
+      clientName: body.clientName,
+      contactPerson: body.contactPerson,
+      contactEmail: body.contactEmail,
+      contactPhone: body.contactPhone,
+      companyId: body.companyId,
+      operationScope: body.operationScope,
+    };
+    if (!data.clientName || !data.contactEmail) throw new Error('Missing fields');
 
     // Duplicate detection - naive implementation
     const existing = await prisma.preContractProspectClient.findFirst({

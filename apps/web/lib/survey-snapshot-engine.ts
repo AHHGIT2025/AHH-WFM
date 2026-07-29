@@ -34,41 +34,40 @@ export class SurveySnapshotEngine {
     const survey = await prisma.preContractSurvey.findUnique({
       where: { id: surveyId },
       include: {
-        templateVersion: {
-          include: { template: true }
-        },
         case: {
           include: {
-            client: true,
-            site: true
+            prospectClient: true,
+            prospectiveSite: true
           }
-        }
+        },
+        snapshot: {
+          include: { templateVersion: { include: { template: true } } }
+        },
+        responses: true
       }
     });
 
     if (!survey) throw new Error('Survey not found.');
 
-    // Note: For PC-1 we assume the full snapshot includes all sections/elements.
-    // In a real implementation we would recursively fetch sections -> elements -> options -> rules.
     const rawSnapshotData = {
       surveyId: survey.id,
       companyId: survey.companyId,
-      operationScope: survey.operationScope,
-      templateVersionId: survey.templateVersionId,
+      operationScope: survey.operationType,
+      templateVersionId: survey.snapshot?.templateVersionId,
       template: {
-        id: survey.templateVersion.template.id,
-        title: survey.templateVersion.template.title,
-        version: survey.templateVersion.versionNumber,
+        id: survey.snapshot?.templateVersion.template.id,
+        title: survey.snapshot?.templateVersion.template.title,
+        version: survey.snapshot?.templateVersion.versionNumber,
       },
       client: {
-        id: survey.case?.client?.id,
-        name: survey.case?.client?.clientName,
+        id: survey.case?.prospectClientId,
+        name: survey.case?.prospectClient?.clientName,
       },
       site: {
-        id: survey.case?.site?.id,
-        name: survey.case?.site?.siteName,
+        id: survey.prospectiveSiteId,
+        name: survey.case?.prospectiveSite?.siteName,
       },
-      responses: survey.responses // Assuming responses is a JSON field
+      responses: survey.responses 
     };
 
     const canonicalData = this.canonicalize(rawSnapshotData);

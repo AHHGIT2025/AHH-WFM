@@ -1,6 +1,4 @@
 import React from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 export default function PreContractConfigPage() {
   return (
@@ -10,49 +8,28 @@ export default function PreContractConfigPage() {
         <p className="text-muted-foreground">Manage templates, site conditions, and cost configuration for Pre-Contract workflows.</p>
       </div>
 
-      <Tabs defaultValue="survey" className="w-full">
-        <TabsList className="mb-4">
-          <TabsTrigger value="survey">Survey Configuration</TabsTrigger>
-          <TabsTrigger value="site-conditions">Site Conditions</TabsTrigger>
-          <TabsTrigger value="cost-config">Cost Configuration</TabsTrigger>
-        </TabsList>
+      <div className="w-full">
+        <div className="mb-4 flex space-x-4">
+          <button className="font-bold">Survey Configuration</button>
+          <button className="font-bold">Site Conditions</button>
+          <button className="font-bold">Cost Configuration</button>
+        </div>
 
-        <TabsContent value="survey">
-          <Card>
-            <CardHeader>
-              <CardTitle>Survey Templates</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {/* Components to manage Survey Templates, Versions, Sections, Elements, Options, Rules */}
-              <p className="text-sm text-muted-foreground">Manage survey templates and versions here.</p>
-            </CardContent>
-          </Card>
-        </TabsContent>
+        <div className="border p-4 rounded">
+          <h2 className="text-xl">Survey Templates</h2>
+          <p className="text-sm text-muted-foreground">Manage survey templates and versions here.</p>
+        </div>
 
-        <TabsContent value="site-conditions">
-          <Card>
-            <CardHeader>
-              <CardTitle>Site Conditions</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {/* Components to manage Site Condition Categories, Definitions */}
-              <p className="text-sm text-muted-foreground">Manage site conditions and categories here.</p>
-            </CardContent>
-          </Card>
-        </TabsContent>
+        <div className="border p-4 rounded mt-4">
+          <h2 className="text-xl">Site Conditions</h2>
+          <p className="text-sm text-muted-foreground">Manage site conditions and categories here.</p>
+        </div>
 
-        <TabsContent value="cost-config">
-          <Card>
-            <CardHeader>
-              <CardTitle>Cost Configuration</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {/* Components to manage Cost Config Versions, Categories, Elements, Rates, Formulas, Driver Mappings */}
-              <p className="text-sm text-muted-foreground">Manage cost configurations, rates, and formulas here.</p>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+        <div className="border p-4 rounded mt-4">
+          <h2 className="text-xl">Cost Configuration</h2>
+          <p className="text-sm text-muted-foreground">Manage cost configurations, rates, and formulas here.</p>
+        </div>
+      </div>
     </div>
   );
 }

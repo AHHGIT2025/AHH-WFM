@@ -1,21 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@ahh-wfm/database';
 import { checkApiAuth } from '@/lib/api-guards';
-import { z } from 'zod';
-
-const createSchema = z.object({
-  prospectClientId: z.string().uuid(),
-  siteName: z.string().min(1),
-  location: z.string().optional(),
-  companyId: z.string().nullable().optional(),
-  operationScope: z.enum(['SECURITY_GUARDING', 'FACILITY_MANAGEMENT']).nullable().optional(),
-});
-
 export async function POST(request: NextRequest) {
   try {
     const user = await checkApiAuth(request, ['precontract.prospectiveSite.manage']);
     const body = await request.json();
-    const data = createSchema.parse(body);
+    const data = {
+      prospectClientId: body.prospectClientId,
+      siteName: body.siteName,
+      location: body.location,
+      companyId: body.companyId,
+      operationScope: body.operationScope,
+    };
+    if (!data.siteName || !data.prospectClientId) throw new Error('Missing fields');
 
     const site = await prisma.preContractProspectiveSite.create({
       data: {
