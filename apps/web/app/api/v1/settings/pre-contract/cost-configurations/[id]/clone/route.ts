@@ -4,7 +4,9 @@ import { checkApiAuth } from '@/lib/api-guards';
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const user = await checkApiAuth(request, ['precontract.costConfig.manage']);
+    const auth = await checkApiAuth(undefined, { requiredPermission: 'precontract.costConfig.manage' });
+    if (auth.error) return auth.error;
+    const user = auth.session.user;
     // Cloning logic here
     return NextResponse.json({ success: true, clonedId: 'new-id' });
   } catch (error: any) {

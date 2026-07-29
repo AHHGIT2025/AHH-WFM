@@ -15,7 +15,9 @@ const createSchema = z.object({
 
 export async function GET(request: NextRequest) {
   try {
-    await checkApiAuth(request, ['precontract.surveyConfig.view']);
+    const auth = await checkApiAuth(undefined, { requiredPermission: 'precontract.surveyConfig.view' });
+    if (auth.error) return auth.error;
+    const user = auth.session.user;
     const items = await prisma.surveyTemplate.findMany({
       include: { versions: { orderBy: { versionNumber: 'desc' }, take: 1 } },
       orderBy: { createdAt: 'desc' }
@@ -28,7 +30,9 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const user = await checkApiAuth(request, ['precontract.surveyConfig.manage']);
+    const auth = await checkApiAuth(undefined, { requiredPermission: 'precontract.surveyConfig.manage' });
+    if (auth.error) return auth.error;
+    const user = auth.session.user;
     const body = await request.json();
     const data = createSchema.parse(body);
 

@@ -3,7 +3,9 @@ import { checkApiAuth } from '@/lib/api-guards';
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    await checkApiAuth(request, ['precontract.surveyConfig.view']);
+    const auth = await checkApiAuth(undefined, { requiredPermission: 'precontract.surveyConfig.view' });
+    if (auth.error) return auth.error;
+    const user = auth.session.user;
     const body = await request.json();
     return NextResponse.json({ success: true, previewResult: {} });
   } catch (error: any) {

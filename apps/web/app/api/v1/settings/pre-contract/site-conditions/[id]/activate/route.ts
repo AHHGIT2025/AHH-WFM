@@ -4,7 +4,9 @@ import { checkApiAuth } from '@/lib/api-guards';
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const user = await checkApiAuth(request, ['precontract.config.activate', 'precontract.siteConditionConfig.manage']);
+    const auth = await checkApiAuth(undefined, { requiredPermission: 'precontract.siteConditionConfig.manage' });
+    if (auth.error) return auth.error;
+    const user = auth.session.user;
     // Activation logic here
     return NextResponse.json({ success: true, status: 'ACTIVE' });
   } catch (error: any) {

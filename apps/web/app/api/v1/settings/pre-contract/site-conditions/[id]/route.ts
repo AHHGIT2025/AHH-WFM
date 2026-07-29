@@ -7,7 +7,9 @@ const updateSchema = z.any();
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    await checkApiAuth(request, ['precontract.siteConditionConfig.view']);
+    const auth = await checkApiAuth(undefined, { requiredPermission: 'precontract.siteConditionConfig.view' });
+    if (auth.error) return auth.error;
+    const user = auth.session.user;
     const item = await prisma.siteConditionConfiguration.findUnique({
       where: { id: params.id },
       include: { versions: { orderBy: { versionNumber: 'desc' } } }
@@ -21,7 +23,9 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 
 export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const user = await checkApiAuth(request, ['precontract.siteConditionConfig.manage']);
+    const auth = await checkApiAuth(undefined, { requiredPermission: 'precontract.siteConditionConfig.manage' });
+    if (auth.error) return auth.error;
+    const user = auth.session.user;
     const body = await request.json();
     const data = updateSchema.parse(body);
 

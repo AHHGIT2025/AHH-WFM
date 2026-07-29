@@ -15,7 +15,9 @@ const createSchema = z.object({
 
 export async function GET(request: NextRequest) {
   try {
-    await checkApiAuth(request, ['precontract.siteConditionConfig.view']);
+    const auth = await checkApiAuth(undefined, { requiredPermission: 'precontract.siteConditionConfig.view' });
+    if (auth.error) return auth.error;
+    const user = auth.session.user;
     const items = await prisma.siteConditionConfiguration.findMany({
       include: { versions: { orderBy: { versionNumber: 'desc' }, take: 1 } },
       orderBy: { createdAt: 'desc' }
@@ -28,7 +30,9 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const user = await checkApiAuth(request, ['precontract.siteConditionConfig.manage']);
+    const auth = await checkApiAuth(undefined, { requiredPermission: 'precontract.siteConditionConfig.manage' });
+    if (auth.error) return auth.error;
+    const user = auth.session.user;
     const body = await request.json();
     const data = createSchema.parse(body);
 
