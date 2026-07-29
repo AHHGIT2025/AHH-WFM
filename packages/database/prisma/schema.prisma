@@ -4295,7 +4295,432 @@ model ManpowerClosureAuditLog {
   reason         String?                    @db.Text
   actorId        String
   metadataJson   Json?
-  createdAt      DateTime                   @default(now())
 
   @@index([closureId])
+}
+
+// ============================================================================
+// PC-1: PRE-CONTRACT CONFIGURABLE FOUNDATION (SURVEY, CONDITIONS, COSTING)
+// ============================================================================
+
+enum PreContractLifecycle {
+  DRAFT
+  IN_WORKFLOW
+  COMPLETED
+  CANCELLED
+  SUPERSEDED
+}
+
+enum PreContractSurveyResponseType {
+  SHORT_TEXT
+  LONG_TEXT
+  INTEGER
+  DECIMAL
+  CURRENCY
+  PERCENTAGE
+  BOOLEAN
+  DATE
+  TIME
+  DATE_TIME
+  SINGLE_SELECTION
+  MULTIPLE_SELECTION
+  RATING
+  MEASUREMENT
+  QUANTITY
+  GPS_LOCATION
+  PHOTO
+  DOCUMENT
+  SIGNATURE
+  CALCULATED_DISPLAY
+  STRUCTURED_TABLE
+}
+
+enum SystemAttachmentIntegrity {
+  VERIFIED
+  MISMATCH
+  UNVERIFIED
+}
+
+model SystemAttachment {
+  id                String                    @id @default(uuid())
+  companyId         String?
+  operationType     String?
+  fileName          String
+  originalName      String
+  mimeType          String
+  fileSizeBytes     Int
+  storagePath       String
+  evidenceType      String                    @default("GENERIC")
+  caption           String?
+  capturedAt        DateTime?
+  latitude          Float?
+  longitude         Float?
+  gpsAccuracyMeters Float?
+  uploadedById      String
+  clientFileHash    String?
+  serverFileHash    String?
+  hashAlgorithm     String                    @default("SHA-256")
+  integrityStatus   SystemAttachmentIntegrity @default(UNVERIFIED)
+  isActive          Boolean                   @default(true)
+  createdAt         DateTime                  @default(now())
+  updatedAt         DateTime                  @updatedAt
+
+  surveyEvidences SurveyResponseEvidence[]
+}
+
+model PreContractProspectClient {
+  id                    String   @id @default(uuid())
+  companyId             String?
+  operationType         String?
+  name                  String
+  contactPersonName     String?
+  contactPersonEmail    String?
+  contactPersonPhone    String?
+  crNumber              String?
+  address               String?  @db.Text
+  duplicateCheckStatus  String   @default("PENDING") // PENDING, MATCH_FOUND, CLEARED
+  matchedClientMasterId String?
+  isActive              Boolean  @default(true)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  cases PreContractCase[]
+}
+
+model PreContractCase {
+  id               String                     @id @default(uuid())
+  companyId        String?
+  operationType    String?
+  title            String
+  prospectClientId String?
+  prospectClient   PreContractProspectClient? @relation(fields: [prospectClientId], references: [id])
+  existingClientId String?
+  businessOutcome  String? // e.g. WON, LOST, NO_DECISION
+  lifecycle        PreContractLifecycle       @default(DRAFT)
+
+  // Workflow fields
+  workflowTemplateId      String?
+  workflowTemplateVersion Int?
+  workflowInstanceId      String?
+  assignedLevelsJson      Json?
+
+  createdBy String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  surveys PreContractSurvey[]
+}
+
+model PreContractProspectiveSite {
+  id              String   @id @default(uuid())
+  companyId       String?
+  operationType   String?
+  name            String
+  address         String?  @db.Text
+  latitude        Float?
+  longitude       Float?
+  approximateArea Float?
+  isActive        Boolean  @default(true)
+  version         Int      @default(1)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  surveys PreContractSurvey[]
+}
+
+// ---------------------------------------------------------
+// SURVEY CONFIGURATION (HYBRID METADATA)
+// ---------------------------------------------------------
+
+model SurveyTemplate {
+  id            String   @id @default(uuid())
+  companyId     String?
+  operationType String?
+  code          String
+  name          String
+  description   String?  @db.Text
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  versions SurveyTemplateVersion[]
+}
+
+model SurveyTemplateVersion {
+  id            String         @id @default(uuid())
+  templateId    String
+  template      SurveyTemplate @relation(fields: [templateId], references: [id])
+  versionNumber Int
+  effectiveFrom DateTime
+  effectiveTo   DateTime?
+  status        String         @default("DRAFT") // DRAFT, ACTIVE, RETIRED
+  createdBy     String
+  approvedBy    String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  sections  SurveySection[]
+  snapshots SurveyConfigurationSnapshot[]
+}
+
+model SurveySection {
+  id           String                @id @default(uuid())
+  versionId    String
+  version      SurveyTemplateVersion @relation(fields: [versionId], references: [id])
+  code         String
+  name         String
+  displayOrder Int
+  isActive     Boolean               @default(true)
+
+  elements SurveyElement[]
+}
+
+model SurveyElement {
+  id               String                        @id @default(uuid())
+  sectionId        String
+  section          SurveySection                 @relation(fields: [sectionId], references: [id])
+  code             String
+  name             String
+  description      String?                       @db.Text
+  responseType     PreContractSurveyResponseType
+  displayOrder     Int
+  isRequired       Boolean                       @default(false)
+  requiresEvidence Boolean                       @default(false)
+  requiresComment  Boolean                       @default(false)
+  unitOfMeasure    String?
+  validationRules  Json? // JSON for min/max/length
+  isActive         Boolean                       @default(true)
+
+  options SurveyElementOption[]
+  rules   SurveyRuleDefinition[]
+}
+
+model SurveyElementOption {
+  id           String        @id @default(uuid())
+  elementId    String
+  element      SurveyElement @relation(fields: [elementId], references: [id])
+  code         String
+  label        String
+  displayOrder Int
+  isDefault    Boolean       @default(false)
+}
+
+model SurveyRuleDefinition {
+  id           String        @id @default(uuid())
+  elementId    String
+  element      SurveyElement @relation(fields: [elementId], references: [id])
+  ruleType     String // VISIBILITY, VALIDATION, COST_DRIVER
+  conditionAst Json // AST representation of the rule condition
+  actionAst    Json // AST representation of the rule action
+  isActive     Boolean       @default(true)
+}
+
+// ---------------------------------------------------------
+// SURVEY TRANSACTIONS & SNAPSHOTS
+// ---------------------------------------------------------
+
+model PreContractSurvey {
+  id                String                      @id @default(uuid())
+  companyId         String?
+  operationType     String?
+  caseId            String
+  case              PreContractCase             @relation(fields: [caseId], references: [id])
+  prospectiveSiteId String?
+  prospectiveSite   PreContractProspectiveSite? @relation(fields: [prospectiveSiteId], references: [id])
+  lifecycle         PreContractLifecycle        @default(DRAFT)
+
+  workflowTemplateId      String?
+  workflowTemplateVersion Int?
+  workflowInstanceId      String?
+  assignedLevelsJson      Json?
+
+  conductedBy String?
+  conductedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  snapshot       SurveyConfigurationSnapshot?
+  responses      SurveyResponse[]
+  siteConditions SurveySiteCondition[]
+}
+
+model SurveyConfigurationSnapshot {
+  id                String                @id @default(uuid())
+  surveyId          String                @unique
+  survey            PreContractSurvey     @relation(fields: [surveyId], references: [id])
+  templateVersionId String
+  templateVersion   SurveyTemplateVersion @relation(fields: [templateVersionId], references: [id])
+  snapshotJson      String                @db.LongText // Immutable copy of everything
+  checksum          String
+  createdAt         DateTime              @default(now())
+}
+
+model SurveyResponse {
+  id          String            @id @default(uuid())
+  surveyId    String
+  survey      PreContractSurvey @relation(fields: [surveyId], references: [id])
+  elementCode String // Matches code in Snapshot/Element
+
+  // Typed values
+  textValue     String?   @db.Text
+  numericValue  Float?
+  booleanValue  Boolean?
+  dateTimeValue DateTime?
+  jsonValue     Json? // For MULTIPLE_SELECTION or STRUCTURED_TABLE
+
+  notes     String?  @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  evidences SurveyResponseEvidence[]
+}
+
+model SurveyResponseEvidence {
+  id           String           @id @default(uuid())
+  responseId   String
+  response     SurveyResponse   @relation(fields: [responseId], references: [id])
+  attachmentId String
+  attachment   SystemAttachment @relation(fields: [attachmentId], references: [id])
+  createdAt    DateTime         @default(now())
+}
+
+// ---------------------------------------------------------
+// SITE CONDITIONS (CONFIG & TRANSACTION)
+// ---------------------------------------------------------
+
+model SiteConditionCategory {
+  id            String    @id @default(uuid())
+  companyId     String?
+  operationType String?
+  code          String
+  name          String
+  description   String?   @db.Text
+  displayOrder  Int
+  isActive      Boolean   @default(true)
+  effectiveFrom DateTime
+  effectiveTo   DateTime?
+
+  definitions SiteConditionDefinition[]
+}
+
+model SiteConditionDefinition {
+  id                       String                        @id @default(uuid())
+  categoryId               String
+  category                 SiteConditionCategory         @relation(fields: [categoryId], references: [id])
+  code                     String
+  name                     String
+  description              String?                       @db.Text
+  responseType             PreContractSurveyResponseType
+  allowedOptionsJson       Json?
+  unitOfMeasure            String?
+  severityConfigJson       Json? // Thresholds for HIGH, MEDIUM, LOW
+  requiresEvidence         Boolean                       @default(false)
+  requiresComment          Boolean                       @default(false)
+  serviceApplicabilityJson Json?
+  operationalImpactClass   String? // e.g. MINOR, MAJOR, CRITICAL
+  costImpactClass          String? // e.g. NO_IMPACT, PREMIUM_APPLIES
+  version                  Int                           @default(1)
+  isActive                 Boolean                       @default(true)
+  effectiveFrom            DateTime
+  effectiveTo              DateTime?
+  createdAt                DateTime                      @default(now())
+  updatedAt                DateTime                      @updatedAt
+}
+
+model SurveySiteCondition {
+  id                     String            @id @default(uuid())
+  surveyId               String
+  survey                 PreContractSurvey @relation(fields: [surveyId], references: [id])
+  definitionCode         String
+  definitionVersion      Int
+  valueJson              Json // The typed value observed
+  assessedSeverity       String // e.g. HIGH, MEDIUM, LOW
+  notes                  String?           @db.Text
+  clientResponsibility   Boolean           @default(false)
+  ahhResponsibility      Boolean           @default(false)
+  operationalImpactClass String?
+  costImpactClass        String?
+  createdAt              DateTime          @default(now())
+  updatedAt              DateTime          @updatedAt
+}
+
+// ---------------------------------------------------------
+// COST CONFIGURATION FOUNDATION
+// ---------------------------------------------------------
+
+model CostConfigurationVersion {
+  id            String    @id @default(uuid())
+  companyId     String?
+  operationType String?
+  versionNumber Int
+  status        String    @default("DRAFT") // DRAFT, ACTIVE, RETIRED
+  effectiveFrom DateTime
+  effectiveTo   DateTime?
+  createdBy     String
+  approvedBy    String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  elements CostElementMaster[]
+  rates    CostRateMaster[]
+  formulas CostFormulaDefinition[]
+  drivers  CostDriverMapping[]
+}
+
+model CostCategoryMaster {
+  id            String  @id @default(uuid())
+  companyId     String?
+  operationType String?
+  code          String
+  name          String
+  isActive      Boolean @default(true)
+}
+
+model CostElementMaster {
+  id                       String                   @id @default(uuid())
+  versionId                String
+  version                  CostConfigurationVersion @relation(fields: [versionId], references: [id])
+  categoryId               String
+  code                     String
+  name                     String
+  unitOfMeasure            String?
+  serviceApplicabilityJson Json?
+  isOneTime                Boolean                  @default(false)
+  isDirect                 Boolean                  @default(true)
+  isFixed                  Boolean                  @default(true)
+  clientProvided           Boolean                  @default(false)
+  quantitySource           String // e.g. FIXED, FORMULA, DRIVER
+  rateSource               String // e.g. MASTER, FORMULA, OVERRIDE
+  isActive                 Boolean                  @default(true)
+}
+
+model CostRateMaster {
+  id          String                   @id @default(uuid())
+  versionId   String
+  version     CostConfigurationVersion @relation(fields: [versionId], references: [id])
+  elementCode String
+  rateValue   Float
+  currency    String                   @default("QAR")
+}
+
+model CostFormulaDefinition {
+  id          String                   @id @default(uuid())
+  versionId   String
+  version     CostConfigurationVersion @relation(fields: [versionId], references: [id])
+  code        String
+  name        String
+  formulaAst  Json // Abstract Syntax Tree for non-eval safe execution
+  description String?                  @db.Text
+}
+
+model CostDriverMapping {
+  id                String                   @id @default(uuid())
+  versionId         String
+  version           CostConfigurationVersion @relation(fields: [versionId], references: [id])
+  sourceType        String // SURVEY_ELEMENT, SITE_CONDITION
+  sourceCode        String
+  targetElementCode String?
+  quantityRuleAst   Json?
+  rateRuleAst       Json?
+  escalationRuleAst Json?
 }

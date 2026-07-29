@@ -353,6 +353,14 @@ export function WorkflowManagementTab({ employees, onShowMessage }: WorkflowMana
                   <option value="SECURITY_GUARDING_CONTRACT">Security Guarding Contract</option>
                   <option value="FACILITY_MANAGEMENT_CONTRACT">Facility Management Contract</option>
                   <option value="LEAVE_REQUEST">Leave Management Request</option>
+                  <option value="PRE_CONTRACT_CASE">Pre-Contract Case</option>
+                  <option value="SITE_SURVEY">Site Survey Approval</option>
+                  <option value="COSTING">Costing Approval</option>
+                  <option value="COMMERCIAL_PROPOSAL">Commercial Proposal Approval</option>
+                  <option value="CLIENT_ACCEPTANCE">Client Acceptance</option>
+                  <option value="CONTRACT_CONVERSION">Contract Conversion</option>
+                  <option value="VARIATION_COSTING">Variation Costing</option>
+                  <option value="CONTRACT_ADDENDUM">Contract Addendum</option>
                   <option value="FUTURE_MODULE">Future Module</option>
                 </select>
               </div>
