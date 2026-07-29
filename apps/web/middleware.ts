@@ -22,7 +22,8 @@ export default withAuth(
       // Require origin to match host exactly (strict same-origin)
       // Note: Mobile APIs using bearer tokens might not send origin, but web sessions do.
       if (!origin || new URL(origin).host !== host) {
-          const res = new NextResponse(JSON.stringify({ error: "Forbidden: CSRF / Origin Validation Failed", correlationId: crypto.randomUUID() }), { status: 403 });
+          const correlationId = Date.now().toString(36) + Math.random().toString(36).substring(2);
+          const res = new NextResponse(JSON.stringify({ error: "Forbidden: CSRF / Origin Validation Failed", correlationId }), { status: 403 });
           res.headers.set("Content-Type", "application/json");
           return res;
       }
@@ -51,7 +52,8 @@ export default withAuth(
         
         if (record.count > MAX_REQUESTS) {
             const retryAfter = Math.ceil((record.resetTime - now) / 1000);
-            const res = new NextResponse(JSON.stringify({ error: "Too Many Requests", correlationId: crypto.randomUUID() }), { status: 429 });
+            const correlationId = Date.now().toString(36) + Math.random().toString(36).substring(2);
+            const res = new NextResponse(JSON.stringify({ error: "Too Many Requests", correlationId }), { status: 429 });
             res.headers.set("Retry-After", retryAfter.toString());
             res.headers.set("Content-Type", "application/json");
             return res;
