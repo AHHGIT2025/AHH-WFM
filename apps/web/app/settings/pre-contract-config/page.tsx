@@ -1,34 +1,50 @@
-import React from 'react';
+"use client";
+
+import React, { useState } from 'react';
+import { Card } from '@ahh-wfm/ui';
+import SurveyConfig from './SurveyConfig';
+import SiteConditionsConfig from './SiteConditionsConfig';
+import CostConfig from './CostConfig';
+
+type Tab = 'survey' | 'site' | 'cost';
 
 export default function PreContractConfigPage() {
+  const [activeTab, setActiveTab] = useState<Tab>('survey');
+
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6 max-w-7xl mx-auto">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Pre-Contract Configuration</h1>
-        <p className="text-muted-foreground">Manage templates, site conditions, and cost configuration for Pre-Contract workflows.</p>
+        <p className="text-muted-foreground mt-1 text-sm text-gray-500">Manage templates, site conditions, and cost configuration for Pre-Contract workflows.</p>
       </div>
 
+      <Card padded={false} className="mb-6">
+        <div className="flex border-b border-outline-variant">
+          <button
+            className={`px-6 py-3 text-sm font-bold transition-colors ${activeTab === 'survey' ? 'border-b-2 border-primary text-primary bg-primary/5' : 'text-on-surface-variant hover:bg-surface-container-low'}`}
+            onClick={() => setActiveTab('survey')}
+          >
+            Survey Configuration
+          </button>
+          <button
+            className={`px-6 py-3 text-sm font-bold transition-colors ${activeTab === 'site' ? 'border-b-2 border-primary text-primary bg-primary/5' : 'text-on-surface-variant hover:bg-surface-container-low'}`}
+            onClick={() => setActiveTab('site')}
+          >
+            Site Conditions
+          </button>
+          <button
+            className={`px-6 py-3 text-sm font-bold transition-colors ${activeTab === 'cost' ? 'border-b-2 border-primary text-primary bg-primary/5' : 'text-on-surface-variant hover:bg-surface-container-low'}`}
+            onClick={() => setActiveTab('cost')}
+          >
+            Cost Configuration
+          </button>
+        </div>
+      </Card>
+
       <div className="w-full">
-        <div className="mb-4 flex space-x-4">
-          <button className="font-bold">Survey Configuration</button>
-          <button className="font-bold">Site Conditions</button>
-          <button className="font-bold">Cost Configuration</button>
-        </div>
-
-        <div className="border p-4 rounded">
-          <h2 className="text-xl">Survey Templates</h2>
-          <p className="text-sm text-muted-foreground">Manage survey templates and versions here.</p>
-        </div>
-
-        <div className="border p-4 rounded mt-4">
-          <h2 className="text-xl">Site Conditions</h2>
-          <p className="text-sm text-muted-foreground">Manage site conditions and categories here.</p>
-        </div>
-
-        <div className="border p-4 rounded mt-4">
-          <h2 className="text-xl">Cost Configuration</h2>
-          <p className="text-sm text-muted-foreground">Manage cost configurations, rates, and formulas here.</p>
-        </div>
+        {activeTab === 'survey' && <SurveyConfig />}
+        {activeTab === 'site' && <SiteConditionsConfig />}
+        {activeTab === 'cost' && <CostConfig />}
       </div>
     </div>
   );

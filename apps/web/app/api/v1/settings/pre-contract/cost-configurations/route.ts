@@ -15,8 +15,8 @@ const createSchema = z.object({
 
 export async function GET(request: NextRequest) {
   try {
-    await checkApiAuth(request, ['precontract.surveyConfig.view']);
-    const items = await prisma.surveyTemplate.findMany({
+    await checkApiAuth(request, ['precontract.costConfig.view']);
+    const items = await prisma.costConfigurationHeader.findMany({
       include: { versions: { orderBy: { versionNumber: 'desc' }, take: 1 } },
       orderBy: { createdAt: 'desc' }
     });
@@ -28,32 +28,32 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const user = await checkApiAuth(request, ['precontract.surveyConfig.manage']);
+    const user = await checkApiAuth(request, ['precontract.costConfig.manage']);
     const body = await request.json();
     const data = createSchema.parse(body);
 
     const item = await prisma.$transaction(async (tx) => {
-      const t = await tx.surveyTemplate.create({
+      const t = await tx.costConfigurationHeader.create({
         data: {
           name: data.name || data.title || 'Untitled',
           code: data.code || 'CODE_' + Math.random().toString(36).substring(7),
           description: data.description,
           companyId: data.companyId,
-          operationScope: data.operationScope, title: data.title || 'Untitled',
+          operationType: data.operationType,
           createdBy: user.id || 'system',
-          updatedBy: user.id || 'system',
+          
         }
       });
 
       
-      await tx.surveyTemplateVersion.create({
+      await tx.costConfigurationHeaderVersion.create({
         data: {
-          templateId: t.id,
+          headerId: t.id,
           versionNumber: 1,
           status: 'DRAFT',
           effectiveFrom: new Date(),
           createdBy: user.id || 'system',
-          updatedBy: user.id || 'system',
+          
         }
       });
       

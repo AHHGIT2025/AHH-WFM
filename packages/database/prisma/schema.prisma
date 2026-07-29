@@ -4615,43 +4615,90 @@ model SurveyResponseEvidence {
 // SITE CONDITIONS (CONFIG & TRANSACTION)
 // ---------------------------------------------------------
 
+model SiteConditionConfiguration {
+  id                   String                              @id @default(uuid())
+  code                 String
+  name                 String
+  description          String?
+  companyId            String?
+  operationType        String?
+  serviceApplicability Json? // E.g. ['CLEANING', 'SECURITY']
+  versions             SiteConditionConfigurationVersion[]
+  createdBy            String
+  createdAt            DateTime                            @default(now())
+  updatedAt            DateTime                            @updatedAt
+
+  @@unique([code, companyId])
+}
+
+model SiteConditionConfigurationVersion {
+  id                  String                     @id @default(uuid())
+  configurationId     String
+  configuration       SiteConditionConfiguration @relation(fields: [configurationId], references: [id])
+  versionNumber       Int
+  status              String // 'DRAFT', 'ACTIVE', 'RETIRED'
+  effectiveFrom       DateTime
+  effectiveTo         DateTime?
+  clonedFromVersionId String?
+  workflowTemplateId  String?
+  workflowInstanceId  String?
+  categories          SiteConditionCategory[]
+  definitions         SiteConditionDefinition[]
+  activatedBy         String?
+  activatedAt         DateTime?
+  retiredBy           String?
+  retiredAt           DateTime?
+  createdBy           String
+  createdAt           DateTime                   @default(now())
+  updatedAt           DateTime                   @updatedAt
+
+  @@unique([configurationId, versionNumber])
+}
+
 model SiteConditionCategory {
-  id            String    @id @default(uuid())
-  companyId     String?
-  operationType String?
+  id            String                            @id @default(uuid())
+  versionId     String
+  version       SiteConditionConfigurationVersion @relation(fields: [versionId], references: [id])
   code          String
   name          String
-  description   String?   @db.Text
-  displayOrder  Int
-  isActive      Boolean   @default(true)
+  description   String?
+  displayOrder  Int                               @default(0)
+  isActive      Boolean                           @default(true)
   effectiveFrom DateTime
   effectiveTo   DateTime?
+  createdAt     DateTime                          @default(now())
+  updatedAt     DateTime                          @updatedAt
+  definitions   SiteConditionDefinition[]
 
-  definitions SiteConditionDefinition[]
+  @@unique([versionId, code])
 }
 
 model SiteConditionDefinition {
-  id                       String                        @id @default(uuid())
-  categoryId               String
-  category                 SiteConditionCategory         @relation(fields: [categoryId], references: [id])
-  code                     String
-  name                     String
-  description              String?                       @db.Text
-  responseType             PreContractSurveyResponseType
-  allowedOptionsJson       Json?
-  unitOfMeasure            String?
-  severityConfigJson       Json? // Thresholds for HIGH, MEDIUM, LOW
-  requiresEvidence         Boolean                       @default(false)
-  requiresComment          Boolean                       @default(false)
-  serviceApplicabilityJson Json?
-  operationalImpactClass   String? // e.g. MINOR, MAJOR, CRITICAL
-  costImpactClass          String? // e.g. NO_IMPACT, PREMIUM_APPLIES
-  version                  Int                           @default(1)
-  isActive                 Boolean                       @default(true)
-  effectiveFrom            DateTime
-  effectiveTo              DateTime?
-  createdAt                DateTime                      @default(now())
-  updatedAt                DateTime                      @updatedAt
+  id                     String                            @id @default(uuid())
+  versionId              String
+  version                SiteConditionConfigurationVersion @relation(fields: [versionId], references: [id])
+  categoryId             String
+  category               SiteConditionCategory             @relation(fields: [categoryId], references: [id])
+  code                   String
+  name                   String
+  description            String?
+  responseType           String
+  optionsJson            Json?
+  unit                   String?
+  severityConfigJson     Json?
+  requiresEvidence       Boolean                           @default(false)
+  requiresComment        Boolean                           @default(false)
+  operationalImpactClass String?
+  costImpactClass        String?
+  riskWeight             Float?
+  clientResponsibility   Boolean                           @default(false)
+  ahhResponsibility      Boolean                           @default(false)
+  displayOrder           Int                               @default(0)
+  isActive               Boolean                           @default(true)
+  createdAt              DateTime                          @default(now())
+  updatedAt              DateTime                          @updatedAt
+
+  @@unique([versionId, code])
 }
 
 model SurveySiteCondition {
@@ -4675,32 +4722,62 @@ model SurveySiteCondition {
 // COST CONFIGURATION FOUNDATION
 // ---------------------------------------------------------
 
-model CostConfigurationVersion {
-  id            String    @id @default(uuid())
-  companyId     String?
-  operationType String?
-  versionNumber Int
-  status        String    @default("DRAFT") // DRAFT, ACTIVE, RETIRED
-  effectiveFrom DateTime
-  effectiveTo   DateTime?
-  createdBy     String
-  approvedBy    String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+model CostConfigurationHeader {
+  id                   String                     @id @default(uuid())
+  code                 String
+  name                 String
+  description          String?
+  companyId            String?
+  operationType        String?
+  serviceApplicability Json?
+  versions             CostConfigurationVersion[]
+  createdBy            String
+  createdAt            DateTime                   @default(now())
+  updatedAt            DateTime                   @updatedAt
 
-  elements CostElementMaster[]
-  rates    CostRateMaster[]
-  formulas CostFormulaDefinition[]
-  drivers  CostDriverMapping[]
+  @@unique([code, companyId])
+}
+
+model CostConfigurationVersion {
+  id                  String                  @id @default(uuid())
+  headerId            String
+  header              CostConfigurationHeader @relation(fields: [headerId], references: [id])
+  companyId           String?
+  operationType       String?
+  versionNumber       Int
+  status              String
+  effectiveFrom       DateTime
+  effectiveTo         DateTime?
+  clonedFromVersionId String?
+  workflowTemplateId  String?
+  workflowInstanceId  String?
+  activatedBy         String?
+  activatedAt         DateTime?
+  retiredBy           String?
+  retiredAt           DateTime?
+  createdBy           String
+  approvedBy          String?
+  createdAt           DateTime                @default(now())
+  updatedAt           DateTime                @updatedAt
+
+  categories     CostCategoryMaster[]
+  elements       CostElementMaster[]
+  rates          CostRateMaster[]
+  formulas       CostFormulaDefinition[]
+  driverMappings CostDriverMapping[]
+
+  @@unique([headerId, versionNumber])
 }
 
 model CostCategoryMaster {
-  id            String  @id @default(uuid())
-  companyId     String?
-  operationType String?
-  code          String
-  name          String
-  isActive      Boolean @default(true)
+  id                         String                    @id @default(uuid())
+  companyId                  String?
+  operationType              String?
+  code                       String
+  name                       String
+  isActive                   Boolean                   @default(true)
+  CostConfigurationVersion   CostConfigurationVersion? @relation(fields: [costConfigurationVersionId], references: [id])
+  costConfigurationVersionId String?
 }
 
 model CostElementMaster {

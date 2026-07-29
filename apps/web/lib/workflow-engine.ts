@@ -1,5 +1,17 @@
 import { prisma } from '@ahh-wfm/database';
 
+export const PC1_WORKFLOW_MODULE_TYPES = [
+  'PRE_CONTRACT_CASE',
+  'SITE_SURVEY',
+  'COSTING',
+  'COMMERCIAL_PROPOSAL',
+  'CLIENT_ACCEPTANCE',
+  'CONTRACT_CONVERSION',
+  'VARIATION_COSTING',
+  'CONTRACT_ADDENDUM'
+] as const;
+
+export type PC1WorkflowModuleType = typeof PC1_WORKFLOW_MODULE_TYPES[number];
 export class WorkflowEngine {
   static async submitCase(moduleType: string, referenceId: string, companyId: string | null, operationScope: string | null, userId: string) {
     // 1. Find active workflow template
