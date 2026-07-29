@@ -1,4 +1,4 @@
-﻿-- AlterTable
+-- AlterTable
 ALTER TABLE `CostCategoryMaster` ADD COLUMN `costConfigurationVersionId` VARCHAR(191) NULL;
 
 -- AlterTable
