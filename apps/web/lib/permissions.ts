@@ -35,7 +35,12 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "manpower.roster.changeRequest.selfApprovalOverride", "manpower.roster.acknowledge", "manpower.roster.publication.viewHistory",
     "manpower.reconciliation.view", "manpower.reconciliation.run", "manpower.reconciliation.review", "manpower.reconciliation.excuse",
     "manpower.reconciliation.classifyUnexcused", "manpower.reconciliation.markSyncDelay", "manpower.reconciliation.manageConfig",
-    "manpower.advisory.view", "manpower.advisory.calculate", "manpower.advisory.review", "manpower.advisory.lock", "manpower.advisory.export", "manpower.calendars.manage", "manpower.calendars.approve"
+    "manpower.advisory.view", "manpower.advisory.calculate", "manpower.advisory.review", "manpower.advisory.lock", "manpower.advisory.export", "manpower.calendars.manage", "manpower.calendars.approve",
+    "precontract.case.view", "precontract.case.manage", "precontract.prospectClient.view", "precontract.prospectClient.manage",
+    "precontract.prospectiveSite.view", "precontract.prospectiveSite.manage", "precontract.surveyConfig.view", "precontract.surveyConfig.manage",
+    "precontract.siteConditionConfig.view", "precontract.siteConditionConfig.manage", "precontract.costConfig.view", "precontract.costConfig.manage",
+    "precontract.formulaRuleConfig.view", "precontract.formulaRuleConfig.manage", "precontract.config.activate", "precontract.config.retire",
+    "precontract.workflow.submit", "precontract.workflow.review", "precontract.workflow.approve"
   ],
   ADMIN: [
     "dashboard.view", "employees.view", "employees.create", "employees.edit", "employees.bulkUpload", "employees.manage",
@@ -73,7 +78,12 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "manpower.roster.changeRequest.approve", "manpower.roster.changeRequest.reject", "manpower.roster.changeRequest.withdraw",
     "manpower.roster.publication.viewHistory",
     "manpower.reconciliation.view", "manpower.reconciliation.run", "manpower.reconciliation.review", "manpower.reconciliation.excuse",
-    "manpower.reconciliation.classifyUnexcused", "manpower.reconciliation.markSyncDelay", "manpower.reconciliation.manageConfig"
+    "manpower.reconciliation.classifyUnexcused", "manpower.reconciliation.markSyncDelay", "manpower.reconciliation.manageConfig",
+    "precontract.case.view", "precontract.case.manage", "precontract.prospectClient.view", "precontract.prospectClient.manage",
+    "precontract.prospectiveSite.view", "precontract.prospectiveSite.manage", "precontract.surveyConfig.view", "precontract.surveyConfig.manage",
+    "precontract.siteConditionConfig.view", "precontract.siteConditionConfig.manage", "precontract.costConfig.view", "precontract.costConfig.manage",
+    "precontract.formulaRuleConfig.view", "precontract.formulaRuleConfig.manage", "precontract.config.activate", "precontract.config.retire",
+    "precontract.workflow.submit", "precontract.workflow.review", "precontract.workflow.approve"
   ],
   SYSTEM_ADMIN: [
     "settings.view", "settings.manage", "users.view", "users.manage", "roles.view", "roles.manage",

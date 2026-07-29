@@ -1944,6 +1944,7 @@ model WorkflowTemplate {
   createdAt     DateTime                @default(now())
   updatedAt     DateTime                @updatedAt
   levels        WorkflowTemplateLevel[]
+  instances     WorkflowInstance[]
 }
 
 model WorkflowTemplateLevel {
@@ -1973,6 +1974,32 @@ model WorkflowTemplateApprover {
   roleName     String?
   createdAt    DateTime              @default(now())
   updatedAt    DateTime              @updatedAt
+}
+
+model WorkflowInstance {
+  id                 String                  @id @default(uuid())
+  templateId         String
+  template           WorkflowTemplate        @relation(fields: [templateId], references: [id])
+  moduleType         String
+  referenceId        String
+  status             String // IN_PROGRESS, APPROVED, REJECTED, RETURNED
+  currentLevelNumber Int                     @default(1)
+  companyId          String?
+  operationScope     String?
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
+  history            WorkflowActionHistory[]
+}
+
+model WorkflowActionHistory {
+  id          String           @id @default(uuid())
+  instanceId  String
+  instance    WorkflowInstance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+  levelNumber Int
+  action      String // SUBMIT, APPROVE, REJECT, RETURN
+  actedBy     String
+  remarks     String?
+  createdAt   DateTime         @default(now())
 }
 
 model WorkflowDelegation {

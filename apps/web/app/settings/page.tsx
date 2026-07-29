@@ -163,6 +163,7 @@ const ACCORDION_GROUPS = [
       { label: "General Settings", capabilities: { view: "system.config.view", edit: "system.config.manage" } },
       { label: "Master Data", capabilities: { view: "masterdata.view", edit: "masterdata.manage" } },
       { label: "Workflow Setup", capabilities: { view: "settings.view", edit: "settings.manage" } },
+      { label: "Pre-Contract Configuration", capabilities: { view: "precontract.config.view", edit: "precontract.config.manage" } },
       { label: "User Roles & Permissions", capabilities: { view: "roles.view", manage: "settings.roles.manage" } },
       { label: "Integration Hub", capabilities: { view: "settings.integration.view", manage: "settings.integration.manage" } },
       { label: "Backup & Restore", capabilities: { view: "settings.backup.view", manage: "settings.backup.manage" } },
