@@ -36,8 +36,7 @@ export class SurveySnapshotEngine {
       include: {
         case: {
           include: {
-            prospectClient: true,
-            prospectiveSite: true
+            prospectClient: true
           }
         },
         snapshot: {

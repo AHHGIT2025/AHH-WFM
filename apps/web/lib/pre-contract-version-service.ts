@@ -41,7 +41,7 @@ export class PreContractVersionService {
     const template = await prisma.surveyTemplate.findUnique({ where: { id: version.templateId } });
     
     // 3. Check overlaps
-    await this.checkOverlap(entityType, version.templateId, effectiveFrom, effectiveTo || null, template?.companyId || null, template?.operationScope || null);
+    await this.checkOverlap(entityType, version.templateId, effectiveFrom, effectiveTo || null, template?.companyId || null, template?.operationType || null);
     
     // 4. Update
     return prisma.surveyTemplateVersion.update({
