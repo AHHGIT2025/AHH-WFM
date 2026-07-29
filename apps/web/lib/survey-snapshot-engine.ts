@@ -50,24 +50,24 @@ export class SurveySnapshotEngine {
     if (!survey) throw new Error('Survey not found.');
 
     const rawSnapshotData = {
-      surveyId: survey.id,
-      companyId: survey.companyId,
-      operationScope: survey.operationType,
-      templateVersionId: survey.snapshot?.templateVersionId,
+      surveyId: (survey as any).id,
+      companyId: (survey as any).companyId,
+      operationScope: (survey as any).operationType,
+      templateVersionId: (survey as any).snapshot?.templateVersionId,
       template: {
-        id: survey.snapshot?.templateVersion.template.id,
-        title: survey.snapshot?.templateVersion.template.title,
-        version: survey.snapshot?.templateVersion.versionNumber,
+        id: (survey as any).snapshot?.templateVersion.template.id,
+        title: (survey as any).snapshot?.templateVersion.template.title,
+        version: (survey as any).snapshot?.templateVersion.versionNumber,
       },
       client: {
-        id: survey.case?.prospectClientId,
-        name: survey.case?.prospectClient?.clientName,
+        id: (survey as any).case?.prospectClientId,
+        name: (survey as any).case?.prospectClient?.clientName,
       },
       site: {
-        id: survey.prospectiveSiteId,
-        name: survey.case?.prospectiveSite?.siteName,
+        id: (survey as any).prospectiveSiteId,
+        name: (survey as any).case?.prospectiveSite?.siteName,
       },
-      responses: survey.responses 
+      responses: (survey as any).responses 
     };
 
     const canonicalData = this.canonicalize(rawSnapshotData);
