@@ -4770,51 +4770,147 @@ model CostConfigurationVersion {
 }
 
 model CostCategoryMaster {
-  id                         String                    @id @default(uuid())
-  companyId                  String?
-  operationType              String?
-  code                       String
-  name                       String
+  id                 String  @id @default(uuid())
+  companyId          String?
+  operationType      String?
+  code               String
+  name               String
+  description        String? @db.Text
+  categoryType       String? // e.g. OVERHEAD, DIRECT
+  displayOrder       Int     @default(0)
+  isDirect           Boolean @default(true)
+  recoverableDefault Boolean @default(true)
+  departmentOwnerId  String?
+
+  versionNumber       Int       @default(1)
+  previousVersionId   String?
+  clonedFromVersionId String?
+  status              String    @default("DRAFT") // DRAFT, UNDER_REVIEW, APPROVED, ACTIVE, RETIRED, SUPERSEDED, REJECTED
+  effectiveFrom       DateTime?
+  effectiveTo         DateTime?
+  workflowInstanceId  String?
+
+  createdById   String?
+  submittedById String?
+  reviewedById  String?
+  approvedById  String?
+  activatedById String?
+  retiredById   String?
+
   isActive                   Boolean                   @default(true)
   CostConfigurationVersion   CostConfigurationVersion? @relation(fields: [costConfigurationVersionId], references: [id])
   costConfigurationVersionId String?
 }
 
 model CostElementMaster {
-  id                       String                   @id @default(uuid())
-  versionId                String
-  version                  CostConfigurationVersion @relation(fields: [versionId], references: [id])
-  categoryId               String
-  code                     String
-  name                     String
+  id                        String                   @id @default(uuid())
+  versionId                 String
+  version                   CostConfigurationVersion @relation(fields: [versionId], references: [id])
+  categoryId                String
+  code                      String
+  name                      String
+  businessDescription       String?                  @db.Text
+  costUnit                  String?
+  defaultAllocationMethod   String?
+  frequency                 String?
+  currency                  String                   @default("QAR")
+  isRecoverable             Boolean                  @default(true)
+  isTaxable                 Boolean                  @default(false)
+  isMandatory               Boolean                  @default(false)
+  clientProvidedEligibility Boolean                  @default(false)
+  calculationType           String                   @default("FIXED_RATE") // FIXED_RATE, FORMULA
+  departmentOwnerId         String?
+  requiresSupportingDoc     Boolean                  @default(false)
+  roundingRule              String?
+
   unitOfMeasure            String?
   serviceApplicabilityJson Json?
-  isOneTime                Boolean                  @default(false)
-  isDirect                 Boolean                  @default(true)
-  isFixed                  Boolean                  @default(true)
-  clientProvided           Boolean                  @default(false)
+  isOneTime                Boolean @default(false)
+  isDirect                 Boolean @default(true)
+  isFixed                  Boolean @default(true)
+  clientProvided           Boolean @default(false)
   quantitySource           String // e.g. FIXED, FORMULA, DRIVER
   rateSource               String // e.g. MASTER, FORMULA, OVERRIDE
-  isActive                 Boolean                  @default(true)
+
+  versionNumber       Int       @default(1)
+  previousVersionId   String?
+  clonedFromVersionId String?
+  status              String    @default("DRAFT")
+  effectiveFrom       DateTime?
+  effectiveTo         DateTime?
+  workflowInstanceId  String?
+
+  createdById   String?
+  submittedById String?
+  approvedById  String?
+  activatedById String?
+
+  isActive Boolean @default(true)
 }
 
 model CostRateMaster {
-  id          String                   @id @default(uuid())
-  versionId   String
-  version     CostConfigurationVersion @relation(fields: [versionId], references: [id])
-  elementCode String
-  rateValue   Float
-  currency    String                   @default("QAR")
+  id                 String                   @id @default(uuid())
+  versionId          String
+  version            CostConfigurationVersion @relation(fields: [versionId], references: [id])
+  elementCode        String
+  rateValue          Float
+  rateCurrency       String                   @default("QAR")
+  baseCurrency       String                   @default("QAR")
+  reportingCurrency  String?
+  exchangeRate       Float                    @default(1.0)
+  exchangeRateSource String?
+
+  companyId         String?
+  operationScope    String?
+  positionId        String?
+  locationId        String?
+  clientId          String?
+  serviceType       String?
+  supplierId        String?
+  departmentOwnerId String?
+  financeReviewerId String?
+
+  versionNumber       Int       @default(1)
+  previousVersionId   String?
+  clonedFromVersionId String?
+  status              String    @default("DRAFT")
+  effectiveFrom       DateTime?
+  effectiveTo         DateTime?
+  workflowInstanceId  String?
+
+  createdById   String?
+  submittedById String?
+  approvedById  String?
+  activatedById String?
 }
 
 model CostFormulaDefinition {
-  id          String                   @id @default(uuid())
-  versionId   String
-  version     CostConfigurationVersion @relation(fields: [versionId], references: [id])
-  code        String
-  name        String
-  formulaAst  Json // Abstract Syntax Tree for non-eval safe execution
-  description String?                  @db.Text
+  id                  String                   @id @default(uuid())
+  versionId           String
+  version             CostConfigurationVersion @relation(fields: [versionId], references: [id])
+  code                String
+  name                String
+  formulaAst          Json
+  driverDependencies  Json?
+  elementDependencies Json?
+  testCases           Json?
+  validationStatus    String?
+  validationErrors    Json?
+  explanationTemplate String?                  @db.Text
+  hash                String?
+
+  versionNumber       Int       @default(1)
+  previousVersionId   String?
+  clonedFromVersionId String?
+  status              String    @default("DRAFT")
+  effectiveFrom       DateTime?
+  effectiveTo         DateTime?
+  workflowInstanceId  String?
+
+  createdById  String?
+  approvedById String?
+
+  description String? @db.Text
 }
 
 model CostDriverMapping {
@@ -4827,4 +4923,71 @@ model CostDriverMapping {
   quantityRuleAst   Json?
   rateRuleAst       Json?
   escalationRuleAst Json?
+}
+
+model CostDriverMaster {
+  id              String  @id @default(uuid())
+  code            String  @unique
+  name            String
+  description     String? @db.Text
+  dataType        String // NUMBER, BOOLEAN, STRING
+  unit            String?
+  min             Float?
+  max             Float?
+  isRequired      Boolean @default(false)
+  source          String // USER_INPUT, DERIVED
+  operationScope  String?
+  validationRules Json?
+
+  versionNumber      Int       @default(1)
+  status             String    @default("DRAFT")
+  effectiveFrom      DateTime?
+  effectiveTo        DateTime?
+  workflowInstanceId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model CostPackageMaster {
+  id             String  @id @default(uuid())
+  code           String
+  name           String
+  description    String? @db.Text
+  companyId      String?
+  operationScope String?
+  hash           String?
+
+  versionNumber       Int       @default(1)
+  previousVersionId   String?
+  clonedFromVersionId String?
+  status              String    @default("DRAFT")
+  effectiveFrom       DateTime?
+  effectiveTo         DateTime?
+  workflowInstanceId  String?
+
+  createdById  String?
+  approvedById String?
+
+  items CostPackageItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model CostPackageItem {
+  id                 String            @id @default(uuid())
+  packageId          String
+  package            CostPackageMaster @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  elementId          String // references CostElementMaster
+  defaultQuantity    Float?
+  allocationOverride String?
+  isMandatory        Boolean           @default(true)
+}
+
+model RateActivationLock {
+  id         String   @id @default(uuid())
+  key        String   @unique
+  lockedAt   DateTime @default(now())
+  lockedById String?
 }
