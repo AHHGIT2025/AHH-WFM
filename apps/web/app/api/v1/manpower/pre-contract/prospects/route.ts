@@ -1,42 +1,36 @@
-// @ts-nocheck
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@ahh-wfm/database';
 import { checkApiAuth } from '@/lib/api-guards';
+
 export async function POST(request: NextRequest) {
   try {
-    const user = await checkApiAuth(request, ['precontract.prospectClient.manage']);
+    const auth = await checkApiAuth(undefined, { requiredPermission: 'precontract.prospect.manage' });
+    if (auth.error) return auth.error;
+    const user = auth.session.user;
     const body = await request.json();
     const data = {
-      clientName: body.clientName,
-      contactPerson: body.contactPerson,
-      contactEmail: body.contactEmail,
-      contactPhone: body.contactPhone,
+      name: body.clientName || body.name,
+      contactPersonName: body.contactPerson,
+      crNumber: body.crNumber,
       companyId: body.companyId,
-      operationScope: body.operationScope,
+      operationType: body.operationScope || body.operationType,
     };
-    if (!data.clientName || !data.contactEmail) throw new Error('Missing fields');
+    if (!data.name) throw new Error('Missing fields');
 
-    // Duplicate detection - naive implementation
     const existing = await prisma.preContractProspectClient.findFirst({
-      where: {
-        clientName: data.clientName,
-      }
+      where: { name: data.name }
     });
-
     if (existing) {
-      return NextResponse.json({ error: 'Possible duplicate prospect client name detected.' }, { status: 409 });
+      return NextResponse.json({ error: 'Prospect already exists' }, { status: 400 });
     }
 
     const prospect = await prisma.preContractProspectClient.create({
       data: {
-        clientName: data.clientName,
-        contactPerson: data.contactPerson,
-        contactEmail: data.contactEmail,
-        contactPhone: data.contactPhone,
+        name: data.name,
+        contactPersonName: data.contactPersonName,
+        crNumber: data.crNumber,
         companyId: data.companyId,
-        operationScope: data.operationScope,
-        createdBy: user.id || 'system',
-        updatedBy: user.id || 'system',
+        operationType: data.operationType,
       }
     });
 
@@ -48,16 +42,14 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    const user = await checkApiAuth(request, ['precontract.prospectClient.view', 'precontract.prospectClient.manage']);
-    
-    // In a real system, apply user.companyId / user.operationScope filtering here
+    const auth = await checkApiAuth(undefined, { requiredPermission: 'precontract.prospect.view' });
+    if (auth.error) return auth.error;
+    const user = auth.session.user;
     const prospects = await prisma.preContractProspectClient.findMany({
       orderBy: { createdAt: 'desc' }
     });
-
     return NextResponse.json(prospects);
   } catch (error: any) {
-    return NextResponse.json({ error: 'Unauthorized or invalid request' }, { status: 400 });
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 }
-
