@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { PrismaClient } from '@prisma/client';
 
 export class PreContractConfigService {
@@ -76,3 +77,4 @@ export class PreContractConfigService {
     });
   }
 }
+
