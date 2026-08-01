@@ -5,13 +5,13 @@ describe("Calendar Authorization Diagnostics", () => {
   const approveOnlyUser = { id: "u4", role: "FINANCE_MANAGER", permissions: ["manpower.calendars.approve"] };
   const unauthorizedUser = { id: "u5", role: "EMPLOYEE", permissions: [] };
 
-  function isAdminUser(user) {
+  function isAdminUser(user: any) {
     if (!user || !user.role) return false;
     const role = user.role.toUpperCase().replace(/\s+/g, "_");
     return role === "ADMIN" || role === "SUPER_ADMIN";
   }
 
-  function hasPermission(user, permissionKey) {
+  function hasPermission(user: any, permissionKey: string) {
     if (!user) return false;
     if (isAdminUser(user)) return true;
     if (user.permissions && Array.isArray(user.permissions)) {
