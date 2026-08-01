@@ -204,7 +204,7 @@ export class CommercialCostService {
   // ── Formula synthetic test ─────────────────────────────────────────────────
 
   testFormula(ast: unknown, variables: Record<string, number>) {
-    const evaluator = new AstEvaluator(variables);
+    const evaluator = new AstEvaluator(variables, { maxDepth: 10, maxNodes: 50, maxDependencies: 20 });
     const result = evaluator.evaluate(ast as any);
     if (!isFinite(result) || isNaN(result)) throw new Error("422: Formula produced a non-finite result");
     if (result < -1_000_000_000_000 || result > 1_000_000_000_000) {

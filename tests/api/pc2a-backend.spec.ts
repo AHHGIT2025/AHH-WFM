@@ -80,13 +80,13 @@ describe("PC-2A Formula Engine (canonical AstEvaluator)", () => {
       for (let i = 0; i < 10; i++) {
         d10 = { op: "+", left: { const: 1 }, right: d10 };
       }
-      expect(new AstEvaluator().evaluate(d10)).toBe(11);
+      expect(new AstEvaluator({}, { maxDepth: 10, maxNodes: 50, maxDependencies: 20 }).evaluate(d10)).toBe(11);
 
       let d11: any = { const: 1 };
       for (let i = 0; i < 11; i++) {
         d11 = { op: "+", left: { const: 1 }, right: d11 };
       }
-      expect(() => new AstEvaluator().evaluate(d11)).toThrow("exceeded maximum depth");
+      expect(() => new AstEvaluator({}, { maxDepth: 10, maxNodes: 50, maxDependencies: 20 }).evaluate(d11)).toThrow("exceeded maximum depth");
     });
 
     function buildBalancedTree(nodeCount: number): any {
@@ -107,10 +107,10 @@ describe("PC-2A Formula Engine (canonical AstEvaluator)", () => {
 
     it("accepts up to 50 nodes, rejects 51 nodes", () => {
       const tree50 = buildBalancedTree(50);
-      expect(new AstEvaluator().evaluate(tree50)).toBeGreaterThan(0);
+      expect(new AstEvaluator({}, { maxDepth: 10, maxNodes: 50, maxDependencies: 20 }).evaluate(tree50)).toBeGreaterThan(0);
 
       const tree51 = buildBalancedTree(51);
-      expect(() => new AstEvaluator().evaluate(tree51)).toThrow("exceeded maximum node count");
+      expect(() => new AstEvaluator({}, { maxDepth: 10, maxNodes: 50, maxDependencies: 20 }).evaluate(tree51)).toThrow("exceeded maximum node count");
     });
 
     function buildBalancedDependencyTree(startIndex: number, endIndex: number): any {
@@ -129,12 +129,12 @@ describe("PC-2A Formula Engine (canonical AstEvaluator)", () => {
       const context20: Record<string, number> = {};
       for (let i = 1; i <= 20; i++) context20[`V${i}`] = 1;
       const tree20 = buildBalancedDependencyTree(1, 20);
-      expect(new AstEvaluator(context20).evaluate(tree20)).toBe(20);
+      expect(new AstEvaluator(context20, { maxDepth: 10, maxNodes: 50, maxDependencies: 20 }).evaluate(tree20)).toBe(20);
 
       const context21: Record<string, number> = {};
       for (let i = 1; i <= 21; i++) context21[`V${i}`] = 1;
       const tree21 = buildBalancedDependencyTree(1, 21);
-      expect(() => new AstEvaluator(context21).evaluate(tree21)).toThrow("exceeded maximum dependencies");
+      expect(() => new AstEvaluator(context21, { maxDepth: 10, maxNodes: 50, maxDependencies: 20 }).evaluate(tree21)).toThrow("exceeded maximum dependencies");
     });
   });
 

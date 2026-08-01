@@ -21,33 +21,45 @@ export interface AstContext {
 
 const ALLOWED_OPERATORS = new Set(['+', '-', '*', '/', 'min', 'max', 'round', '>', '<', '>=', '<=', '==', '!=']);
 
-const MAX_DEPTH = 10;
-const MAX_NODES = 50;
-const MAX_DEPS = 20;
+export interface AstEvaluatorOptions {
+  maxDepth?: number;
+  maxNodes?: number;
+  maxDependencies?: number;
+}
 
 export class AstEvaluator {
   private nodeCount = 0;
   private dependencies = new Set<string>();
+  private maxDepth: number;
+  private maxNodes: number;
+  private maxDependencies: number;
 
-  constructor(private context: AstContext = {}) {}
+  constructor(
+    private context: AstContext = {},
+    options: AstEvaluatorOptions = {}
+  ) {
+    this.maxDepth = options.maxDepth ?? 50;
+    this.maxNodes = options.maxNodes ?? 500;
+    this.maxDependencies = options.maxDependencies ?? 100;
+  }
 
   public evaluate(node: AstNode): number {
     this.nodeCount = 0;
     this.dependencies.clear();
     const result = this._evaluate(node, 0);
-    if (this.dependencies.size > MAX_DEPS) {
-      throw new Error(`AST evaluation exceeded maximum dependencies of ${MAX_DEPS}`);
+    if (this.dependencies.size > this.maxDependencies) {
+      throw new Error(`AST evaluation exceeded maximum dependencies of ${this.maxDependencies}`);
     }
     return result;
   }
 
   private _evaluate(node: AstNode, depth: number): number {
     this.nodeCount++;
-    if (depth > MAX_DEPTH) {
-      throw new Error("AST evaluation exceeded maximum depth of " + MAX_DEPTH);
+    if (depth > this.maxDepth) {
+      throw new Error("AST evaluation exceeded maximum depth of " + this.maxDepth);
     }
-    if (this.nodeCount > MAX_NODES) {
-      throw new Error("AST evaluation exceeded maximum node count of " + MAX_NODES);
+    if (this.nodeCount > this.maxNodes) {
+      throw new Error("AST evaluation exceeded maximum node count of " + this.maxNodes);
     }
 
     if (typeof node === 'object' && node !== null && 'const' in node) {
