@@ -12,7 +12,8 @@
     "paths": {
       "@/*": ["apps/web/*"],
       "@ahh-wfm/types": ["packages/types/src"],
-      "@ahh-wfm/mock-data": ["packages/mock-data/src"]
+      "@ahh-wfm/mock-data": ["packages/mock-data/src"],
+      "@ahh-wfm/database": ["packages/database/src"]
     }
   },
   "include": ["**/*.ts", "**/*.tsx"],

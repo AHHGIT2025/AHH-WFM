@@ -1,11 +1,13 @@
 // POST /api/v1/.../[entityType]/[id]/versions/[versionId]/lifecycle
-// Handles: SUBMIT, APPROVE, REJECT, RETIRE, ACTIVATE
+// Handles: SUBMIT, APPROVE, REJECT, RETIRE, ACTIVATE, RESUBMIT
 import { NextResponse } from "next/server";
 import { prisma } from "@ahh-wfm/database";
 import {
   checkApiAuth, getTable, parseBody, writeAudit, safeError,
   assertValidTransition, actionToState, LifecycleActionSchema,
+  ENTITY_TYPE_MAP,
 } from "@/lib/server/pc2a-shared";
+import { CommercialCostService } from "@/lib/server/commercial-cost-service";
 
 export async function POST(
   req: Request,
@@ -30,6 +32,21 @@ export async function POST(
       return NextResponse.json({ success: false, error: "Not found" }, { status: 404 });
     }
 
+    // ── RESUBMIT: Creates a new Draft cloned from the rejected version ───────
+    if (action === "RESUBMIT") {
+      const typeKey = ENTITY_TYPE_MAP[params.entityType];
+      const service = new CommercialCostService(user);
+      const newVersion = await service.resubmitVersion(typeKey, params.versionId);
+
+      await writeAudit(user.id, "RESUBMITTED", tbl.entityLabel, newVersion.id, {
+        fromVersionId: params.versionId,
+        versionNumber: newVersion.versionNumber,
+        comment,
+      });
+
+      return NextResponse.json({ success: true, data: newVersion }, { status: 201 });
+    }
+
     let newState: string;
     try { newState = actionToState(action, version.status); } catch (e) { return safeError(e) as any; }
     try { assertValidTransition(version.status, newState); } catch (e) { return safeError(e) as any; }
@@ -40,12 +57,6 @@ export async function POST(
         return NextResponse.json(
           { success: false, error: "Maker and Checker must differ. You cannot approve your own submission." },
           { status: 409 }
-        );
-      }
-      if (user.role === "SUPER_ADMIN") {
-        return NextResponse.json(
-          { success: false, error: "SUPER_ADMIN cannot bypass Maker/Checker rules." },
-          { status: 403 }
         );
       }
     }

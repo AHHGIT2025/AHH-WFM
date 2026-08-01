@@ -21,17 +21,24 @@ export interface AstContext {
 
 const ALLOWED_OPERATORS = new Set(['+', '-', '*', '/', 'min', 'max', 'round', '>', '<', '>=', '<=', '==', '!=']);
 
-const MAX_DEPTH = 50;
-const MAX_NODES = 500;
+const MAX_DEPTH = 10;
+const MAX_NODES = 50;
+const MAX_DEPS = 20;
 
 export class AstEvaluator {
   private nodeCount = 0;
+  private dependencies = new Set<string>();
 
   constructor(private context: AstContext = {}) {}
 
   public evaluate(node: AstNode): number {
     this.nodeCount = 0;
-    return this._evaluate(node, 0);
+    this.dependencies.clear();
+    const result = this._evaluate(node, 0);
+    if (this.dependencies.size > MAX_DEPS) {
+      throw new Error(`AST evaluation exceeded maximum dependencies of ${MAX_DEPS}`);
+    }
+    return result;
   }
 
   private _evaluate(node: AstNode, depth: number): number {
@@ -48,6 +55,7 @@ export class AstEvaluator {
     }
 
     if (typeof node === 'object' && node !== null && 'var' in node) {
+      this.dependencies.add(node.var);
       const val = this.context[node.var];
       if (val === undefined || val === null) {
         throw new Error(`AST evaluation missing variable: ${node.var}`);

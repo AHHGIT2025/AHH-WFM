@@ -148,7 +148,7 @@ const PackageItemSchema = z.object({
 }).strict();
 
 const LifecycleActionSchema = z.object({
-  action: z.enum(["SUBMIT", "APPROVE", "REJECT", "RETIRE", "ACTIVATE"]),
+  action: z.enum(["SUBMIT", "APPROVE", "REJECT", "RETIRE", "ACTIVATE", "RESUBMIT"]),
   comment: z.string().max(1000).optional(),
 }).strict();
 
@@ -194,7 +194,7 @@ const VALID_TRANSITIONS: Record<string, string[]> = {
   UNDER_REVIEW: ["APPROVED", "REJECTED"],
   APPROVED: ["ACTIVE", "RETIRED"],
   ACTIVE: ["RETIRED", "SUPERSEDED"],
-  REJECTED: ["DRAFT"],
+  REJECTED: [],
   RETIRED: [],
   SUPERSEDED: [],
 };
@@ -206,6 +206,7 @@ function actionToState(action: string, currentStatus: string): string {
     case "REJECT": return "REJECTED";
     case "RETIRE": return "RETIRED";
     case "ACTIVATE": return "ACTIVE";
+    case "RESUBMIT": return "DRAFT";
     default: throw new Error(`409: Unknown lifecycle action: ${action}`);
   }
 }

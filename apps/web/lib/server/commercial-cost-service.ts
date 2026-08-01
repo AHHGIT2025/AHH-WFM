@@ -100,9 +100,6 @@ export class CommercialCostService {
       if (version.createdBy === this.user.id) {
         throw new Error("409: Maker and Checker must differ. You cannot approve your own submission.");
       }
-      if (["SUPER_ADMIN"].includes((this.user.role ?? "").toUpperCase())) {
-        throw new Error("403: SUPER_ADMIN cannot bypass Maker/Checker rules.");
-      }
     }
 
     if (newState === "ACTIVE") {
@@ -113,6 +110,53 @@ export class CommercialCostService {
       where: { id: versionId },
       data: { status: newState, ...(newState === "APPROVED" ? { approvedBy: this.user.id } : {}) },
     });
+  }
+
+  async resubmitVersion(entityType: string, versionId: string) {
+    const tbl = this.getTable(entityType);
+    const version = await (prisma as any)[tbl.version].findUnique({
+      where: { id: versionId },
+      include: entityType === "PACKAGE" ? { items: true } : undefined,
+    });
+    if (!version) throw new Error("404: Version not found");
+    if (version.status !== "REJECTED") {
+      throw new Error("409: Only REJECTED versions can be resubmitted");
+    }
+
+    const existingOpen = await (prisma as any)[tbl.version].findFirst({
+      where: { masterId: version.masterId, status: { in: ["DRAFT", "UNDER_REVIEW"] } },
+    });
+    if (existingOpen) throw new Error("409: Cannot resubmit while another open version exists");
+
+    const last = await (prisma as any)[tbl.version].findFirst({
+      where: { masterId: version.masterId },
+      orderBy: { versionNumber: "desc" },
+    });
+    const versionNumber = (last?.versionNumber ?? 0) + 1;
+
+    // Clone content, omitting system fields
+    const { id, createdAt, updatedAt, versionNumber: _vn, status: _st, approvedBy: _ap, clonedFromVersionId: _cf, items, ...fields } = version;
+
+    const newVersion = await (prisma as any)[tbl.version].create({
+      data: {
+        ...fields,
+        versionNumber,
+        status: "DRAFT",
+        clonedFromVersionId: versionId,
+        createdBy: this.user.id,
+      },
+    });
+
+    if (entityType === "PACKAGE" && Array.isArray(items)) {
+      await prisma.costPackageItem.createMany({
+        data: items.map((it: any) => {
+          const { id: _iid, createdAt: _ca, updatedAt: _ua, packageVersionId: _pv, ...itFields } = it;
+          return { ...itFields, packageVersionId: newVersion.id };
+        }),
+      });
+    }
+
+    return newVersion;
   }
 
   // ── Concurrency-safe activation ────────────────────────────────────────────
