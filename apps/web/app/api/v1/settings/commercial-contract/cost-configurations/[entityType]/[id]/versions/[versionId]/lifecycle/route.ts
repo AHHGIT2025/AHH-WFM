@@ -63,52 +63,60 @@ export async function POST(
 
     // ── ACTIVATE: concurrency-safe with FOR UPDATE ────────────────────────────
     if (action === "ACTIVATE") {
-      const result = await prisma.$transaction(async (tx: any) => {
-        // Ensure lock row exists
-        await tx.$executeRaw`
-          INSERT IGNORE INTO CostRateActivationLock (id, entityType, masterId, versionId, locked, updatedAt)
-          VALUES (UUID(), ${tbl.entityLabel}, ${params.id}, ${params.versionId}, 0, NOW(3))
-        `;
-        // Acquire row-level lock
-        await tx.$executeRaw`
-          SELECT id FROM CostRateActivationLock
-          WHERE entityType = ${tbl.entityLabel} AND masterId = ${params.id}
-          FOR UPDATE
-        `;
+      try {
+        const result = await prisma.$transaction(async (tx: any) => {
+          // Ensure lock row exists
+          await tx.$executeRaw`
+            INSERT IGNORE INTO CostRateActivationLock (id, entityType, masterId, versionId, locked, updatedAt)
+            VALUES (UUID(), ${tbl.entityLabel}, ${params.id}, ${params.versionId}, 0, NOW(3))
+          `;
+          // Acquire row-level lock
+          await tx.$executeRaw`
+            SELECT id FROM CostRateActivationLock
+            WHERE entityType = ${tbl.entityLabel} AND masterId = ${params.id}
+            FOR UPDATE
+          `;
 
-        // Recheck no overlapping ACTIVE in same window
-        const actives = await (tx as any)[tbl.version].findMany({
-          where: { masterId: params.id, status: "ACTIVE" },
-        });
-        for (const active of actives) {
-          const aFrom = active.effectiveFrom.getTime();
-          const aTo   = active.effectiveTo?.getTime() ?? Infinity;
-          const nFrom = version.effectiveFrom.getTime();
-          const nTo   = version.effectiveTo?.getTime() ?? Infinity;
-          // half-open: [nFrom, nTo) overlaps [aFrom, aTo) when nFrom < aTo && aFrom < nTo
-          if (nFrom < aTo && aFrom < nTo) {
-            throw new Error("409: Overlapping ACTIVE version for this date range");
+          // Recheck no overlapping ACTIVE in same window
+          const actives = await (tx as any)[tbl.version].findMany({
+            where: { masterId: params.id, status: "ACTIVE" },
+          });
+          for (const active of actives) {
+            const aFrom = active.effectiveFrom.getTime();
+            const aTo   = active.effectiveTo?.getTime() ?? Infinity;
+            const nFrom = version.effectiveFrom.getTime();
+            const nTo   = version.effectiveTo?.getTime() ?? Infinity;
+            // half-open: [nFrom, nTo) overlaps [aFrom, aTo) when nFrom < aTo && aFrom < nTo
+            if (nFrom < aTo && aFrom < nTo) {
+              throw new Error("409: Overlapping ACTIVE version for this date range");
+            }
           }
-        }
 
-        const activated = await (tx as any)[tbl.version].update({
-          where: { id: params.versionId },
-          data: { status: "ACTIVE", approvedBy: user.id },
+          const activated = await (tx as any)[tbl.version].update({
+            where: { id: params.versionId },
+            data: { status: "ACTIVE", approvedBy: user.id },
+          });
+
+          await tx.$executeRaw`
+            UPDATE CostRateActivationLock SET locked = 0, updatedAt = NOW(3)
+            WHERE entityType = ${tbl.entityLabel} AND masterId = ${params.id}
+          `;
+
+          return activated;
         });
 
-        await tx.$executeRaw`
-          UPDATE CostRateActivationLock SET locked = 0, updatedAt = NOW(3)
-          WHERE entityType = ${tbl.entityLabel} AND masterId = ${params.id}
-        `;
+        await writeAudit(user.id, "VERSION_ACTIVATED", tbl.entityLabel, params.versionId, {
+          masterId: params.id, comment,
+        });
 
-        return activated;
-      });
-
-      await writeAudit(user.id, "VERSION_ACTIVATED", tbl.entityLabel, params.versionId, {
-        masterId: params.id, comment,
-      });
-
-      return NextResponse.json({ success: true, data: result });
+        return NextResponse.json({ success: true, data: result });
+      } catch (err: any) {
+        const msg = err.message || "";
+        if (msg.includes("Deadlock") || msg.includes("1213") || msg.includes("lock") || msg.includes("P2034")) {
+          throw new Error("409: Concurrent activation request failed due to lock contention");
+        }
+        throw err;
+      }
     }
 
     // ── Standard transitions ──────────────────────────────────────────────────

@@ -179,7 +179,7 @@ function parseBody<T>(schema: z.ZodSchema<T>, body: unknown): { data: T } | { er
   if (!result.success) {
     return {
       error: NextResponse.json(
-        { success: false, error: "Validation failed", details: result.error.flatten() },
+        { success: false, error: "Validation failed", details: (result as any).error.flatten() },
         { status: 422 }
       ) as unknown as Response,
     };

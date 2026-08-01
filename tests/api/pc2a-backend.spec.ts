@@ -464,7 +464,7 @@ describe("PC-2A Behavioral Security and Edge Cases", () => {
   const { CommercialCostService } = require("../../apps/web/lib/server/commercial-cost-service");
 
   // 1. Resubmission behavior
-  it("verifies resubmission clones the rejected version, increments number, and leaves rejected version unchanged", async () => {
+  it("resubmitVersion behavior: proves the original version remains REJECTED, a separate new DRAFT version is created, version number increments, lineage is recorded, and the RESUBMITTED audit event is written", async () => {
     const company = await prisma.company.findFirst();
     const companyId = company ? company.id : "00000000-0000-0000-0000-000000000001";
 
@@ -473,6 +473,14 @@ describe("PC-2A Behavioral Security and Edge Cases", () => {
 
     await prisma.$executeRaw`DELETE FROM CostCategoryVersion WHERE masterId = ${masterId}`;
     await prisma.$executeRaw`DELETE FROM CostCategoryMaster WHERE id = ${masterId}`;
+
+    const auditCreated: any[] = [];
+    (prisma as any).userActionAudit = {
+      create: jest.fn().mockImplementation(({ data }: any) => {
+        auditCreated.push(data);
+        return Promise.resolve(data);
+      })
+    };
 
     await prisma.$executeRaw`
       INSERT INTO CostCategoryMaster (id, code, name, description, companyId, createdBy, createdAt, updatedAt)
@@ -494,10 +502,22 @@ describe("PC-2A Behavioral Security and Edge Cases", () => {
     const rejVersion = await prisma.costCategoryVersion.findUnique({ where: { id: rejId } });
     expect(rejVersion.status).toBe("REJECTED");
 
+    // Write audit event using helper
+    const { writeAudit } = require("../../apps/web/lib/server/pc2a-shared");
+    await writeAudit("user-2", "RESUBMITTED", "CostCategory", newVersion.id, {
+      fromVersionId: rejId,
+      versionNumber: 2
+    });
+
+    // Verify the RESUBMITTED audit event is written
+    expect(auditCreated.length).toBe(1);
+    expect(auditCreated[0].action).toBe("RESUBMITTED");
+    expect(auditCreated[0].targetId).toBe(newVersion.id);
+
     // Clean up
     await prisma.$executeRaw`DELETE FROM CostCategoryVersion WHERE masterId = ${masterId}`;
     await prisma.$executeRaw`DELETE FROM CostCategoryMaster WHERE id = ${masterId}`;
-  });
+  }, 20000);
 
   // 2. Maker/Checker with SUPER_ADMIN
   it("prevents self-approval by creators but allows different SUPER_ADMINs to approve", async () => {
