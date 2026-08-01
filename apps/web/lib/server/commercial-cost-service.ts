@@ -1,159 +1,179 @@
-import { prisma } from '@ahh-wfm/database';
-import { z } from 'zod';
-import { CostFormulaEngine, ASTNode } from './cost-formula-ast';
+/**
+ * PC-2A Commercial Cost Service
+ * Canonical service layer. All PC-2A API routes must call this service.
+ * Do not duplicate business logic in route handlers.
+ */
+import { prisma } from "@ahh-wfm/database";
+import { AstEvaluator } from "../ast-evaluator";
 
-export type CostLifecycleState = "DRAFT" | "UNDER_REVIEW" | "APPROVED" | "ACTIVE" | "REJECTED" | "RETIRED" | "SUPERSEDED";
+export type CostLifecycleState =
+  | "DRAFT" | "UNDER_REVIEW" | "APPROVED" | "ACTIVE"
+  | "REJECTED" | "RETIRED" | "SUPERSEDED";
 
-export interface VersionPayload {
-  effectiveFrom: Date;
-  effectiveTo?: Date | null;
-  [key: string]: any;
+export interface UserContext {
+  id: string;
+  role: string;
+  companyId?: string;
+  operationAccess?: {
+    allowedSecurityGuarding?: boolean;
+    allowedFacilityManagement?: boolean;
+  };
 }
 
-export class CommercialCostService {
-  constructor(private user: { id: string; role: string; companyId: string }) {}
+const TABLE_MAP: Record<string, { master: string; version: string }> = {
+  CATEGORY:  { master: "costCategoryMaster",   version: "costCategoryVersion" },
+  ELEMENT:   { master: "costElementMaster",     version: "costElementVersion" },
+  DRIVER:    { master: "costDriverMaster",      version: "costDriverVersion" },
+  RATECARD:  { master: "costRateCardMaster",    version: "costRateCardVersion" },
+  FORMULA:   { master: "costFormulaDefinition", version: "costFormulaVersion" },
+  PACKAGE:   { master: "costPackageMaster",     version: "costPackageVersion" },
+};
 
-  private checkCompanyIsolation(recordCompanyId: string | null) {
-    if (this.user.role !== 'SUPER_ADMIN' && recordCompanyId && recordCompanyId !== this.user.companyId) {
-      throw new Error("403: Cross-company access is strictly prohibited");
+export class CommercialCostService {
+  constructor(private user: UserContext) {}
+
+  // ── Company + Scope isolation ──────────────────────────────────────────────
+
+  assertCompany(recordCompanyId: string | null | undefined) {
+    const ADMIN_ROLES = ["ADMIN", "SUPER_ADMIN", "SYSTEM_ADMIN"];
+    if (ADMIN_ROLES.includes((this.user.role ?? "").toUpperCase())) return;
+    if (recordCompanyId && this.user.companyId && recordCompanyId !== this.user.companyId) {
+      throw new Error("403: Cross-company access is prohibited");
     }
   }
 
-  async createDraft(entityType: string, masterId: string, payload: VersionPayload) {
-    const tableInfo = this.getTableNames(entityType);
-    
-    // Check if there is already an open working version
-    const existingWorking = await (prisma as any)[tableInfo.version].findFirst({
-      where: {
-        masterId,
-        status: { in: ['DRAFT', 'UNDER_REVIEW'] }
-      }
-    });
-
-    if (existingWorking) {
-      throw new Error("409: Cannot create a new draft while another working version exists.");
+  assertScope(operationType: string | null | undefined) {
+    const ADMIN_ROLES = ["ADMIN", "SUPER_ADMIN", "SYSTEM_ADMIN"];
+    if (ADMIN_ROLES.includes((this.user.role ?? "").toUpperCase())) return;
+    const oa = this.user.operationAccess ?? {};
+    if (operationType === "SECURITY_GUARDING" && !oa.allowedSecurityGuarding) {
+      throw new Error("403: No Security Guarding access");
     }
+    if (operationType === "FACILITY_MANAGEMENT" && !oa.allowedFacilityManagement) {
+      throw new Error("403: No Facility Management access");
+    }
+  }
 
-    // Determine next version number
-    const versions = await (prisma as any)[tableInfo.version].findMany({
+  // ── Draft creation ─────────────────────────────────────────────────────────
+
+  async createDraft(entityType: string, masterId: string, payload: Record<string, unknown>) {
+    const tbl = this.getTable(entityType);
+
+    const existingOpen = await (prisma as any)[tbl.version].findFirst({
+      where: { masterId, status: { in: ["DRAFT", "UNDER_REVIEW"] } },
+    });
+    if (existingOpen) throw new Error("409: Cannot create draft while another open version exists");
+
+    const last = await (prisma as any)[tbl.version].findFirst({
       where: { masterId },
-      orderBy: { versionNumber: 'desc' },
-      take: 1
+      orderBy: { versionNumber: "desc" },
     });
-    const versionNumber = versions.length > 0 ? versions[0].versionNumber + 1 : 1;
+    const versionNumber = (last?.versionNumber ?? 0) + 1;
 
-    let itemsData = undefined;
-    if (entityType === 'PACKAGE' && payload.items) {
-      itemsData = payload.items;
-      delete payload.items;
-    }
+    const { items, ...versionPayload } = payload as any;
 
-    const newVersion = await (prisma as any)[tableInfo.version].create({
-      data: {
-        ...payload,
-        masterId,
-        versionNumber,
-        status: 'DRAFT',
-        createdBy: this.user.id,
+    const version = await (prisma as any)[tbl.version].create({
+      data: { ...versionPayload, masterId, versionNumber, status: "DRAFT", createdBy: this.user.id },
+    });
+
+    if (entityType === "PACKAGE" && Array.isArray(items)) {
+      if (items.length > 200) {
+        await (prisma as any)[tbl.version].delete({ where: { id: version.id } });
+        throw new Error("409: Package cannot exceed 200 items");
       }
-    });
-
-    if (itemsData && itemsData.length > 0) {
       await prisma.costPackageItem.createMany({
-        data: itemsData.map((item: any) => ({
-          ...item,
-          packageVersionId: newVersion.id
-        }))
+        data: items.map((it: any) => ({ ...it, packageVersionId: version.id })),
       });
     }
 
-    return newVersion;
+    return version;
   }
+
+  // ── Lifecycle transition ───────────────────────────────────────────────────
 
   async transitionState(entityType: string, versionId: string, newState: CostLifecycleState) {
-    const tableInfo = this.getTableNames(entityType);
-    const version = await (prisma as any)[tableInfo.version].findUnique({ where: { id: versionId } });
+    const tbl = this.getTable(entityType);
+    const version = await (prisma as any)[tbl.version].findUnique({ where: { id: versionId } });
     if (!version) throw new Error("404: Version not found");
 
-    if (newState === 'APPROVED') {
+    if (newState === "APPROVED") {
       if (version.createdBy === this.user.id) {
-        throw new Error("403: Maker and Checker must differ. You cannot approve your own submission.");
+        throw new Error("409: Maker and Checker must differ. You cannot approve your own submission.");
       }
-      if (this.user.role === 'SUPER_ADMIN') {
-        throw new Error("403: SUPER_ADMIN bypass of Maker/Checker is strictly prohibited.");
-      }
-      if (version.status !== 'UNDER_REVIEW') {
-        throw new Error("409: Can only approve versions that are UNDER_REVIEW");
+      if (["SUPER_ADMIN"].includes((this.user.role ?? "").toUpperCase())) {
+        throw new Error("403: SUPER_ADMIN cannot bypass Maker/Checker rules.");
       }
     }
 
-    if (newState === 'ACTIVE') {
-      if (version.status !== 'APPROVED') {
-        throw new Error("409: Only APPROVED versions can be activated");
-      }
-      return this.activateVersion(entityType, version);
+    if (newState === "ACTIVE") {
+      return this.activateVersion(entityType, tbl, version);
     }
 
-    return await (prisma as any)[tableInfo.version].update({
+    return (prisma as any)[tbl.version].update({
       where: { id: versionId },
-      data: { status: newState, updatedBy: this.user.id }
+      data: { status: newState, ...(newState === "APPROVED" ? { approvedBy: this.user.id } : {}) },
     });
   }
 
-  private async activateVersion(entityType: string, version: any) {
-    const tableInfo = this.getTableNames(entityType);
-    
-    // We must use a raw lock in a transaction to enforce concurrency
-    return await prisma.$transaction(async (tx: any) => {
-      // Create or ensure lock row exists
-      const masterId = version.masterId;
-      await tx.$executeRaw`INSERT IGNORE INTO CostRateActivationLock (id, entityType, masterId, updatedAt) VALUES (UUID(), ${entityType}, ${masterId}, NOW(3))`;
-      
-      // Lock the row
-      await tx.$executeRaw`SELECT 1 FROM CostRateActivationLock WHERE entityType = ${entityType} AND masterId = ${masterId} FOR UPDATE`;
+  // ── Concurrency-safe activation ────────────────────────────────────────────
 
-      // Check for overlaps with ACTIVE
-      const activeVersions = await (tx as any)[tableInfo.version].findMany({
-        where: {
-          masterId,
-          status: 'ACTIVE'
-        }
+  private async activateVersion(entityType: string, tbl: { master: string; version: string }, version: any) {
+    return prisma.$transaction(async (tx: any) => {
+      await tx.$executeRaw`
+        INSERT IGNORE INTO CostRateActivationLock (id, entityType, masterId, versionId, locked, updatedAt)
+        VALUES (UUID(), ${entityType}, ${version.masterId}, ${version.id}, 0, NOW(3))
+      `;
+      await tx.$executeRaw`
+        SELECT id FROM CostRateActivationLock
+        WHERE entityType = ${entityType} AND masterId = ${version.masterId}
+        FOR UPDATE
+      `;
+
+      const actives = await tx[tbl.version].findMany({
+        where: { masterId: version.masterId, status: "ACTIVE" },
       });
 
-      for (const active of activeVersions) {
-        if (!active.effectiveTo || active.effectiveTo > version.effectiveFrom) {
-          if (!version.effectiveTo || active.effectiveFrom < version.effectiveTo) {
-             throw new Error("409: Overlapping date with an existing ACTIVE version");
-          }
+      for (const active of actives) {
+        const aFrom = active.effectiveFrom.getTime();
+        const aTo   = active.effectiveTo?.getTime() ?? Infinity;
+        const nFrom = version.effectiveFrom.getTime();
+        const nTo   = version.effectiveTo?.getTime() ?? Infinity;
+        if (nFrom < aTo && aFrom < nTo) {
+          throw new Error("409: Overlapping ACTIVE version for this date range");
         }
       }
 
-      // Safe to activate
-      const activated = await (tx as any)[tableInfo.version].update({
+      const activated = await tx[tbl.version].update({
         where: { id: version.id },
-        data: { status: 'ACTIVE' }
+        data: { status: "ACTIVE", approvedBy: this.user.id },
       });
+
+      await tx.$executeRaw`
+        UPDATE CostRateActivationLock SET locked = 0, updatedAt = NOW(3)
+        WHERE entityType = ${entityType} AND masterId = ${version.masterId}
+      `;
 
       return activated;
     });
   }
 
-  private getTableNames(entityType: string) {
-    switch (entityType) {
-      case 'CATEGORY': return { master: 'costCategoryMaster', version: 'costCategoryVersion' };
-      case 'ELEMENT': return { master: 'costElementMaster', version: 'costElementVersion' };
-      case 'DRIVER': return { master: 'costDriverMaster', version: 'costDriverVersion' };
-      case 'RATECARD': return { master: 'costRateCardMaster', version: 'costRateCardVersion' };
-      case 'FORMULA': return { master: 'costFormulaDefinition', version: 'costFormulaVersion' };
-      case 'PACKAGE': return { master: 'costPackageMaster', version: 'costPackageVersion' };
-      default: throw new Error("Invalid entity type");
+  // ── Formula synthetic test ─────────────────────────────────────────────────
+
+  testFormula(ast: unknown, variables: Record<string, number>) {
+    const evaluator = new AstEvaluator(variables);
+    const result = evaluator.evaluate(ast as any);
+    if (!isFinite(result) || isNaN(result)) throw new Error("422: Formula produced a non-finite result");
+    if (result < -1_000_000_000_000 || result > 1_000_000_000_000) {
+      throw new Error("422: Formula result exceeds the allowed output range");
     }
+    return { result };
   }
 
-  async testFormula(formulaAst: ASTNode, variables: Record<string, number>) {
-    CostFormulaEngine.validate(formulaAst);
-    const result = CostFormulaEngine.evaluate(formulaAst, variables);
-    const hash = CostFormulaEngine.calculateHash(formulaAst);
-    return { result, hash };
+  // ── Helper ─────────────────────────────────────────────────────────────────
+
+  private getTable(entityType: string) {
+    const t = TABLE_MAP[entityType];
+    if (!t) throw new Error("400: Invalid entity type: " + entityType);
+    return t;
   }
 }
