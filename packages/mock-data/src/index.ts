@@ -545,7 +545,7 @@ let memoryDb: {
   secfacFieldExecutionAudits: any[];
 } = {
   companies: [
-    { id: "COMP-001", companyCode: "AHH", companyName: "Al Hattab Holding", isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+    { id: "COMP-001", companyCode: "AHH", companyName: "Al Hattab Holding", isActive: true, isHoldingCompany: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
     { id: "COMP-002", companyCode: "HS01", companyName: "AHH Security Services", isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
     { id: "COMP-003", companyCode: "TC01", companyName: "Touch Cleaning & Hospitality", isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
   ],
@@ -860,7 +860,8 @@ const seedMySQL = async () => {
             id: comp.id,
             companyCode: comp.companyCode,
             companyName: comp.companyName,
-            isActive: comp.isActive
+            isActive: comp.isActive,
+            isHoldingCompany: comp.isHoldingCompany || false
           }
         });
       }
@@ -4463,6 +4464,7 @@ export const mockDb = {
         companyCode: c.companyCode,
         companyName: c.companyName,
         isActive: c.isActive,
+        isHoldingCompany: c.isHoldingCompany,
         createdAt: c.createdAt.toISOString(),
         updatedAt: c.updatedAt.toISOString()
       }));
@@ -4470,7 +4472,7 @@ export const mockDb = {
     const db = readDb();
     if (!db.companies) {
       db.companies = [
-        { id: "COMP-001", companyCode: "AHH", companyName: "Al Hattab Holding", isActive: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
+        { id: "COMP-001", companyCode: "AHH", companyName: "Al Hattab Holding", isActive: true, isHoldingCompany: true, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
       ];
       writeDb(db);
     }

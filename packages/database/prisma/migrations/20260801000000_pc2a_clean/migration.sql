@@ -125,17 +125,20 @@ ALTER TABLE `SecfacPatrolExecutionCheckpoint` DROP COLUMN `exceptionAcknowledged
 -- AlterTable
 ALTER TABLE `SecfacPatrolRoute` MODIFY `sequenceMode` VARCHAR(191) NOT NULL DEFAULT 'MANDATORY';
 
--- DropTable
-DROP TABLE `CostConfigurationHeader`;
+-- DropTable (Moved to end)
+-- DROP TABLE `CostConfigurationHeader`;
 
--- DropTable
-DROP TABLE `CostConfigurationVersion`;
+-- DropTable (Moved to end)
+-- DROP TABLE `CostConfigurationVersion`;
 
--- DropTable
-DROP TABLE `CostDriverMapping`;
+-- DropTable (Moved to end)
+-- DROP TABLE `CostDriverMapping`;
 
--- DropTable
-DROP TABLE `CostRateMaster`;
+-- DropTable (Moved to end)
+-- DROP TABLE `CostRateMaster`;
+
+-- DropTable (Moved to end)
+-- DROP TABLE `CostFormulaDefinition`;
 
 -- CreateTable
 CREATE TABLE `CostCategoryVersion` (
@@ -428,4 +431,45 @@ ALTER TABLE `SecFacWelfareSetting` RENAME INDEX `SecFacWelfareSetting_companyId_
 
 -- RenameIndex
 ALTER TABLE `SecFacWelfareSetting` RENAME INDEX `SecFacWelfareSetting_siteId_fkey` TO `SecFacWelfareSetting_siteId_idx`;
+
+-- Migrate Legacy CostConfigurationVersion to CostPackageMaster and CostPackageVersion
+-- 1. Create a Master record for each legacy version to preserve lineage
+INSERT INTO `CostPackageMaster` (`id`, `code`, `name`, `description`, `companyId`, `createdBy`, `createdAt`, `updatedAt`)
+SELECT 
+    UUID(), 
+    CONCAT('LEGACY-PKG-', SUBSTRING(`id`, 1, 8)), 
+    'Legacy Cost Configuration', 
+    'Migrated from PC-1 CostConfigurationVersion', 
+    `companyId`, 
+    COALESCE(`createdBy`, 'SYSTEM'), 
+    COALESCE(`createdAt`, CURRENT_TIMESTAMP(3)), 
+    COALESCE(`updatedAt`, CURRENT_TIMESTAMP(3))
+FROM `CostConfigurationVersion`;
+
+-- 2. Create the Version record using the original ID to preserve references (if any)
+INSERT INTO `CostPackageVersion` (`id`, `masterId`, `versionNumber`, `status`, `effectiveFrom`, `effectiveTo`, `createdBy`, `createdAt`, `updatedAt`)
+SELECT 
+    v.`id`, 
+    m.`id`, 
+    COALESCE(v.`versionNumber`, 1), 
+    COALESCE(v.`status`, 'DRAFT'), 
+    COALESCE(v.`effectiveFrom`, CURRENT_TIMESTAMP(3)), 
+    v.`effectiveTo`, 
+    COALESCE(v.`createdBy`, 'SYSTEM'), 
+    COALESCE(v.`createdAt`, CURRENT_TIMESTAMP(3)), 
+    COALESCE(v.`updatedAt`, CURRENT_TIMESTAMP(3))
+FROM `CostConfigurationVersion` v
+JOIN `CostPackageMaster` m ON m.`code` = CONCAT('LEGACY-PKG-', SUBSTRING(v.`id`, 1, 8));
+
+-- DropTable
+DROP TABLE `CostConfigurationHeader`;
+
+-- DropTable
+DROP TABLE `CostConfigurationVersion`;
+
+-- DropTable
+DROP TABLE `CostDriverMapping`;
+
+-- DropTable
+DROP TABLE `CostRateMaster`;
 
