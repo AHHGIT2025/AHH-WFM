@@ -21,6 +21,7 @@ const navItems: NavItem[] = [
   { label: "Workforce Directory", path: "/workforce", icon: "group" },
   { label: "Security Guarding", path: "/manpower/security-guarding/dashboard", icon: "security" },
   { label: "Facility Management", path: "/manpower/facility-management/dashboard", icon: "business" },
+  { label: "Commercial & Contracts", path: "/commercial/dashboard", icon: "handshake" },
   { label: "Attendance Monitor", path: "/attendance", icon: "fact_check" },
   { label: "Leave Management", path: "/leave", icon: "event_busy" },
   { label: "Clearance Management", path: "/clearance", icon: "task" },
@@ -37,6 +38,7 @@ export const LayoutShell: React.FC<{ children: React.ReactNode }> = ({ children 
   const isSecurityGuarding = pathname.startsWith("/manpower/security-guarding");
   const isFacilityManagement = pathname.startsWith("/manpower/facility-management");
   const isSecfac = pathname.startsWith("/secfac");
+  const isCommercial = pathname.startsWith("/commercial");
 
   let currentNavItems = navItems;
   let sidebarTitle = "WFM Control Suite";
@@ -95,6 +97,22 @@ export const LayoutShell: React.FC<{ children: React.ReactNode }> = ({ children 
     ];
     sidebarTitle = "SECFAC Control Suite";
     sidebarSubtitle = "Guard Tour & Inspections";
+  } else if (isCommercial) {
+    currentNavItems = [
+      { label: "← Back to Main Menu", path: "/", icon: "arrow_back" },
+      { label: "Commercial Dashboard", path: "/commercial/dashboard", icon: "dashboard" },
+      { label: "CRM & Enquiries", path: "/commercial/crm", icon: "chat" },
+      { label: "Opportunities", path: "/commercial/opportunities", icon: "lightbulb" },
+      { label: "Site Surveys", path: "/commercial/surveys", icon: "explore" },
+      { label: "Costing", path: "/commercial/costing", icon: "payments" },
+      { label: "Quotations", path: "/commercial/quotations", icon: "request_quote" },
+      { label: "Contracts", path: "/commercial/contracts", icon: "description" },
+      { label: "Operations Handover", path: "/commercial/handover", icon: "assignment_turned_in" },
+      { label: "Activities & Follow-Ups", path: "/commercial/activities", icon: "history" },
+      { label: "Reports", path: "/commercial/reports", icon: "analytics" }
+    ];
+    sidebarTitle = "Commercial & Contracts";
+    sidebarSubtitle = "Sales & Operations Hub";
   }
 
   const activeNavItems = filterNavigationByPermissions(session?.user as any, currentNavItems);
@@ -155,6 +173,9 @@ export const LayoutShell: React.FC<{ children: React.ReactNode }> = ({ children 
     : "/manpower/security-guarding/alerts";
 
   const isActive = (path: string) => {
+    if (path === "/commercial/dashboard") {
+      return pathname.startsWith("/commercial");
+    }
     if (path === "/") {
       return pathname === "/" || pathname === "/dashboard";
     }
