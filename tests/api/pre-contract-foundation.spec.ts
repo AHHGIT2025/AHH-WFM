@@ -3,12 +3,34 @@ import { prisma } from '@ahh-wfm/database';
 import { AstEvaluator } from '../../apps/web/lib/ast-evaluator';
 
 describe('PC-1 Foundation Architecture Tests', () => {
+  const cleanup = async () => {
+    try {
+      await prisma.siteConditionDefinition.deleteMany({ where: { code: 'TEST_COND' } });
+      await prisma.siteConditionCategory.deleteMany({ where: { code: 'CAT1' } });
+      
+      const scConfig = await prisma.siteConditionConfiguration.findFirst({ where: { code: 'SC-TEST' } });
+      if (scConfig) {
+        await prisma.siteConditionConfigurationVersion.deleteMany({ where: { configurationId: scConfig.id } });
+        await prisma.siteConditionConfiguration.delete({ where: { id: scConfig.id } });
+      }
+
+      // Cascade deletes CostElementVersion
+      await prisma.costElementMaster.deleteMany({ where: { code: 'TEST_COST' } });
+      
+      // Cascade deletes CostCategoryVersion
+      await prisma.costCategoryMaster.deleteMany({ where: { code: { in: ['COST_CAT1', 'COST_CAT_EFF'] } } });
+    } catch (e) {
+      console.error('Test cleanup failed:', e);
+    }
+  };
+
   beforeAll(async () => {
-    // Ensure DB connection
     await prisma.$connect();
+    await cleanup();
   });
 
   afterAll(async () => {
+    await cleanup();
     await prisma.$disconnect();
   });
 
