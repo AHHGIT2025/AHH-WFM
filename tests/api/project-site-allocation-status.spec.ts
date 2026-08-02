@@ -8,7 +8,20 @@ describe("Project Manpower Allocation, Site Allocation, Shift Requirement and Si
   let testCategoryId: string;
 
   beforeAll(async () => {
-    // 1. Fetch SCON-0005, IT PRJ, SSITE-9392
+    // Ensure parent client exists
+    let client = await prisma.manpowerClient.findFirst({ where: { name: "IT CLIENT" } });
+    if (!client) {
+      client = await prisma.manpowerClient.create({
+        data: {
+          name: "IT CLIENT",
+          code: "IT-CL",
+          operationType: "SECURITY_GUARDING",
+          isActive: true
+        }
+      });
+    }
+
+    // Ensure contract exists
     const contract = await prisma.manpowerContract.findFirst({
       where: { contractNumber: "SCON-0005" },
       include: { manpowerRequirements: true }
@@ -16,28 +29,83 @@ describe("Project Manpower Allocation, Site Allocation, Shift Requirement and Si
     if (contract) {
       testContractId = contract.id;
       testReqId = contract.manpowerRequirements[0]?.id || "";
+    } else {
+      const createdContract = await prisma.manpowerContract.create({
+        data: {
+          clientId: client.id,
+          contractNumber: "SCON-0005",
+          title: "IT Contract",
+          startDate: new Date("2026-01-01"),
+          endDate: new Date("2026-12-31"),
+          operationType: "SECURITY_GUARDING",
+          status: "ACTIVE",
+          manpowerRequirements: {
+            create: [
+              {
+                position: "Security Guard",
+                quantity: 2,
+                deploymentType: "REGULAR"
+              }
+            ]
+          }
+        },
+        include: { manpowerRequirements: true }
+      });
+      testContractId = createdContract.id;
+      testReqId = (createdContract as any).manpowerRequirements[0]?.id || "";
     }
 
-    const project = await prisma.manpowerProject.findFirst({
+    // Ensure project exists
+    let project = await prisma.manpowerProject.findFirst({
       where: { name: "IT PRJ" }
     });
-    if (project) {
-      testProjectId = project.id;
+    if (!project) {
+      project = await prisma.manpowerProject.create({
+        data: {
+          contractId: testContractId,
+          name: "IT PRJ",
+          code: "IT-PRJ",
+          operationType: "SECURITY_GUARDING"
+        }
+      });
     }
+    testProjectId = project.id;
 
-    const site = await prisma.manpowerSite.findFirst({
+    // Ensure site exists
+    let site = await prisma.manpowerSite.findFirst({
       where: { code: "SSITE-9392" }
     });
-    if (site) {
-      testSiteId = site.id;
+    if (!site) {
+      site = await prisma.manpowerSite.create({
+        data: {
+          projectId: project.id,
+          code: "SSITE-9392",
+          name: "IT Site",
+          lat: 25.2854,
+          lng: 51.531,
+          radiusMeters: 100,
+          operationType: "SECURITY_GUARDING",
+          isActive: true
+        }
+      });
     }
+    testSiteId = site.id;
 
-    const cat = await prisma.manpowerCategory.findFirst({
+    let cat = await prisma.manpowerCategory.findFirst({
       where: { operationType: "SECURITY_GUARDING" }
     });
-    if (cat) {
-      testCategoryId = cat.id;
+    if (!cat) {
+      cat = await prisma.manpowerCategory.create({
+        data: {
+          id: "cat-1",
+          name: "Security Guard",
+          code: "SG",
+          operationType: "SECURITY_GUARDING",
+          isActive: true
+        }
+      });
     }
+    testCategoryId = cat.id;
   });
 
   // 1. Contract Security Guard quantity 2

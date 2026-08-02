@@ -1,5 +1,3 @@
-delete process.env.DATABASE_URL;
-
 import { validateContractPayload } from "../../packages/mock-data/src/index";
 import { mockDb, isDbConnected } from "@ahh-wfm/mock-data";
 import { getServerSession } from "next-auth/next";
@@ -19,7 +17,12 @@ describe("Manpower Planning Phase MP-1 Contract & FOC Validation Test Suite", ()
   let mockChecker: any;
   let mockSite: any;
 
+  afterAll(() => {
+    delete process.env.MOCK_DB_MODE;
+  });
+
   beforeAll(async () => {
+    process.env.MOCK_DB_MODE = "true";
     // Deterministically create test entities using mockDb
     mockClient = await mockDb.createManpowerClient({
       id: "client-mp1-test-id",

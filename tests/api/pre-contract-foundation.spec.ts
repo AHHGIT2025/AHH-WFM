@@ -44,18 +44,36 @@ describe('PC-1 Foundation Architecture Tests', () => {
   });
 
   it('2. should add Site Conditions without migration', async () => {
+    const config = await prisma.siteConditionConfiguration.create({
+      data: { code: 'SC-TEST', name: 'Test Config', createdBy: 'TEST' }
+    });
+    const version = await prisma.siteConditionConfigurationVersion.create({
+      data: {
+        configurationId: config.id,
+        versionNumber: 1,
+        status: 'DRAFT',
+        effectiveFrom: new Date(),
+        createdBy: 'TEST'
+      }
+    });
     const category = await prisma.siteConditionCategory.create({
-      data: { code: 'CAT1', name: 'Cat 1', displayOrder: 1, effectiveFrom: new Date() }
+      data: {
+        versionId: version.id,
+        code: 'CAT1',
+        name: 'Cat 1',
+        displayOrder: 1,
+        effectiveFrom: new Date()
+      }
     });
     
     // Add condition dynamically
     const condition = await prisma.siteConditionDefinition.create({
       data: {
+        versionId: version.id,
         categoryId: category.id,
         code: 'TEST_COND',
         name: 'Test Condition',
-        responseType: 'BOOLEAN',
-        effectiveFrom: new Date()
+        responseType: 'BOOLEAN'
       }
     });
 
@@ -64,38 +82,59 @@ describe('PC-1 Foundation Architecture Tests', () => {
   });
 
   it('3. should add Cost Elements without migration', async () => {
-    const version = await prisma.costConfigurationVersion.create({
-      data: { versionNumber: 1, effectiveFrom: new Date(), createdBy: 'TEST' }
+    const categoryMaster = await prisma.costCategoryMaster.create({
+      data: { code: 'COST_CAT1', name: 'Cost Cat 1', createdBy: 'TEST' }
     });
-    const category = await prisma.costCategoryMaster.create({
-      data: { code: 'COST_CAT1', name: 'Cost Cat 1' }
-    });
-
-    // Add cost element dynamically
-    const costElement = await prisma.costElementMaster.create({
+    const categoryVersion = await prisma.costCategoryVersion.create({
       data: {
-        versionId: version.id,
-        categoryId: category.id,
-        code: 'TEST_COST',
-        name: 'Test Cost',
-        quantitySource: 'FIXED',
-        rateSource: 'MASTER'
+        masterId: categoryMaster.id,
+        versionNumber: 1,
+        status: 'DRAFT',
+        effectiveFrom: new Date(),
+        createdBy: 'TEST'
       }
     });
 
-    expect(costElement.id).toBeDefined();
-    expect(costElement.code).toBe('TEST_COST');
+    const elementMaster = await prisma.costElementMaster.create({
+      data: { code: 'TEST_COST', name: 'Test Cost', createdBy: 'TEST' }
+    });
+    const elementVersion = await prisma.costElementVersion.create({
+      data: {
+        masterId: elementMaster.id,
+        categoryId: categoryMaster.id,
+        categoryCode: categoryMaster.code,
+        versionNumber: 1,
+        status: 'DRAFT',
+        effectiveFrom: new Date(),
+        quantitySource: 'FIXED',
+        rateSource: 'MASTER',
+        createdBy: 'TEST'
+      }
+    });
+
+    expect(elementVersion.id).toBeDefined();
+    expect(elementVersion.masterId).toBe(elementMaster.id);
   });
 
   it('4. effective-dated configuration retrieval works', async () => {
-    // Assume multiple versions of CostConfigurationVersion exist, we can query by date
-    const v1 = await prisma.costConfigurationVersion.create({
-      data: { versionNumber: 1, effectiveFrom: new Date('2026-01-01'), effectiveTo: new Date('2026-12-31'), createdBy: 'TEST' }
+    const categoryMaster = await prisma.costCategoryMaster.create({
+      data: { code: 'COST_CAT_EFF', name: 'Cost Cat Eff', createdBy: 'TEST' }
+    });
+    const v1 = await prisma.costCategoryVersion.create({
+      data: {
+        masterId: categoryMaster.id,
+        versionNumber: 1,
+        status: 'DRAFT',
+        effectiveFrom: new Date('2026-01-01'),
+        effectiveTo: new Date('2026-12-31'),
+        createdBy: 'TEST'
+      }
     });
     
     const targetDate = new Date('2026-06-01');
-    const activeVersion = await prisma.costConfigurationVersion.findFirst({
+    const activeVersion = await prisma.costCategoryVersion.findFirst({
       where: {
+        masterId: categoryMaster.id,
         effectiveFrom: { lte: targetDate },
         OR: [
           { effectiveTo: null },

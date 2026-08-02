@@ -15,10 +15,10 @@ describe('PC-1 Boundaries', () => {
 
   it('should ensure Prospect APIs do not create ManpowerClient or ManpowerSite', async () => {
     // Simulating a prospect creation
-    await prisma.prospectClient.create({ data: { name: 'Test' } } as any);
+    await (prisma as any).prospectClient.create({ data: { name: 'Test' } } as any);
     
-    expect(prisma.manpowerClient.create).not.toHaveBeenCalled();
-    expect(prisma.manpowerSite.create).not.toHaveBeenCalled();
+    expect((prisma as any).manpowerClient.create).not.toHaveBeenCalled();
+    expect((prisma as any).manpowerSite.create).not.toHaveBeenCalled();
   });
 
   it('should reject direct conversion from prospect to manpower', async () => {

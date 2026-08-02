@@ -11,6 +11,7 @@ const defaultHash = bcrypt.hashSync("Password123!", 10);
 let prismaClient: any = null;
 export const isDbConnected = () => {
   if (typeof window !== "undefined") return false;
+  if (process.env.MOCK_DB_MODE === "true") return false;
   if (!process.env.DATABASE_URL) return false;
   
   if (!prismaClient) {
@@ -21,7 +22,7 @@ export const isDbConnected = () => {
       console.error("Failed to load @ahh-wfm/database package", e);
     }
   }
-  return !!prismaClient;
+  return !!(prismaClient && prismaClient.company);
 };
 
 export function getQatarLocalDateString(dateInput: Date | string): string {
@@ -851,12 +852,14 @@ const seedMySQL = async () => {
   if (!isDbConnected()) return;
   
   try {
-    const companyCount = await prismaClient.company.count();
-    if (companyCount === 0) {
+    const hasHoldingCompany = await prismaClient.company.findFirst({ where: { isHoldingCompany: true } });
+    if (!hasHoldingCompany) {
       console.log("Seeding Companies...");
       for (const comp of memoryDb.companies) {
-        await prismaClient.company.create({
-          data: {
+        await prismaClient.company.upsert({
+          where: { id: comp.id },
+          update: {},
+          create: {
             id: comp.id,
             companyCode: comp.companyCode,
             companyName: comp.companyName,
@@ -867,12 +870,14 @@ const seedMySQL = async () => {
       }
     }
     
-    const desCount = await prismaClient.designation.count();
-    if (desCount === 0) {
+    const hasDesignations = await prismaClient.designation.findFirst();
+    if (!hasDesignations) {
       console.log("Seeding Designations...");
       for (const des of memoryDb.designations) {
-        await prismaClient.designation.create({
-          data: {
+        await prismaClient.designation.upsert({
+          where: { id: des.id },
+          update: {},
+          create: {
             id: des.id,
             code: des.code,
             name: des.name,
@@ -1001,14 +1006,16 @@ const seedMySQL = async () => {
       }
     }
 
-    const empCount = await prismaClient.employee.count();
-    if (empCount === 0) {
-      console.log("MySQL database is empty. Seeding mock data...");
+    const hasSarahKim = await prismaClient.employee.findUnique({ where: { id: "SK-90210" } });
+    if (!hasSarahKim) {
+      console.log("Sarah Kim missing. Seeding/upserting mock data...");
       
       // Seed departments
       for (const dept of memoryDb.departments) {
-        await prismaClient.department.create({
-          data: {
+        await prismaClient.department.upsert({
+          where: { id: dept.id },
+          update: {},
+          create: {
             id: dept.id,
             name: dept.name,
             createdAt: new Date(dept.createdAt),
@@ -1019,12 +1026,20 @@ const seedMySQL = async () => {
       
       // Seed employees
       for (const emp of memoryDb.employees) {
-        await prismaClient.employee.create({ data: emp });
+        await prismaClient.employee.upsert({
+          where: { id: emp.id },
+          update: {},
+          create: emp
+        });
       }
       
       // Seed shifts
       for (const shift of memoryDb.shifts) {
-        await prismaClient.shift.create({ data: shift });
+        await prismaClient.shift.upsert({
+          where: { id: shift.id },
+          update: {},
+          create: shift
+        });
       }
 
       // Seed worksites

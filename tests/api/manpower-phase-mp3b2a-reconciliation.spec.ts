@@ -58,8 +58,18 @@ describe("MP-3B2A — Attendance-to-Roster Reconciliation Foundation Complete 42
       create: { id: "MP3B2A-COMP-01", companyCode: "COMP3B2A", companyName: "MP3B2A Test Company" }
     });
 
-    testGuard = await prisma.employee.create({
-      data: {
+    testGuard = await prisma.employee.upsert({
+      where: { id: "EMP-GUARD-MP3B2A" },
+      update: {
+        name: "Security Guard Alpha",
+        companyId: testCompany.id,
+        department: "Operations",
+        email: "guard.alpha.mp3b2a@ahh.qa",
+        operationType: "SECURITY_GUARDING",
+        role: "SECURITY_GUARD",
+        status: "ACTIVE"
+      },
+      create: {
         id: "EMP-GUARD-MP3B2A",
         name: "Security Guard Alpha",
         companyId: testCompany.id,
@@ -71,8 +81,18 @@ describe("MP-3B2A — Attendance-to-Roster Reconciliation Foundation Complete 42
       }
     });
 
-    testReliever = await prisma.employee.create({
-      data: {
+    testReliever = await prisma.employee.upsert({
+      where: { id: "EMP-RELIEVER-MP3B2A" },
+      update: {
+        name: "Security Guard Reliever",
+        companyId: testCompany.id,
+        department: "Operations",
+        email: "guard.reliever.mp3b2a@ahh.qa",
+        operationType: "SECURITY_GUARDING",
+        role: "SECURITY_GUARD",
+        status: "ACTIVE"
+      },
+      create: {
         id: "EMP-RELIEVER-MP3B2A",
         name: "Security Guard Reliever",
         companyId: testCompany.id,
@@ -84,16 +104,31 @@ describe("MP-3B2A — Attendance-to-Roster Reconciliation Foundation Complete 42
       }
     });
 
-    testClient = await prisma.manpowerClient.create({
-      data: {
+    testClient = await prisma.manpowerClient.upsert({
+      where: { code: "MP3B2AC" },
+      update: {
+        operationType: "SECURITY_GUARDING",
+        name: "Client MP3B2A"
+      },
+      create: {
         operationType: "SECURITY_GUARDING",
         code: "MP3B2AC",
         name: "Client MP3B2A"
       }
     });
 
-    testContract = await prisma.manpowerContract.create({
-      data: {
+    testContract = await prisma.manpowerContract.upsert({
+      where: { id: "MP3B2A-CON-01" },
+      update: {
+        operationType: "SECURITY_GUARDING",
+        title: "MP3B2A Reconciliation Security Contract",
+        contractNumber: "MP3B2A-CON-01",
+        clientId: testClient.id,
+        status: "ACTIVE",
+        startDate: new Date("2026-01-01"),
+        endDate: new Date("2026-12-31")
+      },
+      create: {
         id: "MP3B2A-CON-01",
         operationType: "SECURITY_GUARDING",
         title: "MP3B2A Reconciliation Security Contract",
@@ -105,8 +140,14 @@ describe("MP-3B2A — Attendance-to-Roster Reconciliation Foundation Complete 42
       }
     });
 
-    testProject = await prisma.manpowerProject.create({
-      data: {
+    testProject = await prisma.manpowerProject.upsert({
+      where: { code: "MP3B2A-PROJ" },
+      update: {
+        operationType: "SECURITY_GUARDING",
+        name: "MP3B2A Security Project",
+        contractId: testContract.id
+      },
+      create: {
         operationType: "SECURITY_GUARDING",
         code: "MP3B2A-PROJ",
         name: "MP3B2A Security Project",
@@ -114,8 +155,14 @@ describe("MP-3B2A — Attendance-to-Roster Reconciliation Foundation Complete 42
       }
     });
 
-    testSite = await prisma.manpowerSite.create({
-      data: {
+    testSite = await prisma.manpowerSite.upsert({
+      where: { code: "MP3B2A-SITE" },
+      update: {
+        operationType: "SECURITY_GUARDING",
+        name: "MP3B2A Facility Site",
+        projectId: testProject.id
+      },
+      create: {
         operationType: "SECURITY_GUARDING",
         code: "MP3B2A-SITE",
         name: "MP3B2A Facility Site",
@@ -128,8 +175,15 @@ describe("MP-3B2A — Attendance-to-Roster Reconciliation Foundation Complete 42
       data: { siteId: testSite.id }
     });
 
-    const testReq = await prisma.contractManpowerRequirement.create({
-      data: {
+    const testReq = await prisma.contractManpowerRequirement.upsert({
+      where: { id: "MP3B2A-REQ-01" },
+      update: {
+        contractId: testContract.id,
+        position: "Security Guard",
+        quantity: 1,
+        deploymentType: "REGULAR"
+      },
+      create: {
         id: "MP3B2A-REQ-01",
         contractId: testContract.id,
         position: "Security Guard",
