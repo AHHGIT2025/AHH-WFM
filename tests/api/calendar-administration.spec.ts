@@ -7,16 +7,40 @@ describe("Calendar Administration API", () => {
   let testUserId: string;
   
   beforeAll(async () => {
-    const comp = await prisma.company.findFirst({ where: { isActive: true } });
-    testCompanyId = comp?.id || "comp-1";
+    let comp = await prisma.company.findFirst({ where: { isActive: true } });
+    if (!comp) {
+      comp = await prisma.company.create({
+        data: {
+          id: "comp-1",
+          companyCode: "AHH",
+          companyName: "Al Hattab Holding",
+          isActive: true,
+          isHoldingCompany: true
+        }
+      });
+    }
+    testCompanyId = comp.id;
     
-    const dept = await prisma.department.findFirst({ where: { companyId: testCompanyId } });
-    testDepartmentId = dept?.id || "dept-1";
+    let dept = await prisma.department.findFirst({ where: { companyId: testCompanyId } });
+    if (!dept) {
+      dept = await prisma.department.create({
+        data: {
+          id: "dept-1",
+          companyId: testCompanyId,
+          name: "Test Dept"
+        }
+      });
+    }
+    testDepartmentId = dept.id;
     
     const user = await prisma.employee.findFirst({ where: { role: "ADMIN" } });
     testUserId = user?.id || "user-1";
     
     // Robust cleanup before tests in case of previous failure
+    await prisma.manpowerWorkCalendarProfile.updateMany({
+      where: { code: { startsWith: "TEST-PROF-" } },
+      data: { supersedesProfileId: null }
+    });
     await prisma.manpowerWorkCalendarProfile.deleteMany({
       where: { code: { startsWith: "TEST-PROF-" } }
     });
@@ -29,6 +53,10 @@ describe("Calendar Administration API", () => {
   });
 
   afterAll(async () => {
+    await prisma.manpowerWorkCalendarProfile.updateMany({
+      where: { code: { startsWith: "TEST-PROF-" } },
+      data: { supersedesProfileId: null }
+    });
     await prisma.manpowerWorkCalendarProfile.deleteMany({
       where: { code: { startsWith: "TEST-PROF-" } }
     });
@@ -114,7 +142,7 @@ describe("Calendar Administration API", () => {
         return tx.manpowerWorkCalendarProfile.findUnique({ where: { id: p.id }, include: { restDays: true } });
       });
       expect(updated?.restDays.length).toBe(1);
-      expect(updated?.restDays[0].dayOfWeek).toBe(6);
+      expect(updated?.restDays[0].dayOfWeek).toBe("SATURDAY");
     });
 
     it("4. [DATABASE_INTEGRATION] Nested Rest Day failure rolls back the Profile update", async () => {
@@ -256,7 +284,7 @@ describe("Calendar Administration API", () => {
       
       const v2 = await prisma.manpowerWorkCalendarProfile.create({
         data: {
-          code: p.code,
+          code: `${p.code}-V2`,
           name: p.name,
           workerClass: p.workerClass,
           applicability: p.applicability,

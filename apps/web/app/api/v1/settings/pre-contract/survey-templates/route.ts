@@ -43,9 +43,7 @@ export async function POST(request: NextRequest) {
           code: data.code || 'CODE_' + Math.random().toString(36).substring(7),
           description: data.description,
           companyId: data.companyId,
-          operationScope: data.operationScope, title: data.title || 'Untitled',
-          createdBy: user.id || 'system',
-          updatedBy: user.id || 'system',
+          operationType: data.operationType || data.operationScope,
         }
       });
 
@@ -57,7 +55,6 @@ export async function POST(request: NextRequest) {
           status: 'DRAFT',
           effectiveFrom: new Date(),
           createdBy: user.id || 'system',
-          updatedBy: user.id || 'system',
         }
       });
       
@@ -69,3 +66,4 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Invalid data or unauthorized' }, { status: error.status || 400 });
   }
 }
+

@@ -85,7 +85,7 @@ export async function calculatePayrollInputData(
   if (closedDays < daysInMonthTotal) {
      return {
        lines: [],
-       overallReadiness: "BLOCKED",
+       overallReadiness: "DATA_INCOMPLETE",
        summary: { error: "Missing or OPEN Daily Closures for the requested period. Resolve coverage exceptions and close all days." },
        sourceVersionJson: {}
      };

@@ -179,10 +179,62 @@ describe("Phase MP-3C & MP-4 — Client Billing Support & Operational Payroll In
         status: "Active"
       }
     });
+
+    // Seed ManpowerDailyClosure for May 2026 (31 days) to satisfy closedDays check
+    await prisma.manpowerDailyClosure.deleteMany({
+      where: {
+        companyId: testCompany.id,
+        businessDate: { gte: new Date("2026-05-01"), lte: new Date("2026-05-31") }
+      }
+    });
+
+    const closurePromises: any[] = [];
+    for (let day = 1; day <= 31; day++) {
+      const dateStr = `2026-05-${day.toString().padStart(2, "0")}`;
+      const businessDate = new Date(dateStr);
+      
+      // For SECURITY_GUARDING
+      closurePromises.push(
+        prisma.manpowerDailyClosure.create({
+          data: {
+            workerClass: "BLUE_COLLAR",
+            scopeType: "COMPANY",
+            scopeKey: `COMPANY:${testCompany.id}:SECURITY_GUARDING`,
+            companyId: testCompany.id,
+            operationType: "SECURITY_GUARDING",
+            businessDate,
+            status: "CLOSED",
+            currentRevisionNumber: 1,
+            version: 1
+          }
+        })
+      );
+      
+      // For FACILITY_MANAGEMENT
+      closurePromises.push(
+        prisma.manpowerDailyClosure.create({
+          data: {
+            workerClass: "BLUE_COLLAR",
+            scopeType: "COMPANY",
+            scopeKey: `COMPANY:${testCompany.id}:FACILITY_MANAGEMENT`,
+            companyId: testCompany.id,
+            operationType: "FACILITY_MANAGEMENT",
+            businessDate,
+            status: "CLOSED",
+            currentRevisionNumber: 1,
+            version: 1
+          }
+        })
+      );
+    }
+    await Promise.all(closurePromises);
   });
 
   afterAll(async () => {
     try {
+      await prisma.manpowerDailyClosure.deleteMany({
+        where: { companyId: testCompany.id }
+      });
       await prisma.$executeRawUnsafe(`DELETE FROM ManpowerPayrollAdvisoryDay`);
       await prisma.$executeRawUnsafe(`DELETE FROM ManpowerPayrollAdvisoryLine`);
       await prisma.$executeRawUnsafe(`UPDATE ManpowerPayrollAdvisoryRun SET supersedesRunId = NULL`);

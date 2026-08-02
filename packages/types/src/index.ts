@@ -4,6 +4,7 @@ export interface Company {
   companyCode: string;
   companyName: string;
   isActive: boolean;
+  isHoldingCompany?: boolean;
   createdAt?: string;
   updatedAt?: string;
 }

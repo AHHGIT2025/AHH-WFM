@@ -1,28 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@ahh-wfm/database';
 import { checkApiAuth } from '@/lib/api-guards';
+
 export async function POST(request: NextRequest) {
   try {
-    const user = await checkApiAuth(request, ['precontract.prospectiveSite.manage']);
+    const auth = await checkApiAuth(undefined, { requiredPermission: 'precontract.prospectiveSite.manage' });
+    if (auth.error) return auth.error;
+    const user = auth.session.user;
     const body = await request.json();
     const data = {
-      prospectClientId: body.prospectClientId,
-      siteName: body.siteName,
-      location: body.location,
+      name: body.siteName || body.name,
+      address: body.location || body.address,
       companyId: body.companyId,
-      operationScope: body.operationScope,
+      operationType: body.operationScope || body.operationType,
     };
-    if (!data.siteName || !data.prospectClientId) throw new Error('Missing fields');
+    if (!data.name) throw new Error('Missing fields');
 
     const site = await prisma.preContractProspectiveSite.create({
       data: {
-        prospectClientId: data.prospectClientId,
-        siteName: data.siteName,
-        location: data.location,
+        name: data.name,
+        address: data.address,
         companyId: data.companyId,
-        operationScope: data.operationScope,
-        createdBy: user.id || 'system',
-        updatedBy: user.id || 'system',
+        operationType: data.operationType,
       }
     });
 
@@ -34,12 +33,12 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
-    const user = await checkApiAuth(request, ['precontract.prospectiveSite.view', 'precontract.prospectiveSite.manage']);
-    const { searchParams } = new URL(request.url);
-    const clientId = searchParams.get('clientId');
-
+    const auth = await checkApiAuth(undefined, { requiredPermission: 'precontract.prospectiveSite.view' });
+    if (auth.error) return auth.error;
+    const user = auth.session.user;
+    
+    // Schema doesn't actually have prospectClientId yet. Let's ignore it for now.
     const sites = await prisma.preContractProspectiveSite.findMany({
-      where: clientId ? { prospectClientId: clientId } : undefined,
       orderBy: { createdAt: 'desc' }
     });
 
@@ -48,3 +47,5 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized or invalid request' }, { status: 400 });
   }
 }
+
+

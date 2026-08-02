@@ -1,3 +1,5 @@
+require('dotenv').config({ path: require('path').resolve(__dirname, '../.env') });
+
 module.exports = {
   preset: 'ts-jest',
   testEnvironment: 'node',
@@ -9,10 +11,12 @@ module.exports = {
     '^server-only$': '<rootDir>/tests/api/setup.ts',
     '^@/(.*)$': '<rootDir>/apps/web/$1',
     '^@ahh-wfm/types$': '<rootDir>/packages/types/src',
-    '^@ahh-wfm/mock-data$': '<rootDir>/packages/mock-data/src'
+    '^@ahh-wfm/mock-data$': '<rootDir>/packages/mock-data/src',
+    '^@ahh-wfm/database$': '<rootDir>/packages/database/src'
   },
   rootDir: '../',
   setupFiles: ['<rootDir>/tests/api/setup.ts'],
+  setupFilesAfterEnv: ['<rootDir>/tests/api/setupAfterEnv.ts'],
   // Exclude compiled output so Jest does not pick up generated package.json files
   // from dist/ which would collide with source package.json haste names.
   modulePathIgnorePatterns: ['<rootDir>/dist/'],

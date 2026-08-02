@@ -10,47 +10,13 @@ export class PreContractConfigService {
    * 2. Match on operationType (companyId is null)
    * 3. Global config (companyId is null and operationType is null)
    */
+  // Method disabled for PC-2A Schema Upgrade (CostConfigurationVersion deleted)
+  // To be rewritten in GATE 4 using CostCategoryVersion, CostElementVersion, etc.
   async resolveActiveCostConfiguration(
     targetDate: Date,
     companyId?: string,
     operationType?: string
   ) {
-    const candidates = await this.prisma.costConfigurationVersion.findMany({
-      where: {
-        effectiveFrom: { lte: targetDate },
-        OR: [
-          { effectiveTo: null },
-          { effectiveTo: { gt: targetDate } }
-        ],
-        status: 'ACTIVE'
-      },
-      orderBy: { versionNumber: 'desc' }
-    });
-
-    if (candidates.length === 0) return null;
-
-    // 1. Exact match on both companyId and operationType
-    if (companyId && operationType) {
-      const exactMatch = candidates.find(
-        (c) => c.companyId === companyId && c.operationType === operationType
-      );
-      if (exactMatch) return exactMatch;
-    }
-
-    // 2. Match on operationType only
-    if (operationType) {
-      const opMatch = candidates.find(
-        (c) => !c.companyId && c.operationType === operationType
-      );
-      if (opMatch) return opMatch;
-    }
-
-    // 3. Match on global configuration
-    const globalMatch = candidates.find(
-      (c) => !c.companyId && !c.operationType
-    );
-    if (globalMatch) return globalMatch;
-
     return null;
   }
 
@@ -76,3 +42,5 @@ export class PreContractConfigService {
     });
   }
 }
+
+

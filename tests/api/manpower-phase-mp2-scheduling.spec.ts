@@ -729,6 +729,8 @@ describe("Manpower Planning Phase MP-2A Roster-Scheduling Complete Release Harde
   });
 
   it("28. Inactive employee rejection", async () => {
+    await prisma.employee.deleteMany({ where: { id: "emp-inactive-mp2a" } });
+
     const inactiveEmp = await prisma.employee.create({
       data: {
         id: "emp-inactive-mp2a",
@@ -754,6 +756,8 @@ describe("Manpower Planning Phase MP-2A Roster-Scheduling Complete Release Harde
   });
 
   it("29. Cross-scope employee rejection", async () => {
+    await prisma.employee.deleteMany({ where: { id: "emp-fm-mp2a" } });
+
     const fmEmp = await prisma.employee.create({
       data: {
         id: "emp-fm-mp2a",
@@ -779,6 +783,9 @@ describe("Manpower Planning Phase MP-2A Roster-Scheduling Complete Release Harde
   });
 
   it("30. Approved Leave overlap rejection", async () => {
+    try { await prisma.leaveRequest.deleteMany({ where: { employeeId: "emp-leave-mp2a" } }); } catch (e) {}
+    await prisma.employee.deleteMany({ where: { id: "emp-leave-mp2a" } });
+
     const leaveEmp = await prisma.employee.create({
       data: {
         id: "emp-leave-mp2a",
@@ -820,6 +827,8 @@ describe("Manpower Planning Phase MP-2A Roster-Scheduling Complete Release Harde
   });
 
   it("32. Designation mismatch warning", async () => {
+    await prisma.employee.deleteMany({ where: { id: "emp-mismatch-mp2a" } });
+
     const mismatchEmp = await prisma.employee.create({
       data: {
         id: "emp-mismatch-mp2a",
@@ -831,7 +840,10 @@ describe("Manpower Planning Phase MP-2A Roster-Scheduling Complete Release Harde
         isActive: true,
         operationType: "SECURITY_GUARDING",
         designation: {
-          create: { name: "Supervisor", code: "DES-SUP-2A" }
+          connectOrCreate: {
+            where: { code: "DES-SUP-2A" },
+            create: { name: "Supervisor", code: "DES-SUP-2A" }
+          }
         }
       }
     });

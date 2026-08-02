@@ -1,7 +1,11 @@
 import { getHoldingCompany, getActiveCompanies, getWhiteCollarDesignations, getBlueCollarPositionCategories } from "../../apps/web/lib/server/master-data-service";
 import { validateCompanyDepartment, validatePositionApplicability } from "../../apps/web/lib/master-data-validator";
+import { mockDb } from "../../packages/mock-data/src/index";
 
 describe("Phase MD-1: Master Data Architecture & Validator Unit Tests", () => {
+  beforeAll(async () => {
+    await mockDb.getCompanies(); // Force DB seeding
+  });
 
   test("1. Master Data Service resolves singleton Holding Company without hardcoded code or ID", async () => {
     const holding = await getHoldingCompany();
