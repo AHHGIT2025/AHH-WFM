@@ -11,7 +11,7 @@ export async function GET(
   { params }: { params: { entityType: string; id: string; versionId: string } }
 ) {
   try {
-    const auth = await checkApiAuth(undefined, { requiredPermission: "settings.view" });
+    const auth = await checkApiAuth(undefined, { requiredPermission: "precontract.costConfig.view" });
     if (auth.error) return auth.error;
 
     const items = await prisma.costPackageItem.findMany({
@@ -29,7 +29,7 @@ export async function POST(
   { params }: { params: { entityType: string; id: string; versionId: string } }
 ) {
   try {
-    const auth = await checkApiAuth(undefined, { requiredPermission: "settings.manage" });
+    const auth = await checkApiAuth(undefined, { requiredPermission: "precontract.costConfig.manage" });
     if (auth.error) return auth.error;
     const user = auth.session!.user as any;
 

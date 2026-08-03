@@ -107,8 +107,8 @@ export const LayoutShell: React.FC<{ children: React.ReactNode }> = ({ children 
       { label: "Costing", path: "/commercial/costing", icon: "payments" },
       { label: "Quotations", path: "/commercial/quotations", icon: "request_quote" },
       { label: "Contracts", path: "/commercial/contracts", icon: "description" },
-      { label: "Operations Handover", path: "/commercial/handover", icon: "assignment_turned_in" },
-      { label: "Activities & Follow-Ups", path: "/commercial/activities", icon: "history" },
+      { label: "Handover", path: "/commercial/handover", icon: "assignment_turned_in" },
+      { label: "Activities", path: "/commercial/activities", icon: "history" },
       { label: "Reports", path: "/commercial/reports", icon: "analytics" }
     ];
     sidebarTitle = "Commercial & Contracts";

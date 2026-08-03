@@ -14,7 +14,7 @@ interface Candidate {
 
 export async function POST(req: Request) {
   try {
-    const auth = await checkApiAuth(undefined, { requiredPermission: "settings.view" });
+    const auth = await checkApiAuth(undefined, { requiredPermission: "precontract.costConfig.view" });
     if (auth.error) return auth.error;
     const user = auth.session!.user as any;
 

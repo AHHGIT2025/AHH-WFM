@@ -4751,6 +4751,11 @@ model CostCategoryMaster {
   createdAt     DateTime              @default(now())
   updatedAt     DateTime              @updatedAt
   versions      CostCategoryVersion[]
+
+  // Legacy Cost Fields
+  costConfigurationVersionId String?
+  CostConfigurationVersion   CostConfigurationVersion? @relation(fields: [costConfigurationVersionId], references: [id])
+  isActive                   Boolean                   @default(true)
 }
 
 model CostCategoryVersion {
@@ -4785,6 +4790,20 @@ model CostElementMaster {
   createdAt     DateTime             @default(now())
   updatedAt     DateTime             @updatedAt
   versions      CostElementVersion[]
+
+  // Legacy Cost Fields
+  versionId                String?
+  version                  CostConfigurationVersion? @relation(fields: [versionId], references: [id])
+  categoryId               String?
+  unitOfMeasure            String?
+  serviceApplicabilityJson Json?
+  isOneTime                Boolean                   @default(false)
+  isDirect                 Boolean                   @default(true)
+  isFixed                  Boolean                   @default(true)
+  clientProvided           Boolean                   @default(false)
+  quantitySource           String?
+  rateSource               String?
+  isActive                 Boolean                   @default(true)
 }
 
 model CostElementVersion {
@@ -4902,6 +4921,11 @@ model CostFormulaDefinition {
   createdAt   DateTime             @default(now())
   updatedAt   DateTime             @updatedAt
   versions    CostFormulaVersion[]
+
+  // Legacy Cost Fields
+  versionId  String?
+  version    CostConfigurationVersion? @relation(fields: [versionId], references: [id])
+  formulaAst Json?
 }
 
 model CostFormulaVersion {
@@ -4987,4 +5011,74 @@ model CostRateActivationLock {
   updatedAt            DateTime  @updatedAt
 
   @@unique([entityType, masterId, versionId])
+}
+
+// --- LEGACY COST MODELS (RETAINED FOR SERVER COMPATIBILITY) ---
+
+model CostConfigurationHeader {
+  id                   String                     @id @default(uuid())
+  code                 String
+  name                 String
+  description          String?
+  companyId            String?
+  operationType        String?
+  serviceApplicability Json?
+  versions             CostConfigurationVersion[]
+  createdBy            String
+  createdAt            DateTime                   @default(now())
+  updatedAt            DateTime                   @updatedAt
+
+  @@unique([code, companyId])
+}
+
+model CostConfigurationVersion {
+  id                  String                  @id @default(uuid())
+  headerId            String
+  header              CostConfigurationHeader @relation(fields: [headerId], references: [id])
+  companyId           String?
+  operationType       String?
+  versionNumber       Int
+  status              String
+  effectiveFrom       DateTime
+  effectiveTo         DateTime?
+  clonedFromVersionId String?
+  workflowTemplateId  String?
+  workflowInstanceId  String?
+  activatedBy         String?
+  activatedAt         DateTime?
+  retiredBy           String?
+  retiredAt           DateTime?
+  createdBy           String
+  approvedBy          String?
+  createdAt           DateTime                @default(now())
+  updatedAt           DateTime                @updatedAt
+
+  categories     CostCategoryMaster[]
+  elements       CostElementMaster[]
+  rates          CostRateMaster[]
+  formulas       CostFormulaDefinition[]
+  driverMappings CostDriverMapping[]
+
+  @@unique([headerId, versionNumber])
+}
+
+model CostRateMaster {
+  id          String                   @id @default(uuid())
+  versionId   String
+  version     CostConfigurationVersion @relation(fields: [versionId], references: [id])
+  elementCode String
+  rateValue   Float
+  currency    String                   @default("QAR")
+}
+
+model CostDriverMapping {
+  id                String                   @id @default(uuid())
+  versionId         String
+  version           CostConfigurationVersion @relation(fields: [versionId], references: [id])
+  sourceType        String
+  sourceCode        String
+  targetElementCode String?
+  quantityRuleAst   Json?
+  rateRuleAst       Json?
+  escalationRuleAst Json?
 }

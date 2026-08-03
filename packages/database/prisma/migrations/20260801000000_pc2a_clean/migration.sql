@@ -16,131 +16,7 @@ ALTER TABLE `CostFormulaDefinition` DROP FOREIGN KEY `CostFormulaDefinition_vers
 -- DropForeignKey
 ALTER TABLE `CostRateMaster` DROP FOREIGN KEY `CostRateMaster_versionId_fkey`;
 
--- DropForeignKey
-ALTER TABLE `SecFacWelfareCheck` DROP FOREIGN KEY `SecFacWelfareCheck_companyId_fkey`;
-
--- DropForeignKey
-ALTER TABLE `SecFacWelfareCheck` DROP FOREIGN KEY `SecFacWelfareCheck_deploymentId_fkey`;
-
--- DropForeignKey
-ALTER TABLE `SecFacWelfareCheck` DROP FOREIGN KEY `SecFacWelfareCheck_employeeId_fkey`;
-
--- DropForeignKey
-ALTER TABLE `SecFacWelfareCheck` DROP FOREIGN KEY `SecFacWelfareCheck_projectId_fkey`;
-
--- DropForeignKey
-ALTER TABLE `SecFacWelfareCheck` DROP FOREIGN KEY `SecFacWelfareCheck_siteId_fkey`;
-
--- DropForeignKey
-ALTER TABLE `SecFacWelfareSetting` DROP FOREIGN KEY `SecFacWelfareSetting_companyId_fkey`;
-
--- DropForeignKey
-ALTER TABLE `SecFacWelfareSetting` DROP FOREIGN KEY `SecFacWelfareSetting_createdById_fkey`;
-
--- DropForeignKey
-ALTER TABLE `SecFacWelfareSetting` DROP FOREIGN KEY `SecFacWelfareSetting_projectId_fkey`;
-
--- DropForeignKey
-ALTER TABLE `SecFacWelfareSetting` DROP FOREIGN KEY `SecFacWelfareSetting_siteId_fkey`;
-
--- DropForeignKey
-ALTER TABLE `SecfacPatrolExecutionCheckpoint` DROP FOREIGN KEY `SecfacPatrolExecutionCheckpoint_alertId_fkey`;
-
--- DropForeignKey
-ALTER TABLE `SecfacPatrolExecutionCheckpoint` DROP FOREIGN KEY `SecfacPatrolExecutionCheckpoint_exceptionAcknowledgedById_fkey`;
-
--- AlterTable
-ALTER TABLE `CostCategoryMaster` DROP COLUMN `costConfigurationVersionId`,
-    DROP COLUMN `isActive`,
-    ADD COLUMN `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-    ADD COLUMN `createdBy` VARCHAR(191) NOT NULL,
-    ADD COLUMN `description` TEXT NULL,
-    ADD COLUMN `updatedAt` DATETIME(3) NOT NULL;
-
--- AlterTable
-ALTER TABLE `CostElementMaster` DROP COLUMN `categoryId`,
-    DROP COLUMN `clientProvided`,
-    DROP COLUMN `isActive`,
-    DROP COLUMN `isDirect`,
-    DROP COLUMN `isFixed`,
-    DROP COLUMN `isOneTime`,
-    DROP COLUMN `quantitySource`,
-    DROP COLUMN `rateSource`,
-    DROP COLUMN `serviceApplicabilityJson`,
-    DROP COLUMN `unitOfMeasure`,
-    DROP COLUMN `versionId`,
-    ADD COLUMN `companyId` VARCHAR(191) NULL,
-    ADD COLUMN `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-    ADD COLUMN `createdBy` VARCHAR(191) NOT NULL,
-    ADD COLUMN `description` TEXT NULL,
-    ADD COLUMN `operationType` VARCHAR(191) NULL,
-    ADD COLUMN `updatedAt` DATETIME(3) NOT NULL;
-
--- AlterTable
-ALTER TABLE `CostFormulaDefinition` DROP COLUMN `formulaAst`,
-    DROP COLUMN `versionId`,
-    ADD COLUMN `companyId` VARCHAR(191) NULL,
-    ADD COLUMN `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-    ADD COLUMN `createdBy` VARCHAR(191) NOT NULL,
-    ADD COLUMN `updatedAt` DATETIME(3) NOT NULL;
-
--- AlterTable
-ALTER TABLE `RosterSlotAssignment` DROP COLUMN `assignedRosterType`;
-
--- AlterTable
-ALTER TABLE `SecFacWelfareCheck` MODIFY `operationType` VARCHAR(191) NOT NULL,
-    MODIFY `status` VARCHAR(191) NOT NULL DEFAULT 'PENDING',
-    MODIFY `acknowledgementMethod` VARCHAR(191) NULL,
-    MODIFY `exemptionType` VARCHAR(191) NULL,
-    MODIFY `exemptionReason` TEXT NULL,
-    MODIFY `settingSourceType` VARCHAR(191) NOT NULL DEFAULT 'SYSTEM_DEFAULT',
-    MODIFY `idempotencyKey` VARCHAR(191) NOT NULL;
-
--- AlterTable
-ALTER TABLE `SecFacWelfareSetting` DROP COLUMN `sourceType`,
-    ADD COLUMN `postId` VARCHAR(191) NULL,
-    MODIFY `operationType` VARCHAR(191) NOT NULL,
-    MODIFY `companyId` VARCHAR(191) NOT NULL,
-    MODIFY `createdById` VARCHAR(191) NOT NULL;
-
--- AlterTable
-ALTER TABLE `SecfacEvidenceAttachment` ADD COLUMN `clientCapturedAt` DATETIME(3) NULL,
-    ADD COLUMN `deviceSessionId` VARCHAR(191) NULL,
-    ADD COLUMN `integrityFlags` JSON NULL,
-    ADD COLUMN `serverReceivedAt` DATETIME(3) NULL,
-    MODIFY `hashAlgorithm` VARCHAR(191) NULL DEFAULT 'SHA-256',
-    MODIFY `integrityStatus` VARCHAR(191) NOT NULL DEFAULT 'UNVERIFIED';
-
--- AlterTable
-ALTER TABLE `SecfacPatrolExecution` DROP COLUMN `lastEvaluatedAt`,
-    ADD COLUMN `evaluationRunId` VARCHAR(191) NULL,
-    MODIFY `evaluationStatus` VARCHAR(191) NOT NULL DEFAULT 'SCHEDULED';
-
--- AlterTable
-ALTER TABLE `SecfacPatrolExecutionCheckpoint` DROP COLUMN `exceptionAcknowledgedById`,
-    ADD COLUMN `evaluationRunId` VARCHAR(191) NULL,
-    ADD COLUMN `exceptionAcknowledgedBy` VARCHAR(191) NULL,
-    MODIFY `assuranceStatus` VARCHAR(191) NOT NULL DEFAULT 'PENDING';
-
--- AlterTable
-ALTER TABLE `SecfacPatrolRoute` MODIFY `sequenceMode` VARCHAR(191) NOT NULL DEFAULT 'MANDATORY';
-
--- DropTable (Moved to end)
--- DROP TABLE `CostConfigurationHeader`;
-
--- DropTable (Moved to end)
--- DROP TABLE `CostConfigurationVersion`;
-
--- DropTable (Moved to end)
--- DROP TABLE `CostDriverMapping`;
-
--- DropTable (Moved to end)
--- DROP TABLE `CostRateMaster`;
-
--- DropTable (Moved to end)
--- DROP TABLE `CostFormulaDefinition`;
-
--- CreateTable
+-- CreateTable CostCategoryVersion
 CREATE TABLE `CostCategoryVersion` (
     `id` VARCHAR(191) NOT NULL,
     `masterId` VARCHAR(191) NOT NULL,
@@ -159,7 +35,7 @@ CREATE TABLE `CostCategoryVersion` (
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
--- CreateTable
+-- CreateTable CostElementVersion
 CREATE TABLE `CostElementVersion` (
     `id` VARCHAR(191) NOT NULL,
     `masterId` VARCHAR(191) NOT NULL,
@@ -189,7 +65,7 @@ CREATE TABLE `CostElementVersion` (
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
--- CreateTable
+-- CreateTable CostDriverMaster
 CREATE TABLE `CostDriverMaster` (
     `id` VARCHAR(191) NOT NULL,
     `code` VARCHAR(191) NOT NULL,
@@ -205,7 +81,7 @@ CREATE TABLE `CostDriverMaster` (
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
--- CreateTable
+-- CreateTable CostDriverVersion
 CREATE TABLE `CostDriverVersion` (
     `id` VARCHAR(191) NOT NULL,
     `masterId` VARCHAR(191) NOT NULL,
@@ -228,7 +104,7 @@ CREATE TABLE `CostDriverVersion` (
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
--- CreateTable
+-- CreateTable CostRateCardMaster
 CREATE TABLE `CostRateCardMaster` (
     `id` VARCHAR(191) NOT NULL,
     `code` VARCHAR(191) NOT NULL,
@@ -244,7 +120,7 @@ CREATE TABLE `CostRateCardMaster` (
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
--- CreateTable
+-- CreateTable CostRateCardVersion
 CREATE TABLE `CostRateCardVersion` (
     `id` VARCHAR(191) NOT NULL,
     `masterId` VARCHAR(191) NOT NULL,
@@ -264,7 +140,7 @@ CREATE TABLE `CostRateCardVersion` (
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
--- CreateTable
+-- CreateTable CostFormulaVersion
 CREATE TABLE `CostFormulaVersion` (
     `id` VARCHAR(191) NOT NULL,
     `masterId` VARCHAR(191) NOT NULL,
@@ -285,7 +161,7 @@ CREATE TABLE `CostFormulaVersion` (
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
--- CreateTable
+-- CreateTable CostPackageMaster
 CREATE TABLE `CostPackageMaster` (
     `id` VARCHAR(191) NOT NULL,
     `code` VARCHAR(191) NOT NULL,
@@ -300,7 +176,7 @@ CREATE TABLE `CostPackageMaster` (
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
--- CreateTable
+-- CreateTable CostPackageVersion
 CREATE TABLE `CostPackageVersion` (
     `id` VARCHAR(191) NOT NULL,
     `masterId` VARCHAR(191) NOT NULL,
@@ -319,7 +195,7 @@ CREATE TABLE `CostPackageVersion` (
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
--- CreateTable
+-- CreateTable CostPackageItem
 CREATE TABLE `CostPackageItem` (
     `id` VARCHAR(191) NOT NULL,
     `packageVersionId` VARCHAR(191) NOT NULL,
@@ -334,7 +210,7 @@ CREATE TABLE `CostPackageItem` (
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
--- CreateTable
+-- CreateTable CostRateActivationLock
 CREATE TABLE `CostRateActivationLock` (
     `id` VARCHAR(191) NOT NULL,
     `entityType` VARCHAR(191) NOT NULL,
@@ -351,125 +227,100 @@ CREATE TABLE `CostRateActivationLock` (
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
--- CreateIndex
+-- AlterTable for CostCategoryMaster (Additive only)
+ALTER TABLE `CostCategoryMaster`
+    ADD COLUMN `description` TEXT NULL,
+    ADD COLUMN `createdBy` VARCHAR(191) NOT NULL DEFAULT 'SYSTEM',
+    ADD COLUMN `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    ADD COLUMN `updatedAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3);
+
+ALTER TABLE `CostCategoryMaster` ALTER COLUMN `createdBy` DROP DEFAULT;
+ALTER TABLE `CostCategoryMaster` ALTER COLUMN `updatedAt` DROP DEFAULT;
+
+-- AddUniqueIndex on CostCategoryMaster
 CREATE UNIQUE INDEX `CostCategoryMaster_code_key` ON `CostCategoryMaster`(`code`);
 
--- CreateIndex
-CREATE UNIQUE INDEX `CostElementMaster_code_key` ON `CostElementMaster`(`code`);
-
--- CreateIndex
-CREATE UNIQUE INDEX `CostFormulaDefinition_code_key` ON `CostFormulaDefinition`(`code`);
-
--- CreateIndex
-CREATE INDEX `SecFacWelfareSetting_operationType_idx` ON `SecFacWelfareSetting`(`operationType`);
-
--- CreateIndex
-CREATE INDEX `SecFacWelfareSetting_postId_idx` ON `SecFacWelfareSetting`(`postId`);
-
--- CreateIndex
-CREATE INDEX `SecFacWelfareSetting_isActive_idx` ON `SecFacWelfareSetting`(`isActive`);
-
--- CreateIndex
-CREATE INDEX `SecfacEvidenceAttachment_integrityStatus_idx` ON `SecfacEvidenceAttachment`(`integrityStatus`);
-
--- CreateIndex
-CREATE INDEX `SecfacPatrolExecution_evaluationStatus_idx` ON `SecfacPatrolExecution`(`evaluationStatus`);
-
--- CreateIndex
-CREATE INDEX `SecfacPatrolExecutionCheckpoint_assuranceStatus_idx` ON `SecfacPatrolExecutionCheckpoint`(`assuranceStatus`);
-
--- AddForeignKey
-ALTER TABLE `SecFacWelfareSetting` ADD CONSTRAINT `SecFacWelfareSetting_createdById_fkey` FOREIGN KEY (`createdById`) REFERENCES `Employee`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE `SecFacWelfareCheck` ADD CONSTRAINT `SecFacWelfareCheck_siteId_fkey` FOREIGN KEY (`siteId`) REFERENCES `ManpowerSite`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE `SecFacWelfareCheck` ADD CONSTRAINT `SecFacWelfareCheck_employeeId_fkey` FOREIGN KEY (`employeeId`) REFERENCES `Employee`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
+-- AddForeignKey to Company for CostCategoryMaster
 ALTER TABLE `CostCategoryMaster` ADD CONSTRAINT `CostCategoryMaster_companyId_fkey` FOREIGN KEY (`companyId`) REFERENCES `Company`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
--- AddForeignKey
+-- AddForeignKey for CostCategoryVersion
 ALTER TABLE `CostCategoryVersion` ADD CONSTRAINT `CostCategoryVersion_masterId_fkey` FOREIGN KEY (`masterId`) REFERENCES `CostCategoryMaster`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
--- AddForeignKey
+
+-- AlterTable for CostElementMaster (Additive only)
+ALTER TABLE `CostElementMaster`
+    ADD COLUMN `companyId` VARCHAR(191) NULL,
+    ADD COLUMN `description` TEXT NULL,
+    ADD COLUMN `operationType` VARCHAR(191) NULL,
+    ADD COLUMN `createdBy` VARCHAR(191) NOT NULL DEFAULT 'SYSTEM',
+    ADD COLUMN `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    ADD COLUMN `updatedAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3);
+
+ALTER TABLE `CostElementMaster` ALTER COLUMN `createdBy` DROP DEFAULT;
+ALTER TABLE `CostElementMaster` ALTER COLUMN `updatedAt` DROP DEFAULT;
+
+-- AddUniqueIndex on CostElementMaster
+CREATE UNIQUE INDEX `CostElementMaster_code_key` ON `CostElementMaster`(`code`);
+
+-- AddForeignKey to Company for CostElementMaster
 ALTER TABLE `CostElementMaster` ADD CONSTRAINT `CostElementMaster_companyId_fkey` FOREIGN KEY (`companyId`) REFERENCES `Company`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
--- AddForeignKey
+-- AddForeignKey for CostElementVersion
 ALTER TABLE `CostElementVersion` ADD CONSTRAINT `CostElementVersion_masterId_fkey` FOREIGN KEY (`masterId`) REFERENCES `CostElementMaster`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
--- AddForeignKey
-ALTER TABLE `CostDriverMaster` ADD CONSTRAINT `CostDriverMaster_companyId_fkey` FOREIGN KEY (`companyId`) REFERENCES `Company`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
--- AddForeignKey
-ALTER TABLE `CostDriverVersion` ADD CONSTRAINT `CostDriverVersion_masterId_fkey` FOREIGN KEY (`masterId`) REFERENCES `CostDriverMaster`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+-- AlterTable for CostFormulaDefinition (Additive only)
+ALTER TABLE `CostFormulaDefinition`
+    ADD COLUMN `companyId` VARCHAR(191) NULL,
+    ADD COLUMN `createdBy` VARCHAR(191) NOT NULL DEFAULT 'SYSTEM',
+    ADD COLUMN `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    ADD COLUMN `updatedAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3);
 
--- AddForeignKey
-ALTER TABLE `CostRateCardMaster` ADD CONSTRAINT `CostRateCardMaster_companyId_fkey` FOREIGN KEY (`companyId`) REFERENCES `Company`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `CostFormulaDefinition` ALTER COLUMN `createdBy` DROP DEFAULT;
+ALTER TABLE `CostFormulaDefinition` ALTER COLUMN `updatedAt` DROP DEFAULT;
 
--- AddForeignKey
-ALTER TABLE `CostRateCardVersion` ADD CONSTRAINT `CostRateCardVersion_masterId_fkey` FOREIGN KEY (`masterId`) REFERENCES `CostRateCardMaster`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+-- AddUniqueIndex on CostFormulaDefinition
+CREATE UNIQUE INDEX `CostFormulaDefinition_code_key` ON `CostFormulaDefinition`(`code`);
 
--- AddForeignKey
+-- AddForeignKey to Company for CostFormulaDefinition
 ALTER TABLE `CostFormulaDefinition` ADD CONSTRAINT `CostFormulaDefinition_companyId_fkey` FOREIGN KEY (`companyId`) REFERENCES `Company`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
--- AddForeignKey
+-- AddForeignKey for CostFormulaVersion
 ALTER TABLE `CostFormulaVersion` ADD CONSTRAINT `CostFormulaVersion_masterId_fkey` FOREIGN KEY (`masterId`) REFERENCES `CostFormulaDefinition`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
--- AddForeignKey
+
+-- AddForeignKey for rest of new tables
+ALTER TABLE `CostDriverMaster` ADD CONSTRAINT `CostDriverMaster_companyId_fkey` FOREIGN KEY (`companyId`) REFERENCES `Company`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `CostDriverVersion` ADD CONSTRAINT `CostDriverVersion_masterId_fkey` FOREIGN KEY (`masterId`) REFERENCES `CostDriverMaster`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
+ALTER TABLE `CostRateCardMaster` ADD CONSTRAINT `CostRateCardMaster_companyId_fkey` FOREIGN KEY (`companyId`) REFERENCES `Company`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `CostRateCardVersion` ADD CONSTRAINT `CostRateCardVersion_masterId_fkey` FOREIGN KEY (`masterId`) REFERENCES `CostRateCardMaster`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+
 ALTER TABLE `CostPackageMaster` ADD CONSTRAINT `CostPackageMaster_companyId_fkey` FOREIGN KEY (`companyId`) REFERENCES `Company`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
-
--- AddForeignKey
 ALTER TABLE `CostPackageVersion` ADD CONSTRAINT `CostPackageVersion_masterId_fkey` FOREIGN KEY (`masterId`) REFERENCES `CostPackageMaster`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
-
--- AddForeignKey
 ALTER TABLE `CostPackageItem` ADD CONSTRAINT `CostPackageItem_packageVersionId_fkey` FOREIGN KEY (`packageVersionId`) REFERENCES `CostPackageVersion`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
--- RenameIndex
-ALTER TABLE `SecFacWelfareSetting` RENAME INDEX `SecFacWelfareSetting_companyId_fkey` TO `SecFacWelfareSetting_companyId_idx`;
+-- Make legacy required columns nullable to support additive new masters
+ALTER TABLE `CostElementMaster`
+    MODIFY `versionId` VARCHAR(191) NULL,
+    MODIFY `categoryId` VARCHAR(191) NULL,
+    MODIFY `quantitySource` VARCHAR(191) NULL,
+    MODIFY `rateSource` VARCHAR(191) NULL;
 
--- RenameIndex
-ALTER TABLE `SecFacWelfareSetting` RENAME INDEX `SecFacWelfareSetting_siteId_fkey` TO `SecFacWelfareSetting_siteId_idx`;
+ALTER TABLE `CostFormulaDefinition`
+    MODIFY `versionId` VARCHAR(191) NULL,
+    MODIFY `formulaAst` JSON NULL;
 
--- Migrate Legacy CostConfigurationVersion to CostPackageMaster and CostPackageVersion
--- 1. Create a Master record for each legacy version to preserve lineage
-INSERT INTO `CostPackageMaster` (`id`, `code`, `name`, `description`, `companyId`, `createdBy`, `createdAt`, `updatedAt`)
-SELECT 
-    UUID(), 
-    CONCAT('LEGACY-PKG-', SUBSTRING(`id`, 1, 8)), 
-    'Legacy Cost Configuration', 
-    'Migrated from PC-1 CostConfigurationVersion', 
-    `companyId`, 
-    COALESCE(`createdBy`, 'SYSTEM'), 
-    COALESCE(`createdAt`, CURRENT_TIMESTAMP(3)), 
-    COALESCE(`updatedAt`, CURRENT_TIMESTAMP(3))
-FROM `CostConfigurationVersion`;
 
--- 2. Create the Version record using the original ID to preserve references (if any)
-INSERT INTO `CostPackageVersion` (`id`, `masterId`, `versionNumber`, `status`, `effectiveFrom`, `effectiveTo`, `createdBy`, `createdAt`, `updatedAt`)
-SELECT 
-    v.`id`, 
-    m.`id`, 
-    COALESCE(v.`versionNumber`, 1), 
-    COALESCE(v.`status`, 'DRAFT'), 
-    COALESCE(v.`effectiveFrom`, CURRENT_TIMESTAMP(3)), 
-    v.`effectiveTo`, 
-    COALESCE(v.`createdBy`, 'SYSTEM'), 
-    COALESCE(v.`createdAt`, CURRENT_TIMESTAMP(3)), 
-    COALESCE(v.`updatedAt`, CURRENT_TIMESTAMP(3))
-FROM `CostConfigurationVersion` v
-JOIN `CostPackageMaster` m ON m.`code` = CONCAT('LEGACY-PKG-', SUBSTRING(v.`id`, 1, 8));
+-- Add missing Foreign Keys
 
--- DropTable
-DROP TABLE `CostConfigurationHeader`;
+ALTER TABLE `CostElementMaster` ADD CONSTRAINT `CostElementMaster_versionId_fkey` FOREIGN KEY (`versionId`) REFERENCES `CostConfigurationVersion`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `CostFormulaDefinition` ADD CONSTRAINT `CostFormulaDefinition_versionId_fkey` FOREIGN KEY (`versionId`) REFERENCES `CostConfigurationVersion`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
--- DropTable
-DROP TABLE `CostConfigurationVersion`;
+ALTER TABLE `CostCategoryMaster` ADD CONSTRAINT `CostCategoryMaster_costConfigurationVersionId_fkey` FOREIGN KEY (`costConfigurationVersionId`) REFERENCES `CostConfigurationVersion`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE `CostConfigurationVersion` ADD CONSTRAINT `CostConfigurationVersion_headerId_fkey` FOREIGN KEY (`headerId`) REFERENCES `CostConfigurationHeader`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `CostRateMaster` ADD CONSTRAINT `CostRateMaster_versionId_fkey` FOREIGN KEY (`versionId`) REFERENCES `CostConfigurationVersion`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE `CostDriverMapping` ADD CONSTRAINT `CostDriverMapping_versionId_fkey` FOREIGN KEY (`versionId`) REFERENCES `CostConfigurationVersion`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
 
--- DropTable
-DROP TABLE `CostDriverMapping`;
 
--- DropTable
-DROP TABLE `CostRateMaster`;
 

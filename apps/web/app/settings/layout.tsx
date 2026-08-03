@@ -69,6 +69,12 @@ const SIDEBAR_ITEMS: SettingsSidebarItem[] = [
     icon: "fact_check",
     permission: "settings.productionReadiness.view",
   },
+  {
+    label: "Commercial & Contract Config",
+    path: "/settings/commercial-contract/cost-configuration",
+    icon: "request_quote",
+    permission: "precontract.costConfig.view",
+  },
 ];
 
 export default function SettingsLayout({ children }: { children: React.ReactNode }) {
