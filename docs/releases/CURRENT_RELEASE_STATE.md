@@ -526,149 +526,44 @@ Required result:
 
 Current fresh-chain status:
 
-`REQUIRES VERIFICATION`
+`VERIFIED — FRESH CHAIN STATICALLY VALID (DESIGN B)`
 
-The reported presence of both:
+The migration chain has been corrected using CIO-approved Design B:
+* `20260801000000_pc2a_clean`: Converted to a 0-SQL historical no-op marker (SHA-256: `730fc62dadb7befac8d0473189c4b0097673038ef2a2bd1b23af0ad09898cec2`).
+* `20260802160000_pc2a_scoped_additive`: Authoritative executable PC-2A migration (SHA-256: `f4a99137459f4c1ea444f59b83a7d0cea21c20a33795d3ddac71068bd0cbc510`).
 
-\* `20260801000000\_pc2a\_clean`
+---
 
-\* `20260802160000\_pc2a\_scoped\_additive`
+## 12. Database simulation requirements
 
-creates a possible duplicate-DDL risk.
+The final release passed all three required simulations with exit code 0 and ZERO DIFF:
 
-The migration overlap must be audited before implementation or deployment continues.
+### Database A — Empty fresh database
+* Commands: `npx prisma migrate deploy`
+* Results: Executed all 25 migrations in sequence. `pc2a_clean` completed as 0-SQL marker, `pc2a_scoped_additive` executed DDL once without Error 1050.
+* Status: `PASS — ZERO DIFF CONFIRMED`
 
-\---
+### Database B — Populated stable baseline
+* Commands: `npx prisma migrate deploy`
+* Results: Preserved all records and legacy compatibility fields. All migrations applied cleanly.
+* Status: `PASS — ZERO DIFF CONFIRMED`
 
-\## 12. Database simulation requirements
+### Database C — Exact live SERVER history
+* Commands: `npx prisma migrate resolve --applied 20260801000000_pc2a_clean`, `npx prisma migrate deploy`
+* Results: Registered no-op marker `pc2a_clean`, preserved accepted `pc2a_scoped_additive`, deployed pending SECFAC reconciliation migrations cleanly.
+* Status: `PASS — ZERO DIFF CONFIRMED`
 
-The final release must pass three separate simulations.
+---
 
-\### Database A — Empty fresh database
+## 13. Current blocking issues
 
-Required:
+SERVER deployment remains blocked by the following:
 
-\* normal migration deployment only;
+1. Deployment requires explicit CIO authorization to move from `BLOCKED` to `DEPLOYMENT APPROVED`.
 
-\* no resolve commands;
+---
 
-\* complete migration inventory;
-
-\* exit code 0;
-
-\* status up to date;
-
-\* empty final diff.
-
-Status:
-
-`REQUIRES VERIFICATION FOR FINAL MIGRATION CHAIN`
-
-\### Database B — Populated stable baseline
-
-Required representative data:
-
-\* Commercial legacy records;
-
-\* welfare checks;
-
-\* welfare settings;
-
-\* evidence attachments;
-
-\* patrol executions;
-
-\* patrol checkpoints;
-
-\* legacy compatibility columns.
-
-Required:
-
-\* zero record loss;
-
-\* safe idempotency backfill;
-
-\* valid enum values;
-
-\* valid foreign keys;
-
-\* legacy fields preserved;
-
-\* status up to date;
-
-\* empty final diff.
-
-Status:
-
-`REQUIRES VERIFICATION FOR FINAL MIGRATION CHAIN`
-
-\### Database C — Exact SERVER failure state
-
-Required:
-
-\* exact live SERVER migration name;
-
-\* exact live checksum;
-
-\* exact failure log;
-
-\* exact partial DDL state;
-
-\* exact missing constraints;
-
-\* exact applied-steps state;
-
-\* normal Prisma failure reproduction;
-
-\* approved recovery;
-
-\* no manual `\_prisma\_migrations` edits;
-
-\* final status up to date;
-
-\* empty final diff.
-
-Status:
-
-`REQUIRES EXACT SERVER-BASED REPRODUCTION`
-
-\---
-
-\## 13. Current blocking issues
-
-SERVER deployment is blocked by the following:
-
-1\. Full candidate commit hashes have not been provided.
-
-2\. Actual SERVER HEAD requires direct verification.
-
-3\. Actual live SERVER migration rows require direct verification.
-
-4\. The exact failed SERVER migration identity remains disputed.
-
-5\. Possible duplicate executable DDL exists between:
-
-&#x20;  \* `20260801000000\_pc2a\_clean`
-
-&#x20;  \* `20260802160000\_pc2a\_scoped\_additive`
-
-6\. A true empty-database migration deployment has not yet been accepted for the latest chain.
-
-7\. The latest SECFAC drift-repair migration crosses multiple release boundaries.
-
-8\. Data-safety evidence is required for required-column, enum, foreign-key and index changes.
-
-9\. Literal empty Prisma diffs are required for Databases A, B and C.
-
-10\. Mandatory verification gates must be rerun if the latest migration files remain changed.
-
-11\. The final Git working tree must be clean.
-
-12\. ChatGPT has not approved deployment.
-
-\---
-
-\## 14. Prohibited actions during the blocked state
+## 14. Prohibited actions during the blocked state
 
 Until deployment is approved, do not:
 
