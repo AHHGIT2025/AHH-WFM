@@ -526,11 +526,11 @@ Required result:
 
 Current fresh-chain status:
 
-`VERIFIED — FRESH CHAIN STATICALLY VALID (DESIGN B)`
+`VERIFIED — FRESH CHAIN STATICALLY VALID (DESIGN B & LIVE SERVER CHECKSUM RESTORED)`
 
-The migration chain has been corrected using CIO-approved Design B:
+The migration chain has been corrected using CIO-approved Design B and live SERVER checksum restoration:
 * `20260801000000_pc2a_clean`: Converted to a 0-SQL historical no-op marker (SHA-256: `730fc62dadb7befac8d0473189c4b0097673038ef2a2bd1b23af0ad09898cec2`).
-* `20260802160000_pc2a_scoped_additive`: Authoritative executable PC-2A migration (SHA-256: `f4a99137459f4c1ea444f59b83a7d0cea21c20a33795d3ddac71068bd0cbc510`).
+* `20260802160000_pc2a_scoped_additive`: Authoritative executable PC-2A migration restored to match live SERVER `_prisma_migrations` row (SHA-256: `f5d07607460890201fdbc30588b214fef3efa91f995c7736eeb4e2131a345dc1`).
 
 ---
 
@@ -550,7 +550,7 @@ The final release passed all three required simulations with exit code 0 and ZER
 
 ### Database C — Exact live SERVER history
 * Commands: `npx prisma migrate resolve --applied 20260801000000_pc2a_clean`, `npx prisma migrate deploy`
-* Results: Registered no-op marker `pc2a_clean`, preserved accepted `pc2a_scoped_additive`, deployed pending SECFAC reconciliation migrations cleanly.
+* Results: Registered no-op marker `pc2a_clean`, accepted live SERVER `pc2a_scoped_additive` without modified-migration warnings, deployed pending SECFAC reconciliation migrations cleanly.
 * Status: `PASS — ZERO DIFF CONFIRMED`
 
 ---

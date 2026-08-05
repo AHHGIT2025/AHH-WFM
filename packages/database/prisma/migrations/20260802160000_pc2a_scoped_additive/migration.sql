@@ -1,21 +1,3 @@
--- DropForeignKey
-ALTER TABLE `CostCategoryMaster` DROP FOREIGN KEY `CostCategoryMaster_costConfigurationVersionId_fkey`;
-
--- DropForeignKey
-ALTER TABLE `CostConfigurationVersion` DROP FOREIGN KEY `CostConfigurationVersion_headerId_fkey`;
-
--- DropForeignKey
-ALTER TABLE `CostDriverMapping` DROP FOREIGN KEY `CostDriverMapping_versionId_fkey`;
-
--- DropForeignKey
-ALTER TABLE `CostElementMaster` DROP FOREIGN KEY `CostElementMaster_versionId_fkey`;
-
--- DropForeignKey
-ALTER TABLE `CostFormulaDefinition` DROP FOREIGN KEY `CostFormulaDefinition_versionId_fkey`;
-
--- DropForeignKey
-ALTER TABLE `CostRateMaster` DROP FOREIGN KEY `CostRateMaster_versionId_fkey`;
-
 -- CreateTable CostCategoryVersion
 CREATE TABLE `CostCategoryVersion` (
     `id` VARCHAR(191) NOT NULL,
@@ -311,15 +293,3 @@ ALTER TABLE `CostFormulaDefinition`
     MODIFY `versionId` VARCHAR(191) NULL,
     MODIFY `formulaAst` JSON NULL;
 
-
--- Add missing Foreign Keys
--- NOTE: versionId FKs use RESTRICT here (differs from pc2a_clean which uses SET NULL).
--- This reflects what was directly applied to the live SERVER on 2026-08-02.
--- The drift_repair migration (20260803150000) corrects these to SET NULL.
-ALTER TABLE `CostElementMaster` ADD CONSTRAINT `CostElementMaster_versionId_fkey` FOREIGN KEY (`versionId`) REFERENCES `CostConfigurationVersion`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
-ALTER TABLE `CostFormulaDefinition` ADD CONSTRAINT `CostFormulaDefinition_versionId_fkey` FOREIGN KEY (`versionId`) REFERENCES `CostConfigurationVersion`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
-
-ALTER TABLE `CostCategoryMaster` ADD CONSTRAINT `CostCategoryMaster_costConfigurationVersionId_fkey` FOREIGN KEY (`costConfigurationVersionId`) REFERENCES `CostConfigurationVersion`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
-ALTER TABLE `CostConfigurationVersion` ADD CONSTRAINT `CostConfigurationVersion_headerId_fkey` FOREIGN KEY (`headerId`) REFERENCES `CostConfigurationHeader`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
-ALTER TABLE `CostRateMaster` ADD CONSTRAINT `CostRateMaster_versionId_fkey` FOREIGN KEY (`versionId`) REFERENCES `CostConfigurationVersion`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
-ALTER TABLE `CostDriverMapping` ADD CONSTRAINT `CostDriverMapping_versionId_fkey` FOREIGN KEY (`versionId`) REFERENCES `CostConfigurationVersion`(`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
