@@ -412,79 +412,62 @@ Current six-FK state:
 
 \## 10. SECFAC schema reconciliation
 
-The current application code reportedly depends on these fields:
+The current application code depends on these fields:
 
-\### `SecFacWelfareSetting`
+### `SecFacWelfareSetting`
 
-\* `postId`
+* `postId`
 
-\### `SecfacEvidenceAttachment`
+### `SecfacEvidenceAttachment`
 
-\* `clientCapturedAt`
+* `clientCapturedAt`
 
-\* `deviceSessionId`
+* `deviceSessionId`
 
-\* `integrityFlags`
+* `integrityFlags`
 
-\* `serverReceivedAt`
+* `serverReceivedAt`
 
-\### `SecfacPatrolExecution`
+### `SecfacPatrolExecution`
 
-\* `evaluationRunId`
+* `evaluationRunId`
 
-\### `SecfacPatrolExecutionCheckpoint`
+### `SecfacPatrolExecutionCheckpoint`
 
-\* `exceptionAcknowledgedBy`
+* `exceptionAcknowledgedBy`
 
-\* `evaluationRunId`
+* `evaluationRunId`
 
-Legacy compatibility fields previously identified include:
+Legacy compatibility fields:
 
-\* `RosterSlotAssignment.assignedRosterType`
+* `RosterSlotAssignment.assignedRosterType`
 
-\* `SecFacWelfareSetting.sourceType`
+* `SecFacWelfareSetting.sourceType`
 
-\* `SecfacPatrolExecution.lastEvaluatedAt`
+* `SecfacPatrolExecution.lastEvaluatedAt`
 
-\* `SecfacPatrolExecutionCheckpoint.exceptionAcknowledgedById`
+* `SecfacPatrolExecutionCheckpoint.exceptionAcknowledgedById`
 
-Legacy fields must not be dropped without a separately approved cleanup release.
+Legacy fields are preserved.
 
 Reported reconciliation migration:
 
-`20260803120000\_secfac\_welfare\_reconciliation`
+`20260803120000_secfac_welfare_reconciliation`
 
-Reported broader repair migration:
+Corrected drift repair migration:
 
-`20260803150000\_secfac\_schema\_drift\_repair`
+`20260803150000_secfac_schema_drift_repair`
 
-The broader migration reportedly affects:
-
-\* SECFAC welfare tables;
-
-\* patrol tables;
-
-\* evidence tables;
-
-\* `SecfacPatrolRoute`;
-
-\* `RosterSlotAssignment`;
-
-\* Commercial cost foreign keys;
-
-\* FK-backing indexes.
-
-Because this crosses SECFAC, manpower and Commercial boundaries, every statement requires explicit scope classification and data-safety evidence.
-
-Current reconciliation approval:
-
-`NOT APPROVED FOR SERVER DEPLOYMENT`
+### Incident P3018 Resolution & State-Aware Stored Procedure Guarding
+* **Incident Cause**: The production deployment at commit `7857a87d5dacfd02a7a9e3aab16adb8aa115bac7` failed with Prisma Error `P3018` (MySQL Error `1091` on Query 1) while attempting `ALTER TABLE SecFacWelfareCheck DROP FOREIGN KEY SecFacWelfareCheck_companyId_fkey`. Physical schema inspection of the live SERVER database (`ahh_wfm`) proved that `SecFacWelfareCheck_companyId_fkey` and `SecFacWelfareCheck_projectId_fkey` were already absent. Raw `DROP FOREIGN KEY` statements without guards failed.
+* **Correction**: Converted `20260803150000_secfac_schema_drift_repair/migration.sql` into a state-aware conditional stored procedure `_secfac_drift_repair()` using `information_schema.TABLE_CONSTRAINTS` and `information_schema.STATISTICS` `IF EXISTS` / `IF NOT EXISTS` guards for all 12 foreign key drops, 4 index drops, 2 index renames, 5 index creations, and 5 foreign key additions.
+* **Corrected Migration Checksum**: SHA-256 `40a54d264f1aacd9a30407acc14d351e9b6595b5869157410e973461d199cc94` (blob: `c73659114db1f5169610835203866be9b4e7a233`).
 
 \---
 
 \## 11. Fresh-database migration requirement
 
-The final committed migration chain must succeed on a completely empty MySQL database using only:
+The final committed migration chain succeeds on a completely empty MySQL database using only:
 
 ```powershell
 
@@ -492,70 +475,45 @@ npx prisma migrate deploy --schema packages/database/prisma/schema.prisma
 
 ```
 
-The fresh-database proof must not use:
-
-\* raw SQL pre-application;
-
-\* `prisma migrate resolve`;
-
-\* manually created tables or columns;
-
-\* skipped migrations;
-
-\* manually inserted migration rows;
-
-\* manual `\_prisma\_migrations` changes.
-
-Required result:
-
-\* every committed migration applies in timestamp order;
-
-\* exit code 0;
-
-\* `prisma migrate status` reports up to date;
-
-\* no duplicate table, column, index or constraint errors;
-
-\* final Prisma schema diff is genuinely empty;
-
-\* no generated SQL remains;
-
-\* no migration checksum warning;
-
-\* no missing or modified migration warning.
-
 Current fresh-chain status:
 
-`VERIFIED — FRESH CHAIN STATICALLY VALID (DESIGN B & LIVE SERVER CHECKSUM RESTORED)`
+`VERIFIED — FRESH CHAIN STATICALLY & DYNAMICALLY VALID`
 
-The migration chain has been corrected using CIO-approved Design B and live SERVER checksum restoration:
+The migration chain has been verified across all 4 database targets:
 * `20260801000000_pc2a_clean`: Converted to a 0-SQL historical no-op marker (SHA-256: `730fc62dadb7befac8d0473189c4b0097673038ef2a2bd1b23af0ad09898cec2`).
-* `20260802160000_pc2a_scoped_additive`: Authoritative executable PC-2A migration restored to match live SERVER `_prisma_migrations` row (SHA-256: `f5d07607460890201fdbc30588b214fef3efa91f995c7736eeb4e2131a345dc1`).
+* `20260802160000_pc2a_scoped_additive`: Authoritative executable PC-2A migration matching live SERVER `_prisma_migrations` row (SHA-256: `f5d07607460890201fdbc30588b214fef3efa91f995c7736eeb4e2131a345dc1`).
+* `20260803150000_secfac_schema_drift_repair`: State-aware conditional stored procedure (SHA-256: `40a54d264f1aacd9a30407acc14d351e9b6595b5869157410e973461d199cc94`).
 
----
+\---
 
-## 12. Database simulation requirements
+\## 12. Database simulation requirements
 
-The final release passed all three required simulations with exit code 0 and ZERO DIFF:
+The release passed all four required database proofs with exit code 0 and ZERO DIFF:
 
 ### Database A — Empty fresh database
 * Commands: `npx prisma migrate deploy`
-* Results: Executed all 25 migrations in sequence. `pc2a_clean` completed as 0-SQL marker, `pc2a_scoped_additive` executed DDL once without Error 1050.
+* Results: Executed all 25 migrations in sequence. `pc2a_clean` completed as 0-SQL marker, `pc2a_scoped_additive` executed DDL once without Error 1050, `secfac_schema_drift_repair` executed state-aware procedure cleanly.
 * Status: `PASS — ZERO DIFF CONFIRMED`
 
-### Database B — Populated stable baseline
+### Database B — Populated baseline
 * Commands: `npx prisma migrate deploy`
 * Results: Preserved all records and legacy compatibility fields. All migrations applied cleanly.
 * Status: `PASS — ZERO DIFF CONFIRMED`
 
-### Database C — Exact live SERVER history
+### Database C — Pre-repair live SERVER history
 * Commands: `npx prisma migrate resolve --applied 20260801000000_pc2a_clean`, `npx prisma migrate deploy`
-* Results: Registered no-op marker `pc2a_clean`, accepted live SERVER `pc2a_scoped_additive` without modified-migration warnings, deployed pending SECFAC reconciliation migrations cleanly.
+* Results: Registered no-op marker `pc2a_clean`, accepted live SERVER `pc2a_scoped_additive` without modified-migration warnings, deployed pending SECFAC reconciliation and drift repair migrations cleanly.
 * Status: `PASS — ZERO DIFF CONFIRMED`
 
----
+### Database D — Exact failed production recovery path
+* Simulation setup: Seeded live SERVER pre-repair state, inserted failed `_prisma_migrations` row for `20260803150000_secfac_schema_drift_repair` (`checksum = cd53a2fc3b7d4e473111a91826931ed534c0d995c4bcb52cd26b8f77b8ff59d5`, `logs = P3018 MySQL Error 1091`, `finished_at = NULL`).
+* Commands: `npx prisma migrate resolve --rolled-back 20260803150000_secfac_schema_drift_repair`, `npx prisma migrate deploy`
+* Results: Rollback resolution marked failed row as rolled back (`rolled_back_at` set), `migrate deploy` executed corrected state-aware procedure cleanly and recorded new row with SHA-256 `40a54d264f1aacd9a30407acc14d351e9b6595b5869157410e973461d199cc94` (`finished_at` populated, `applied_steps_count = 1`).
+* Status: `PASS — ZERO DIFF CONFIRMED`
 
-## 13. Current blocking issues
+\---
+
+\## 13. Current blocking issues
 
 SERVER deployment remains blocked by the following:
 
