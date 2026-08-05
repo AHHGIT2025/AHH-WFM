@@ -558,6 +558,7 @@ let memoryDb: {
     { id: "DEPT-005", name: "IT", companyId: "COMP-001", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
   ],
   employees: [
+    { id: "AA-1001", name: "Ahmed Ali", department: "Manned Security Department", departmentId: "DEPT-001", companyId: "COMP-002", designationId: "DES-001", positionCategoryId: "cat-1", grade: "G1", role: "EMPLOYEE", status: "Active", email: "ahmed.ali@alhattab.qa", phone: "+974 5555 1111", shiftId: "MOR-102", passwordHash: defaultHash, isActive: true, dateOfJoining: "2022-01-15T00:00:00Z", qidNumber: "28532400111", qidExpiryDate: "2027-05-20T00:00:00Z", passportNumber: "P-AA1001", passportIssueDate: "2022-01-15T00:00:00Z", passportExpiryDate: "2032-01-15T00:00:00Z", passportIssuingCountry: "Qatar", sponsor: "AHH Security Services", hasAccommodation: false, hasItAssets: true, employeeCategory: "BLUE_COLLAR", employmentStatus: "ACTIVE", operationType: "SECURITY_GUARDING" },
     { id: "SK-90210", name: "Sarah Kim", department: "Manned Security Department", departmentId: "DEPT-001", companyId: "COMP-002", designationId: "DES-001", positionCategoryId: "cat-1", grade: "G1", role: "EMPLOYEE", status: "Active", email: "sarah.kim@alhattab.qa", phone: "+974 5555 1234", shiftId: "MOR-102", passwordHash: defaultHash, isActive: true, dateOfJoining: "2022-01-15T00:00:00Z", qidNumber: "28532400123", qidExpiryDate: "2027-05-20T00:00:00Z", passportNumber: "P-SK90210", passportIssueDate: "2022-01-15T00:00:00Z", passportExpiryDate: "2032-01-15T00:00:00Z", passportIssuingCountry: "South Korea", sponsor: "AHH Security Services", hasAccommodation: false, hasItAssets: true, employeeCategory: "BLUE_COLLAR", employmentStatus: "ACTIVE", operationType: "SECURITY_GUARDING" },
     { id: "WC-TEST-8116", name: "SEC Guard 2", department: "Manned Security Department", departmentId: "DEPT-001", companyId: "COMP-002", designationId: "DES-001", positionCategoryId: "cat-1", grade: "G1", role: "EMPLOYEE", status: "Active", email: "sec.guard2@alhattab.qa", phone: "+974 5555 8116", shiftId: "MOR-102", passwordHash: defaultHash, isActive: true, dateOfJoining: "2022-01-15T00:00:00Z", qidNumber: "28532408116", qidExpiryDate: "2027-05-20T00:00:00Z", passportNumber: "P-WC8116", passportIssueDate: "2022-01-15T00:00:00Z", passportExpiryDate: "2032-01-15T00:00:00Z", passportIssuingCountry: "Nepal", sponsor: "AHH Security Services", hasAccommodation: true, hasItAssets: false, employeeCategory: "BLUE_COLLAR", employmentStatus: "ACTIVE", operationType: "SECURITY_GUARDING" },
     { id: "SEC-1001", name: "Guard One", department: "Operations", departmentId: "DEPT-001", companyId: "COMP-002", designationId: "DES-001", positionCategoryId: "cat-1", manpowerCategoryId: "PM-CAT-SEC-02", operationType: "SECURITY_GUARDING", grade: "G1", isActive: true, status: "Offline", role: "EMPLOYEE", employeeCategory: "BLUE_COLLAR", dutyStatus: "OFF_DUTY", email: "guard1@alhattabsecurity.qa", phone: "+974 7777 0001", dateOfJoining: "2024-01-01T00:00:00Z", qidNumber: "29032400001", qidExpiryDate: "2028-01-01T00:00:00Z", passportNumber: "P-SEC1001", passportIssueDate: "2024-01-01T00:00:00Z", passportExpiryDate: "2034-01-01T00:00:00Z", passportIssuingCountry: "India", sponsor: "Al Hattab Security", hasAccommodation: true, hasItAssets: false },
@@ -1009,7 +1010,31 @@ const seedMySQL = async () => {
     const hasSarahKim = await prismaClient.employee.findUnique({ where: { id: "SK-90210" } });
     if (!hasSarahKim) {
       console.log("Sarah Kim missing. Seeding/upserting mock data...");
-      
+
+      // Seed Manpower Categories (Always ensure they are seeded BEFORE employees due to FK constraint)
+      console.log("Checking/Seeding Manpower Categories...");
+      for (const cat of memoryDb.manpowerCategories) {
+        const exists = await prismaClient.manpowerCategory.findUnique({
+          where: { id: cat.id }
+        });
+        if (!exists) {
+          await prismaClient.manpowerCategory.create({
+            data: {
+              id: cat.id,
+              name: cat.name,
+              code: cat.code,
+              operationType: cat.operationType,
+              isActive: cat.isActive !== false,
+              isBlueCollar: cat.isBlueCollar !== false,
+              isDeployableInRoster: cat.isDeployableInRoster !== false,
+              canWorkOvertime: cat.canWorkOvertime !== false,
+              requiresMoiLicense: !!cat.requiresMoiLicense,
+              requiresGatePassCheck: !!cat.requiresGatePassCheck
+            }
+          });
+        }
+      }
+
       // Seed departments
       for (const dept of memoryDb.departments) {
         await prismaClient.department.upsert({
@@ -1372,30 +1397,6 @@ const seedMySQL = async () => {
       }
 
       console.log("MySQL Database seeded successfully!");
-    }
-
-    // Seed Manpower Categories (Always ensure they are seeded)
-    console.log("Checking/Seeding Manpower Categories...");
-    for (const cat of memoryDb.manpowerCategories) {
-      const exists = await prismaClient.manpowerCategory.findUnique({
-        where: { id: cat.id }
-      });
-      if (!exists) {
-        await prismaClient.manpowerCategory.create({
-          data: {
-            id: cat.id,
-            name: cat.name,
-            code: cat.code,
-            operationType: cat.operationType,
-            isActive: cat.isActive !== false,
-            isBlueCollar: cat.isBlueCollar !== false,
-            isDeployableInRoster: cat.isDeployableInRoster !== false,
-            canWorkOvertime: cat.canWorkOvertime !== false,
-            requiresMoiLicense: !!cat.requiresMoiLicense,
-            requiresGatePassCheck: !!cat.requiresGatePassCheck
-          }
-        });
-      }
     }
 
     isSeeded = true;

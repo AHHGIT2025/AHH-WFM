@@ -1,4 +1,4 @@
-import { prisma } from "@ahh-wfm/database";
+import { prisma, SecfacPatrolExecutionEvaluationStatus, SecfacPatrolExecutionCheckpointAssuranceStatus } from "@ahh-wfm/database";
 import { isDbConnected } from "@ahh-wfm/mock-data";
 import { OperationType, SecFacPatrolSequenceMode } from "@ahh-wfm/types";
 import { getQatarBusinessDateString } from "./secfac-alert-service";
@@ -165,7 +165,7 @@ export async function evaluatePatrolAssurance(): Promise<{
           await prisma.secfacPatrolExecution.update({
             where: { id: execution.id },
             data: {
-              evaluationStatus: "COMPLETED_WITH_EXCEPTIONS",
+              evaluationStatus: SecfacPatrolExecutionEvaluationStatus.EXCEPTIONS_PENDING,
               evaluationRunId
             }
           });
@@ -202,7 +202,7 @@ export async function acknowledgePatrolException(
           exceptionAcknowledgedBy: supervisorId,
           exceptionAcknowledgedAt: now,
           exceptionNotes: notes,
-          assuranceStatus: "EXCUSED"
+          assuranceStatus: SecfacPatrolExecutionCheckpointAssuranceStatus.EXCEPTION_ACKNOWLEDGED
         }
       });
       return cp;
@@ -217,6 +217,6 @@ export async function acknowledgePatrolException(
     exceptionAcknowledgedBy: supervisorId,
     exceptionAcknowledgedAt: now.toISOString(),
     exceptionNotes: notes,
-    assuranceStatus: "EXCUSED"
+    assuranceStatus: SecfacPatrolExecutionCheckpointAssuranceStatus.EXCEPTION_ACKNOWLEDGED
   };
 }

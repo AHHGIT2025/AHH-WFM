@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { prisma } from "@ahh-wfm/database";
+import { prisma, SystemAttachmentIntegrity } from "@ahh-wfm/database";
 import { isDbConnected } from "@ahh-wfm/mock-data";
 import { OperationType, SecFacEvidenceIntegrityStatus } from "@ahh-wfm/types";
 
@@ -67,12 +67,12 @@ export async function verifyAndStoreEvidence(input: StoreEvidenceInput): Promise
   const storagePath = `uploads/secfac/${executionId}/${fileName}`;
 
   // Correction 2: Default status is UNVERIFIED, set to VERIFIED or MISMATCH after comparison
-  let integrityStatus: SecFacEvidenceIntegrityStatus = "UNVERIFIED";
+  let integrityStatus: SystemAttachmentIntegrity = SystemAttachmentIntegrity.UNVERIFIED;
   let hashMatch = false;
 
   if (clientFileHash) {
     hashMatch = clientFileHash.toLowerCase() === serverFileHash.toLowerCase();
-    integrityStatus = hashMatch ? "VERIFIED" : "MISMATCH";
+    integrityStatus = hashMatch ? SystemAttachmentIntegrity.VERIFIED : SystemAttachmentIntegrity.MISMATCH;
   }
 
   if (isDbConnected()) {

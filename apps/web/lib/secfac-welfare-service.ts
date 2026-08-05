@@ -1,4 +1,4 @@
-import { prisma } from "@ahh-wfm/database";
+import { prisma, ManpowerOperationType } from "@ahh-wfm/database";
 import { mockDb, isDbConnected } from "@ahh-wfm/mock-data";
 import {
   OperationType,
@@ -75,7 +75,7 @@ export async function resolveEffectiveWelfareSetting(params: {
       // 1. Check POST level
       if (postId) {
         const postSetting = await prisma.secFacWelfareSetting.findFirst({
-          where: { operationType, postId, isActive: true }
+          where: { operationType: operationType as ManpowerOperationType, postId, isActive: true }
         });
         if (postSetting) {
           return {
@@ -90,7 +90,7 @@ export async function resolveEffectiveWelfareSetting(params: {
       // 2. Check SITE level
       if (siteId) {
         const siteSetting = await prisma.secFacWelfareSetting.findFirst({
-          where: { operationType, siteId, isActive: true }
+          where: { operationType: operationType as ManpowerOperationType, siteId, isActive: true }
         });
         if (siteSetting) {
           return {
@@ -105,7 +105,7 @@ export async function resolveEffectiveWelfareSetting(params: {
       // 3. Check PROJECT level
       if (projectId) {
         const projectSetting = await prisma.secFacWelfareSetting.findFirst({
-          where: { operationType, projectId, isActive: true }
+          where: { operationType: operationType as ManpowerOperationType, projectId, isActive: true }
         });
         if (projectSetting) {
           return {
@@ -119,7 +119,7 @@ export async function resolveEffectiveWelfareSetting(params: {
 
       // 4. Check COMPANY level
       const companySetting = await prisma.secFacWelfareSetting.findFirst({
-        where: { operationType, companyId, isActive: true }
+        where: { operationType: operationType as ManpowerOperationType, companyId, isActive: true }
       });
       if (companySetting) {
         return {
@@ -164,7 +164,7 @@ export async function upsertWelfareSetting(input: CreateWelfareSettingInput): Pr
     return await prisma.secFacWelfareSetting.upsert({
       where: { scopeKey },
       create: {
-        operationType,
+        operationType: operationType as ManpowerOperationType,
         companyId,
         projectId,
         siteId,
@@ -238,7 +238,7 @@ export async function generateWelfareChecksForActiveDeployments(): Promise<{ gen
         if (!existing) {
           await prisma.secFacWelfareCheck.create({
             data: {
-              operationType: opType,
+              operationType: opType as ManpowerOperationType,
               companyId,
               projectId: dep.projectId,
               siteId: dep.siteId,

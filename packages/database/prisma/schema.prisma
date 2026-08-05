@@ -140,6 +140,7 @@ model Employee {
   welfareSettingsCreated          SecFacWelfareSetting[]                 @relation("WelfareSettingCreatedBy")
   secfacWelfareChecks             SecFacWelfareCheck[]                   @relation("SecFacWelfareCheckEmployee")
   secfacFieldAudits               SecfacFieldExecutionAudit[]            @relation("SecfacFieldAuditEmployee")
+  secfacPatrolCheckpointAcks      SecfacPatrolExecutionCheckpoint[]      @relation("SecfacPatrolCheckpointAckBy")
   focRequestedRequirements        ContractManpowerRequirement[]          @relation("FocRequester")
   focApprovedRequirements         ContractManpowerRequirement[]          @relation("FocApprover")
   focRejectedRequirements         ContractManpowerRequirement[]          @relation("FocRejector")
@@ -2385,7 +2386,7 @@ model SecfacEvidenceAttachment {
   clientFileHash    String?
   serverFileHash    String?
   hashAlgorithm     String?                  @default("SHA-256")
-  integrityStatus   String                   @default("UNVERIFIED") // VERIFIED | MISMATCH | UNVERIFIED
+  integrityStatus   SystemAttachmentIntegrity @default(UNVERIFIED)
   integrityFlags    Json?
   clientCapturedAt  DateTime?
   serverReceivedAt  DateTime?
@@ -2510,8 +2511,9 @@ model SecfacPatrolExecution {
   employeeId       String
   employee         Employee          @relation("SecfacPatrolExecutionEmployee", fields: [employeeId], references: [id], onDelete: Restrict)
   status           String            @default("NOT_STARTED") // NOT_STARTED | IN_PROGRESS | PENDING_REVIEW | COMPLETED | INCOMPLETE | CANCELLED
-  evaluationStatus String            @default("SCHEDULED") // SCHEDULED | ON_TIME | LATE | MISSED | DEVIATED | COMPLETED_WITH_EXCEPTIONS
-  evaluationRunId  String?
+  evaluationStatus  SecfacPatrolExecutionEvaluationStatus @default(SCHEDULED)
+  evaluationRunId   String?
+  lastEvaluatedAt   DateTime?                             // Legacy compatibility field
   startedAt        DateTime?
   completedAt      DateTime?
   createdAt        DateTime          @default(now())
@@ -2535,16 +2537,18 @@ model SecfacPatrolExecutionCheckpoint {
   sequenceNo              Int
   required                Boolean               @default(true)
   status                  String                @default("PENDING") // PENDING | VALIDATED | PENDING_REVIEW | INVALID | SKIPPED
-  assuranceStatus         String                @default("PENDING") // PENDING | ON_TIME | LATE | MISSED | SEQUENCE_DEVIATION | EXCUSED | COMPLETED_LATE
-  targetTime              DateTime?
-  lateAt                  DateTime?
-  missedAt                DateTime?
-  sequenceDeviated        Boolean               @default(false)
-  alertId                 String?
-  evaluationRunId         String?
-  exceptionAcknowledged   Boolean               @default(false)
-  exceptionAcknowledgedBy String?
-  exceptionAcknowledgedAt DateTime?
+  assuranceStatus           SecfacPatrolExecutionCheckpointAssuranceStatus @default(PENDING)
+  targetTime                DateTime?
+  lateAt                    DateTime?
+  missedAt                  DateTime?
+  sequenceDeviated          Boolean                                        @default(false)
+  alertId                   String?
+  evaluationRunId           String?
+  exceptionAcknowledged     Boolean                                        @default(false)
+  exceptionAcknowledgedBy   String?
+  exceptionAcknowledgedAt   DateTime?
+  exceptionAcknowledgedById String?                                        // Legacy compatibility field
+  exceptionAcknowledgedByEmp Employee?                                      @relation("SecfacPatrolCheckpointAckBy", fields: [exceptionAcknowledgedById], references: [id], onDelete: SetNull)
   exceptionNotes          String?               @db.Text
   scanProofId             String?               @unique
   scanProof               SecfacScanProof?      @relation("SecfacScanProofPatrolCheckpoint", fields: [scanProofId], references: [id], onDelete: SetNull)
@@ -3070,12 +3074,13 @@ model SecFacDispatchAssignment {
 
 model SecFacWelfareSetting {
   id                 String   @id @default(cuid())
-  operationType      String // SECURITY_GUARDING | FACILITY_MANAGEMENT
+  operationType      ManpowerOperationType
   companyId          String
   projectId          String?
   siteId             String?
   postId             String?
-  scopeKey           String   @unique // e.g. SECURITY_GUARDING:COMPANY:COMP-002
+  scopeKey           String                         @unique // e.g. SECURITY_GUARDING:COMPANY:COMP-002
+  sourceType         SecFacWelfareSettingSourceType?        // Legacy compatibility field
   checkFrequencyMins Int      @default(60)
   gracePeriodMins    Int      @default(10)
   isActive           Boolean  @default(true)
@@ -3093,28 +3098,28 @@ model SecFacWelfareSetting {
 
 model SecFacWelfareCheck {
   id                    String                  @id @default(cuid())
-  operationType         String // SECURITY_GUARDING | FACILITY_MANAGEMENT
+  operationType         ManpowerOperationType
   companyId             String
   contractId            String?
   projectId             String?
   siteId                String
-  site                  ManpowerSite            @relation("SecFacWelfareCheckSite", fields: [siteId], references: [id], onDelete: Restrict)
+  site                  ManpowerSite                            @relation("SecFacWelfareCheckSite", fields: [siteId], references: [id], onDelete: Restrict)
   postId                String?
   deploymentId          String?
   employeeId            String
-  employee              Employee                @relation("SecFacWelfareCheckEmployee", fields: [employeeId], references: [id], onDelete: Restrict)
+  employee              Employee                                @relation("SecFacWelfareCheckEmployee", fields: [employeeId], references: [id], onDelete: Restrict)
   scheduledAt           DateTime
   dueAt                 DateTime
   graceExpiresAt        DateTime
-  status                String                  @default("PENDING") // PENDING | ACKNOWLEDGED | MISSED | EXEMPTED | CANCELLED
+  status                SecFacWelfareCheckStatus                @default(PENDING)
   acknowledgedAt        DateTime?
-  acknowledgementMethod String? // MOBILE_APP | CONTROL_ROOM | OFFLINE_SYNC
-  exemptionType         String? // SHIFT_END | SUPERVISOR_OVERRIDE | SITE_EXEMPTION
-  exemptionReason       String?                 @db.Text
+  acknowledgementMethod SecFacWelfareCheckAcknowledgementMethod?
+  exemptionType         SecFacWelfareCheckExemptionType?
+  exemptionReason       String?                                 @db.Text
   alertId               String?
-  alert                 SecFacOperationalAlert? @relation("SecFacWelfareCheckAlert", fields: [alertId], references: [id], onDelete: SetNull)
-  idempotencyKey        String                  @unique
-  settingSourceType     String                  @default("SYSTEM_DEFAULT") // POST | SITE | PROJECT | COMPANY | SYSTEM_DEFAULT
+  alert                 SecFacOperationalAlert?                 @relation("SecFacWelfareCheckAlert", fields: [alertId], references: [id], onDelete: SetNull)
+  idempotencyKey        String                                  @unique
+  settingSourceType     SecFacWelfareSettingSourceType          @default(SYSTEM_DEFAULT)
   settingSourceId       String?
   createdAt             DateTime                @default(now())
   updatedAt             DateTime                @updatedAt
@@ -3182,6 +3187,7 @@ model RosterSlotAssignment {
   employeeId              String
   employee                Employee              @relation("EmployeeRosterAssignments", fields: [employeeId], references: [id], onDelete: Restrict)
   assignmentType          String                @default("PRIMARY") // "PRIMARY", "RELIEVER", "TEMPORARY_COVER"
+  assignedRosterType      String?               @default("PRIMARY") // Legacy compatibility field
   historyStatus           String                @default("ACTIVE") // "ACTIVE", "ENDED", "CANCELLED"
   assignedById            String
   assignedBy              Employee              @relation("AssignedByEmployee", fields: [assignedById], references: [id], onDelete: Restrict)
@@ -5082,3 +5088,49 @@ model CostDriverMapping {
   rateRuleAst       Json?
   escalationRuleAst Json?
 }
+
+enum SecFacWelfareCheckStatus {
+  PENDING
+  ACKNOWLEDGED
+  MISSED
+  EXEMPTED
+  CANCELLED
+}
+
+enum SecFacWelfareCheckAcknowledgementMethod {
+  MOBILE_APP
+  CONTROL_ROOM
+  OFFLINE_SYNC
+}
+
+enum SecFacWelfareCheckExemptionType {
+  SHIFT_END
+  SUPERVISOR_OVERRIDE
+  SITE_EXEMPTION
+}
+
+enum SecFacWelfareSettingSourceType {
+  POST
+  SITE
+  PROJECT
+  COMPANY
+  SYSTEM_DEFAULT
+}
+
+enum SecfacPatrolExecutionEvaluationStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  OVERDUE
+  EXCEPTIONS_PENDING
+}
+
+enum SecfacPatrolExecutionCheckpointAssuranceStatus {
+  PENDING
+  ON_TIME
+  LATE
+  MISSED
+  SKIPPED
+  EXCEPTION_ACKNOWLEDGED
+}
+

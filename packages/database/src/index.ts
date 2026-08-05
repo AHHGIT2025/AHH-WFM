@@ -10,5 +10,4 @@ if (process.env.NODE_ENV !== "production") {
   globalThis.prismaGlobal = prisma;
 }
 
-export { PrismaClient, Prisma };
-export type * from "./generated/client/index.js";
+export * from "./generated/client/index.js";

@@ -15,7 +15,7 @@ describe('AHH WFM API Routes Verification', () => {
   let mobileCookie: string | null = null;
   let testEmployeeId = 'AD-0001';
   let testShiftRequirementId = '22687da6-a08a-41cd-b56d-9a87ddc967bd';
-  let testSiteId = '1fa0a418-e601-4ba4-9195-e91e7dfb54e7';
+  let testSiteId = 'MSITE-001';
 
   beforeAll(async () => {
     console.log('Authenticating for API tests...');
@@ -76,8 +76,48 @@ describe('AHH WFM API Routes Verification', () => {
         console.log('Mobile Auth successful!');
       }
 
-      // Use the default seeded IDs to stay in sync with the dev server
-      console.log('Using default seeded IDs for scheduling alignment');
+      // Resolve seeded IDs dynamically to stay in sync with the dev server and prevent 400 errors
+      console.log('Resolving seeded IDs dynamically...');
+      const site = await prisma.manpowerSite.findFirst({ where: { operationType: 'SECURITY_GUARDING' } });
+      if (site) {
+        testSiteId = site.id;
+        console.log('Resolved testSiteId:', testSiteId);
+
+        // Ensure manpower is allocated to this site to satisfy route validation checks
+        let alloc = await prisma.securitySiteManpowerAllocation.findFirst({ where: { siteId: testSiteId } });
+        if (!alloc) {
+          alloc = await prisma.securitySiteManpowerAllocation.create({
+            data: {
+              siteId: testSiteId,
+              position: 'GUARD',
+              quantity: 5,
+              deploymentType: 'PERMANENT',
+              relieverPoolType: 'DEDICATED'
+            }
+          });
+          console.log('Created security site manpower allocation for testing');
+        }
+
+        // Resolve or create a shift requirement for scheduling
+        let req = await prisma.manpowerShiftRequirement.findFirst({ where: { siteId: testSiteId } });
+        if (!req) {
+          const category = await prisma.manpowerCategory.findFirst({ where: { operationType: 'SECURITY_GUARDING' } });
+          req = await prisma.manpowerShiftRequirement.create({
+            data: {
+              siteId: testSiteId,
+              categoryId: category?.id || 'PM-CAT-SEC-02',
+              shiftCode: 'WF-SH-MORN',
+              requiredCount: 5,
+              requiredRelieverCount: 1,
+              operationType: 'SECURITY_GUARDING',
+              isActive: true
+            }
+          });
+          console.log('Created shift requirement for testing');
+        }
+        testShiftRequirementId = req.id;
+        console.log('Resolved testShiftRequirementId:', testShiftRequirementId);
+      }
     } catch (e: any) {
       console.warn('Authentication failed. Testing APIs in public/guest mode:', e.message);
     }
@@ -216,7 +256,7 @@ describe('AHH WFM API Routes Verification', () => {
 
   test('GET /api/v1/security/scheduling/calendar with valid siteId', async () => {
     const headers = webCookie ? { Cookie: webCookie } : {};
-    const siteId = '1fa0a418-e601-4ba4-9195-e91e7dfb54e7'; // Main Office FD site in MySQL
+    const siteId = testSiteId;
     const res = await axios.get(`${WEB_URL}/api/v1/security/scheduling/calendar?siteId=${siteId}`, { headers, validateStatus: () => true });
 
     expect(res.status).toBe(200);
@@ -1357,7 +1397,7 @@ describe('AHH WFM API Routes Verification', () => {
     const fmSupHeaders = fmSupCookie ? { Cookie: fmSupCookie } : {};
 
     // 2. Resolve database resources dynamically to ensure foreign key safety
-    let testSiteId = '1fa0a418-e601-4ba4-9195-e91e7dfb54e7';
+    // Use outer testSiteId
     let otherEmployeeId = 'BR-8823';
 
     let tempId = '';
@@ -1648,7 +1688,7 @@ describe('AHH WFM API Routes Verification', () => {
     const fmSupHeaders = fmSupCookie ? { Cookie: fmSupCookie } : {};
 
     // 2. Resolve database resources dynamically
-    let testSiteId = '1fa0a418-e601-4ba4-9195-e91e7dfb54e7';
+    // Use outer testSiteId
     let otherEmployeeId = 'BR-8823';
 
     // 3. Create test checkpoint, template, assignments
@@ -2051,7 +2091,7 @@ describe('AHH WFM API Routes Verification', () => {
     const fmSupHeaders = fmSupCookie ? { Cookie: fmSupCookie } : {};
 
     // ─── 2. Resolve test resources ───
-    let testSiteId = '1fa0a418-e601-4ba4-9195-e91e7dfb54e7';
+    // Use outer testSiteId
 
     // ─── 3. Create 3 test checkpoints ───
     const cpIds: string[] = [];
@@ -2518,7 +2558,7 @@ describe('AHH WFM API Routes Verification', () => {
     const otherEmpHeaders = otherEmpWebCookie ? { Cookie: otherEmpWebCookie } : {};
 
     // ─── 2. Resolve test site ───
-    let testSiteId = '1fa0a418-e601-4ba4-9195-e91e7dfb54e7';
+    // Use outer testSiteId
 
     // ─── Create Checkpoint First ───
     const cpRes = await axios.post(`${WEB_URL}/api/v1/secfac/checkpoints`, {

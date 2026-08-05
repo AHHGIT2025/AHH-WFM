@@ -121,7 +121,7 @@ describe("SECFAC Phase 6A.2 Corrected Implementation Test Suite", () => {
 
     it("acknowledges patrol checkpoint exception", async () => {
       const res = await acknowledgePatrolException("cp-exec-01", "SUP-001", "Excused due to weather");
-      expect(res.assuranceStatus).toBe("EXCUSED");
+      expect(res.assuranceStatus).toBe("EXCEPTION_ACKNOWLEDGED");
     });
   });
 
