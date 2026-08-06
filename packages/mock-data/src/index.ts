@@ -848,28 +848,88 @@ let memoryDb: {
 
 // Seeding helper to pre-fill MySQL with mock data if it is empty
 let isSeeded = false;
+let seedPromise: Promise<void> | null = null;
+
+export const resetSeededStateForTesting = () => {
+  isSeeded = false;
+  seedPromise = null;
+};
+
 const seedMySQL = async () => {
   if (isSeeded) return;
   if (!isDbConnected()) return;
-  
-  try {
-    const hasHoldingCompany = await prismaClient.company.findFirst({ where: { isHoldingCompany: true } });
-    if (!hasHoldingCompany) {
-      console.log("Seeding Companies...");
-      for (const comp of memoryDb.companies) {
-        await prismaClient.company.upsert({
-          where: { id: comp.id },
-          update: {},
-          create: {
-            id: comp.id,
-            companyCode: comp.companyCode,
-            companyName: comp.companyName,
-            isActive: comp.isActive,
-            isHoldingCompany: comp.isHoldingCompany || false
+
+  if (seedPromise) {
+    return seedPromise;
+  }
+
+  seedPromise = (async () => {
+    try {
+      const companyCount = await prismaClient.company.count();
+      const hasHoldingCompany = companyCount > 0 ? await prismaClient.company.findFirst({ where: { isHoldingCompany: true } }) : null;
+
+      if (!hasHoldingCompany) {
+        console.log("Seeding Companies...");
+        for (const comp of memoryDb.companies) {
+          try {
+            // First check if company exists by canonical companyCode
+            const existingByCode = await prismaClient.company.findUnique({
+              where: { companyCode: comp.companyCode }
+            });
+
+            if (existingByCode) {
+              // Company with this code already exists!
+              // Ensure holding company flag is set if comp is holding company
+              if (comp.isHoldingCompany && !existingByCode.isHoldingCompany) {
+                await prismaClient.company.update({
+                  where: { id: existingByCode.id },
+                  data: { isHoldingCompany: true }
+                });
+              }
+            } else {
+              // Check if ID is taken by a different companyCode
+              const existingById = await prismaClient.company.findUnique({
+                where: { id: comp.id }
+              });
+
+              if (existingById) {
+                // ID exists with a different companyCode. Insert with auto-generated ID to preserve companyCode uniqueness
+                await prismaClient.company.create({
+                  data: {
+                    companyCode: comp.companyCode,
+                    companyName: comp.companyName,
+                    isActive: comp.isActive,
+                    isHoldingCompany: comp.isHoldingCompany || false
+                  }
+                });
+              } else {
+                // Both ID and companyCode are free - insert canonical record
+                await prismaClient.company.create({
+                  data: {
+                    id: comp.id,
+                    companyCode: comp.companyCode,
+                    companyName: comp.companyName,
+                    isActive: comp.isActive,
+                    isHoldingCompany: comp.isHoldingCompany || false
+                  }
+                });
+              }
+            }
+          } catch (err: any) {
+            // Handle P2002 duplicate key constraint specifically for concurrent multi-process execution
+            const isP2002 = err?.code === 'P2002' ||
+                            err?.message?.includes('P2002') ||
+                            err?.message?.includes('Company_companyCode_key') ||
+                            err?.message?.includes('Unique constraint failed');
+            if (isP2002) {
+              console.warn(`[seedMySQL] Company ${comp.companyCode} already exists (concurrent seed race handled safely):`, err?.message || err);
+            } else {
+              // Re-throw any other unexpected error
+              throw err;
+            }
           }
-        });
+        }
       }
-    }
     
     const hasDesignations = await prismaClient.designation.findFirst();
     if (!hasDesignations) {
@@ -967,7 +1027,7 @@ const seedMySQL = async () => {
       }
     }
 
-    const relieverAssignmentCount = await prismaClient.shiftShiftRelieverAssignment || await prismaClient.shiftRelieverAssignment ? await prismaClient.shiftRelieverAssignment.count() : 0;
+    const relieverAssignmentCount = (prismaClient as any).shiftRelieverAssignment ? await prismaClient.shiftRelieverAssignment.count() : 0;
     if (relieverAssignmentCount === 0 && prismaClient.shiftRelieverAssignment) {
       console.log("Seeding Shift Reliever Assignments...");
       for (const ra of memoryDb.shiftRelieverAssignments) {
@@ -1399,10 +1459,16 @@ const seedMySQL = async () => {
       console.log("MySQL Database seeded successfully!");
     }
 
-    isSeeded = true;
-  } catch (e) {
-    console.error("Failed to seed MySQL database", e);
-  }
+      isSeeded = true;
+    } catch (e) {
+      console.error("Failed to seed MySQL database", e);
+      throw e;
+    } finally {
+      seedPromise = null;
+    }
+  })();
+
+  return seedPromise;
 };
 
 // JSON file database resolution on disk (Node.js environment fallback)
