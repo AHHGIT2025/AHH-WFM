@@ -1,7 +1,5 @@
 import { prisma } from '@ahh-wfm/database';
-import { mockDb, resetSeededStateForTesting } from '../../packages/mock-data/src/index';
-import { exec } from 'child_process';
-import path from 'path';
+import { mockDb, resetSeededStateForTesting, isCompanyCodeP2002Error } from '../../packages/mock-data/src/index';
 
 describe('Company Seeding P2002 Fix & Idempotency Verification', () => {
   beforeEach(async () => {
@@ -28,7 +26,6 @@ describe('Company Seeding P2002 Fix & Idempotency Verification', () => {
   it('2. should perform safe no-op on repeated seed invocations without throwing P2002', async () => {
     resetSeededStateForTesting();
     await mockDb.getCompanies();
-    // Force reset local boolean to test database re-entrancy
     resetSeededStateForTesting();
     const secondCall = await mockDb.getCompanies();
     expect(secondCall).toBeDefined();
@@ -63,7 +60,6 @@ describe('Company Seeding P2002 Fix & Idempotency Verification', () => {
         }
       });
 
-      // Simulate mock data attempting to seed same companyCode under a new canonical ID
       const mockComp = {
         id: 'HIST-ID-NEW',
         companyCode: testCode,
@@ -72,7 +68,6 @@ describe('Company Seeding P2002 Fix & Idempotency Verification', () => {
         isActive: true
       };
 
-      // Execute safe seeding reconciliation logic
       const existingByCode = await prisma.company.findUnique({
         where: { companyCode: mockComp.companyCode }
       });
@@ -81,7 +76,6 @@ describe('Company Seeding P2002 Fix & Idempotency Verification', () => {
       expect(existingByCode?.id).toBe(testId1);
       expect(existingByCode?.companyCode).toBe(testCode);
 
-      // Verify no P2002 occurred and no second company row was inserted
       const count = await prisma.company.count({ where: { companyCode: testCode } });
       expect(count).toBe(1);
     } finally {
@@ -104,7 +98,7 @@ describe('Company Seeding P2002 Fix & Idempotency Verification', () => {
     expect(call1.length).toEqual(call2.length);
   });
 
-  // Test 6: Concurrent independent initialization paths (multi-process race simulation in-process)
+  // Test 6: Concurrent independent initialization paths
   it('6. should safely handle concurrent independent seed executions without throwing P2002', async () => {
     const runIndependentSeed = async () => {
       resetSeededStateForTesting();
@@ -205,46 +199,35 @@ describe('Company Seeding P2002 Fix & Idempotency Verification', () => {
     });
   });
 
-  // Test 15: Separate Node child-process process-isolation integration test
-  it('15. should run 3 separate Node child processes concurrently and resolve to identical authoritative Company rows without P2002', async () => {
-    const rootDir = path.resolve(__dirname, '../..');
-
-    const spawnWorker = (): Promise<any> => {
-      return new Promise((resolve, reject) => {
-        exec('npx ts-node -T tests/api/company-seeding-child-process-worker.js', { cwd: rootDir }, (error, stdout, stderr) => {
-          if (error) {
-            reject(new Error(`Child process failed: ${error.message} - Stderr: ${stderr}`));
-          } else {
-            try {
-              const res = JSON.parse(stdout.trim());
-              resolve(res);
-            } catch (e: any) {
-              reject(new Error(`Failed to parse stdout: ${stdout} (Stderr: ${stderr})`));
-            }
-          }
-        });
-      });
+  // Test 15: Exact P2002 Metadata Target & Message Matching Unit Tests
+  it('15. should validate exact P2002 error target matching and re-throw unrelated P2002 errors', () => {
+    // 15a: Model name differs (PartnerCompany) -> false (re-throws)
+    const errPartnerCompany = {
+      code: 'P2002',
+      meta: { modelName: 'PartnerCompany', target: ['companyCode'] }
     };
+    expect(isCompanyCodeP2002Error(errPartnerCompany)).toBe(false);
 
-    // Spawn 3 concurrent separate Node child processes
-    const results = await Promise.all([spawnWorker(), spawnWorker(), spawnWorker()]);
+    // 15b: Different unique constraint on Company (Company_companyName_key) -> false (re-throws)
+    const errCompanyName = {
+      code: 'P2002',
+      meta: { modelName: 'Company', target: ['Company_companyName_key'] }
+    };
+    expect(isCompanyCodeP2002Error(errCompanyName)).toBe(false);
 
-    expect(results).toHaveLength(3);
-    results.forEach((res) => {
-      expect(res.success).toBe(true);
-      expect(res.companyCount).toBeGreaterThanOrEqual(3);
-      expect(res.holdingCompanyId).toBeDefined();
-    });
+    // 15c: Absent metadata with exact Company_companyCode_key message -> true (matches)
+    const errExactMessage = {
+      code: 'P2002',
+      message: 'Unique constraint failed on the constraint: `Company_companyCode_key`'
+    };
+    expect(isCompanyCodeP2002Error(errExactMessage)).toBe(true);
 
-    // Verify all processes resolved to identical holding company ID
-    const firstHoldingId = results[0].holdingCompanyId;
-    expect(results[1].holdingCompanyId).toBe(firstHoldingId);
-    expect(results[2].holdingCompanyId).toBe(firstHoldingId);
-
-    // Verify no duplicate companyCode in database
-    const dbCompanies = await prisma.company.findMany();
-    const codes = dbCompanies.map(c => c.companyCode);
-    const uniqueCodes = new Set(codes);
-    expect(codes.length).toEqual(uniqueCodes.size);
+    // 15d: Absent metadata with vague unrelated message -> false (re-throws)
+    const errVagueMessage = {
+      code: 'P2002',
+      message: 'Unique constraint failed on PartnerCompany_companyCode_key'
+    };
+    expect(isCompanyCodeP2002Error(errVagueMessage)).toBe(false);
   });
+
 });

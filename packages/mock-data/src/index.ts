@@ -850,9 +850,48 @@ let memoryDb: {
 let isSeeded = false;
 let seedPromise: Promise<void> | null = null;
 
+const companyIdMap = new Map<string, string>();
+
+export const getAuthoritativeCompanyId = (canonicalId: string): string => {
+  return companyIdMap.get(canonicalId) || canonicalId;
+};
+
+export const clearCompanyIdMapForTesting = () => {
+  companyIdMap.clear();
+};
+
 export const resetSeededStateForTesting = () => {
   isSeeded = false;
   seedPromise = null;
+  companyIdMap.clear();
+};
+
+export const isCompanyCodeP2002Error = (err: any): boolean => {
+  if (err?.code !== 'P2002') return false;
+
+  const modelName = err?.meta?.modelName;
+  if (modelName && modelName !== 'Company') {
+    return false;
+  }
+
+  const target = err?.meta?.target;
+  if (target !== undefined && target !== null) {
+    if (Array.isArray(target)) {
+      return target.includes('companyCode') || target.includes('Company_companyCode_key');
+    }
+    if (typeof target === 'string') {
+      return target === 'companyCode' || target === 'Company_companyCode_key';
+    }
+    return false;
+  }
+
+  const message = typeof err?.message === 'string' ? err.message : '';
+  const isExactCompanyConstraint =
+    /(?:^|[^a-zA-Z0-9_])Company_companyCode_key\b/.test(message) ||
+    /Unique constraint failed on the constraint: `(?:Company_)?companyCode`/.test(message) ||
+    /Unique constraint failed on the fields: \(`companyCode`\)/.test(message);
+
+  return isExactCompanyConstraint;
 };
 
 const seedMySQL = async () => {
@@ -865,96 +904,106 @@ const seedMySQL = async () => {
 
   seedPromise = (async () => {
     try {
-      const companyCount = await prismaClient.company.count();
-      const hasHoldingCompany = companyCount > 0 ? await prismaClient.company.findFirst({ where: { isHoldingCompany: true } }) : null;
+      // Build companyIdMap for any existing companies in DB
+      for (const comp of memoryDb.companies) {
+        const existingByCode = await prismaClient.company.findUnique({
+          where: { companyCode: comp.companyCode }
+        });
+        if (existingByCode) {
+          companyIdMap.set(comp.id, existingByCode.id);
+        }
+      }
 
-      if (!hasHoldingCompany) {
-        console.log("Seeding Companies...");
-        for (const comp of memoryDb.companies) {
-          try {
-            // First check if company exists by canonical companyCode
-            const existingByCode = await prismaClient.company.findUnique({
+      for (const comp of memoryDb.companies) {
+        try {
+          // First check if company exists by canonical companyCode
+          const existingByCode = await prismaClient.company.findUnique({
+            where: { companyCode: comp.companyCode }
+          });
+
+          if (existingByCode) {
+            // Company with this code already exists!
+            companyIdMap.set(comp.id, existingByCode.id);
+            if (comp.isHoldingCompany && !existingByCode.isHoldingCompany) {
+              await prismaClient.company.update({
+                where: { id: existingByCode.id },
+                data: { isHoldingCompany: true }
+              });
+            }
+          } else {
+            // Check if ID is taken by a different companyCode
+            const existingById = await prismaClient.company.findUnique({
+              where: { id: comp.id }
+            });
+
+            if (existingById) {
+              // ID exists with a different companyCode. Insert with auto-generated ID to preserve companyCode uniqueness
+              const created = await prismaClient.company.create({
+                data: {
+                  companyCode: comp.companyCode,
+                  companyName: comp.companyName,
+                  isActive: comp.isActive,
+                  isHoldingCompany: comp.isHoldingCompany || false
+                }
+              });
+              companyIdMap.set(comp.id, created.id);
+            } else {
+              // Both ID and companyCode are free - insert canonical record
+              const created = await prismaClient.company.create({
+                data: {
+                  id: comp.id,
+                  companyCode: comp.companyCode,
+                  companyName: comp.companyName,
+                  isActive: comp.isActive,
+                  isHoldingCompany: comp.isHoldingCompany || false
+                }
+              });
+              companyIdMap.set(comp.id, created.id);
+            }
+          }
+        } catch (err: any) {
+          if (isCompanyCodeP2002Error(err)) {
+            // After a caught race, re-read and validate the authoritative row by companyCode
+            const authoritativeRow = await prismaClient.company.findUnique({
               where: { companyCode: comp.companyCode }
             });
 
-            if (existingByCode) {
-              // Company with this code already exists!
-              // Ensure holding company flag is set if comp is holding company
-              if (comp.isHoldingCompany && !existingByCode.isHoldingCompany) {
+            if (authoritativeRow && authoritativeRow.companyCode === comp.companyCode) {
+              companyIdMap.set(comp.id, authoritativeRow.id);
+              if (comp.isHoldingCompany && !authoritativeRow.isHoldingCompany) {
                 await prismaClient.company.update({
-                  where: { id: existingByCode.id },
+                  where: { id: authoritativeRow.id },
                   data: { isHoldingCompany: true }
                 });
               }
+              console.warn(
+                `[seedMySQL] Company ${comp.companyCode} seed race handled safely; reconciled authoritative row ID: ${authoritativeRow.id}`
+              );
             } else {
-              // Check if ID is taken by a different companyCode
-              const existingById = await prismaClient.company.findUnique({
-                where: { id: comp.id }
-              });
-
-              if (existingById) {
-                // ID exists with a different companyCode. Insert with auto-generated ID to preserve companyCode uniqueness
-                await prismaClient.company.create({
-                  data: {
-                    companyCode: comp.companyCode,
-                    companyName: comp.companyName,
-                    isActive: comp.isActive,
-                    isHoldingCompany: comp.isHoldingCompany || false
-                  }
-                });
-              } else {
-                // Both ID and companyCode are free - insert canonical record
-                await prismaClient.company.create({
-                  data: {
-                    id: comp.id,
-                    companyCode: comp.companyCode,
-                    companyName: comp.companyName,
-                    isActive: comp.isActive,
-                    isHoldingCompany: comp.isHoldingCompany || false
-                  }
-                });
-              }
-            }
-          } catch (err: any) {
-            // Validate exact P2002 handling semantics:
-            // 1. Prisma error code must be P2002
-            // 2. Target/message must correspond to Company_companyCode_key
-            const isPrismaP2002 = err?.code === 'P2002';
-            const isCompanyCodeTarget =
-              err?.meta?.target?.includes('companyCode') ||
-              err?.meta?.target?.includes('Company_companyCode_key') ||
-              err?.message?.includes('Company_companyCode_key') ||
-              err?.message?.includes('companyCode');
-
-            if (isPrismaP2002 && isCompanyCodeTarget) {
-              // After a caught race, re-read and validate the authoritative row by companyCode
-              const authoritativeRow = await prismaClient.company.findUnique({
-                where: { companyCode: comp.companyCode }
-              });
-
-              if (authoritativeRow) {
-                // Validate existing row is safe to reuse (update isHoldingCompany if needed)
-                if (comp.isHoldingCompany && !authoritativeRow.isHoldingCompany) {
-                  await prismaClient.company.update({
-                    where: { id: authoritativeRow.id },
-                    data: { isHoldingCompany: true }
-                  });
-                }
-                console.warn(
-                  `[seedMySQL] Company ${comp.companyCode} seed race handled safely; reconciled authoritative row ID: ${authoritativeRow.id}`
-                );
-              } else {
-                // If authoritative row cannot be found, do not swallow error - re-throw
-                throw err;
-              }
-            } else {
-              // Re-throw any other P2002 target or unexpected error
+              // If authoritative row cannot be found or identity conflicts, re-throw
               throw err;
             }
+          } else {
+            // Re-throw any other P2002 target or unexpected error
+            throw err;
           }
         }
       }
-    
+
+      // Reconcile employee companyId references in DB only when canonical ID was remapped to a different authoritative ID.
+      // Do NOT perform broad operationType sweeps — that would corrupt test-specific employee fixtures.
+      for (const emp of memoryDb.employees) {
+        if (!emp.companyId) continue;
+        const authoritativeId = getAuthoritativeCompanyId(emp.companyId);
+        if (authoritativeId !== emp.companyId) {
+          // Only update if remap actually occurred (canonical ID was occupied by a different company)
+          await prismaClient.employee.updateMany({
+            where: { id: emp.id },
+            data: { companyId: authoritativeId }
+          });
+        }
+      }
+
     const hasDesignations = await prismaClient.designation.findFirst();
     if (!hasDesignations) {
       console.log("Seeding Designations...");
@@ -1121,12 +1170,15 @@ const seedMySQL = async () => {
 
       // Seed departments
       for (const dept of memoryDb.departments) {
+        const authDeptCompanyId = dept.companyId ? getAuthoritativeCompanyId(dept.companyId) : undefined;
+        const deptIdRemapped = authDeptCompanyId && dept.companyId && authDeptCompanyId !== dept.companyId;
         await prismaClient.department.upsert({
           where: { id: dept.id },
-          update: {},
+          update: deptIdRemapped ? { companyId: authDeptCompanyId } : {},
           create: {
             id: dept.id,
             name: dept.name,
+            ...(authDeptCompanyId ? { companyId: authDeptCompanyId } : {}),
             createdAt: new Date(dept.createdAt),
             updatedAt: new Date(dept.updatedAt)
           }
@@ -1135,10 +1187,17 @@ const seedMySQL = async () => {
       
       // Seed employees
       for (const emp of memoryDb.employees) {
+        const authEmpCompanyId = emp.companyId ? getAuthoritativeCompanyId(emp.companyId) : emp.companyId;
+        const empIdRemapped = authEmpCompanyId && emp.companyId && authEmpCompanyId !== emp.companyId;
         await prismaClient.employee.upsert({
           where: { id: emp.id },
-          update: {},
-          create: emp
+          // Only update companyId if canonical ID was remapped to a different authoritative ID.
+          // Never overwrite companyId for existing employees — that corrupts test-specific fixtures.
+          update: empIdRemapped ? { companyId: authEmpCompanyId } : {},
+          create: {
+            ...emp,
+            ...(authEmpCompanyId ? { companyId: authEmpCompanyId } : {})
+          }
         });
       }
       

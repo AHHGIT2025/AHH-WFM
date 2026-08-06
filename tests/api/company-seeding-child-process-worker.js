@@ -6,9 +6,12 @@ async function runWorker() {
     resetSeededStateForTesting();
     const companies = await mockDb.getCompanies();
     const holding = companies.find(c => c.isHoldingCompany);
+    const maskedDb = process.env.DATABASE_URL ? process.env.DATABASE_URL.replace(/:[^:@]+@/, ':***@') : 'ahh_wfm_test';
     const result = {
       success: true,
       pid: process.pid,
+      command: 'npx ts-node -T tests/api/company-seeding-child-process-worker.js',
+      database: maskedDb,
       companyCount: companies.length,
       holdingCompanyId: holding ? holding.id : null,
       companyCodes: companies.map(c => c.companyCode).sort()
