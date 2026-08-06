@@ -1,5 +1,7 @@
 import { prisma } from '@ahh-wfm/database';
 import { mockDb, resetSeededStateForTesting } from '../../packages/mock-data/src/index';
+import { exec } from 'child_process';
+import path from 'path';
 
 describe('Company Seeding P2002 Fix & Idempotency Verification', () => {
   beforeEach(async () => {
@@ -102,7 +104,7 @@ describe('Company Seeding P2002 Fix & Idempotency Verification', () => {
     expect(call1.length).toEqual(call2.length);
   });
 
-  // Test 6: Concurrent independent initialization paths (multi-process race simulation)
+  // Test 6: Concurrent independent initialization paths (multi-process race simulation in-process)
   it('6. should safely handle concurrent independent seed executions without throwing P2002', async () => {
     const runIndependentSeed = async () => {
       resetSeededStateForTesting();
@@ -180,9 +182,8 @@ describe('Company Seeding P2002 Fix & Idempotency Verification', () => {
 
   // Test 13: Unexpected Prisma errors remain visible
   it('13. should allow unexpected non-P2002 Prisma errors to surface clearly', async () => {
-    // Attempt invalid query to ensure error handling does not swallow unexpected errors
     const prismaAny: any = prisma;
-    const invalidQueryPromise = prismaAny.company.findUnique({ where: { invalidNonExistentField: 'fail' } });
+    const invalidQueryPromise = (prismaAny as any).company.findUnique({ where: { invalidNonExistentField: 'fail' } });
     await expect(invalidQueryPromise).rejects.toThrow();
   });
 
@@ -202,5 +203,48 @@ describe('Company Seeding P2002 Fix & Idempotency Verification', () => {
     codeCounts.forEach((count, code) => {
       expect(count).toBe(1);
     });
+  });
+
+  // Test 15: Separate Node child-process process-isolation integration test
+  it('15. should run 3 separate Node child processes concurrently and resolve to identical authoritative Company rows without P2002', async () => {
+    const rootDir = path.resolve(__dirname, '../..');
+
+    const spawnWorker = (): Promise<any> => {
+      return new Promise((resolve, reject) => {
+        exec('npx ts-node -T tests/api/company-seeding-child-process-worker.js', { cwd: rootDir }, (error, stdout, stderr) => {
+          if (error) {
+            reject(new Error(`Child process failed: ${error.message} - Stderr: ${stderr}`));
+          } else {
+            try {
+              const res = JSON.parse(stdout.trim());
+              resolve(res);
+            } catch (e: any) {
+              reject(new Error(`Failed to parse stdout: ${stdout} (Stderr: ${stderr})`));
+            }
+          }
+        });
+      });
+    };
+
+    // Spawn 3 concurrent separate Node child processes
+    const results = await Promise.all([spawnWorker(), spawnWorker(), spawnWorker()]);
+
+    expect(results).toHaveLength(3);
+    results.forEach((res) => {
+      expect(res.success).toBe(true);
+      expect(res.companyCount).toBeGreaterThanOrEqual(3);
+      expect(res.holdingCompanyId).toBeDefined();
+    });
+
+    // Verify all processes resolved to identical holding company ID
+    const firstHoldingId = results[0].holdingCompanyId;
+    expect(results[1].holdingCompanyId).toBe(firstHoldingId);
+    expect(results[2].holdingCompanyId).toBe(firstHoldingId);
+
+    // Verify no duplicate companyCode in database
+    const dbCompanies = await prisma.company.findMany();
+    const codes = dbCompanies.map(c => c.companyCode);
+    const uniqueCodes = new Set(codes);
+    expect(codes.length).toEqual(uniqueCodes.size);
   });
 });

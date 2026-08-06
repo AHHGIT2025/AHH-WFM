@@ -916,15 +916,39 @@ const seedMySQL = async () => {
               }
             }
           } catch (err: any) {
-            // Handle P2002 duplicate key constraint specifically for concurrent multi-process execution
-            const isP2002 = err?.code === 'P2002' ||
-                            err?.message?.includes('P2002') ||
-                            err?.message?.includes('Company_companyCode_key') ||
-                            err?.message?.includes('Unique constraint failed');
-            if (isP2002) {
-              console.warn(`[seedMySQL] Company ${comp.companyCode} already exists (concurrent seed race handled safely):`, err?.message || err);
+            // Validate exact P2002 handling semantics:
+            // 1. Prisma error code must be P2002
+            // 2. Target/message must correspond to Company_companyCode_key
+            const isPrismaP2002 = err?.code === 'P2002';
+            const isCompanyCodeTarget =
+              err?.meta?.target?.includes('companyCode') ||
+              err?.meta?.target?.includes('Company_companyCode_key') ||
+              err?.message?.includes('Company_companyCode_key') ||
+              err?.message?.includes('companyCode');
+
+            if (isPrismaP2002 && isCompanyCodeTarget) {
+              // After a caught race, re-read and validate the authoritative row by companyCode
+              const authoritativeRow = await prismaClient.company.findUnique({
+                where: { companyCode: comp.companyCode }
+              });
+
+              if (authoritativeRow) {
+                // Validate existing row is safe to reuse (update isHoldingCompany if needed)
+                if (comp.isHoldingCompany && !authoritativeRow.isHoldingCompany) {
+                  await prismaClient.company.update({
+                    where: { id: authoritativeRow.id },
+                    data: { isHoldingCompany: true }
+                  });
+                }
+                console.warn(
+                  `[seedMySQL] Company ${comp.companyCode} seed race handled safely; reconciled authoritative row ID: ${authoritativeRow.id}`
+                );
+              } else {
+                // If authoritative row cannot be found, do not swallow error - re-throw
+                throw err;
+              }
             } else {
-              // Re-throw any other unexpected error
+              // Re-throw any other P2002 target or unexpected error
               throw err;
             }
           }
