@@ -120,13 +120,16 @@ Branch:
 
 Latest reported candidate correction commit:
 
-`f9ee5b6ca43dbf44a1f3f4eaba15ed16382d28e8`
+`ebd9d6e273063f25ddafbc09425ef81254350cfc`
 
-P2002 Company Seeding Defect Resolution:
+P2002 Company Seeding Defect Hardening & Evidence Status:
 
-* Status: `RESOLVED LOCALLY`
-* Fix: Idempotent company seeding by canonical `companyCode`, process-level deduplication promise, and safe P2002 race handling in `packages/mock-data/src/index.ts`.
-* Tests: All 14 targeted unit tests passed cleanly in `tests/api/company-seeding-p2002-fix.spec.ts`.
+* LOCAL Status: `VERIFIED LOCALLY`
+* Fix: Idempotent company seeding by canonical `companyCode`, process-level deduplication promise, strict `Company_companyCode_key` P2002 target validation, post-race re-read/reconciliation, and multi-process safety in `packages/mock-data/src/index.ts`.
+* Tests: All 15 unit and separate Node child-process integration tests passed cleanly in `tests/api/company-seeding-p2002-fix.spec.ts`.
+* Runtime Verification: 50 concurrent LOCAL requests executed in `scripts/runtime-p2002-verification.ts` with 0 P2002 errors.
+* SERVER Deployment State: `BLOCKED` (Production migration state remains unverified; pending SECFAC recovery remains blocked; no recovery script is currently approved).
+* DevOps Recommendation: `complete actual production migration-state verification before preparing combined deployment`.
 
 Required direct verification:
 
