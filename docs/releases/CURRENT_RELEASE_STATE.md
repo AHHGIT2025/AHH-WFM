@@ -120,17 +120,15 @@ Branch:
 
 Latest reported candidate correction commit:
 
-`d8ba591`
+`f9ee5b6ca43dbf44a1f3f4eaba15ed16382d28e8`
 
-The abbreviated hash is not sufficient for release or deployment approval.
+P2002 Company Seeding Defect Resolution:
+
+* Status: `RESOLVED LOCALLY`
+* Fix: Idempotent company seeding by canonical `companyCode`, process-level deduplication promise, and safe P2002 race handling in `packages/mock-data/src/index.ts`.
+* Tests: All 14 targeted unit tests passed cleanly in `tests/api/company-seeding-p2002-fix.spec.ts`.
 
 Required direct verification:
-
-\* full 40-character LOCAL HEAD;
-
-\* full 40-character REMOTE HEAD;
-
-\* full 40-character SERVER HEAD;
 
 \* LOCAL `git status --short`;
 
