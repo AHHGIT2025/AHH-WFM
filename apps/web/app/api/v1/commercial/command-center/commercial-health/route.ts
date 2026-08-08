@@ -382,12 +382,11 @@ export async function GET(request: Request) {
         slaRiskReasons.push(`${unexcusedAbsences} unexcused absence discrepancy(ies) logged.`);
       }
 
-      // Contract-specific SLA requirement evaluation
-      const customSlaTargetParam = searchParams.get("customSlaTarget") ? parseInt(searchParams.get("customSlaTarget")!, 10) : null;
-      const contractSlaTargetCoverage = customSlaTargetParam ?? (contract as any).contractSlaTargetCoverage ?? (contract as any).slaTargetCoverage ?? null;
-      const hasCustomSlaConfig = contractSlaTargetCoverage !== null && contractSlaTargetCoverage !== undefined;
-      const isSlaBreach = hasCustomSlaConfig && coveragePercentage < contractSlaTargetCoverage;
-      const isSlaRisk = isSlaBreach || isOperationalRiskAdvisory;
+      // Contractual SLA Evaluation (Formally Not Configured in Database Schema)
+      const hasCustomSlaConfig = false;
+      const contractSlaTargetCoverage: number | null = null;
+      const isSlaBreach = false;
+      const isSlaRisk = isOperationalRiskAdvisory;
 
       // Option A — Deterministic Health Score & Status Deduction Formula
       // Starting score: 100
@@ -542,11 +541,11 @@ export async function GET(request: Request) {
         },
         slaExposure: {
           isSlaRisk,
-          isSlaBreach,
+          isSlaBreach: false,
           isOperationalRiskAdvisory,
-          hasCustomSlaConfig,
-          slaTargetCoverage: contractSlaTargetCoverage,
-          slaConfigurationSource: hasCustomSlaConfig ? "CONTRACT_CUSTOM_SLA_REQUIREMENT" : "MANPOWER_CONTRACT_STANDARD_BASELINE",
+          hasCustomSlaConfig: false,
+          slaTargetCoverage: null,
+          slaConfigurationSource: "FORMAL_CONTRACT_COVERAGE_SLA_NOT_CONFIGURED",
           slaRiskReasons,
           openEscalationCount
         },

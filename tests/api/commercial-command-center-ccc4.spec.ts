@@ -318,11 +318,11 @@ describe("Commercial Command Center Phase CCC-4 Suite (Commercial Health & SLA A
       const c = data.contracts[0];
       expect(c.slaExposure.hasCustomSlaConfig).toBe(false);
       expect(c.slaExposure.isSlaBreach).toBe(false);
-      expect(c.slaExposure.slaConfigurationSource).toBe("MANPOWER_CONTRACT_STANDARD_BASELINE");
+      expect(c.slaExposure.slaConfigurationSource).toBe("FORMAL_CONTRACT_COVERAGE_SLA_NOT_CONFIGURED");
       expect(typeof c.slaExposure.isOperationalRiskAdvisory).toBe("boolean");
     });
 
-    it("13. Case A — contract with custom SLA target breached (coverage < target) returns isSlaBreach = true", async () => {
+    it("13. query override protection — customSlaTarget query input cannot alter contractual SLA state", async () => {
       (getServerSession as jest.Mock).mockResolvedValueOnce({ user: mockAdminUser });
 
       const req = new Request(`http://localhost:3100/api/v1/commercial/command-center/commercial-health?contractId=${testContract.id}&customSlaTarget=95`);
@@ -331,25 +331,25 @@ describe("Commercial Command Center Phase CCC-4 Suite (Commercial Health & SLA A
 
       const data = await res.json();
       const c = data.contracts[0];
-      expect(c.slaExposure.hasCustomSlaConfig).toBe(true);
-      expect(c.slaExposure.slaTargetCoverage).toBe(95);
-      expect(c.slaExposure.slaConfigurationSource).toBe("CONTRACT_CUSTOM_SLA_REQUIREMENT");
-      expect(c.slaExposure.isSlaBreach).toBe(true);
+      expect(c.slaExposure.hasCustomSlaConfig).toBe(false);
+      expect(c.slaExposure.slaTargetCoverage).toBeNull();
+      expect(c.slaExposure.slaConfigurationSource).toBe("FORMAL_CONTRACT_COVERAGE_SLA_NOT_CONFIGURED");
+      expect(c.slaExposure.isSlaBreach).toBe(false);
     });
 
-    it("14. Case B — contract with custom SLA target satisfied (coverage >= target) returns isSlaBreach = false", async () => {
+    it("14. all contractual SLA breaches remain false when no persisted contractual SLA target exists", async () => {
       (getServerSession as jest.Mock).mockResolvedValueOnce({ user: mockAdminUser });
 
-      const req = new Request(`http://localhost:3100/api/v1/commercial/command-center/commercial-health?contractId=${testContract.id}&customSlaTarget=0`);
+      const req = new Request(`http://localhost:3100/api/v1/commercial/command-center/commercial-health`);
       const res = await getCommercialHealth(req);
       expect(res.status).toBe(200);
 
       const data = await res.json();
-      const c = data.contracts[0];
-      expect(c.slaExposure.hasCustomSlaConfig).toBe(true);
-      expect(c.slaExposure.slaTargetCoverage).toBe(0);
-      expect(c.slaExposure.slaConfigurationSource).toBe("CONTRACT_CUSTOM_SLA_REQUIREMENT");
-      expect(c.slaExposure.isSlaBreach).toBe(false);
+      data.contracts.forEach((c: any) => {
+        expect(c.slaExposure.hasCustomSlaConfig).toBe(false);
+        expect(c.slaExposure.isSlaBreach).toBe(false);
+        expect(c.slaExposure.slaConfigurationSource).toBe("FORMAL_CONTRACT_COVERAGE_SLA_NOT_CONFIGURED");
+      });
     });
   });
 
