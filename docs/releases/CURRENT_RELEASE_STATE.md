@@ -146,7 +146,7 @@ Branch:
 
 Current release baseline:
 
-`b73cb34e1fe50c50ee2712dd549b2f5f61e6df4f`
+`2fcfc30a84e3e3b3efd20892c90adbbccae008f1`
 
 Required direct verification:
 
@@ -162,8 +162,8 @@ Current values:
 
 | Item                | Value                          |
 | ------------------- | ------------------------------ |
-| LOCAL HEAD          | `b73cb34e1fe50c50ee2712dd549b2f5f61e6df4f` (CCC-4 commit) |
-| REMOTE HEAD         | `b73cb34e1fe50c50ee2712dd549b2f5f61e6df4f` |
+| LOCAL HEAD          | `2fcfc30a84e3e3b3efd20892c90adbbccae008f1` (CCC-4 hardened commit) |
+| REMOTE HEAD         | `2fcfc30a84e3e3b3efd20892c90adbbccae008f1` |
 | SERVER HEAD         | `13e7b516dc0ede72dc61b4a8f7173a95b5bd0f78` |
 | LOCAL working tree  | `CLEAN` |
 | SERVER working tree | `CLEAN` |
@@ -196,9 +196,9 @@ The accepted CCC-4 API test matrix is:
 
 ```text
 Test Suites: 1 passed, 1 total
-Tests:       15 passed, 15 total
+Tests:       17 passed, 17 total
 Snapshots:   0 total
-Time:        10.523 s
+Time:        12.171 s
 Exit code:   0
 ```
 
@@ -206,9 +206,9 @@ Exit code:   0
 
 ```text
 Test Suites: 4 passed, 4 total
-Tests:       101 passed, 101 total
+Tests:       103 passed, 103 total
 Snapshots:   0 total
-Time:        13.239 s
+Time:        17.646 s
 Exit code:   0
 ```
 
@@ -217,8 +217,8 @@ Exit code:   0
 1. Prisma schema validation (`npx prisma validate`): `PASS (0 errors)`
 2. Web TypeScript check (`npx tsc --noEmit --project apps/web/tsconfig.json`): `PASS (0 errors)`
 3. Mobile TypeScript check (`npx tsc --noEmit --project apps/mobile/tsconfig.json`): `PASS (0 errors)`
-4. CCC-4 Jest test matrix (`npx jest --config=tests/jest.api.config.js tests/api/commercial-command-center-ccc4.spec.ts`): `PASS (15/15 tests passed)`
-5. Full Command Center test matrix (`npx jest --config=tests/jest.api.config.js tests/api/commercial-command-center*.spec.ts`): `PASS (101/101 tests passed)`
+4. CCC-4 Jest test matrix (`npx jest --config=tests/jest.api.config.js tests/api/commercial-command-center-ccc4.spec.ts`): `PASS (17/17 tests passed)`
+5. Full Command Center test matrix (`npx jest --config=tests/jest.api.config.js tests/api/commercial-command-center*.spec.ts`): `PASS (103/103 tests passed)`
 6. Web production build (`npm run build:web`): `PASS (Exit code 0)`
 7. Mobile production build (`npm run build:mobile`): `PASS (Exit code 0)`
 8. Local dev server HTTP verification (`http://localhost:3100/commercial/command-center/commercial-health`): `PASS (HTTP Status 200)`
