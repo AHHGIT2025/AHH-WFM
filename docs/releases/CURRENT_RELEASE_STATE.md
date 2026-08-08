@@ -26,7 +26,7 @@ Current programme:
 
 * Commercial & Contracts lifecycle foundation (CL-0, PC-2A, CL-1 CRM & Deal Opportunities, CL-2 Pre-Contract Site Surveys & Audits)
 
-* Commercial Command Center Phase CCC-0 Programme, Phase CCC-1 Operational Health, Phase CCC-2 Roster Coverage & Reliever Readiness Console
+* Commercial Command Center Phase CCC-0 Programme, Phase CCC-1 Operational Health, Phase CCC-2 Roster Coverage & Reliever Readiness Console, Phase CCC-3 Operational Escalation Queue & Workflow
 
 * SECFAC Phase 6A.2 schema reconciliation (SECFAC Status: PAUSED BY CIO)
 
@@ -63,6 +63,10 @@ CCC-2 Status:
 CL-1 Status:
 
 `DEPLOYED AND CLOSED (COMMITTED & PUSHED)`
+
+CCC-3 Status:
+
+`VERIFIED LOCALLY (48/48 TESTS PASSED, ALL GATES PASSED, COMMITTED & PUSHED TO REMOTE)`
 
 CL-2 Status:
 
@@ -138,7 +142,7 @@ Branch:
 
 Current release baseline:
 
-`71befcb65dac7040b2ee67abc22bf5f39d21b6d0`
+`7762ce1f5dfcec57e28bb7a333dd7a8c00d02a22`
 
 Required direct verification:
 
@@ -154,56 +158,54 @@ Current values:
 
 | Item                | Value                          |
 | ------------------- | ------------------------------ |
-| LOCAL HEAD          | `71befcb65dac7040b2ee67abc22bf5f39d21b6d0` |
-| REMOTE HEAD         | `71befcb65dac7040b2ee67abc22bf5f39d21b6d0` |
+| LOCAL HEAD          | `7762ce1f5dfcec57e28bb7a333dd7a8c00d02a22` (CCC-3 commit) |
+| REMOTE HEAD         | `7762ce1f5dfcec57e28bb7a333dd7a8c00d02a22` |
 | SERVER HEAD         | `13e7b516dc0ede72dc61b4a8f7173a95b5bd0f78` |
-| LOCAL working tree  | `CL-2 UNCOMMITTED CHANGES` |
+| LOCAL working tree  | `CLEAN` |
 | SERVER working tree | `CLEAN` |
 
 ---
 
 ## 5. Functional LOCAL status
 
-The following CL-2 functionality is visible and working in the LOCAL Web application:
+The following CCC-3 functionality is visible and working in the LOCAL Web application:
 
-* Pre-Contract Site Surveys & Audits Console (`/commercial/surveys`);
+* Operational Escalation Queue & Workflow (`/commercial/command-center/escalations`);
 
-* Commercial Opportunities integration ("Site Surveys" nav link & "Create / View Site Survey" card action at `/commercial/opportunities`);
+* Commercial Command Center integration ("Operational Escalation Queue" nav link & metric scorecard at `/commercial/command-center`);
 
-* KPI Scorecards (Total Surveys, Drafts, In Workflow, Approved);
+* Metric Scorecards (Total Open, Critical Escalations, High Priority, Overdue SLA, Unassigned, Resolved Today);
 
-* Survey Register table with search, lifecycle filter, operation type filter;
+* Multi-domain Escalation Register table supporting filtering by business date, operation scope (SG vs. FM), escalation status, severity, source type, and assigned owner;
 
-* Create Site Survey modal with opportunity case eligibility check & prospective site reuse;
+* 5-Tab Escalation Detail Drawer (Overview & Context, Source Model Snapshot, SLA & Escalation Path, Action Workspace, Immutable Audit Trail);
 
-* 5-Tab Survey Workspace Drawer (Site Context, Configured Survey Form, Site Condition Register, Evidence, Governance & Audit Log);
-
-* Centralized Workflow Action Modal (`SUBMIT`, `APPROVE`, `RETURN`, `REJECT`) bound to `Settings > Workflow Setup`.
+* Legitimate Workflow Action Modal (`ACKNOWLEDGE`, `ASSIGN`, `RESOLVE`, `CANCEL`, `COMMENT`) preserving Authoritative Source Protection (CCC-3 cannot approve AttendanceCorrection items).
 
 ---
 
 ## 6. Accepted verification baseline
 
-### CL-2 API baseline
+### CCC-3 API baseline
 
-The accepted CL-2 API test matrix is:
+The accepted CCC-3 API test matrix is:
 
 ```text
 Test Suites: 1 passed, 1 total
-Tests:       24 passed, 24 total
+Tests:       48 passed, 48 total
 Snapshots:   0 total
-Time:        11.433 s
+Time:        11.933 s
 Exit code:   0
 ```
 
-### Mandatory CL-2 verification gates
+### Mandatory CCC-3 verification gates
 
 1. Prisma schema validation (`npx prisma validate`): `PASS (0 errors)`
 2. Web TypeScript check (`npx tsc --noEmit --project apps/web/tsconfig.json`): `PASS (0 errors)`
-3. Mobile TypeScript check (`npx tsc --noEmit --project apps/mobile/tsconfig.json`): `PASS (0 errors)`
-4. CL-2 Jest test matrix (`npx jest --config=tests/jest.api.config.js tests/api/commercial-lifecycle-cl2.spec.ts --runInBand`): `PASS (24/24 tests passed)`
+3. CCC-3 Jest test matrix (`npx jest --config=tests/jest.api.config.js tests/api/commercial-command-center-ccc3.spec.ts`): `PASS (48/48 tests passed)`
+4. Full Commercial Command Center test matrix (`npx jest --config=tests/jest.api.config.js tests/api/commercial-command-center*.spec.ts`): `PASS (86/86 tests passed)`
 5. Web production build (`npm run build:web`): `PASS (Exit code 0)`
-6. Mobile production build (`npm run build:mobile`): `PASS (Exit code 0)`
+6. Local dev server HTTP verification (`http://localhost:3100/commercial/command-center`): `PASS (HTTP Status 200)`
 
 ---
 
