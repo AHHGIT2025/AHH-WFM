@@ -64,9 +64,13 @@ CL-1 Status:
 
 `DEPLOYED AND CLOSED (COMMITTED & PUSHED)`
 
+CCC-4 Status:
+
+`VERIFIED LOCALLY (15/15 TESTS PASSED, ALL 6 GATES PASSED, COMMITTED & PUSHED TO REMOTE)`
+
 CCC-3 Status:
 
-`VERIFIED LOCALLY (48/48 TESTS PASSED, ALL GATES PASSED, COMMITTED & PUSHED TO REMOTE)`
+`DEPLOYED AND CLOSED (LOCAL HEAD LINEAGE)`
 
 CL-2 Status:
 
@@ -142,7 +146,7 @@ Branch:
 
 Current release baseline:
 
-`7762ce1f5dfcec57e28bb7a333dd7a8c00d02a22`
+`b73cb34e1fe50c50ee2712dd549b2f5f61e6df4f`
 
 Required direct verification:
 
@@ -158,8 +162,8 @@ Current values:
 
 | Item                | Value                          |
 | ------------------- | ------------------------------ |
-| LOCAL HEAD          | `7762ce1f5dfcec57e28bb7a333dd7a8c00d02a22` (CCC-3 commit) |
-| REMOTE HEAD         | `7762ce1f5dfcec57e28bb7a333dd7a8c00d02a22` |
+| LOCAL HEAD          | `b73cb34e1fe50c50ee2712dd549b2f5f61e6df4f` (CCC-4 commit) |
+| REMOTE HEAD         | `b73cb34e1fe50c50ee2712dd549b2f5f61e6df4f` |
 | SERVER HEAD         | `13e7b516dc0ede72dc61b4a8f7173a95b5bd0f78` |
 | LOCAL working tree  | `CLEAN` |
 | SERVER working tree | `CLEAN` |
@@ -168,44 +172,56 @@ Current values:
 
 ## 5. Functional LOCAL status
 
-The following CCC-3 functionality is visible and working in the LOCAL Web application:
+The following CCC-4 functionality is visible and working in the LOCAL Web application:
 
-* Operational Escalation Queue & Workflow (`/commercial/command-center/escalations`);
+* Commercial & SLA Health Console (`/commercial/command-center/commercial-health`);
 
-* Commercial Command Center integration ("Operational Escalation Queue" nav link & metric scorecard at `/commercial/command-center`);
+* Commercial Command Center integration ("Commercial & SLA Health" nav header link & metric card action at `/commercial/command-center`);
 
-* Metric Scorecards (Total Open, Critical Escalations, High Priority, Overdue SLA, Unassigned, Resolved Today);
+* Portfolio Metric Scorecards (Active Contracts, Healthy, Attention, Critical, Average Coverage %, SLA Risk Count, Expiring Soon);
 
-* Multi-domain Escalation Register table supporting filtering by business date, operation scope (SG vs. FM), escalation status, severity, source type, and assigned owner;
+* Multi-Contract Health Register table supporting filtering by business date, operation scope (SG vs. FM), company, client, contract, site, health status, SLA risk, and expiry status;
 
-* 5-Tab Escalation Detail Drawer (Overview & Context, Source Model Snapshot, SLA & Escalation Path, Action Workspace, Immutable Audit Trail);
+* 5-Tab Contract Detail Drawer (Health & SLA Summary, Effective Requirement Breakdown, Roster & Reliever Coverage, Attendance & Reconciliation Exposure, Billing Support & Audit Drill-Downs);
 
-* Legitimate Workflow Action Modal (`ACKNOWLEDGE`, `ASSIGN`, `RESOLVE`, `CANCEL`, `COMMENT`) preserving Authoritative Source Protection (CCC-3 cannot approve AttendanceCorrection items).
+* Corrective Drill-Down Navigation Links (`Contract Master`, `Roster Coverage`, `Escalation Queue`, `Reconciliation Console`).
 
 ---
 
 ## 6. Accepted verification baseline
 
-### CCC-3 API baseline
+### CCC-4 API baseline
 
-The accepted CCC-3 API test matrix is:
+The accepted CCC-4 API test matrix is:
 
 ```text
 Test Suites: 1 passed, 1 total
-Tests:       48 passed, 48 total
+Tests:       15 passed, 15 total
 Snapshots:   0 total
-Time:        11.933 s
+Time:        10.523 s
 Exit code:   0
 ```
 
-### Mandatory CCC-3 verification gates
+### Full Command Center Suite baseline
+
+```text
+Test Suites: 4 passed, 4 total
+Tests:       101 passed, 101 total
+Snapshots:   0 total
+Time:        13.239 s
+Exit code:   0
+```
+
+### Mandatory CCC-4 verification gates
 
 1. Prisma schema validation (`npx prisma validate`): `PASS (0 errors)`
 2. Web TypeScript check (`npx tsc --noEmit --project apps/web/tsconfig.json`): `PASS (0 errors)`
-3. CCC-3 Jest test matrix (`npx jest --config=tests/jest.api.config.js tests/api/commercial-command-center-ccc3.spec.ts`): `PASS (48/48 tests passed)`
-4. Full Commercial Command Center test matrix (`npx jest --config=tests/jest.api.config.js tests/api/commercial-command-center*.spec.ts`): `PASS (86/86 tests passed)`
-5. Web production build (`npm run build:web`): `PASS (Exit code 0)`
-6. Local dev server HTTP verification (`http://localhost:3100/commercial/command-center`): `PASS (HTTP Status 200)`
+3. Mobile TypeScript check (`npx tsc --noEmit --project apps/mobile/tsconfig.json`): `PASS (0 errors)`
+4. CCC-4 Jest test matrix (`npx jest --config=tests/jest.api.config.js tests/api/commercial-command-center-ccc4.spec.ts`): `PASS (15/15 tests passed)`
+5. Full Command Center test matrix (`npx jest --config=tests/jest.api.config.js tests/api/commercial-command-center*.spec.ts`): `PASS (101/101 tests passed)`
+6. Web production build (`npm run build:web`): `PASS (Exit code 0)`
+7. Mobile production build (`npm run build:mobile`): `PASS (Exit code 0)`
+8. Local dev server HTTP verification (`http://localhost:3100/commercial/command-center/commercial-health`): `PASS (HTTP Status 200)`
 
 ---
 
