@@ -26,7 +26,7 @@ Current programme:
 
 * Commercial & Contracts lifecycle foundation (CL-0, PC-2A)
 
-* Commercial Command Center Phase CCC-0 Programme & Phase CCC-1 Operational Health
+* Commercial Command Center Phase CCC-0 Programme, Phase CCC-1 Operational Health, Phase CCC-2 Roster Coverage & Reliever Readiness Console
 
 * SECFAC Phase 6A.2 schema reconciliation (SECFAC Status: PAUSED BY CIO)
 
@@ -34,9 +34,9 @@ Current release objective:
 
 1. Establish Commercial Command Center foundation (Web route `/commercial/command-center`, API `GET /api/v1/commercial/command-center/summary`).
 
-2. Enforce authoritative deterministic operational health calculation (CRITICAL <80% / ATTENTION <95% / HEALTHY 100%).
+2. Establish Phase CCC-2 Roster Coverage & Reliever Readiness Console (Web route `/commercial/command-center/roster-coverage`, canonical API `GET /api/v1/commercial/command-center/roster-coverage`).
 
-3. Complete 22-test matrix in `tests/api/commercial-command-center.spec.ts` (22/22 passed).
+3. Complete 16-test matrix in `tests/api/commercial-command-center-coverage.spec.ts` (16/16 passed).
 
 4. Enforce SECFAC pause (no SECFAC code, migrations, or workers modified).
 
@@ -46,7 +46,11 @@ Current release objective:
 
 CCC-1 Status:
 
-`VERIFIED LOCALLY & COMMITTED (22/22 TESTS PASSED)`
+`DEPLOYED AND CLOSED (LOCAL HEAD LINEAGE)`
+
+CCC-2 Status:
+
+`VERIFIED LOCALLY & COMMITTED (16/16 TESTS PASSED)`
 
 Deployment approval state:
 

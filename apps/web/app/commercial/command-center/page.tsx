@@ -196,6 +196,13 @@ export default function CommercialCommandCenterPage() {
             Refresh Now
           </Button>
 
+          <Link href="/commercial/command-center/roster-coverage">
+            <Button variant="primary" size="sm" className="inline-flex items-center gap-1.5 bg-secondary text-white hover:bg-[#0047a3]">
+              <span className="material-symbols-outlined text-[16px]">grid_view</span>
+              Roster Coverage Console
+            </Button>
+          </Link>
+
           <Link href="/commercial/dashboard">
             <Button variant="ghost" size="sm" className="inline-flex items-center gap-1">
               <span className="material-symbols-outlined text-[16px]">arrow_back</span>
