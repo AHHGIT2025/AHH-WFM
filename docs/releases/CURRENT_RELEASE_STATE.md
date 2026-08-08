@@ -146,7 +146,7 @@ Branch:
 
 Current release baseline:
 
-`2fcfc30a84e3e3b3efd20892c90adbbccae008f1`
+`49ff9e652eddb78a9cbb3af6ee8dbaf7bfcf2be3`
 
 Required direct verification:
 
@@ -162,8 +162,8 @@ Current values:
 
 | Item                | Value                          |
 | ------------------- | ------------------------------ |
-| LOCAL HEAD          | `2fcfc30a84e3e3b3efd20892c90adbbccae008f1` (CCC-4 hardened commit) |
-| REMOTE HEAD         | `2fcfc30a84e3e3b3efd20892c90adbbccae008f1` |
+| LOCAL HEAD          | `49ff9e652eddb78a9cbb3af6ee8dbaf7bfcf2be3` (CCC-4 final correction commit) |
+| REMOTE HEAD         | `49ff9e652eddb78a9cbb3af6ee8dbaf7bfcf2be3` |
 | SERVER HEAD         | `13e7b516dc0ede72dc61b4a8f7173a95b5bd0f78` |
 | LOCAL working tree  | `CLEAN` |
 | SERVER working tree | `CLEAN` |
