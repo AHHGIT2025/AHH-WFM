@@ -382,9 +382,10 @@ export async function GET(request: Request) {
         slaRiskReasons.push(`${unexcusedAbsences} unexcused absence discrepancy(ies) logged.`);
       }
 
-      // Contract-specific SLA requirement evaluate (default false for standard baseline contracts)
-      const contractSlaTargetCoverage = (contract as any).contractSlaTargetCoverage || null;
-      const hasCustomSlaConfig = contractSlaTargetCoverage !== null;
+      // Contract-specific SLA requirement evaluation
+      const customSlaTargetParam = searchParams.get("customSlaTarget") ? parseInt(searchParams.get("customSlaTarget")!, 10) : null;
+      const contractSlaTargetCoverage = customSlaTargetParam ?? (contract as any).contractSlaTargetCoverage ?? (contract as any).slaTargetCoverage ?? null;
+      const hasCustomSlaConfig = contractSlaTargetCoverage !== null && contractSlaTargetCoverage !== undefined;
       const isSlaBreach = hasCustomSlaConfig && coveragePercentage < contractSlaTargetCoverage;
       const isSlaRisk = isSlaBreach || isOperationalRiskAdvisory;
 
@@ -544,6 +545,8 @@ export async function GET(request: Request) {
           isSlaBreach,
           isOperationalRiskAdvisory,
           hasCustomSlaConfig,
+          slaTargetCoverage: contractSlaTargetCoverage,
+          slaConfigurationSource: hasCustomSlaConfig ? "CONTRACT_CUSTOM_SLA_REQUIREMENT" : "MANPOWER_CONTRACT_STANDARD_BASELINE",
           slaRiskReasons,
           openEscalationCount
         },

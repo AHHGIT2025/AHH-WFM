@@ -62,6 +62,7 @@ describe("Commercial Command Center Phase CCC-4 Suite (Commercial Health & SLA A
   let testClient: any;
   let testContract: any;
   let testContract2: any;
+  let testContractSla: any;
   let testRequirement: any;
 
   beforeAll(async () => {
@@ -317,12 +318,43 @@ describe("Commercial Command Center Phase CCC-4 Suite (Commercial Health & SLA A
       const c = data.contracts[0];
       expect(c.slaExposure.hasCustomSlaConfig).toBe(false);
       expect(c.slaExposure.isSlaBreach).toBe(false);
+      expect(c.slaExposure.slaConfigurationSource).toBe("MANPOWER_CONTRACT_STANDARD_BASELINE");
       expect(typeof c.slaExposure.isOperationalRiskAdvisory).toBe("boolean");
+    });
+
+    it("13. Case A — contract with custom SLA target breached (coverage < target) returns isSlaBreach = true", async () => {
+      (getServerSession as jest.Mock).mockResolvedValueOnce({ user: mockAdminUser });
+
+      const req = new Request(`http://localhost:3100/api/v1/commercial/command-center/commercial-health?contractId=${testContract.id}&customSlaTarget=95`);
+      const res = await getCommercialHealth(req);
+      expect(res.status).toBe(200);
+
+      const data = await res.json();
+      const c = data.contracts[0];
+      expect(c.slaExposure.hasCustomSlaConfig).toBe(true);
+      expect(c.slaExposure.slaTargetCoverage).toBe(95);
+      expect(c.slaExposure.slaConfigurationSource).toBe("CONTRACT_CUSTOM_SLA_REQUIREMENT");
+      expect(c.slaExposure.isSlaBreach).toBe(true);
+    });
+
+    it("14. Case B — contract with custom SLA target satisfied (coverage >= target) returns isSlaBreach = false", async () => {
+      (getServerSession as jest.Mock).mockResolvedValueOnce({ user: mockAdminUser });
+
+      const req = new Request(`http://localhost:3100/api/v1/commercial/command-center/commercial-health?contractId=${testContract.id}&customSlaTarget=0`);
+      const res = await getCommercialHealth(req);
+      expect(res.status).toBe(200);
+
+      const data = await res.json();
+      const c = data.contracts[0];
+      expect(c.slaExposure.hasCustomSlaConfig).toBe(true);
+      expect(c.slaExposure.slaTargetCoverage).toBe(0);
+      expect(c.slaExposure.slaConfigurationSource).toBe("CONTRACT_CUSTOM_SLA_REQUIREMENT");
+      expect(c.slaExposure.isSlaBreach).toBe(false);
     });
   });
 
   describe("5. Reliever Readiness CCC-2 Parity", () => {
-    it("13. CCC-2 / CCC-4 reliever parity — consumes shared getRelieverEligibilityWhere filter", async () => {
+    it("15. CCC-2 / CCC-4 reliever parity — consumes shared getRelieverEligibilityWhere filter", async () => {
       (getServerSession as jest.Mock).mockResolvedValueOnce({ user: mockAdminUser });
       const req = new Request(`http://localhost:3100/api/v1/commercial/command-center/commercial-health?contractId=${testContract.id}`);
       const res = await getCommercialHealth(req);
