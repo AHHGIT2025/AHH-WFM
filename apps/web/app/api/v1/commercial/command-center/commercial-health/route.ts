@@ -54,8 +54,11 @@ export async function GET(request: Request) {
   const slaRiskFilter = searchParams.get("slaRisk") || "ALL";
   const expiryStatusFilter = searchParams.get("expiryStatus") || "ALL";
 
-  const page = parseInt(searchParams.get("page") || "1", 10);
-  const limit = Math.min(parseInt(searchParams.get("limit") || "50", 10), 100);
+  const rawPage = parseInt(searchParams.get("page") || "1", 10);
+  const rawLimit = parseInt(searchParams.get("limit") || "50", 10);
+
+  const page = isNaN(rawPage) || rawPage < 1 ? 1 : rawPage;
+  const limit = isNaN(rawLimit) || rawLimit < 1 ? 50 : Math.min(rawLimit, 100);
 
   // Validate operationType
   if (
@@ -101,6 +104,34 @@ export async function GET(request: Request) {
   }
 
   try {
+    // Single Contract Direct Access Protection Check
+    if (contractId) {
+      const existingContract = await prisma.manpowerContract.findUnique({
+        where: { id: contractId },
+        select: { id: true, operationType: true, clientId: true }
+      });
+
+      if (existingContract) {
+        if (!isAdminUser(user) && !hasPermission(user, "manpower.admin.full_access")) {
+          const userAllowedSG = user?.operationAccess?.allowedSecurityGuarding ?? true;
+          const userAllowedFM = user?.operationAccess?.allowedFacilityManagement ?? true;
+
+          if (existingContract.operationType === "SECURITY_GUARDING" && !userAllowedSG) {
+            return NextResponse.json(
+              { error: "Forbidden: Direct access denied. You lack access to this contract's operation scope." },
+              { status: 403 }
+            );
+          }
+          if (existingContract.operationType === "FACILITY_MANAGEMENT" && !userAllowedFM) {
+            return NextResponse.json(
+              { error: "Forbidden: Direct access denied. You lack access to this contract's operation scope." },
+              { status: 403 }
+            );
+          }
+        }
+      }
+    }
+
     // -------------------------------------------------------------------------
     // 1. Fetch Active Contracts matching filter criteria
     // -------------------------------------------------------------------------
@@ -140,77 +171,63 @@ export async function GET(request: Request) {
     const contractHealthItems: any[] = [];
 
     for (const contract of contracts) {
-      // Effective Manpower Breakdown (Base + Approved Addenda)
-      const { effectiveManpower, effectiveReliever } = getEffectiveContractManpower(contract);
-
-      const baseManpowerCount = (contract.manpowerRequirements || []).reduce(
-        (sum: number, r: any) => sum + (r.quantity || 0),
+      // Calculate Effective Manpower Requirements (Base + Approved Addenda)
+      const effectiveReqs = getEffectiveContractManpower(contract as any);
+      
+      const baseManpowerCount =
+        effectiveReqs.effectiveManpower.reduce((sum: number, item: any) => sum + (item.originalQty || 0), 0) ||
+        contract.defaultManpowerCount ||
+        0;
+      const addendaManpowerDelta = effectiveReqs.effectiveManpower.reduce(
+        (sum: number, item: any) => sum + (item.addendumQty || 0),
         0
       );
-      const effectiveManpowerCount = effectiveManpower.reduce(
-        (sum: number, r: any) => sum + (r.quantity || 0),
+      const effectiveManpowerCount = baseManpowerCount + addendaManpowerDelta;
+
+      const baseRelieverCount =
+        effectiveReqs.effectiveReliever.reduce((sum: number, item: any) => sum + (item.originalQty || 0), 0) ||
+        contract.defaultRelieverCount ||
+        0;
+      const addendaRelieverDelta = effectiveReqs.effectiveReliever.reduce(
+        (sum: number, item: any) => sum + (item.addendumQty || 0),
         0
       );
-      const addendaManpowerDelta = effectiveManpowerCount - baseManpowerCount;
+      const effectiveRelieverCount = baseRelieverCount + addendaRelieverDelta;
 
-      const baseRelieverCount = (contract.relieverRequirements || []).reduce(
-        (sum: number, r: any) => sum + (r.quantity || 0),
-        0
-      );
-      const effectiveRelieverCount = effectiveReliever.reduce(
-        (sum: number, r: any) => sum + (r.quantity || 0),
-        0
-      );
-      const addendaRelieverDelta = effectiveRelieverCount - baseRelieverCount;
-
-      // Roster Coverage Query for target Date
-      const slotWhere: any = {
-        contractId: contract.id,
-        businessDate: targetDate
-      };
-      if (companyId) slotWhere.companyId = companyId;
-      if (siteId) slotWhere.siteId = siteId;
-
+      // Authoritative Roster Coverage Slots & Assignments
       const slots = await prisma.rosterRequirementSlot.findMany({
-        where: slotWhere,
+        where: {
+          contractId: contract.id
+        },
         include: {
-          assignments: {
-            where: { historyStatus: "ACTIVE" },
-            select: { id: true, employeeId: true }
-          }
+          assignments: true
         }
       });
 
-      let requiredSlots = 0;
+      const requiredSlots = slots.length > 0 ? slots.length : effectiveManpowerCount;
       let assignedSlots = 0;
       let uncoveredSlots = 0;
       let overCoveredSlots = 0;
 
-      for (const slot of slots) {
-        requiredSlots += 1;
-        const activeAssignments = slot.assignments.length;
-        assignedSlots += activeAssignments;
-        if (activeAssignments === 0) {
-          uncoveredSlots += 1;
-        } else if (activeAssignments > 1) {
-          overCoveredSlots += activeAssignments - 1;
-        }
-      }
-
-      // Fallback: If no requirement slots exist for today's business date,
-      // use effectiveManpowerCount as contractual benchmark
-      if (requiredSlots === 0) {
-        requiredSlots = effectiveManpowerCount;
-        assignedSlots = Math.min(requiredSlots, baseManpowerCount);
-        uncoveredSlots = Math.max(0, requiredSlots - assignedSlots);
+      if (slots.length > 0) {
+        slots.forEach((slot: any) => {
+          const count = slot.assignments.length;
+          if (count === 1) assignedSlots++;
+          else if (count === 0) uncoveredSlots++;
+          else if (count > 1) {
+            assignedSlots++;
+            overCoveredSlots += count - 1;
+          }
+        });
+      } else {
+        assignedSlots = 0;
+        uncoveredSlots = effectiveManpowerCount;
       }
 
       const coveragePercentage =
-        requiredSlots > 0
-          ? Math.round((assignedSlots / requiredSlots) * 10000) / 100
-          : 100;
+        requiredSlots > 0 ? Math.min(100, Math.round((assignedSlots / requiredSlots) * 100)) : 100;
 
-      // Reliever Readiness for Contract
+      // Reliever Readiness for Contract (CCC-2 Reuse)
       const assignedRelievers = await prisma.shiftRelieverAssignment.count({
         where: {
           date: businessDateStr,
@@ -222,52 +239,69 @@ export async function GET(request: Request) {
       const availableStandby = await prisma.employee.count({
         where: {
           isActive: true,
-          employmentStatus: "ACTIVE",
-          dutyStatus: "OFF_DUTY",
-          OR: [{ isRelieverEligible: true }, { isStandbyEligible: true }],
           ...(companyId ? { companyId } : {})
         }
       });
+
       const uncoveredRelieverDemand = Math.max(0, effectiveRelieverCount - assignedRelievers);
-      let relieverReadinessStatus: "READY" | "ATTENTION" | "CRITICAL" = "READY";
+      let relieverReadinessStatus: "OPTIMAL" | "ATTENTION" | "DEFICIT" = "OPTIMAL";
       if (uncoveredRelieverDemand > 0) {
-        relieverReadinessStatus = availableStandby >= uncoveredRelieverDemand ? "ATTENTION" : "CRITICAL";
+        relieverReadinessStatus = availableStandby >= uncoveredRelieverDemand ? "ATTENTION" : "DEFICIT";
       }
 
-      // Attendance & Duty Exposure
+      // Attendance & Exception Exposure
       const attendanceRecords = await prisma.attendanceRecord.findMany({
         where: {
-          checkIn: { gte: targetDateStart, lte: targetDateEnd },
+          checkIn: {
+            gte: targetDateStart,
+            lte: targetDateEnd
+          },
           ...(companyId ? { companyId } : {})
         },
-        select: { id: true, status: true, lateMinutes: true, checkIn: true, checkOut: true }
+        select: {
+          id: true,
+          employeeId: true,
+          status: true,
+          checkIn: true,
+          checkOut: true,
+          lateMinutes: true
+        }
       });
 
-      const presentToday = attendanceRecords.filter(
-        (a) => a.status === "ON_TIME" || a.status === "CORRECTED" || a.checkIn !== null
+      const presentToday = attendanceRecords.filter((r: any) => r.status === "ON_TIME" || r.status === "PRESENT").length;
+      const absentToday = attendanceRecords.filter((r: any) => r.status === "ABSENT").length;
+      const lateToday = attendanceRecords.filter((r: any) => r.status === "LATE" || (r.lateMinutes && r.lateMinutes > 0)).length;
+      const missingPunch = attendanceRecords.filter(
+        (r: any) => (r.status === "ON_TIME" || r.status === "PRESENT") && (!r.checkIn || !r.checkOut)
       ).length;
-      const absentToday = attendanceRecords.filter((a) => a.status === "ABSENT").length;
-      const lateToday = attendanceRecords.filter((a) => a.status === "LATE" || a.lateMinutes > 0).length;
-      const missingPunch = attendanceRecords.filter((a) => a.checkIn !== null && a.checkOut === null).length;
 
       const unresolvedCorrections = await prisma.attendanceCorrection.count({
-        where: { status: "Pending" }
+        where: {
+          status: "PENDING"
+        }
       });
 
-      // Attendance Roster Reconciliation Exposure for Contract
-      const unresolvedReconciliations = await prisma.attendanceRosterReconciliation.count({
+      // Attendance & Roster Reconciliation Exposure
+      const reconciliations = await prisma.attendanceRosterReconciliation.findMany({
         where: {
           contractId: contract.id,
           workflowStatus: { in: ["OPEN", "PENDING_REVIEW", "UNDER_REVIEW"] }
+        },
+        select: {
+          id: true,
+          resolution: true
         }
       });
-      const unexcusedAbsences = await prisma.attendanceRosterReconciliation.count({
-        where: {
-          contractId: contract.id,
-          workflowStatus: { in: ["OPEN", "PENDING_REVIEW", "UNDER_REVIEW"] },
-          resolution: "UNEXCUSED_ABSENCE"
-        }
-      });
+
+      const unresolvedReconciliations = reconciliations.length;
+      const unexcusedAbsences = reconciliations.filter(
+        (r: any) => r.resolution === "UNEXCUSED_ABSENCE"
+      ).length;
+
+      // Deduplicated Attendance Exposure Policy (Unique Employee Incidents)
+      const affectedEmployeeIds = new Set<string>();
+      attendanceRecords.filter((r: any) => r.status === "ABSENT" || (!r.checkIn || !r.checkOut)).forEach((r: any) => affectedEmployeeIds.add(r.employeeId));
+      const totalUniqueAttendanceIncidents = affectedEmployeeIds.size;
 
       // CCC-3 Open Escalations Count
       const openPlanningExceptions = await prisma.rosterPlanningException.count({
@@ -290,7 +324,7 @@ export async function GET(request: Request) {
         expiryStatus = "EXPIRING_SOON";
       }
 
-      // SLA Risk & Reasons Evaluation
+      // SLA Authority & Risk Advisory Evaluation
       const slaRiskReasons: string[] = [];
       let isSlaRisk = false;
 
@@ -311,7 +345,34 @@ export async function GET(request: Request) {
         slaRiskReasons.push(`${unexcusedAbsences} unexcused absence discrepancy(ies) logged.`);
       }
 
-      // Overall Contract Health Status & Reasons
+      const hasCustomSlaConfig = false; // Standard contract baseline applies unless custom SLA model defined
+      const isSlaBreach = hasCustomSlaConfig && isSlaRisk; // Only true when formal custom SLA exists
+      const isOperationalRiskAdvisory = isSlaRisk; // Operational/commercial risk advisory indicator
+
+      // Option A — Deterministic Health Score & Status Deduction Formula
+      // Starting score: 100
+      let healthScore = 100;
+
+      // Deduction weights:
+      const coverageDeduction = requiredSlots > 0 ? Math.round((100 - coveragePercentage) * 0.4) : 0;
+      const uncoveredSlotsDeduction = uncoveredSlots * 5;
+      const escalationsDeduction = openEscalationCount * 8;
+      const reconciliationsDeduction = unresolvedReconciliations * 5;
+      const correctionsDeduction = unresolvedCorrections * 3;
+      const relieverDeduction = uncoveredRelieverDemand > 0 ? 5 : 0;
+      const expiryDeduction = expiryStatus === "EXPIRED" ? 50 : expiryStatus === "EXPIRING_SOON" ? 15 : 0;
+
+      const totalDeductions =
+        coverageDeduction +
+        uncoveredSlotsDeduction +
+        escalationsDeduction +
+        reconciliationsDeduction +
+        correctionsDeduction +
+        relieverDeduction +
+        expiryDeduction;
+
+      healthScore = Math.max(0, Math.min(100, 100 - totalDeductions));
+
       const healthReasons: string[] = [];
 
       const isCritical =
@@ -332,14 +393,13 @@ export async function GET(request: Request) {
           uncoveredRelieverDemand > 0);
 
       let healthStatus: "HEALTHY" | "ATTENTION" | "CRITICAL" = "HEALTHY";
-      let healthScore = 100;
 
       if (isCritical) {
         healthStatus = "CRITICAL";
-        healthScore = requiredSlots > 0 ? Math.max(40, Math.min(69, Math.round(coveragePercentage * 0.65))) : 50;
+        healthScore = Math.min(69, healthScore);
       } else if (isAttention) {
         healthStatus = "ATTENTION";
-        healthScore = requiredSlots > 0 ? Math.max(70, Math.min(89, Math.round(coveragePercentage * 0.85))) : 80;
+        healthScore = Math.max(70, Math.min(89, healthScore));
       } else {
         healthStatus = "HEALTHY";
         healthScore = 100;
@@ -427,7 +487,8 @@ export async function GET(request: Request) {
           absentToday,
           lateToday,
           missingPunch,
-          unresolvedCorrections
+          unresolvedCorrections,
+          totalUniqueAttendanceIncidents
         },
         reconciliationExposure: {
           unresolvedReconciliations,
@@ -440,12 +501,16 @@ export async function GET(request: Request) {
         },
         slaExposure: {
           isSlaRisk,
+          isSlaBreach,
+          isOperationalRiskAdvisory,
+          hasCustomSlaConfig,
           slaRiskReasons,
           openEscalationCount
         },
         health: {
           status: healthStatus,
           score: healthScore,
+          deductions: totalDeductions,
           reasons: healthReasons
         },
         drillDownUrls
@@ -453,7 +518,7 @@ export async function GET(request: Request) {
     }
 
     // -------------------------------------------------------------------------
-    // 3. Post-fetch Filtering by Health, SLA Risk, and Expiry status
+    // 3. Filter Items by Health / SLA / Expiry Status
     // -------------------------------------------------------------------------
     let filteredContracts = contractHealthItems;
 
@@ -461,31 +526,32 @@ export async function GET(request: Request) {
       filteredContracts = filteredContracts.filter(c => c.health.status === healthStatusFilter);
     }
     if (slaRiskFilter === "AT_RISK") {
-      filteredContracts = filteredContracts.filter(c => c.slaExposure.isSlaRisk === true);
+      filteredContracts = filteredContracts.filter(c => c.slaExposure.isSlaRisk);
     } else if (slaRiskFilter === "NORMAL") {
-      filteredContracts = filteredContracts.filter(c => c.slaExposure.isSlaRisk === false);
+      filteredContracts = filteredContracts.filter(c => !c.slaExposure.isSlaRisk);
     }
     if (expiryStatusFilter !== "ALL") {
       filteredContracts = filteredContracts.filter(c => c.expiryStatus === expiryStatusFilter);
     }
 
     // -------------------------------------------------------------------------
-    // 4. Compute Portfolio Summary Metrics across ALL scoped contracts
+    // 4. Aggregate Portfolio Summary Metrics (Scoped)
     // -------------------------------------------------------------------------
     const totalActiveContracts = contractHealthItems.length;
     const healthyContractsCount = contractHealthItems.filter(c => c.health.status === "HEALTHY").length;
     const attentionContractsCount = contractHealthItems.filter(c => c.health.status === "ATTENTION").length;
     const criticalContractsCount = contractHealthItems.filter(c => c.health.status === "CRITICAL").length;
 
-    const totalRequiredManpower = contractHealthItems.reduce((sum, c) => sum + c.coverage.requiredSlots, 0);
+    const sumCoverage = contractHealthItems.reduce((sum, c) => sum + c.coverage.coveragePercentage, 0);
+    const averageCoveragePercentage =
+      totalActiveContracts > 0 ? Math.round(sumCoverage / totalActiveContracts) : 100;
+
+    const totalRequiredManpower = contractHealthItems.reduce(
+      (sum, c) => sum + c.effectiveRequirements.effectiveManpowerCount,
+      0
+    );
     const totalAssignedManpower = contractHealthItems.reduce((sum, c) => sum + c.coverage.assignedSlots, 0);
     const totalUncoveredSlots = contractHealthItems.reduce((sum, c) => sum + c.coverage.uncoveredSlots, 0);
-
-    const averageCoveragePercentage =
-      totalRequiredManpower > 0
-        ? Math.round((totalAssignedManpower / totalRequiredManpower) * 10000) / 100
-        : 100;
-
     const contractsWithSlaRiskCount = contractHealthItems.filter(c => c.slaExposure.isSlaRisk).length;
     const contractsWithEscalationsCount = contractHealthItems.filter(c => c.slaExposure.openEscalationCount > 0).length;
     const contractsExpiringSoonCount = contractHealthItems.filter(c => c.expiryStatus === "EXPIRING_SOON").length;
@@ -525,7 +591,8 @@ export async function GET(request: Request) {
           companyBound: Boolean(user?.companyId),
           allowedSecurityGuarding: user?.operationAccess?.allowedSecurityGuarding ?? true,
           allowedFacilityManagement: user?.operationAccess?.allowedFacilityManagement ?? true
-        }
+        },
+        trends: "DEFERRED_NO_EFFICIENT_AUTHORITATIVE_SOURCE"
       },
       portfolioMetrics,
       pagination: {

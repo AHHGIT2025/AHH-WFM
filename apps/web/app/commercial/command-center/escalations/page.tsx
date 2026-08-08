@@ -307,6 +307,11 @@ export default function OperationalEscalationsPage() {
               Roster Coverage Matrix
             </Button>
           </Link>
+          <Link href="/commercial/command-center/commercial-health">
+            <Button variant="secondary" style={{ border: "1px solid #4338ca", backgroundColor: "#4f46e5", color: "#ffffff" }}>
+              Commercial &amp; SLA Health (CCC-4)
+            </Button>
+          </Link>
           <Button variant="primary" onClick={fetchEscalations} disabled={loading}>
             {loading ? "Refreshing..." : "↻ Refresh Queue"}
           </Button>

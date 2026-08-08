@@ -62,10 +62,7 @@ describe("Commercial Command Center Phase CCC-4 Suite (Commercial Health & SLA A
   let testClient: any;
   let testContract: any;
   let testContract2: any;
-  let testProject: any;
-  let testSite: any;
   let testRequirement: any;
-  let testSlot: any;
 
   beforeAll(async () => {
     // Clean up stale CCC4 test data
@@ -201,7 +198,7 @@ describe("Commercial Command Center Phase CCC-4 Suite (Commercial Health & SLA A
         `DELETE FROM ManpowerContract WHERE contractNumber LIKE 'CONT-CCC4-%'`
       );
       await prisma.$executeRawUnsafe(
-        `DELETE FROM ManpowerClient WHERE clientCode = 'CLI-CCC4-001'`
+        `DELETE FROM ManpowerClient WHERE code = 'CLI-CCC4-001'`
       );
       await prisma.$executeRawUnsafe(
         `DELETE FROM Company WHERE companyCode = 'COMP-CCC4-01'`
@@ -280,21 +277,29 @@ describe("Commercial Command Center Phase CCC-4 Suite (Commercial Health & SLA A
       expect(res.status).toBe(403);
     });
 
-    it("9. prevents KPI scope leakage — portfolio metrics reflect ONLY scoped contracts", async () => {
+    it("9. direct contract access denial — returns 403 when requesting an out-of-scope contract ID directly", async () => {
+      (getServerSession as jest.Mock).mockResolvedValueOnce({ user: mockSgUser });
+      const req = new Request(`http://localhost:3100/api/v1/commercial/command-center/commercial-health?contractId=${testContract2.id}`);
+      const res = await getCommercialHealth(req);
+      expect(res.status).toBe(403);
+      const data = await res.json();
+      expect(data.error).toContain("Forbidden");
+    });
+
+    it("10. prevents KPI scope leakage — portfolio metrics reflect ONLY scoped contracts", async () => {
       (getServerSession as jest.Mock).mockResolvedValueOnce({ user: mockSgUser });
       const req = new Request("http://localhost:3100/api/v1/commercial/command-center/commercial-health?operationType=SECURITY_GUARDING");
       const res = await getCommercialHealth(req);
       expect(res.status).toBe(200);
 
       const data = await res.json();
-      // Ensure portfolio metrics count only SG contracts
       const totalContractsInList = data.contracts.length;
       expect(data.portfolioMetrics.totalActiveContracts).toBe(totalContractsInList);
     });
   });
 
   describe("3. Effective Contract Manpower & Addenda Analytics", () => {
-    it("10. calculates base manpower and approved addenda adjustments accurately", async () => {
+    it("11. calculates base manpower and approved addenda adjustments accurately", async () => {
       (getServerSession as jest.Mock).mockResolvedValueOnce({ user: mockAdminUser });
       const req = new Request(`http://localhost:3100/api/v1/commercial/command-center/commercial-health?contractId=${testContract.id}`);
       const res = await getCommercialHealth(req);
@@ -309,8 +314,8 @@ describe("Commercial Command Center Phase CCC-4 Suite (Commercial Health & SLA A
     });
   });
 
-  describe("4. Contract Expiry & SLA Risk Rules", () => {
-    it("11. flags contract expiring within 30 days with EXPIRING_SOON status", async () => {
+  describe("4. Contract Expiry, Option A Deterministic Score & SLA Authority Rules", () => {
+    it("12. flags contract expiring within 30 days with EXPIRING_SOON status", async () => {
       (getServerSession as jest.Mock).mockResolvedValueOnce({ user: mockAdminUser });
       const req = new Request(`http://localhost:3100/api/v1/commercial/command-center/commercial-health?contractId=${testContract2.id}`);
       const res = await getCommercialHealth(req);
@@ -324,7 +329,7 @@ describe("Commercial Command Center Phase CCC-4 Suite (Commercial Health & SLA A
       expect(c.daysToExpiry).toBeGreaterThan(0);
     });
 
-    it("12. returns correct SLA risk state and SLA risk reason flags", async () => {
+    it("13. Option A deterministic score formula — score is a bounded number [0-100] with tracked deductions", async () => {
       (getServerSession as jest.Mock).mockResolvedValueOnce({ user: mockAdminUser });
       const req = new Request(`http://localhost:3100/api/v1/commercial/command-center/commercial-health?contractId=${testContract.id}`);
       const res = await getCommercialHealth(req);
@@ -332,14 +337,29 @@ describe("Commercial Command Center Phase CCC-4 Suite (Commercial Health & SLA A
 
       const data = await res.json();
       const c = data.contracts[0];
-      expect(c.slaExposure).toBeDefined();
-      expect(typeof c.slaExposure.isSlaRisk).toBe("boolean");
-      expect(Array.isArray(c.slaExposure.slaRiskReasons)).toBe(true);
+      expect(c.health).toBeDefined();
+      expect(typeof c.health.score).toBe("number");
+      expect(c.health.score).toBeGreaterThanOrEqual(0);
+      expect(c.health.score).toBeLessThanOrEqual(100);
+      expect(typeof c.health.deductions).toBe("number");
+    });
+
+    it("14. SLA Authority — does not flag false contractual SLA breach when no custom SLA config exists", async () => {
+      (getServerSession as jest.Mock).mockResolvedValueOnce({ user: mockAdminUser });
+      const req = new Request(`http://localhost:3100/api/v1/commercial/command-center/commercial-health?contractId=${testContract.id}`);
+      const res = await getCommercialHealth(req);
+      expect(res.status).toBe(200);
+
+      const data = await res.json();
+      const c = data.contracts[0];
+      expect(c.slaExposure.hasCustomSlaConfig).toBe(false);
+      expect(c.slaExposure.isSlaBreach).toBe(false);
+      expect(typeof c.slaExposure.isOperationalRiskAdvisory).toBe("boolean");
     });
   });
 
   describe("5. Billing Support Advisory & Drill-Down URLs", () => {
-    it("13. returns billing-support advisory indicators and non-empty drill-down URLs", async () => {
+    it("15. returns billing-support advisory indicators and non-empty drill-down URLs", async () => {
       (getServerSession as jest.Mock).mockResolvedValueOnce({ user: mockAdminUser });
       const req = new Request(`http://localhost:3100/api/v1/commercial/command-center/commercial-health?contractId=${testContract.id}`);
       const res = await getCommercialHealth(req);
@@ -359,7 +379,7 @@ describe("Commercial Command Center Phase CCC-4 Suite (Commercial Health & SLA A
   });
 
   describe("6. Filters, Pagination & Empty State", () => {
-    it("14. pagination — limit=1 returns at most 1 item with pagination metadata", async () => {
+    it("16. pagination — limit=1 returns at most 1 item with pagination metadata", async () => {
       (getServerSession as jest.Mock).mockResolvedValueOnce({ user: mockAdminUser });
       const req = new Request("http://localhost:3100/api/v1/commercial/command-center/commercial-health?limit=1&page=1");
       const res = await getCommercialHealth(req);
@@ -372,7 +392,7 @@ describe("Commercial Command Center Phase CCC-4 Suite (Commercial Health & SLA A
       expect(data.pagination.totalItems).toBeDefined();
     });
 
-    it("15. empty state — searching for non-existent client returns 200 with empty contracts array", async () => {
+    it("17. empty state — searching for non-existent client returns 200 with empty contracts array", async () => {
       (getServerSession as jest.Mock).mockResolvedValueOnce({ user: mockAdminUser });
       const req = new Request("http://localhost:3100/api/v1/commercial/command-center/commercial-health?clientId=NON_EXISTENT_CLIENT_ID");
       const res = await getCommercialHealth(req);
