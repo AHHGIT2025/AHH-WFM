@@ -3,7 +3,7 @@ import { prisma } from "@ahh-wfm/database";
 import { checkApiAuth } from "@/lib/api-guards";
 import { hasPermission, isAdminUser } from "@/lib/permissions";
 import { getQatarDate, getQatarDateString } from "@/lib/roster-engine";
-import { getEffectiveContractManpower } from "@/lib/contract-helpers";
+import { getEffectiveContractManpower, getRelieverEligibilityWhere } from "@/lib/contract-helpers";
 
 export async function GET(request: Request) {
   const auth = await checkApiAuth();
@@ -29,9 +29,10 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url);
 
-  // Parse Filters
+  // Parse & Validate Date Parameters
   const dateParam = searchParams.get("businessDate");
-  const businessDateStr = dateParam ? dateParam.trim() : getQatarDateString(new Date());
+  const dateFromParam = searchParams.get("dateFrom");
+  const dateToParam = searchParams.get("dateTo");
 
   if (dateParam && !/^\d{4}-\d{2}-\d{2}$/.test(dateParam.trim())) {
     return NextResponse.json(
@@ -39,10 +40,46 @@ export async function GET(request: Request) {
       { status: 400 }
     );
   }
+  if (dateFromParam && !/^\d{4}-\d{2}-\d{2}$/.test(dateFromParam.trim())) {
+    return NextResponse.json(
+      { error: "Invalid dateFrom filter format. Expected format: YYYY-MM-DD." },
+      { status: 400 }
+    );
+  }
+  if (dateToParam && !/^\d{4}-\d{2}-\d{2}$/.test(dateToParam.trim())) {
+    return NextResponse.json(
+      { error: "Invalid dateTo filter format. Expected format: YYYY-MM-DD." },
+      { status: 400 }
+    );
+  }
 
-  const targetDate = getQatarDate(businessDateStr);
-  const targetDateStart = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), 0, 0, 0);
-  const targetDateEnd = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), 23, 59, 59);
+  const businessDateStr = dateParam ? dateParam.trim() : getQatarDateString(new Date());
+  const dateFromStr = dateFromParam ? dateFromParam.trim() : businessDateStr;
+  const dateToStr = dateToParam ? dateToParam.trim() : businessDateStr;
+
+  const dateFromObj = getQatarDate(dateFromStr);
+  const dateToObj = getQatarDate(dateToStr);
+
+  if (dateFromObj.getTime() > dateToObj.getTime()) {
+    return NextResponse.json(
+      { error: "Invalid date range: dateFrom cannot be after dateTo." },
+      { status: 400 }
+    );
+  }
+
+  const diffMs = dateToObj.getTime() - dateFromObj.getTime();
+  const rangeLengthDays = Math.round(diffMs / (1000 * 60 * 60 * 24)) + 1;
+
+  // Maximum supported date range is 31 days
+  if (rangeLengthDays > 31) {
+    return NextResponse.json(
+      { error: "Date range exceeds maximum supported limit of 31 days." },
+      { status: 400 }
+    );
+  }
+
+  const targetDateStart = new Date(dateFromObj.getFullYear(), dateFromObj.getMonth(), dateFromObj.getDate(), 0, 0, 0);
+  const targetDateEnd = new Date(dateToObj.getFullYear(), dateToObj.getMonth(), dateToObj.getDate(), 23, 59, 59);
 
   let companyId = searchParams.get("companyId") || undefined;
   let operationType = searchParams.get("operationType") || undefined;
@@ -166,7 +203,7 @@ export async function GET(request: Request) {
     });
 
     // -------------------------------------------------------------------------
-    // 2. Aggregate Data per Contract
+    // 2. Aggregate Data per Contract (Bounded to Date Range)
     // -------------------------------------------------------------------------
     const contractHealthItems: any[] = [];
 
@@ -194,7 +231,7 @@ export async function GET(request: Request) {
       );
       const effectiveRelieverCount = baseRelieverCount + addendaRelieverDelta;
 
-      // Authoritative Roster Coverage Slots & Assignments
+      // Authoritative Roster Coverage Slots & Assignments Bounded to Date Range
       const slots = await prisma.rosterRequirementSlot.findMany({
         where: {
           contractId: contract.id
@@ -227,7 +264,7 @@ export async function GET(request: Request) {
       const coveragePercentage =
         requiredSlots > 0 ? Math.min(100, Math.round((assignedSlots / requiredSlots) * 100)) : 100;
 
-      // Reliever Readiness for Contract (CCC-2 Reuse)
+      // Reliever Readiness for Contract (Exact CCC-2 Helper Reuse)
       const assignedRelievers = await prisma.shiftRelieverAssignment.count({
         where: {
           date: businessDateStr,
@@ -236,11 +273,9 @@ export async function GET(request: Request) {
             : {})
         }
       });
+
       const availableStandby = await prisma.employee.count({
-        where: {
-          isActive: true,
-          ...(companyId ? { companyId } : {})
-        }
+        where: getRelieverEligibilityWhere({ companyId, operationType: contract.operationType })
       });
 
       const uncoveredRelieverDemand = Math.max(0, effectiveRelieverCount - assignedRelievers);
@@ -249,7 +284,7 @@ export async function GET(request: Request) {
         relieverReadinessStatus = availableStandby >= uncoveredRelieverDemand ? "ATTENTION" : "DEFICIT";
       }
 
-      // Attendance & Exception Exposure
+      // Attendance & Exception Exposure Bounded to Date Range
       const attendanceRecords = await prisma.attendanceRecord.findMany({
         where: {
           checkIn: {
@@ -281,7 +316,7 @@ export async function GET(request: Request) {
         }
       });
 
-      // Attendance & Roster Reconciliation Exposure
+      // Attendance & Roster Reconciliation Exposure Bounded to Date Range
       const reconciliations = await prisma.attendanceRosterReconciliation.findMany({
         where: {
           contractId: contract.id,
@@ -314,8 +349,8 @@ export async function GET(request: Request) {
 
       // Contract Expiry Calculation
       const endDate = new Date(contract.endDate);
-      const diffMs = endDate.getTime() - targetDate.getTime();
-      const daysToExpiry = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+      const diffMsExpiry = endDate.getTime() - dateToObj.getTime();
+      const daysToExpiry = Math.ceil(diffMsExpiry / (1000 * 60 * 60 * 24));
 
       let expiryStatus: "EXPIRED" | "EXPIRING_SOON" | "ACTIVE" = "ACTIVE";
       if (daysToExpiry <= 0 || contract.status === "EXPIRED") {
@@ -325,29 +360,33 @@ export async function GET(request: Request) {
       }
 
       // SLA Authority & Risk Advisory Evaluation
+      // MANPOWER_CONTRACT_STANDARD_BASELINE (90% coverage) is an internal operational quality benchmark.
+      // Standard baseline deficits trigger isOperationalRiskAdvisory: true, but MUST NOT trigger contractual isSlaBreach: true.
       const slaRiskReasons: string[] = [];
-      let isSlaRisk = false;
+      let isOperationalRiskAdvisory = false;
 
       if (coveragePercentage < 90 && requiredSlots > 0) {
-        isSlaRisk = true;
-        slaRiskReasons.push(`Coverage is below 90% threshold (${coveragePercentage}%).`);
+        isOperationalRiskAdvisory = true;
+        slaRiskReasons.push(`Coverage below operational baseline of 90% (${coveragePercentage}%).`);
       }
       if (openEscalationCount > 0) {
-        isSlaRisk = true;
+        isOperationalRiskAdvisory = true;
         slaRiskReasons.push(`${openEscalationCount} unresolved escalation(s) active on contract.`);
       }
       if (uncoveredSlots >= 2) {
-        isSlaRisk = true;
+        isOperationalRiskAdvisory = true;
         slaRiskReasons.push(`${uncoveredSlots} unfilled requirement slot(s) for business date.`);
       }
       if (unexcusedAbsences > 0) {
-        isSlaRisk = true;
+        isOperationalRiskAdvisory = true;
         slaRiskReasons.push(`${unexcusedAbsences} unexcused absence discrepancy(ies) logged.`);
       }
 
-      const hasCustomSlaConfig = false; // Standard contract baseline applies unless custom SLA model defined
-      const isSlaBreach = hasCustomSlaConfig && isSlaRisk; // Only true when formal custom SLA exists
-      const isOperationalRiskAdvisory = isSlaRisk; // Operational/commercial risk advisory indicator
+      // Contract-specific SLA requirement evaluate (default false for standard baseline contracts)
+      const contractSlaTargetCoverage = (contract as any).contractSlaTargetCoverage || null;
+      const hasCustomSlaConfig = contractSlaTargetCoverage !== null;
+      const isSlaBreach = hasCustomSlaConfig && coveragePercentage < contractSlaTargetCoverage;
+      const isSlaRisk = isSlaBreach || isOperationalRiskAdvisory;
 
       // Option A — Deterministic Health Score & Status Deduction Formula
       // Starting score: 100
@@ -399,7 +438,8 @@ export async function GET(request: Request) {
         healthScore = Math.min(69, healthScore);
       } else if (isAttention) {
         healthStatus = "ATTENTION";
-        healthScore = Math.max(70, Math.min(89, healthScore));
+        // Scores 70-99 map to ATTENTION when attention degradation factors exist
+        healthScore = Math.max(70, Math.min(99, healthScore));
       } else {
         healthStatus = "HEALTHY";
         healthScore = 100;
@@ -581,6 +621,9 @@ export async function GET(request: Request) {
     return NextResponse.json({
       context: {
         businessDate: businessDateStr,
+        dateFrom: dateFromStr,
+        dateTo: dateToStr,
+        rangeLengthDays,
         operationType: operationType || "ALL",
         companyId: companyId || null,
         clientId: clientId || null,

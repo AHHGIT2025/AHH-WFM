@@ -3,6 +3,7 @@ import { prisma } from "@ahh-wfm/database";
 import { checkApiAuth } from "@/lib/api-guards";
 import { hasPermission, isAdminUser } from "@/lib/permissions";
 import { getQatarDate, getQatarDateString } from "@/lib/roster-engine";
+import { getRelieverEligibilityWhere } from "@/lib/contract-helpers";
 
 export async function GET(request: Request) {
   const auth = await checkApiAuth();
@@ -158,14 +159,7 @@ export async function GET(request: Request) {
     });
 
     // Authoritative Reliever Eligibility (Off Duty + Active + Reliever/Standby Eligible)
-    const empWhere: any = {
-      isActive: true,
-      employmentStatus: "ACTIVE",
-      dutyStatus: "OFF_DUTY",
-      OR: [{ isRelieverEligible: true }, { isStandbyEligible: true }]
-    };
-    if (companyId) empWhere.companyId = companyId;
-    if (operationType && operationType !== "ALL") empWhere.operationType = operationType;
+    const empWhere = getRelieverEligibilityWhere({ companyId, operationType });
 
     const availableStandbyCount = await prisma.employee.count({ where: empWhere });
     const uncoveredRelieverDemand = Math.max(0, relieverReqsCount - assignedRelieversCount);

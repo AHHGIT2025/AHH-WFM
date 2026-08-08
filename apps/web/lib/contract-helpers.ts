@@ -296,4 +296,27 @@ export function getEffectiveContractManpower(contract: any) {
   };
 }
 
+/**
+ * Authoritative Reliever Eligibility Filter (Reused across CCC-2 and CCC-4)
+ * Evaluates active employment, OFF_DUTY status, and reliever/standby eligibility flags.
+ */
+export function getRelieverEligibilityWhere(options?: {
+  companyId?: string;
+  operationType?: string;
+}) {
+  const where: any = {
+    isActive: true,
+    employmentStatus: "ACTIVE",
+    dutyStatus: "OFF_DUTY",
+    OR: [{ isRelieverEligible: true }, { isStandbyEligible: true }]
+  };
+
+  if (options?.companyId) where.companyId = options.companyId;
+  if (options?.operationType && options.operationType !== "ALL") {
+    where.operationType = options.operationType;
+  }
+
+  return where;
+}
+
 
