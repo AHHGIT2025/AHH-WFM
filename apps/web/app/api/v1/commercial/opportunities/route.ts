@@ -13,7 +13,6 @@ export async function GET(request: Request) {
     isAdminUser(user) ||
     hasPermission(user, "precontract.case.view") ||
     hasPermission(user, "commercial.opportunities.view") ||
-    hasPermission(user, "commercial.commandCenter.view") ||
     hasPermission(user, "manpower.admin.full_access");
 
   if (!isAuthorized) {
@@ -36,7 +35,7 @@ export async function GET(request: Request) {
     companyId = user.companyId;
   }
 
-  // Operation Scope Isolation
+  // SG / FM Scope Isolation
   if (!isAdminUser(user) && !hasPermission(user, "manpower.admin.full_access")) {
     const userAllowedSG = user?.operationAccess?.allowedSecurityGuarding ?? true;
     const userAllowedFM = user?.operationAccess?.allowedFacilityManagement ?? true;
@@ -52,6 +51,14 @@ export async function GET(request: Request) {
         { error: "Forbidden: You do not have access to Facility Management operational data." },
         { status: 403 }
       );
+    }
+
+    if (!operationType || operationType === "ALL") {
+      if (userAllowedSG && !userAllowedFM) {
+        operationType = "SECURITY_GUARDING";
+      } else if (!userAllowedSG && userAllowedFM) {
+        operationType = "FACILITY_MANAGEMENT";
+      }
     }
   }
 
@@ -152,6 +159,25 @@ export async function POST(request: Request) {
     const effectiveCompanyId = user?.companyId && !isAdminUser(user) ? user.companyId : companyId || null;
     const effectiveOpType = operationType || "SECURITY_GUARDING";
 
+    // SG / FM Scope Isolation Check
+    if (!isAdminUser(user) && !hasPermission(user, "manpower.admin.full_access")) {
+      const userAllowedSG = user?.operationAccess?.allowedSecurityGuarding ?? true;
+      const userAllowedFM = user?.operationAccess?.allowedFacilityManagement ?? true;
+
+      if (effectiveOpType === "SECURITY_GUARDING" && !userAllowedSG) {
+        return NextResponse.json(
+          { error: "Forbidden: You do not have access to Security Guarding operational data." },
+          { status: 403 }
+        );
+      }
+      if (effectiveOpType === "FACILITY_MANAGEMENT" && !userAllowedFM) {
+        return NextResponse.json(
+          { error: "Forbidden: You do not have access to Facility Management operational data." },
+          { status: 403 }
+        );
+      }
+    }
+
     const newCase = await prisma.preContractCase.create({
       data: {
         title: title.trim(),
@@ -215,6 +241,25 @@ export async function PATCH(request: Request) {
     // Company boundary check
     if (user?.companyId && !isAdminUser(user) && existing.companyId && existing.companyId !== user.companyId) {
       return NextResponse.json({ error: "Forbidden: Company boundary violation." }, { status: 403 });
+    }
+
+    // SG / FM Scope Isolation Check
+    if (!isAdminUser(user) && !hasPermission(user, "manpower.admin.full_access")) {
+      const userAllowedSG = user?.operationAccess?.allowedSecurityGuarding ?? true;
+      const userAllowedFM = user?.operationAccess?.allowedFacilityManagement ?? true;
+
+      if (existing.operationType === "SECURITY_GUARDING" && !userAllowedSG) {
+        return NextResponse.json(
+          { error: "Forbidden: You do not have access to Security Guarding operational data." },
+          { status: 403 }
+        );
+      }
+      if (existing.operationType === "FACILITY_MANAGEMENT" && !userAllowedFM) {
+        return NextResponse.json(
+          { error: "Forbidden: You do not have access to Facility Management operational data." },
+          { status: 403 }
+        );
+      }
     }
 
     const updated = await prisma.preContractCase.update({

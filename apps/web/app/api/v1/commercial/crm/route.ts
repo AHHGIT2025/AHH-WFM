@@ -9,12 +9,11 @@ export async function GET(request: Request) {
 
   const user = auth.session?.user as any;
 
-  // Authorization Check
+  // Pre-Contract / Commercial Permission Model Authorization
   const isAuthorized =
     isAdminUser(user) ||
     hasPermission(user, "precontract.prospectClient.view") ||
     hasPermission(user, "commercial.crm.view") ||
-    hasPermission(user, "commercial.commandCenter.view") ||
     hasPermission(user, "manpower.admin.full_access");
 
   if (!isAuthorized) {
@@ -35,7 +34,7 @@ export async function GET(request: Request) {
     companyId = user.companyId;
   }
 
-  // Operation Scope (SG / FM) Isolation
+  // SG / FM Scope Isolation
   if (!isAdminUser(user) && !hasPermission(user, "manpower.admin.full_access")) {
     const userAllowedSG = user?.operationAccess?.allowedSecurityGuarding ?? true;
     const userAllowedFM = user?.operationAccess?.allowedFacilityManagement ?? true;
@@ -51,6 +50,14 @@ export async function GET(request: Request) {
         { error: "Forbidden: You do not have access to Facility Management operational data." },
         { status: 403 }
       );
+    }
+
+    if (!operationType || operationType === "ALL") {
+      if (userAllowedSG && !userAllowedFM) {
+        operationType = "SECURITY_GUARDING";
+      } else if (!userAllowedSG && userAllowedFM) {
+        operationType = "FACILITY_MANAGEMENT";
+      }
     }
   }
 
@@ -141,6 +148,25 @@ export async function POST(request: Request) {
     const effectiveCompanyId = user?.companyId && !isAdminUser(user) ? user.companyId : companyId || null;
     const effectiveOpType = operationType || "SECURITY_GUARDING";
 
+    // SG / FM Scope Isolation Check
+    if (!isAdminUser(user) && !hasPermission(user, "manpower.admin.full_access")) {
+      const userAllowedSG = user?.operationAccess?.allowedSecurityGuarding ?? true;
+      const userAllowedFM = user?.operationAccess?.allowedFacilityManagement ?? true;
+
+      if (effectiveOpType === "SECURITY_GUARDING" && !userAllowedSG) {
+        return NextResponse.json(
+          { error: "Forbidden: You do not have access to Security Guarding operational data." },
+          { status: 403 }
+        );
+      }
+      if (effectiveOpType === "FACILITY_MANAGEMENT" && !userAllowedFM) {
+        return NextResponse.json(
+          { error: "Forbidden: You do not have access to Facility Management operational data." },
+          { status: 403 }
+        );
+      }
+    }
+
     // Automatic Duplicate Prospect / Master Client Checking Trigger
     let duplicateCheckStatus = "CLEARED";
     let matchedClientMasterId: string | null = null;
@@ -168,7 +194,7 @@ export async function POST(request: Request) {
     }
 
     if (duplicateCheckStatus === "CLEARED") {
-      // Name fuzzy/exact duplicate match check
+      // Name duplicate match check
       const existingByName = await prisma.manpowerClient.findFirst({
         where: { name: { equals: name.trim() } }
       });
@@ -251,6 +277,25 @@ export async function PATCH(request: Request) {
     // Company scope check
     if (user?.companyId && !isAdminUser(user) && existing.companyId && existing.companyId !== user.companyId) {
       return NextResponse.json({ error: "Forbidden: Company boundary violation." }, { status: 403 });
+    }
+
+    // SG / FM Scope Isolation Check
+    if (!isAdminUser(user) && !hasPermission(user, "manpower.admin.full_access")) {
+      const userAllowedSG = user?.operationAccess?.allowedSecurityGuarding ?? true;
+      const userAllowedFM = user?.operationAccess?.allowedFacilityManagement ?? true;
+
+      if (existing.operationType === "SECURITY_GUARDING" && !userAllowedSG) {
+        return NextResponse.json(
+          { error: "Forbidden: You do not have access to Security Guarding operational data." },
+          { status: 403 }
+        );
+      }
+      if (existing.operationType === "FACILITY_MANAGEMENT" && !userAllowedFM) {
+        return NextResponse.json(
+          { error: "Forbidden: You do not have access to Facility Management operational data." },
+          { status: 403 }
+        );
+      }
     }
 
     const updated = await prisma.preContractProspectClient.update({

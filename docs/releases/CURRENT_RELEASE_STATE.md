@@ -1,6 +1,6 @@
 \# AHH WFM — Current Release State
 
-Last updated: August 5, 2026
+Last updated: August 8, 2026
 
 Timezone: Asia/Qatar
 
@@ -32,19 +32,21 @@ Current programme:
 
 Current release objective:
 
-1. Establish Commercial Lifecycle Phase CL-1 CRM & Prospective Client Intake (Web route `/commercial/crm`, canonical API `GET/POST/PATCH /api/v1/commercial/crm`).
+1. Finalize Commercial Lifecycle Phase CL-1 CRM & Prospective Client Intake (Web route `/commercial/crm`, canonical API `GET/POST/PATCH /api/v1/commercial/crm`).
 
-2. Establish Phase CL-1 Commercial Deal Opportunities & Pipeline Kanban Console (Web route `/commercial/opportunities`, canonical API `GET/POST/PATCH /api/v1/commercial/opportunities`).
+2. Finalize Phase CL-1 Commercial Deal Opportunities & Pipeline Kanban Console (Web route `/commercial/opportunities`, canonical API `GET/POST/PATCH /api/v1/commercial/opportunities`).
 
-3. Integrate Centralized Workflow Engine (`Settings > Workflow Setup`) via `WorkflowInstance` and `WorkflowActionHistory` audit trails (`POST /api/v1/commercial/opportunities/[id]/workflow`).
+3. Enforce Centralized Workflow Engine Governance (`Settings > Workflow Setup`) via `WorkflowInstance` and `WorkflowActionHistory` audit trails (`POST /api/v1/commercial/opportunities/[id]/workflow`), including missing template rejection (400), approver role eligibility checks, multi-level progression, RETURN to DRAFT, REJECT to CANCELLED, and Segregation of Duties (SoD) enforcement.
 
-4. Complete 10-test matrix in `tests/api/commercial-lifecycle-cl1.spec.ts` (10/10 passed) and pass regression suites (38/38 passed).
+4. Clean up permissions (remove `commercial.commandCenter.view` dependency from CRM and Opportunities APIs) and enforce strict Operation Scope Isolation (`allowedSecurityGuarding` / `allowedFacilityManagement`).
 
-5. Enforce SECFAC pause (no SECFAC code, migrations, or workers modified).
+5. Pass 21-test expanded matrix in `tests/api/commercial-lifecycle-cl1.spec.ts` (21/21 passed).
 
-6. Complete all required verification gates (Prisma validate, tsc Web/Mobile, Jest spec tests, Web/Mobile production builds).
+6. Enforce SECFAC pause (no SECFAC code, migrations, or workers modified).
 
-7. Deploy only after CIO / ChatGPT review and explicit deployment authorization.
+7. Complete all 6 mandatory verification gates (Prisma validate, tsc Web/Mobile, 21-test Jest spec, Web/Mobile production builds).
+
+8. Deploy only after CIO / ChatGPT review and explicit deployment authorization.
 
 CCC-1 Status:
 
@@ -56,7 +58,7 @@ CCC-2 Status:
 
 CL-1 Status:
 
-`VERIFIED LOCALLY & COMMITTED (10/10 TESTS PASSED)`
+`VERIFIED LOCALLY & COMMITTED (21/21 TESTS PASSED)`
 
 Deployment approval state:
 
