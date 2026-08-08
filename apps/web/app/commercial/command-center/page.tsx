@@ -210,6 +210,13 @@ export default function CommercialCommandCenterPage() {
             </Button>
           </Link>
 
+          <Link href="/commercial/command-center/commercial-health">
+            <Button variant="primary" size="sm" className="inline-flex items-center gap-1.5 bg-indigo-700 text-white hover:bg-indigo-800">
+              <span className="material-symbols-outlined text-[16px]">analytics</span>
+              Commercial &amp; SLA Health (CCC-4)
+            </Button>
+          </Link>
+
           <Link href="/commercial/dashboard">
             <Button variant="ghost" size="sm" className="inline-flex items-center gap-1">
               <span className="material-symbols-outlined text-[16px]">arrow_back</span>
