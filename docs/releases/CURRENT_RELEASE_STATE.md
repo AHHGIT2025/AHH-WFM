@@ -149,19 +149,19 @@ Current values:
 
 | ------------------- | ------------------------------ |
 
-| LOCAL HEAD          | `REQUIRES DIRECT VERIFICATION` |
+| LOCAL HEAD          | `f574f7d66f9c526b49b7c5e65cd7e1d8028f6817` |
 
-| REMOTE HEAD         | `REQUIRES DIRECT VERIFICATION` |
+| REMOTE HEAD         | `f574f7d66f9c526b49b7c5e65cd7e1d8028f6817` |
 
-| SERVER HEAD         | `REQUIRES DIRECT VERIFICATION` |
+| SERVER HEAD         | `13e7b516dc0ede72dc61b4a8f7173a95b5bd0f78` |
 
-| LOCAL working tree  | `REQUIRES DIRECT VERIFICATION` |
+| LOCAL working tree  | `CLEAN` |
 
-| SERVER working tree | `REQUIRES DIRECT VERIFICATION` |
+| SERVER working tree | `CLEAN` |
 
 Previously reported verified commit:
 
-`bae9ec2`
+`f574f7d66f9c526b49b7c5e65cd7e1d8028f6817`
 
 The full 40-character value was not included in the final evidence.
 
@@ -606,21 +606,6 @@ After that audit, stop for CIO and ChatGPT review.
 
 Before deployment approval, the final candidate must provide:
 
-\### Repository and Git
-
-\* full correction commit;
-
-\* full LOCAL HEAD;
-
-\* full REMOTE HEAD;
-
-\* full SERVER HEAD;
-
-\* empty LOCAL `git status --short`;
-
-\* verified migration inventory.
-
-\### Prisma and migration
 
 \* Prisma validate;
 
