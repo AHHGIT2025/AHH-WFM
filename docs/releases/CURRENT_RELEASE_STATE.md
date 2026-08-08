@@ -24,7 +24,7 @@ Do not store passwords, API keys, tokens, connection strings, `.env` values or s
 
 Current programme:
 
-* Commercial & Contracts lifecycle foundation (CL-0, PC-2A)
+* Commercial & Contracts lifecycle foundation (CL-0, PC-2A, CL-1 CRM & Deal Opportunities)
 
 * Commercial Command Center Phase CCC-0 Programme, Phase CCC-1 Operational Health, Phase CCC-2 Roster Coverage & Reliever Readiness Console
 
@@ -32,17 +32,19 @@ Current programme:
 
 Current release objective:
 
-1. Establish Commercial Command Center foundation (Web route `/commercial/command-center`, API `GET /api/v1/commercial/command-center/summary`).
+1. Establish Commercial Lifecycle Phase CL-1 CRM & Prospective Client Intake (Web route `/commercial/crm`, canonical API `GET/POST/PATCH /api/v1/commercial/crm`).
 
-2. Establish Phase CCC-2 Roster Coverage & Reliever Readiness Console (Web route `/commercial/command-center/roster-coverage`, canonical API `GET /api/v1/commercial/command-center/roster-coverage`).
+2. Establish Phase CL-1 Commercial Deal Opportunities & Pipeline Kanban Console (Web route `/commercial/opportunities`, canonical API `GET/POST/PATCH /api/v1/commercial/opportunities`).
 
-3. Complete 16-test matrix in `tests/api/commercial-command-center-coverage.spec.ts` (16/16 passed).
+3. Integrate Centralized Workflow Engine (`Settings > Workflow Setup`) via `WorkflowInstance` and `WorkflowActionHistory` audit trails (`POST /api/v1/commercial/opportunities/[id]/workflow`).
 
-4. Enforce SECFAC pause (no SECFAC code, migrations, or workers modified).
+4. Complete 10-test matrix in `tests/api/commercial-lifecycle-cl1.spec.ts` (10/10 passed) and pass regression suites (38/38 passed).
 
-5. Complete all required verification gates (Prisma validate, tsc Web/Mobile, Jest spec tests, Web/Mobile production builds).
+5. Enforce SECFAC pause (no SECFAC code, migrations, or workers modified).
 
-6. Deploy only after CIO / ChatGPT review and explicit deployment authorization.
+6. Complete all required verification gates (Prisma validate, tsc Web/Mobile, Jest spec tests, Web/Mobile production builds).
+
+7. Deploy only after CIO / ChatGPT review and explicit deployment authorization.
 
 CCC-1 Status:
 
@@ -50,7 +52,11 @@ CCC-1 Status:
 
 CCC-2 Status:
 
-`VERIFIED LOCALLY & COMMITTED (16/16 TESTS PASSED)`
+`DEPLOYED AND CLOSED (LOCAL HEAD LINEAGE)`
+
+CL-1 Status:
+
+`VERIFIED LOCALLY & COMMITTED (10/10 TESTS PASSED)`
 
 Deployment approval state:
 
