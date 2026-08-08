@@ -101,6 +101,7 @@ export const LayoutShell: React.FC<{ children: React.ReactNode }> = ({ children 
     currentNavItems = [
       { label: "← Back to Main Menu", path: "/", icon: "arrow_back" },
       { label: "Commercial Dashboard", path: "/commercial/dashboard", icon: "dashboard" },
+      { label: "Commercial Command Center", path: "/commercial/command-center", icon: "hub" },
       { label: "CRM & Enquiries", path: "/commercial/crm", icon: "chat" },
       { label: "Opportunities", path: "/commercial/opportunities", icon: "lightbulb" },
       { label: "Site Surveys", path: "/commercial/surveys", icon: "explore" },

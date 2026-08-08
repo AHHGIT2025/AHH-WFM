@@ -40,7 +40,8 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "precontract.prospectiveSite.view", "precontract.prospectiveSite.manage", "precontract.surveyConfig.view", "precontract.surveyConfig.manage",
     "precontract.siteConditionConfig.view", "precontract.siteConditionConfig.manage", "precontract.costConfig.view", "precontract.costConfig.manage",
     "precontract.formulaRuleConfig.view", "precontract.formulaRuleConfig.manage", "precontract.config.activate", "precontract.config.retire",
-    "precontract.workflow.submit", "precontract.workflow.review", "precontract.workflow.approve"
+    "precontract.workflow.submit", "precontract.workflow.review", "precontract.workflow.approve",
+    "commercial.commandCenter.view", "commercial.commandCenter.crossCompany", "commercial.commandCenter.contractHealth", "commercial.commandCenter.exceptions"
   ],
   ADMIN: [
     "dashboard.view", "employees.view", "employees.create", "employees.edit", "employees.bulkUpload", "employees.manage",
@@ -83,7 +84,8 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "precontract.prospectiveSite.view", "precontract.prospectiveSite.manage", "precontract.surveyConfig.view", "precontract.surveyConfig.manage",
     "precontract.siteConditionConfig.view", "precontract.siteConditionConfig.manage", "precontract.costConfig.view", "precontract.costConfig.manage",
     "precontract.formulaRuleConfig.view", "precontract.formulaRuleConfig.manage", "precontract.config.activate", "precontract.config.retire",
-    "precontract.workflow.submit", "precontract.workflow.review", "precontract.workflow.approve"
+    "precontract.workflow.submit", "precontract.workflow.review", "precontract.workflow.approve",
+    "commercial.commandCenter.view", "commercial.commandCenter.crossCompany", "commercial.commandCenter.contractHealth", "commercial.commandCenter.exceptions"
   ],
   SYSTEM_ADMIN: [
     "settings.view", "settings.manage", "users.view", "users.manage", "roles.view", "roles.manage",

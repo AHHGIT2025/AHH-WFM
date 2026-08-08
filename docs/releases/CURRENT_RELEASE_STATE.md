@@ -18,37 +18,33 @@ When this file conflicts with an older conversation, walkthrough or report, use 
 
 Do not store passwords, API keys, tokens, connection strings, `.env` values or sensitive employee/client data in this file.
 
-\---
+---
 
-\## 1. Release identity
+## 1. Release identity
 
 Current programme:
 
-\* Commercial \& Contracts lifecycle foundation
+* Commercial & Contracts lifecycle foundation (CL-0, PC-2A)
 
-\* PC-2A Commercial Cost Master administration
+* Commercial Command Center Phase CCC-0 Programme & Phase CCC-1 Operational Health
 
-\* CL-0 Commercial \& Contracts navigation and visual foundation
-
-\* SECFAC Phase 6A.2 schema reconciliation required by the current application code
+* SECFAC Phase 6A.2 schema reconciliation (SECFAC Status: PAUSED BY CIO)
 
 Current release objective:
 
-1\. Establish one valid Prisma migration chain.
+1. Establish Commercial Command Center foundation (Web route `/commercial/command-center`, API `GET /api/v1/commercial/command-center/summary`).
 
-2\. Preserve existing approved Commercial, SECFAC and manpower functionality.
+2. Preserve existing approved Commercial, manpower, and attendance functionality.
 
-3\. reconcile the actual SERVER database history safely.
+3. Enforce SECFAC pause (no SECFAC code, migrations, or workers modified).
 
-4\. achieve a normal fresh-database migration deployment.
+4. Complete all required verification gates (Prisma validate, tsc Web/Mobile, Jest spec tests, Web/Mobile production builds).
 
-5\. complete all required verification gates.
+5. Deploy only after CIO / ChatGPT review and explicit deployment authorization.
 
-6\. deploy only after ChatGPT reviews the final AG walkthrough and explicitly approves deployment.
+CCC-1 Status:
 
-CL-1 is not approved.
-
-Do not begin CRM, Opportunities or another Commercial phase until the current migration and release work is completed and approved.
+`VERIFIED LOCALLY & COMMITTED`
 
 Deployment approval state:
 
