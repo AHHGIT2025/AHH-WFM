@@ -34,17 +34,19 @@ Current release objective:
 
 1. Establish Commercial Command Center foundation (Web route `/commercial/command-center`, API `GET /api/v1/commercial/command-center/summary`).
 
-2. Preserve existing approved Commercial, manpower, and attendance functionality.
+2. Enforce authoritative deterministic operational health calculation (CRITICAL <80% / ATTENTION <95% / HEALTHY 100%).
 
-3. Enforce SECFAC pause (no SECFAC code, migrations, or workers modified).
+3. Complete 22-test matrix in `tests/api/commercial-command-center.spec.ts` (22/22 passed).
 
-4. Complete all required verification gates (Prisma validate, tsc Web/Mobile, Jest spec tests, Web/Mobile production builds).
+4. Enforce SECFAC pause (no SECFAC code, migrations, or workers modified).
 
-5. Deploy only after CIO / ChatGPT review and explicit deployment authorization.
+5. Complete all required verification gates (Prisma validate, tsc Web/Mobile, Jest spec tests, Web/Mobile production builds).
+
+6. Deploy only after CIO / ChatGPT review and explicit deployment authorization.
 
 CCC-1 Status:
 
-`VERIFIED LOCALLY & COMMITTED`
+`VERIFIED LOCALLY & COMMITTED (22/22 TESTS PASSED)`
 
 Deployment approval state:
 

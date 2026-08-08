@@ -31,6 +31,15 @@ export async function GET(request: Request) {
   // Parse filters
   const dateParam = searchParams.get("businessDate");
   const businessDateStr = dateParam ? dateParam.trim() : getQatarDateString(new Date());
+
+  // Validate businessDate format (YYYY-MM-DD)
+  if (dateParam && !/^\d{4}-\d{2}-\d{2}$/.test(dateParam.trim())) {
+    return NextResponse.json(
+      { error: "Invalid businessDate filter format. Expected format: YYYY-MM-DD." },
+      { status: 400 }
+    );
+  }
+
   const targetDate = getQatarDate(businessDateStr);
 
   let companyId = searchParams.get("companyId") || undefined;
@@ -38,6 +47,17 @@ export async function GET(request: Request) {
   const clientId = searchParams.get("clientId") || undefined;
   const contractId = searchParams.get("contractId") || undefined;
   const siteId = searchParams.get("siteId") || undefined;
+
+  // Validate operationType enum if provided
+  if (
+    operationType &&
+    !["ALL", "SECURITY_GUARDING", "FACILITY_MANAGEMENT", "WHITE_COLLAR"].includes(operationType)
+  ) {
+    return NextResponse.json(
+      { error: "Invalid operationType filter. Expected SECURITY_GUARDING, FACILITY_MANAGEMENT, or WHITE_COLLAR." },
+      { status: 400 }
+    );
+  }
 
   // Company isolation
   if (user?.companyId && !isAdminUser(user) && !hasPermission(user, "commercial.commandCenter.crossCompany")) {
@@ -62,7 +82,7 @@ export async function GET(request: Request) {
       );
     }
 
-    if (!operationType) {
+    if (!operationType || operationType === "ALL") {
       if (userAllowedSG && !userAllowedFM) {
         operationType = "SECURITY_GUARDING";
       } else if (!userAllowedSG && userAllowedFM) {
@@ -77,7 +97,7 @@ export async function GET(request: Request) {
       businessDate: targetDate
     };
     if (companyId) slotWhere.companyId = companyId;
-    if (operationType) slotWhere.operationType = operationType;
+    if (operationType && operationType !== "ALL") slotWhere.operationType = operationType;
     if (contractId) slotWhere.contractId = contractId;
     if (siteId) slotWhere.siteId = siteId;
 
@@ -127,7 +147,7 @@ export async function GET(request: Request) {
     // 2. Attendance & Duty Queries
     const empWhere: any = {};
     if (companyId) empWhere.companyId = companyId;
-    if (operationType) empWhere.operationType = operationType;
+    if (operationType && operationType !== "ALL") empWhere.operationType = operationType;
 
     const attendanceRecords = await prisma.attendanceRecord.findMany({
       where: {
@@ -176,7 +196,7 @@ export async function GET(request: Request) {
       where: {
         contract: {
           status: "ACTIVE",
-          ...(operationType ? { operationType } : {})
+          ...(operationType && operationType !== "ALL" ? { operationType } : {})
         }
       }
     });
@@ -194,7 +214,7 @@ export async function GET(request: Request) {
         dutyStatus: "OFF_DUTY",
         OR: [{ isRelieverEligible: true }, { isStandbyEligible: true }],
         ...(companyId ? { companyId } : {}),
-        ...(operationType ? { operationType } : {})
+        ...(operationType && operationType !== "ALL" ? { operationType } : {})
       }
     });
 
@@ -208,7 +228,7 @@ export async function GET(request: Request) {
     const excWhere: any = {
       status: { in: ["OPEN", "COVERAGE_REQUIRED"] }
     };
-    if (operationType) excWhere.operationType = operationType;
+    if (operationType && operationType !== "ALL") excWhere.operationType = operationType;
     if (contractId) excWhere.contractId = contractId;
     if (siteId) excWhere.siteId = siteId;
 
@@ -229,7 +249,7 @@ export async function GET(request: Request) {
     const contractWhere: any = {
       status: "ACTIVE"
     };
-    if (operationType) contractWhere.operationType = operationType;
+    if (operationType && operationType !== "ALL") contractWhere.operationType = operationType;
     if (clientId) contractWhere.clientId = clientId;
     if (contractId) contractWhere.id = contractId;
 
@@ -245,7 +265,7 @@ export async function GET(request: Request) {
         contractsBelowRequirementCount += 1;
       }
       const contractCoverage = data.required > 0 ? (data.assigned / data.required) * 100 : 100;
-      if (contractCoverage < 90) {
+      if (contractCoverage < 90 || data.assigned < data.required) {
         potentialSlaRiskCount += 1;
       }
     }
@@ -260,12 +280,48 @@ export async function GET(request: Request) {
       }
     });
 
-    // 6. Deterministic Operational Health Calculation
+    // 6. Authoritative Deterministic Operational Health Calculation
     const healthReasons: string[] = [];
 
-    if (coveragePercentage < 80) {
+    // Critical conditions
+    const isCritical =
+      (requiredManpower > 0 && coveragePercentage < 80) ||
+      uncoveredSlots >= 5 ||
+      (uncoveredRelieverDemand > 0 && availableStandbyCount === 0) ||
+      rosterPlanningExceptions >= 5 ||
+      potentialSlaRiskCount >= 3;
+
+    // Attention conditions
+    const isAttention =
+      !isCritical &&
+      ((requiredManpower > 0 && coveragePercentage < 95) ||
+        uncoveredSlots > 0 ||
+        lateToday > 3 ||
+        missingPunch > 0 ||
+        unresolvedCorrections > 0 ||
+        unexcusedReconciliations > 0 ||
+        contractsBelowRequirementCount > 0 ||
+        potentialSlaRiskCount > 0 ||
+        uncoveredRelieverDemand > 0);
+
+    let overallStatus: "HEALTHY" | "ATTENTION" | "CRITICAL" = "HEALTHY";
+    let healthScore = 100;
+
+    if (isCritical) {
+      overallStatus = "CRITICAL";
+      healthScore = requiredManpower > 0 ? Math.max(40, Math.min(69, Math.round(coveragePercentage * 0.65))) : 50;
+    } else if (isAttention) {
+      overallStatus = "ATTENTION";
+      healthScore = requiredManpower > 0 ? Math.max(70, Math.min(89, Math.round(coveragePercentage * 0.85))) : 80;
+    } else {
+      overallStatus = "HEALTHY";
+      healthScore = 100;
+    }
+
+    // Reason List Generation
+    if (requiredManpower > 0 && coveragePercentage < 80) {
       healthReasons.push(`Manpower coverage is critically low at ${coveragePercentage}% (target: 100%).`);
-    } else if (coveragePercentage < 95) {
+    } else if (requiredManpower > 0 && coveragePercentage < 95) {
       healthReasons.push(`Manpower coverage requires attention at ${coveragePercentage}%.`);
     }
 
@@ -273,8 +329,12 @@ export async function GET(request: Request) {
       healthReasons.push(`${uncoveredSlots} roster requirement slot(s) remain unfilled for ${businessDateStr}.`);
     }
 
-    if (uncoveredRelieverDemand > 0 && availableStandbyCount < uncoveredRelieverDemand) {
-      healthReasons.push(`Reliever deficit: ${uncoveredRelieverDemand} reliever(s) needed but only ${availableStandbyCount} standby employee(s) available.`);
+    if (uncoveredRelieverDemand > 0) {
+      if (availableStandbyCount === 0) {
+        healthReasons.push(`Critical reliever deficit: ${uncoveredRelieverDemand} reliever(s) needed but 0 standby employees are available.`);
+      } else {
+        healthReasons.push(`Reliever deficit: ${uncoveredRelieverDemand} reliever(s) needed with ${availableStandbyCount} standby employee(s) available.`);
+      }
     }
 
     if (rosterPlanningExceptions > 0) {
@@ -289,30 +349,16 @@ export async function GET(request: Request) {
       healthReasons.push(`${contractsBelowRequirementCount} active contract(s) currently operate below required manpower allocation.`);
     }
 
-    let overallStatus: "HEALTHY" | "ATTENTION" | "CRITICAL" = "HEALTHY";
-    if (
-      coveragePercentage < 80 ||
-      uncoveredSlots >= 5 ||
-      (uncoveredRelieverDemand > 0 && availableStandbyCount === 0) ||
-      rosterPlanningExceptions >= 5
-    ) {
-      overallStatus = "CRITICAL";
-    } else if (
-      coveragePercentage < 95 ||
-      uncoveredSlots > 0 ||
-      lateToday > 3 ||
-      unresolvedCorrections > 0 ||
-      unexcusedReconciliations > 0 ||
-      contractsBelowRequirementCount > 0
-    ) {
-      overallStatus = "ATTENTION";
+    if (potentialSlaRiskCount > 0 && contractsBelowRequirementCount === 0) {
+      healthReasons.push(`${potentialSlaRiskCount} contract(s) operating near SLA risk threshold.`);
     }
 
-    let healthScore = 100;
-    if (overallStatus === "CRITICAL") {
-      healthScore = Math.max(40, Math.round(coveragePercentage * 0.7));
-    } else if (overallStatus === "ATTENTION") {
-      healthScore = Math.max(70, Math.round(coveragePercentage * 0.9));
+    if (lateToday > 3) {
+      healthReasons.push(`Excessive late check-ins today (${lateToday} employees).`);
+    }
+
+    if (unresolvedCorrections > 0) {
+      healthReasons.push(`${unresolvedCorrections} attendance correction request(s) awaiting supervisor review.`);
     }
 
     // 7. Structured Response
