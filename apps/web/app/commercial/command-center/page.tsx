@@ -203,6 +203,13 @@ export default function CommercialCommandCenterPage() {
             </Button>
           </Link>
 
+          <Link href="/commercial/command-center/escalations">
+            <Button variant="primary" size="sm" className="inline-flex items-center gap-1.5 bg-error text-white hover:bg-[#b91c1c]">
+              <span className="material-symbols-outlined text-[16px]">warning</span>
+              Operational Escalations (CCC-3)
+            </Button>
+          </Link>
+
           <Link href="/commercial/dashboard">
             <Button variant="ghost" size="sm" className="inline-flex items-center gap-1">
               <span className="material-symbols-outlined text-[16px]">arrow_back</span>
