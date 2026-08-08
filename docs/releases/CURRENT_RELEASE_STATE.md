@@ -146,7 +146,7 @@ Branch:
 
 Current release baseline:
 
-`ef328b23c21a415ff6ee1ee67b09bf94f997cb39`
+`724a344d5cff9d443e2e5cdbcae6a0d6edae64d1`
 
 Required direct verification:
 
@@ -162,8 +162,8 @@ Current values:
 
 | Item                | Value                          |
 | ------------------- | ------------------------------ |
-| LOCAL HEAD          | `ef328b23c21a415ff6ee1ee67b09bf94f997cb39` (CCC-4 SLA proof commit) |
-| REMOTE HEAD         | `ef328b23c21a415ff6ee1ee67b09bf94f997cb39` |
+| LOCAL HEAD          | `724a344d5cff9d443e2e5cdbcae6a0d6edae64d1` (CCC-4 SLA caller override removal commit) |
+| REMOTE HEAD         | `724a344d5cff9d443e2e5cdbcae6a0d6edae64d1` |
 | SERVER HEAD         | `13e7b516dc0ede72dc61b4a8f7173a95b5bd0f78` |
 | LOCAL working tree  | `CLEAN` |
 | SERVER working tree | `CLEAN` |
