@@ -155,9 +155,9 @@ Current values:
 
 | ------------------- | ------------------------------ |
 
-| LOCAL HEAD          | `f574f7d66f9c526b49b7c5e65cd7e1d8028f6817` |
+| LOCAL HEAD          | `2f8311b6bb3814b4d0676c391f9ff41c307fd3d6` |
 
-| REMOTE HEAD         | `f574f7d66f9c526b49b7c5e65cd7e1d8028f6817` |
+| REMOTE HEAD         | `2f8311b6bb3814b4d0676c391f9ff41c307fd3d6` |
 
 | SERVER HEAD         | `13e7b516dc0ede72dc61b4a8f7173a95b5bd0f78` |
 
@@ -167,7 +167,7 @@ Current values:
 
 Previously reported verified commit:
 
-`f574f7d66f9c526b49b7c5e65cd7e1d8028f6817`
+`2f8311b6bb3814b4d0676c391f9ff41c307fd3d6`
 
 The full 40-character value was not included in the final evidence.
 
