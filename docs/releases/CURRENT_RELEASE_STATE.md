@@ -36,19 +36,23 @@ Current programme:
 
 Current release objective:
 
-1. Implement Commercial Lifecycle Phase CL-3 — Pre-Contract Costing & Estimation.
+CL-3 Pre-Contract Costing & Estimation — FULLY VERIFIED AND CLOSED.
 
-2. Added 4 transactional models (`PreContractCostEstimate`, `PreContractCostEstimateVersion`, `PreContractCostEstimateItem`, `PreContractCostOverrideLog`) and relation linkages to `PreContractCase` and `PreContractSurvey` in Prisma schema, with migration `20260809130000_add_cl3_precontract_costing`.
+Summary of CL-3 deliverables:
 
-3. Registered `precontract.costing.view`, `precontract.costing.manage`, `precontract.costing.override`, `precontract.costing.crossCompany` permissions under `SUPER_ADMIN` and `ADMIN` roles in `apps/web/lib/permissions.ts`.
+1. Added 4 transactional models (`PreContractCostEstimate`, `PreContractCostEstimateVersion`, `PreContractCostEstimateItem`, `PreContractCostOverrideLog`) and relation linkages to `PreContractCase` and `PreContractSurvey` in Prisma schema, with migration `20260809130000_add_cl3_precontract_costing`.
 
-4. Built domain calculation engine (`apps/web/lib/precontract-costing.ts`) using Prisma `Decimal` arithmetic for exact Gross Margin %, Target Margin Selling Price, Markup %, Target Markup Selling Price, line items breakdown, and SHA-256 snapshot generation.
+2. Registered `precontract.costing.view`, `precontract.costing.manage`, `precontract.costing.override`, `precontract.costing.crossCompany`, `precontract.workflow.submit`, `precontract.workflow.approve`, `precontract.workflow.review` permissions under `SUPER_ADMIN` and `ADMIN` roles.
 
-5. Built REST APIs under `/api/v1/commercial/costing/` (`GET` list, `POST` draft creation, `GET` detail, `PATCH` line overrides/recalculation, `POST` workflow actions `SUBMIT`/`APPROVE`/`REJECT`/`RETURN`).
+3. Built domain calculation engine (`apps/web/lib/precontract-costing.ts`) using Prisma `Decimal` arithmetic for Gross Margin %, Target Margin Selling Price, Markup %, Target Markup Selling Price, line items breakdown, and SHA-256 snapshot generation.
+
+4. Built REST APIs under `/api/v1/commercial/costing/` (`GET` list, `POST` draft creation with lifecycle guard, `GET` detail, `PATCH` line overrides/recalculation, `POST` workflow actions `SUBMIT`/`APPROVE`/`REJECT`/`RETURN`).
+
+5. Added CANCELLED/SUPERSEDED case-state lifecycle guard to `POST /api/v1/commercial/costing`: only `DRAFT`, `IN_WORKFLOW`, `COMPLETED` cases are eligible for new costing estimates.
 
 6. Built Web UI Register & Interactive Calculator Editor at `/commercial/costing` in `apps/web/app/commercial/costing/page.tsx`.
 
-7. Passed all 6 mandatory verification gates (Prisma validate, Web tsc, Mobile tsc, Jest test suite 6/6 passed, Web build, Mobile build).
+7. Passed all verification gates: Prisma validate, Web tsc (exit 0), full 30-test CL-3 suite (30/30 pass), full regression suite (1161/1170 pass, 9 skipped unchanged, exit 0).
 
 8. SECFAC remains PAUSED BY CIO.
 
@@ -60,7 +64,7 @@ CCC-6 Status:
 
 CL-3 Status:
 
-`VERIFIED LOCALLY (ALL 6 GATES PASSED, 20/20 JEST TESTS PASSED, COMMITTED & PUSHED TO REMOTE)`
+`FULLY VERIFIED — 30/30 JEST TESTS PASS — FULL REGRESSION 1161/1170 PASS (9 SKIPPED UNCHANGED) — COMMITTED c5e1052 AND PUSHED TO REMOTE`
 
 Deployment approval state:
 
@@ -130,9 +134,9 @@ Branch:
 
 `manpower-operations-scope`
 
-Current release baseline:
+Current release baseline (CL-3 final):
 
-`724a344d5cff9d443e2e5cdbcae6a0d6edae64d1`
+`c5e1052bdd62974cf7d01899c6c1a8358803ef5a`
 
 Required direct verification:
 
@@ -144,12 +148,12 @@ Required direct verification:
 
 * confirmation of whether SERVER is still on the stable baseline or another commit.
 
-Current values:
+Current values (as of 2026-08-09):
 
 | Item                | Value                          |
 | ------------------- | ------------------------------ |
-| LOCAL HEAD          | `724a344d5cff9d443e2e5cdbcae6a0d6edae64d1` (CCC-4 SLA caller override removal commit) |
-| REMOTE HEAD         | `724a344d5cff9d443e2e5cdbcae6a0d6edae64d1` |
+| LOCAL HEAD          | `c5e1052bdd62974cf7d01899c6c1a8358803ef5a` (CL-3 case-state guard + test hardening) |
+| REMOTE HEAD         | `c5e1052bdd62974cf7d01899c6c1a8358803ef5a` |
 | SERVER HEAD         | `13e7b516dc0ede72dc61b4a8f7173a95b5bd0f78` |
 | LOCAL working tree  | `CLEAN` |
 | SERVER working tree | `CLEAN` |
@@ -158,68 +162,84 @@ Current values:
 
 ## 5. Functional LOCAL status
 
-The following CCC-4 functionality is visible and working in the LOCAL Web application:
+The following CL-3 functionality is visible and working in the LOCAL Web application:
 
-* Commercial & SLA Health Console (`/commercial/command-center/commercial-health`);
+* Pre-Contract Costing Register (`/commercial/costing`);
 
-* Commercial Command Center integration ("Commercial & SLA Health" nav header link & metric card action at `/commercial/command-center`);
+* Draft costing estimate creation from completed site surveys;
 
-* Portfolio Metric Scorecards (Active Contracts, Healthy, Attention, Critical, Average Coverage %, SLA Risk Count, Expiring Soon);
+* Line item breakdown with Gross Margin %, Target Margin Selling Price, Markup %, Target Markup Selling Price calculations;
 
-* Multi-Contract Health Register table supporting filtering by business date, operation scope (SG vs. FM), company, client, contract, site, health status, SLA risk, and expiry status;
+* Line item override with audit trail (`PreContractCostOverrideLog`);
 
-* 5-Tab Contract Detail Drawer (Health & SLA Summary, Effective Requirement Breakdown, Roster & Reliever Coverage, Attendance & Reconciliation Exposure, Billing Support & Audit Drill-Downs);
+* Version revisioning (clone to new version with reason);
 
-* Corrective Drill-Down Navigation Links (`Contract Master`, `Roster Coverage`, `Escalation Queue`, `Reconciliation Console`).
+* Centralized workflow (SUBMIT → IN_WORKFLOW, APPROVE → APPROVED + SHA-256 snapshot, RETURN → DRAFT, REJECT → REJECTED);
+
+* Multi-level workflow (configurable via Settings > Workflow Setup);
+
+* Company boundary enforcement and operation scope isolation (SG vs FM);
+
+* CANCELLED/SUPERSEDED case lifecycle guard (HTTP 400).
 
 ---
 
 ## 6. Accepted verification baseline
 
-### CCC-4 API baseline
-
-The accepted CCC-4 API test matrix is:
+### CL-3 focused suite baseline
 
 ```text
 Test Suites: 1 passed, 1 total
-Tests:       17 passed, 17 total
+Tests:       30 passed, 30 total
 Snapshots:   0 total
-Time:        12.171 s
+Time:        ~17 s
 Exit code:   0
 ```
 
-### Full Command Center Suite baseline
+### Full API regression baseline (as of CL-3 commit c5e1052)
 
 ```text
-Test Suites: 4 passed, 4 total
-Tests:       103 passed, 103 total
+Test Suites: 1 skipped, 59 passed, 59 of 60 total
+Tests:       9 skipped, 1161 passed, 1170 total
 Snapshots:   0 total
-Time:        17.646 s
+Time:        ~249 s
 Exit code:   0
 ```
 
-### Mandatory CCC-4 verification gates
+The skipped suite count (1) and skipped test count (9) must not increase without CIO approval.
 
-1. Prisma schema validation (`npx prisma validate`): `PASS (0 errors)`
-2. Web TypeScript check (`npx tsc --noEmit --project apps/web/tsconfig.json`): `PASS (0 errors)`
-3. Mobile TypeScript check (`npx tsc --noEmit --project apps/mobile/tsconfig.json`): `PASS (0 errors)`
-4. CCC-4 Jest test matrix (`npx jest --config=tests/jest.api.config.js tests/api/commercial-command-center-ccc4.spec.ts`): `PASS (17/17 tests passed)`
-5. Full Command Center test matrix (`npx jest --config=tests/jest.api.config.js tests/api/commercial-command-center*.spec.ts`): `PASS (103/103 tests passed)`
-6. Web production build (`npm run build:web`): `PASS (Exit code 0)`
-7. Mobile production build (`npm run build:mobile`): `PASS (Exit code 0)`
-8. Local dev server HTTP verification (`http://localhost:3100/commercial/command-center/commercial-health`): `PASS (HTTP Status 200)`
+### CL-3 mandatory verification gates (all passed)
+
+1. Prisma schema validation (`npx prisma validate --schema packages/database/prisma/schema.prisma`): `PASS (exit 0)`
+2. Web TypeScript check (`npx tsc --noEmit --project apps/web/tsconfig.json`): `PASS (exit 0)`
+3. CL-3 Jest focused suite (`npx jest --config=tests/jest.api.config.js tests/api/cl3-precontract-costing.spec.ts --runInBand --forceExit`): `PASS (30/30, exit 0)`
+4. Full API regression (`npx jest --config=tests/jest.api.config.js --runInBand --forceExit`): `PASS (1161/1170, 9 skipped, exit 0)`
+5. Local dev server (`http://localhost:3100`) responding: `CONFIRMED`
 
 ---
 
-## 7. Current blocking issues
+## 7. Authoritative migration inventory
+
+| Migration name | Status | Notes |
+|---|---|---|
+| `20260809130000_add_cl3_precontract_costing` | Applied (LOCAL) | Adds 4 CL-3 tables + relations to Case/Survey |
+| (All prior migrations) | Applied (LOCAL & SERVER) | Unchanged |
+
+Server migration status for `20260809130000_add_cl3_precontract_costing`: **NOT YET APPLIED** (deployment blocked).
+
+---
+
+## 8. Current blocking issues
 
 SERVER deployment remains blocked by the following:
 
 1. Deployment requires explicit CIO authorization to move from `BLOCKED` to `DEPLOYMENT APPROVED`.
 
+2. `20260809130000_add_cl3_precontract_costing` migration has not been applied on SERVER.
+
 ---
 
-## 8. Deployment approval state
+## 9. Deployment approval state
 
 Current state:
 
