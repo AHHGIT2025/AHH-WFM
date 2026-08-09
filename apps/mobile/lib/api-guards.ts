@@ -28,12 +28,18 @@ const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
   ]
 };
 
+export function isAdminUser(user: { role?: string } | null | undefined): boolean {
+  if (!user || !user.role) return false;
+  const role = user.role.toUpperCase().replace(/\s+/g, "_");
+  return role === "ADMIN" || role === "SUPER_ADMIN";
+}
+
 export function hasPermission(user: { role?: string; permissions?: string[] } | null | undefined, permissionKey: string): boolean {
   if (!user) return false;
-  const roleUpper = user.role?.toUpperCase().replace(/\s+/g, "_") || "";
-  if (roleUpper === "SUPER_ADMIN") {
+  if (isAdminUser(user)) {
     return true;
   }
+  const roleUpper = user.role?.toUpperCase().replace(/\s+/g, "_") || "";
   if (user.permissions && Array.isArray(user.permissions)) {
     if (user.permissions.includes("manpower.admin.full_access")) return true;
     return user.permissions.includes(permissionKey);

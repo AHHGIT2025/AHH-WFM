@@ -1,8 +1,10 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
+import { hasClientPermission } from "../../lib/client-permissions";
 
 export default function SupervisorDashboard() {
   const router = useRouter();
@@ -75,6 +77,25 @@ export default function SupervisorDashboard() {
         <h2 className="text-xl font-bold text-primary">Team Status</h2>
         <p className="text-[11px] text-on-surface-variant">Live overview of your assigned personnel</p>
       </div>
+
+      {/* Command Center Shortcut for Authorized Supervisors */}
+      {hasClientPermission(session?.user as any, "commercial.commandCenter.view") && (
+        <Link
+          href="/command-center"
+          className="bg-slate-900 text-white p-4 rounded-2xl flex items-center justify-between shadow-md active:scale-95 transition-transform border border-slate-800"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
+              <span className="material-symbols-outlined text-primary text-[20px]">space_dashboard</span>
+            </div>
+            <div>
+              <p className="text-sm font-bold text-white">Mobile Command Suite</p>
+              <p className="text-[10px] text-slate-400">Executive operations & escalation queue</p>
+            </div>
+          </div>
+          <span className="material-symbols-outlined text-slate-400">chevron_right</span>
+        </Link>
+      )}
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 gap-3">

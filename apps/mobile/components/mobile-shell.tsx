@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import { ProfileProvider, useProfile } from "../context/ProfileContext";
+import { hasClientPermission } from "../lib/client-permissions";
 
 export interface MobileNavItem {
   label: string;
@@ -65,6 +66,19 @@ const MobileShellInner: React.FC<{ children: React.ReactNode }> = ({ children })
               </div>
             </div>
             <div className="flex items-center gap-1">
+              {hasClientPermission(session?.user as any, "commercial.commandCenter.view") && (
+                <Link
+                  href="/command-center"
+                  className={`p-2 rounded-full transition-colors relative flex items-center justify-center ${
+                    pathname.startsWith("/command-center")
+                      ? "bg-slate-900 text-primary font-bold shadow-sm"
+                      : "hover:bg-surface-container-high text-primary"
+                  }`}
+                  title="Mobile Command Suite"
+                >
+                  <span className="material-symbols-outlined text-[20px]">space_dashboard</span>
+                </Link>
+              )}
               <button className="p-2 rounded-full hover:bg-surface-container-high text-primary transition-colors relative">
                 <span className="material-symbols-outlined text-[20px]">notifications</span>
                 <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-status-error rounded-full"></span>

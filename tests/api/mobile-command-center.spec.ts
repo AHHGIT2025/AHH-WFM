@@ -117,9 +117,11 @@ describe("CCC-6 Mobile Command Suite BFF & Authorization Tests", () => {
     expect(hasPermission({ role: "EMPLOYEE", permissions: ["commercial.commandCenter.view"] }, "commercial.commandCenter.view")).toBe(true);
     expect(hasClientPermission({ role: "EMPLOYEE", permissions: ["commercial.commandCenter.view"] }, "commercial.commandCenter.view")).toBe(true);
 
-    // Centralized SUPER_ADMIN bypass
+    // Centralized SUPER_ADMIN and ADMIN bypass
     expect(hasPermission({ role: "SUPER_ADMIN" }, "commercial.commandCenter.view")).toBe(true);
     expect(hasClientPermission({ role: "SUPER_ADMIN" }, "commercial.commandCenter.view")).toBe(true);
+    expect(hasPermission({ role: "ADMIN" }, "commercial.commandCenter.view")).toBe(true);
+    expect(hasClientPermission({ role: "ADMIN" }, "commercial.commandCenter.view")).toBe(true);
 
     // Centralized manpower.admin.full_access bypass
     expect(hasPermission({ role: "MANAGER", permissions: ["manpower.admin.full_access"] }, "commercial.commandCenter.view")).toBe(true);
