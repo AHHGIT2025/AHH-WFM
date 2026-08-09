@@ -59,7 +59,9 @@ describe("CCC-5 Wallboard API Endpoint Tests", () => {
         totalOpen: 4,
         criticalCount: 1,
         highCount: 2,
-        overdueCount: 1
+        overdueCount: 1,
+        unassignedCount: 2,
+        resolvedTodayCount: 0
       },
       escalations: [
         {
@@ -121,54 +123,19 @@ describe("CCC-5 Wallboard API Endpoint Tests", () => {
     });
   });
 
-  test("1. Returns 200 OK with unified Wallboard structure for authorized user", async () => {
+  test("1. Returns 401 Unauthorized for unauthenticated request", async () => {
+    const { NextResponse } = require("next/server");
     (checkApiAuth as jest.Mock).mockResolvedValue({
-      session: {
-        user: {
-          id: "u-1",
-          role: "SUPER_ADMIN",
-          permissions: ["commercial.commandCenter.view"]
-        }
-      }
+      error: NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     });
 
     const req = new Request("http://localhost:3100/api/v1/commercial/command-center/wallboard");
     const res = await GET(req);
 
-    expect(res.status).toBe(200);
-    const json = await res.json();
-
-    expect(json.context.businessDate).toBe("2026-08-09");
-    expect(json.primaryKpis.overallHealthScore).toBe(80);
-    expect(json.primaryKpis.overallCoveragePercentage).toBe(94);
-    expect(json.primaryKpis.totalOpenEscalations).toBe(4);
-    expect(json.primaryKpis.relieverReadinessStatus).toBe("ATTENTION");
-
-    expect(json.attendancePulse.presentToday).toBe(45);
-    expect(json.rosterCoverage.assignedSlotsCount).toBe(47);
-    expect(json.escalationSummary.metrics.criticalCount).toBe(1);
-    expect(json.commercialPortfolio.portfolioMetrics.totalActiveContracts).toBe(10);
+    expect(res.status).toBe(401);
   });
 
-  test("2. Sets Cache-Control header to private, no-store, no-cache", async () => {
-    (checkApiAuth as jest.Mock).mockResolvedValue({
-      session: {
-        user: {
-          id: "u-1",
-          role: "SUPER_ADMIN",
-          permissions: ["commercial.commandCenter.view"]
-        }
-      }
-    });
-
-    const req = new Request("http://localhost:3100/api/v1/commercial/command-center/wallboard");
-    const res = await GET(req);
-
-    expect(res.status).toBe(200);
-    expect(res.headers.get("Cache-Control")).toContain("no-store");
-  });
-
-  test("3. Returns 403 Forbidden for unauthorized user lacking permissions", async () => {
+  test("2. Returns 403 Forbidden for unauthorized user lacking permissions", async () => {
     (checkApiAuth as jest.Mock).mockResolvedValue({
       session: {
         user: {
@@ -187,7 +154,56 @@ describe("CCC-5 Wallboard API Endpoint Tests", () => {
     expect(json.error).toContain("Forbidden");
   });
 
-  test("4. Enforces company boundary from user session for non-superadmin", async () => {
+  test("3. Returns 200 OK with unified Wallboard structure & domain parity for authorized user", async () => {
+    (checkApiAuth as jest.Mock).mockResolvedValue({
+      session: {
+        user: {
+          id: "u-1",
+          role: "SUPER_ADMIN",
+          permissions: ["commercial.commandCenter.view"]
+        }
+      }
+    });
+
+    const req = new Request("http://localhost:3100/api/v1/commercial/command-center/wallboard?businessDate=2026-08-09");
+    const res = await GET(req);
+
+    expect(res.status).toBe(200);
+    const json = await res.json();
+
+    expect(json.context.businessDate).toBe("2026-08-09");
+    expect(json.primaryKpis.overallHealthScore).toBe(80);
+    expect(json.primaryKpis.overallCoveragePercentage).toBe(94);
+    expect(json.primaryKpis.totalOpenEscalations).toBe(4);
+    expect(json.primaryKpis.relieverReadinessStatus).toBe("ATTENTION");
+
+    expect(json.attendancePulse.presentToday).toBe(45);
+    expect(json.rosterCoverage.assignedSlotsCount).toBe(47);
+    expect(json.escalationSummary.metrics.criticalCount).toBe(1);
+    expect(json.commercialPortfolio.portfolioMetrics.totalActiveContracts).toBe(10);
+    expect(json.escalationSummary.topCriticalEscalations.length).toBe(1);
+    expect(json.commercialPortfolio.contracts[0].drillDownUrls.contractMaster).toBeDefined();
+  });
+
+  test("4. Sets Cache-Control header to private, no-store, no-cache", async () => {
+    (checkApiAuth as jest.Mock).mockResolvedValue({
+      session: {
+        user: {
+          id: "u-1",
+          role: "SUPER_ADMIN",
+          permissions: ["commercial.commandCenter.view"]
+        }
+      }
+    });
+
+    const req = new Request("http://localhost:3100/api/v1/commercial/command-center/wallboard");
+    const res = await GET(req);
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("Cache-Control")).toContain("no-store");
+  });
+
+  test("5. Enforces company boundary from user session for non-superadmin", async () => {
     (checkApiAuth as jest.Mock).mockResolvedValue({
       session: {
         user: {
@@ -205,6 +221,30 @@ describe("CCC-5 Wallboard API Endpoint Tests", () => {
     expect(res.status).toBe(200);
     expect(getAttendancePulseAggregations).toHaveBeenCalledWith(
       expect.objectContaining({ companyId: "comp-123" })
+    );
+  });
+
+  test("6. Enforces operation scope isolation for SG / FM users", async () => {
+    (checkApiAuth as jest.Mock).mockResolvedValue({
+      session: {
+        user: {
+          id: "u-4",
+          role: "SECURITY_ADMIN",
+          permissions: ["commercial.commandCenter.view"],
+          operationAccess: {
+            allowedSecurityGuarding: true,
+            allowedFacilityManagement: false
+          }
+        }
+      }
+    });
+
+    const req = new Request("http://localhost:3100/api/v1/commercial/command-center/wallboard");
+    const res = await GET(req);
+
+    expect(res.status).toBe(200);
+    expect(getAttendancePulseAggregations).toHaveBeenCalledWith(
+      expect.objectContaining({ operationType: "SECURITY_GUARDING" })
     );
   });
 });
