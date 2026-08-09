@@ -136,6 +136,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Opportunity case not found." }, { status: 404 });
     }
 
+    // Case lifecycle guard — only active cases may be costed
+    const DISALLOWED_CASE_LIFECYCLES = ["CANCELLED", "SUPERSEDED"];
+    if (DISALLOWED_CASE_LIFECYCLES.includes(opCase.lifecycle as string)) {
+      return NextResponse.json(
+        { error: `Costing estimates cannot be created for a case in ${opCase.lifecycle} state. Only active cases (DRAFT, IN_WORKFLOW, COMPLETED) are eligible.` },
+        { status: 400 }
+      );
+    }
+
     // Company boundary check
     if (user?.companyId && !isAdminUser(user) && !hasPermission(user, "precontract.costing.crossCompany") && opCase.companyId && opCase.companyId !== user.companyId) {
       return NextResponse.json({ error: "Forbidden: Company boundary violation." }, { status: 403 });

@@ -178,37 +178,57 @@ describe("Commercial Lifecycle — Phase CL-3 Comprehensive Test Suite (Pre-Cont
     });
 
     // 4. Create Workflow Template for Costing Governance
-    testWorkflowTemplate = await prisma.workflowTemplate.findFirst({
-      where: { moduleType: "PRE_CONTRACT_COSTING", isActive: true }
+    // Purge any stale CL3 test templates left over from prior failed runs.
+    // Prior failures can leave a template with levels already deleted but the template still active,
+    // causing the workflow route's `levels: { some: {} }` filter to return null.
+    const staleTemplates = await prisma.workflowTemplate.findMany({
+      where: { workflowName: { startsWith: "CL3 Test" } },
+      select: { id: true }
     });
-    if (!testWorkflowTemplate) {
-      testWorkflowTemplate = await prisma.workflowTemplate.create({
-        data: {
-          workflowName: "CL3 Test Costing Governance Template",
-          moduleType: "PRE_CONTRACT_COSTING",
-          appliesTo: "APPROVAL",
-          isActive: true,
-          isDefault: true,
-          levels: {
-            create: [
-              {
-                levelNumber: 1,
-                levelName: "Commercial Review Level 1",
-                approvers: {
-                  create: [
-                    { approverType: "ROLE_BASED", roleName: "COMMERCIAL_MANAGER" }
-                  ]
-                }
-              }
-            ]
-          }
-        }
-      });
+    if (staleTemplates.length > 0) {
+      const staleIds = staleTemplates.map((t: any) => t.id);
+      // Delete WorkflowInstances (cascade deletes WorkflowActionHistory)
+      await prisma.workflowInstance.deleteMany({ where: { templateId: { in: staleIds } } });
+      // Delete template structural records
+      await prisma.workflowTemplateApprover.deleteMany({ where: { level: { templateId: { in: staleIds } } } });
+      await prisma.workflowTemplateLevel.deleteMany({ where: { templateId: { in: staleIds } } });
+      await prisma.workflowTemplate.deleteMany({ where: { id: { in: staleIds } } });
     }
+
+    // Always create a fresh, correctly-structured single-level test template
+    testWorkflowTemplate = await prisma.workflowTemplate.create({
+      data: {
+        workflowName: "CL3 Test Costing Governance Template",
+        moduleType: "PRE_CONTRACT_COSTING",
+        appliesTo: "APPROVAL",
+        isActive: true,
+        isDefault: true,
+        levels: {
+          create: [
+            {
+              levelNumber: 1,
+              levelName: "Commercial Review Level 1",
+              approvers: {
+                create: [
+                  { approverType: "ROLE_BASED", roleName: "COMMERCIAL_MANAGER" }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    });
   });
 
   afterAll(async () => {
-    // Cleanup created test records
+    // Cleanup workflow template first (WorkflowInstances cascade from Section 7/8/11 workflow tests)
+    if (testWorkflowTemplate) {
+      await prisma.workflowInstance.deleteMany({ where: { templateId: testWorkflowTemplate.id } });
+      await prisma.workflowTemplateApprover.deleteMany({ where: { level: { templateId: testWorkflowTemplate.id } } });
+      await prisma.workflowTemplateLevel.deleteMany({ where: { templateId: testWorkflowTemplate.id } });
+      await prisma.workflowTemplate.delete({ where: { id: testWorkflowTemplate.id } });
+    }
+    // Cleanup costing data
     await prisma.preContractCostOverrideLog.deleteMany({
       where: { estimateVersion: { estimate: { caseId: { in: [testCaseCompA_SG.id, testCaseCompA_FM.id, testCaseCompB_SG.id] } } } }
     });
@@ -621,6 +641,354 @@ describe("Commercial Lifecycle — Phase CL-3 Comprehensive Test Suite (Pre-Cont
       expect(listData.estimates).toBeDefined();
       // Verify no proposal objects or PDF contracts generated in CL-3
       expect((listData as any).proposals).toBeUndefined();
+    });
+  });
+
+  // -------------------------------------------------------------
+  // SECTION 10: MULTI-LEVEL WORKFLOW (CENTRALIZED)
+  // -------------------------------------------------------------
+  describe("10. Multi-Level Centralized Workflow", () => {
+    let multiLevelTemplate: any;
+    let multiLevelEstimate: any;
+
+    it("should set up a 2-level centralized WorkflowTemplate", async () => {
+      // Deactivate existing single-level template to avoid conflict
+      if (testWorkflowTemplate) {
+        await prisma.workflowTemplate.update({
+          where: { id: testWorkflowTemplate.id },
+          data: { isActive: false }
+        });
+      }
+
+      multiLevelTemplate = await prisma.workflowTemplate.create({
+        data: {
+          workflowName: "CL3 Multi-Level Costing Template",
+          moduleType: "PRE_CONTRACT_COSTING",
+          appliesTo: "APPROVAL",
+          isActive: true,
+          isDefault: true,
+          levels: {
+            create: [
+              {
+                levelNumber: 1,
+                levelName: "Level 1 — Commercial Supervisor Review",
+                approvers: {
+                  create: [{ approverType: "ROLE_BASED", roleName: "COMMERCIAL_MANAGER" }]
+                }
+              },
+              {
+                levelNumber: 2,
+                levelName: "Level 2 — Commercial Director Final Approval",
+                approvers: {
+                  create: [{ approverType: "ROLE_BASED", roleName: "COMMERCIAL_DIRECTOR" }]
+                }
+              }
+            ]
+          }
+        }
+      });
+      expect(multiLevelTemplate).toBeDefined();
+      expect(multiLevelTemplate.id).toBeDefined();
+    });
+
+    it("should SUBMIT draft costing and create WorkflowInstance at Level 1", async () => {
+      // Create draft estimate
+      (getServerSession as jest.Mock).mockResolvedValue({ user: mockSuperAdmin });
+      const createRes = await postCosting(new Request("http://localhost:3100/api/v1/commercial/costing", {
+        method: "POST",
+        body: JSON.stringify({ caseId: testCaseCompA_SG.id, surveyId: testCompletedSurveyCompA_SG.id })
+      }));
+      expect(createRes.status).toBe(201);
+      const { estimate } = await createRes.json();
+      multiLevelEstimate = estimate;
+
+      // SUBMIT
+      (getServerSession as jest.Mock).mockResolvedValue({ user: mockSgUserCompA });
+      const submitRes = await postCostingWorkflow(
+        new Request(`http://localhost:3100/api/v1/commercial/costing/${estimate.id}/workflow`, {
+          method: "POST",
+          body: JSON.stringify({ action: "SUBMIT", remarks: "Multi-level submit test" })
+        }),
+        { params: { id: estimate.id } }
+      );
+      expect(submitRes.status).toBe(200);
+      const submitData = await submitRes.json();
+      expect(submitData.estimate.status).toBe("IN_WORKFLOW");
+      expect(submitData.workflow.currentLevelNumber).toBe(1);
+      expect(submitData.workflow.status).toBe("IN_PROGRESS");
+    });
+
+    it("should advance workflow to Level 2 after Level 1 approval — estimate remains IN_WORKFLOW and NOT APPROVED", async () => {
+      const l1ApproverUser = {
+        ...mockApproverUser,
+        id: "EMP-CL3-L1-APPROVER",
+        role: "COMMERCIAL_MANAGER"
+      };
+      (getServerSession as jest.Mock).mockResolvedValue({ user: l1ApproverUser });
+
+      const l1ApproveRes = await postCostingWorkflow(
+        new Request(`http://localhost:3100/api/v1/commercial/costing/${multiLevelEstimate.id}/workflow`, {
+          method: "POST",
+          body: JSON.stringify({ action: "APPROVE", remarks: "Level 1 approved" })
+        }),
+        { params: { id: multiLevelEstimate.id } }
+      );
+      expect(l1ApproveRes.status).toBe(200);
+      const l1Data = await l1ApproveRes.json();
+
+      // Estimate must remain IN_WORKFLOW — NOT APPROVED after intermediate level
+      expect(l1Data.estimate.status).toBe("IN_WORKFLOW");
+      expect(l1Data.estimate.status).not.toBe("APPROVED");
+      // Current level must have advanced to 2
+      expect(l1Data.workflow.currentLevelNumber).toBe(2);
+      expect(l1Data.workflow.status).toBe("IN_PROGRESS");
+      // Version must NOT be approved yet
+      expect(l1Data.estimate.versions[0].status).not.toBe("APPROVED");
+      // Snapshot must NOT be written at intermediate step
+      expect(l1Data.estimate.versions[0].snapshotJson).toBeNull();
+    });
+
+    it("should reject Level 2 approval attempt from unauthorized user (COMMERCIAL_MANAGER role at Level 2)", async () => {
+      // COMMERCIAL_MANAGER is authorized for Level 1 only; Level 2 requires COMMERCIAL_DIRECTOR
+      const unauthorizedL2User = {
+        ...mockApproverUser,
+        id: "EMP-CL3-L1-APPROVER-RETRY",
+        role: "COMMERCIAL_MANAGER"
+      };
+      (getServerSession as jest.Mock).mockResolvedValue({ user: unauthorizedL2User });
+
+      const l2UnauthorizedRes = await postCostingWorkflow(
+        new Request(`http://localhost:3100/api/v1/commercial/costing/${multiLevelEstimate.id}/workflow`, {
+          method: "POST",
+          body: JSON.stringify({ action: "APPROVE", remarks: "Attempting unauthorized Level 2 approval" })
+        }),
+        { params: { id: multiLevelEstimate.id } }
+      );
+      expect(l2UnauthorizedRes.status).toBe(403);
+    });
+
+    it("should APPROVE at Level 2 (final), set estimate APPROVED, and write SHA-256 snapshot only at final level", async () => {
+      const l2ApproverUser = {
+        id: "EMP-CL3-L2-DIRECTOR",
+        name: "Commercial Director L2",
+        role: "COMMERCIAL_DIRECTOR",
+        companyId: "COMP-CL3-A",
+        permissions: ["precontract.costing.view", "precontract.workflow.review", "precontract.workflow.approve"],
+        operationAccess: { allowedSecurityGuarding: true, allowedFacilityManagement: true }
+      };
+      (getServerSession as jest.Mock).mockResolvedValue({ user: l2ApproverUser });
+
+      const l2ApproveRes = await postCostingWorkflow(
+        new Request(`http://localhost:3100/api/v1/commercial/costing/${multiLevelEstimate.id}/workflow`, {
+          method: "POST",
+          body: JSON.stringify({ action: "APPROVE", remarks: "Final Level 2 director approval" })
+        }),
+        { params: { id: multiLevelEstimate.id } }
+      );
+      expect(l2ApproveRes.status).toBe(200);
+      const l2Data = await l2ApproveRes.json();
+
+      expect(l2Data.estimate.status).toBe("APPROVED");
+      expect(l2Data.estimate.versions[0].status).toBe("APPROVED");
+      // Snapshot must be written only at final approval
+      expect(l2Data.estimate.versions[0].snapshotJson).toBeDefined();
+      expect(l2Data.estimate.versions[0].checksum).toHaveLength(64);
+      expect(l2Data.workflow.status).toBe("APPROVED");
+    });
+
+    afterAll(async () => {
+      // Cleanup multi-level template records and reactivate original
+      if (multiLevelTemplate) {
+        // Must delete WorkflowInstance records (FK: WorkflowInstance.templateId → WorkflowTemplate.id)
+        // WorkflowActionHistory is cascade-deleted when WorkflowInstance is deleted
+        // Null out workflowInstanceId in versions to avoid orphan constraints
+        await prisma.workflowInstance.deleteMany({ where: { templateId: multiLevelTemplate.id } });
+        await prisma.workflowTemplateApprover.deleteMany({ where: { level: { templateId: multiLevelTemplate.id } } });
+        await prisma.workflowTemplateLevel.deleteMany({ where: { templateId: multiLevelTemplate.id } });
+        await prisma.workflowTemplate.delete({ where: { id: multiLevelTemplate.id } });
+      }
+      // Reactivate the original template so Section 11+ tests can find an active template
+      if (testWorkflowTemplate) {
+        await prisma.workflowTemplate.update({
+          where: { id: testWorkflowTemplate.id },
+          data: { isActive: true }
+        });
+      }
+    });
+  });
+
+  // -------------------------------------------------------------
+  // SECTION 11: EXPLICIT REJECT TEST
+  // -------------------------------------------------------------
+  describe("11. Explicit REJECT Test", () => {
+    it("should REJECT costing estimate and prove no snapshot is created", async () => {
+      // 1. Create fresh draft
+      (getServerSession as jest.Mock).mockResolvedValue({ user: mockSuperAdmin });
+      const createRes = await postCosting(new Request("http://localhost:3100/api/v1/commercial/costing", {
+        method: "POST",
+        body: JSON.stringify({ caseId: testCaseCompA_SG.id, surveyId: testCompletedSurveyCompA_SG.id })
+      }));
+      expect(createRes.status).toBe(201);
+      const { estimate } = await createRes.json();
+
+      // 2. SUBMIT
+      (getServerSession as jest.Mock).mockResolvedValue({ user: mockSgUserCompA });
+      await postCostingWorkflow(
+        new Request(`http://localhost:3100/api/v1/commercial/costing/${estimate.id}/workflow`, {
+          method: "POST",
+          body: JSON.stringify({ action: "SUBMIT" })
+        }),
+        { params: { id: estimate.id } }
+      );
+
+      // 3. REJECT as authorized approver
+      (getServerSession as jest.Mock).mockResolvedValue({ user: mockApproverUser });
+      const rejectRes = await postCostingWorkflow(
+        new Request(`http://localhost:3100/api/v1/commercial/costing/${estimate.id}/workflow`, {
+          method: "POST",
+          body: JSON.stringify({ action: "REJECT", remarks: "Cost assumptions not validated by operations." })
+        }),
+        { params: { id: estimate.id } }
+      );
+      expect(rejectRes.status).toBe(200);
+      const rejectData = await rejectRes.json();
+
+      // Assertions
+      expect(rejectData.estimate.status).toBe("REJECTED");
+      expect(rejectData.estimate.versions[0].status).toBe("REJECTED");
+      expect(rejectData.workflow.status).toBe("REJECTED");
+      // No approved snapshot must be created on rejection
+      expect(rejectData.estimate.versions[0].snapshotJson).toBeNull();
+      expect(rejectData.estimate.versions[0].checksum).toBeNull();
+    });
+  });
+
+  // -------------------------------------------------------------
+  // SECTION 12: DEDICATED NON-ADMIN CROSS-COMPANY PERMISSION
+  // -------------------------------------------------------------
+  describe("12. Dedicated Non-Admin Cross-Company Permission", () => {
+    let compBEstimateId: string;
+    let compBSurveyId: string; // tracked for afterAll cleanup
+
+    beforeAll(async () => {
+      // Create a COMPLETED survey for Company B case separately so ID can be tracked for cleanup
+      const compBSurvey = await prisma.preContractSurvey.create({
+        data: { caseId: testCaseCompB_SG.id, lifecycle: "COMPLETED" }
+      });
+      compBSurveyId = compBSurvey.id;
+
+      // Create a Company B estimate via SUPER_ADMIN
+      (getServerSession as jest.Mock).mockResolvedValue({ user: mockSuperAdmin });
+      const createRes = await postCosting(new Request("http://localhost:3100/api/v1/commercial/costing", {
+        method: "POST",
+        body: JSON.stringify({ caseId: testCaseCompB_SG.id, surveyId: compBSurveyId })
+      }));
+      const data = await createRes.json();
+      compBEstimateId = data.estimate?.id;
+    });
+
+    it("should BLOCK non-admin Company A user WITHOUT crossCompany permission from listing Company B estimates", async () => {
+      const compAUserNoCrossCompany = {
+        id: "EMP-CL3-SG-A-NO-CROSS",
+        name: "SG Officer No Cross-Company",
+        role: "COMMERCIAL_OFFICER",
+        companyId: "COMP-CL3-A",
+        // Has view + manage but NOT crossCompany
+        permissions: ["precontract.costing.view", "precontract.costing.manage", "precontract.workflow.submit"],
+        operationAccess: { allowedSecurityGuarding: true, allowedFacilityManagement: false }
+      };
+      (getServerSession as jest.Mock).mockResolvedValue({ user: compAUserNoCrossCompany });
+      const listRes = await getCosting(new Request("http://localhost:3100/api/v1/commercial/costing"));
+      const listData = await listRes.json();
+      // Company B estimate must NOT appear for Company A user without crossCompany permission
+      const found = listData.estimates.find((e: any) => e.id === compBEstimateId);
+      expect(found).toBeUndefined();
+    });
+
+    it("should ALLOW non-admin Company A user WITH crossCompany permission to see Company B estimates in list", async () => {
+      const compAUserWithCrossCompany = {
+        id: "EMP-CL3-SG-A-CROSS",
+        name: "SG Officer With Cross-Company",
+        role: "COMMERCIAL_OFFICER",
+        companyId: "COMP-CL3-A",
+        // Has view + crossCompany but is NOT admin/SUPER_ADMIN
+        permissions: ["precontract.costing.view", "precontract.costing.crossCompany"],
+        operationAccess: { allowedSecurityGuarding: true, allowedFacilityManagement: true }
+      };
+      (getServerSession as jest.Mock).mockResolvedValue({ user: compAUserWithCrossCompany });
+      const listRes = await getCosting(new Request("http://localhost:3100/api/v1/commercial/costing"));
+      const listData = await listRes.json();
+      // Company B estimate MUST appear for user WITH crossCompany permission
+      const found = listData.estimates.find((e: any) => e.id === compBEstimateId);
+      expect(found).toBeDefined();
+    });
+
+    afterAll(async () => {
+      // Clean up the Section 12 estimate and survey to prevent FK violation in the global afterAll
+      if (compBEstimateId) {
+        await prisma.preContractCostEstimateItem.deleteMany({
+          where: { estimateVersion: { estimateId: compBEstimateId } }
+        });
+        await prisma.preContractCostEstimateVersion.deleteMany({ where: { estimateId: compBEstimateId } });
+        await prisma.preContractCostEstimate.delete({ where: { id: compBEstimateId } });
+      }
+      if (compBSurveyId) {
+        await prisma.preContractSurvey.delete({ where: { id: compBSurveyId } });
+      }
+    });
+  });
+
+  // -------------------------------------------------------------
+  // SECTION 13: CASE-STATE GUARDS
+  // -------------------------------------------------------------
+  describe("13. Case-State Guards", () => {
+    it("should ALLOW costing creation when case lifecycle is DRAFT (allowed active state)", async () => {
+      // testCaseCompA_SG has lifecycle DRAFT — this is the allowed state in current implementation
+      (getServerSession as jest.Mock).mockResolvedValue({ user: mockSuperAdmin });
+      const createRes = await postCosting(new Request("http://localhost:3100/api/v1/commercial/costing", {
+        method: "POST",
+        body: JSON.stringify({
+          caseId: testCaseCompA_SG.id,
+          surveyId: testCompletedSurveyCompA_SG.id
+        })
+      }));
+      // Should create successfully (201) — DRAFT is an allowed case state for costing
+      expect(createRes.status).toBe(201);
+      const data = await createRes.json();
+      expect(data.estimate).toBeDefined();
+      expect(data.estimate.status).toBe("DRAFT");
+    });
+
+    it("should REJECT costing creation when case lifecycle is CANCELLED (disallowed state)", async () => {
+      // Create a CANCELLED case and attempt costing against it
+      const cancelledCase = await prisma.preContractCase.create({
+        data: {
+          title: "CL3 Cancelled Case for Guard Test",
+          companyId: "COMP-CL3-A",
+          operationType: "SECURITY_GUARDING",
+          lifecycle: "CANCELLED",
+          createdBy: "SYSTEM"
+        }
+      });
+
+      const cancelledSurvey = await prisma.preContractSurvey.create({
+        data: { caseId: cancelledCase.id, lifecycle: "COMPLETED" }
+      });
+
+      (getServerSession as jest.Mock).mockResolvedValue({ user: mockSuperAdmin });
+      const createRes = await postCosting(new Request("http://localhost:3100/api/v1/commercial/costing", {
+        method: "POST",
+        body: JSON.stringify({ caseId: cancelledCase.id, surveyId: cancelledSurvey.id })
+      }));
+
+      // CANCELLED case must be rejected
+      expect(createRes.status).toBe(400);
+      const data = await createRes.json();
+      expect(data.error).toBeDefined();
+
+      // Cleanup
+      await prisma.preContractSurvey.delete({ where: { id: cancelledSurvey.id } });
+      await prisma.preContractCase.delete({ where: { id: cancelledCase.id } });
     });
   });
 });
