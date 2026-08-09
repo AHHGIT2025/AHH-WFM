@@ -28,7 +28,7 @@ const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
   ]
 };
 
-function hasPermission(user: { role?: string; permissions?: string[] } | null | undefined, permissionKey: string): boolean {
+export function hasPermission(user: { role?: string; permissions?: string[] } | null | undefined, permissionKey: string): boolean {
   if (!user) return false;
   const roleUpper = user.role?.toUpperCase().replace(/\s+/g, "_") || "";
   if (roleUpper === "SUPER_ADMIN") {

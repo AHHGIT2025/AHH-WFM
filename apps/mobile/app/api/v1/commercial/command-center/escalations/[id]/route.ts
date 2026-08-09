@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
-
-const WEB_API_URL = process.env.WEB_API_URL || process.env.NEXT_PUBLIC_WEB_API_URL || "http://localhost:3100";
+import { getWebApiBaseUrl } from "../../../../../../../lib/server-config";
 
 export async function GET(
   request: Request,
   { params }: { params: { id: string } }
 ) {
   try {
-    const targetUrl = `${WEB_API_URL}/api/v1/commercial/command-center/escalations/${params.id}`;
+    const webApiBase = getWebApiBaseUrl();
+    const targetUrl = `${webApiBase}/api/v1/commercial/command-center/escalations/${params.id}`;
 
     const headers: Record<string, string> = {};
     const cookie = request.headers.get("cookie");
@@ -37,8 +37,9 @@ export async function PATCH(
   { params }: { params: { id: string } }
 ) {
   try {
+    const webApiBase = getWebApiBaseUrl();
     const body = await request.json();
-    const targetUrl = `${WEB_API_URL}/api/v1/commercial/command-center/escalations/${params.id}`;
+    const targetUrl = `${webApiBase}/api/v1/commercial/command-center/escalations/${params.id}`;
 
     const headers: Record<string, string> = {
       "Content-Type": "application/json"

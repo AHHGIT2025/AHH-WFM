@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-
-const WEB_API_URL = process.env.WEB_API_URL || process.env.NEXT_PUBLIC_WEB_API_URL || "http://localhost:3100";
+import { getWebApiBaseUrl } from "../../../../../../lib/server-config";
 
 export async function GET(request: Request) {
   try {
+    const webApiBase = getWebApiBaseUrl();
     const { search } = new URL(request.url);
-    const targetUrl = `${WEB_API_URL}/api/v1/commercial/command-center/commercial-health${search}`;
+    const targetUrl = `${webApiBase}/api/v1/commercial/command-center/commercial-health${search}`;
 
     const headers: Record<string, string> = {};
     const cookie = request.headers.get("cookie");

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { SOSOverlay } from "../components/SOSOverlay";
+import { hasClientPermission } from "../lib/client-permissions";
 
 export default function MobileDashboard() {
   const { data: session } = useSession();
@@ -196,12 +197,7 @@ export default function MobileDashboard() {
       ) : null}
 
       {/* Command Center Entrance for Authorized Users */}
-      {((session?.user as any)?.role === "SUPER_ADMIN" ||
-        (session?.user as any)?.role === "ADMIN" ||
-        ((session?.user as any)?.permissions && Array.isArray((session?.user as any)?.permissions) && (
-          (session?.user as any)?.permissions.includes("commercial.commandCenter.view") ||
-          (session?.user as any)?.permissions.includes("manpower.admin.full_access")
-        ))) ? (
+      {hasClientPermission(session?.user as any, "commercial.commandCenter.view") ? (
         <Link href="/command-center" className="bg-slate-900 text-white p-4 rounded-2xl flex items-center justify-between shadow-md active:scale-95 transition-transform border border-slate-800">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
