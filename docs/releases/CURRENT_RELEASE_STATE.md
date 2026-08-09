@@ -64,9 +64,11 @@ Summary of CL-4 deliverables:
 
 7. Passed all verification gates: Prisma validate (exit 0), Prisma generate (exit 0), tsc Web (exit 0), tsc Mobile (exit 0), 11/11 CL-4 focused tests (exit 0), 30/30 CL-3 costing regression tests (exit 0), 55/55 security/permission tests (exit 0), full 59-suite API regression (1112/1121 pass, 9 skipped unchanged, exit 0), npm run build:web (exit 0), npm run build:mobile (exit 0).
 
-8. SECFAC remains PAUSED BY CIO.
+8. Added `.gitattributes` (`*.sql text eol=lf`) to enforce LF line-ending materialization for migration SQL files on Windows checkouts.
 
-9. Deployment to SERVER remains BLOCKED pending explicit CIO authorization.
+9. SECFAC remains PAUSED BY CIO.
+
+10. Next phase: Await explicit CIO approval for SERVER migration recovery (`prisma migrate resolve --applied 20260803150000_secfac_schema_drift_repair`) and CL-4 deployment. Do NOT begin CL-5.
 
 
 CCC-6 Status:

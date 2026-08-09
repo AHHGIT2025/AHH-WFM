@@ -1,0 +1,2 @@
+# Ensure SQL migration files maintain LF line endings on all environments
+*.sql text eol=lf
