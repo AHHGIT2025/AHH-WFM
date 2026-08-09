@@ -4449,6 +4449,7 @@ model PreContractCase {
 
   surveys PreContractSurvey[]
   costEstimates PreContractCostEstimate[]
+  proposals PreContractProposal[]
 }
 
 model PreContractProspectiveSite {
@@ -5111,6 +5112,7 @@ model PreContractCostEstimate {
   updatedAt            DateTime                @updatedAt
 
   versions PreContractCostEstimateVersion[]
+  proposals PreContractProposalVersion[]
 }
 
 model PreContractCostEstimateVersion {
@@ -5139,6 +5141,7 @@ model PreContractCostEstimateVersion {
 
   items     PreContractCostEstimateItem[]
   overrides PreContractCostOverrideLog[]
+  proposals PreContractProposalVersion[]
 }
 
 model PreContractCostEstimateItem {
@@ -5169,6 +5172,67 @@ model PreContractCostOverrideLog {
   reason            String
   overriddenBy      String
   overriddenAt      DateTime                       @default(now())
+}
+
+model PreContractProposal {
+  id                   String                       @id @default(uuid())
+  proposalCode         String?
+  caseId               String
+  case                 PreContractCase              @relation(fields: [caseId], references: [id])
+  companyId            String?
+  operationType        String?
+  status               String                       @default("DRAFT")
+  currentVersionNumber Int                          @default(1)
+  createdBy            String
+  createdAt            DateTime                     @default(now())
+  updatedAt            DateTime                     @updatedAt
+  versions             PreContractProposalVersion[]
+}
+
+model PreContractProposalVersion {
+  id                    String                         @id @default(uuid())
+  proposalId            String
+  proposal              PreContractProposal            @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  versionNumber         Int
+  clonedFromVersionId   String?
+  costEstimateId        String
+  costEstimate          PreContractCostEstimate        @relation(fields: [costEstimateId], references: [id])
+  costEstimateVersionId String
+  costEstimateVersion   PreContractCostEstimateVersion @relation(fields: [costEstimateVersionId], references: [id])
+  costEstimateChecksum  String?
+  status                String                         @default("DRAFT")
+  workflowTemplateId    String?
+  workflowInstanceId    String?
+  title                 String
+  sellingPrice          Decimal                        @db.Decimal(12, 2)
+  currency              String
+  validityDays          Int?
+  validUntil            DateTime?
+  scopeSummary          String?                        @db.Text
+  assumptions           String?                        @db.Text
+  exclusions            String?                        @db.Text
+  termsAndConditions    String?                        @db.Text
+  issuedAt              DateTime?
+  issuedBy              String?
+  snapshotJson          String?                        @db.LongText
+  snapshotChecksum      String?
+  createdBy             String
+  createdAt             DateTime                       @default(now())
+  updatedAt             DateTime                       @updatedAt
+  issuanceLogs          ProposalIssuanceLog[]
+}
+
+model ProposalIssuanceLog {
+  id                String                     @id @default(uuid())
+  proposalVersionId String
+  proposalVersion   PreContractProposalVersion @relation(fields: [proposalVersionId], references: [id], onDelete: Cascade)
+  issuedBy          String
+  issuedAt          DateTime                   @default(now())
+  recipientName     String?
+  recipientEmail    String?
+  deliveryMethod    String                     @default("MANUAL")
+  remarks           String?
+  createdAt         DateTime                   @default(now())
 }
 
 

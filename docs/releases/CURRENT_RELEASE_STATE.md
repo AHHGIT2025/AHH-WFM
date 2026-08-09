@@ -30,33 +30,44 @@ Current programme:
 
 * Commercial Command Center Phase CCC-6 Mobile Command Suite
 
-* Commercial Lifecycle Phase CL-3 — Pre-Contract Costing & Estimation
+* Commercial Lifecycle Phase CL-3 — Pre-Contract Costing & Estimation (DEPLOYED AND CLOSED)
+
+* Commercial Lifecycle Phase CL-4 — Proposal Management (LOCAL IMPLEMENTATION COMPLETED AND VERIFIED)
 
 * SECFAC Phase 6A.2 schema reconciliation (SECFAC Status: PAUSED BY CIO)
 
 Current release objective:
 
-CL-3 Pre-Contract Costing & Estimation — FULLY VERIFIED AND CLOSED.
+CL-4 Proposal Management — FULLY IMPLEMENTED AND VERIFIED LOCALLY.
 
-Summary of CL-3 deliverables:
+Summary of CL-4 deliverables:
 
-1. Added 4 transactional models (`PreContractCostEstimate`, `PreContractCostEstimateVersion`, `PreContractCostEstimateItem`, `PreContractCostOverrideLog`) and relation linkages to `PreContractCase` and `PreContractSurvey` in Prisma schema, with migration `20260809130000_add_cl3_precontract_costing`.
+1. Added 3 Prisma models (`PreContractProposal`, `PreContractProposalVersion`, `ProposalIssuanceLog`) with enum `PreContractProposalStatus` (`DRAFT`, `IN_WORKFLOW`, `APPROVED_INTERNAL`, `ISSUED_TO_CLIENT`, `REJECTED`, `SUPERSEDED`) in `packages/database/prisma/schema.prisma`. Generated additive migration `20260809153000_add_cl4_precontract_proposals`.
 
-2. Registered `precontract.costing.view`, `precontract.costing.manage`, `precontract.costing.override`, `precontract.costing.crossCompany`, `precontract.workflow.submit`, `precontract.workflow.approve`, `precontract.workflow.review` permissions under `SUPER_ADMIN` and `ADMIN` roles.
+2. Financial Authority: `PreContractCostEstimateVersion` is authoritative. Binds to `costEstimateVersionId` and `costEstimateChecksum`. Proposal engine does not recalculate costs, margins, markups, or selling prices.
 
-3. Built domain calculation engine (`apps/web/lib/precontract-costing.ts`) using Prisma `Decimal` arithmetic for Gross Margin %, Target Margin Selling Price, Markup %, Target Markup Selling Price, line items breakdown, and SHA-256 snapshot generation.
+3. Registered `precontract.proposal.view`, `precontract.proposal.manage`, `precontract.proposal.issue`, `precontract.proposal.crossCompany` permissions under `SUPER_ADMIN` and `ADMIN` roles in `apps/web/lib/permissions.ts`.
 
-4. Built REST APIs under `/api/v1/commercial/costing/` (`GET` list, `POST` draft creation with lifecycle guard, `GET` detail, `PATCH` line overrides/recalculation, `POST` workflow actions `SUBMIT`/`APPROVE`/`REJECT`/`RETURN`).
+4. Built client confidentiality helper library `apps/web/lib/precontract-proposal.ts` with `toClientSafeProposalDTO()` using explicit allowlisting, SHA-256 snapshot generator `generateProposalSnapshot()`, and dynamic `isProposalExpired()` evaluator (`status === "ISSUED_TO_CLIENT" && validUntil != null && now > validUntil`).
 
-5. Added CANCELLED/SUPERSEDED case-state lifecycle guard to `POST /api/v1/commercial/costing`: only `DRAFT`, `IN_WORKFLOW`, `COMPLETED` cases are eligible for new costing estimates.
+5. Built REST APIs under `/api/v1/commercial/proposals/`:
+   - `GET /api/v1/commercial/proposals` (list with auth, company, operation scope filters)
+   - `POST /api/v1/commercial/proposals` (draft proposal creation from APPROVED costing version)
+   - `GET /api/v1/commercial/proposals/[id]` (detail)
+   - `PATCH /api/v1/commercial/proposals/[id]` (draft narrative/validity update, selling price edit prohibited)
+   - `POST /api/v1/commercial/proposals/[id]/workflow` (centralized workflow actions SUBMIT, APPROVE, REJECT, RETURN)
+   - `POST /api/v1/commercial/proposals/[id]/revision` (create new proposal revision v2 in DRAFT status)
+   - `POST /api/v1/commercial/proposals/[id]/issue` (record issuance in ProposalIssuanceLog and update status to ISSUED_TO_CLIENT)
+   - `GET /api/v1/commercial/proposals/[id]/preview` (client-safe DTO preview)
 
-6. Built Web UI Register & Interactive Calculator Editor at `/commercial/costing` in `apps/web/app/commercial/costing/page.tsx`.
+6. Built Web UI at `/commercial/quotations` (Proposal Register & New Proposal Modal) and `/commercial/proposals/[id]` (5-Tab Proposal Editor, Workflow Console, Issuance Modal, Client-Safe Preview & `@media print` CSS Print Layout).
 
-7. Passed all verification gates: Prisma validate, Web tsc (exit 0), full 30-test CL-3 suite (30/30 pass), full regression suite (1161/1170 pass, 9 skipped unchanged, exit 0).
+7. Passed all verification gates: Prisma validate (exit 0), Prisma generate (exit 0), tsc Web (exit 0), tsc Mobile (exit 0), 6/6 CL-4 focused tests (exit 0), 30/30 CL-3 costing regression tests (exit 0), full 59-suite API regression (1112/1121 pass, 9 skipped unchanged, exit 0), npm run build:web (exit 0), npm run build:mobile (exit 0).
 
 8. SECFAC remains PAUSED BY CIO.
 
 9. Deployment to SERVER remains BLOCKED pending explicit CIO authorization.
+
 
 CCC-6 Status:
 
