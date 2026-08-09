@@ -4,6 +4,7 @@ import { checkApiAuth } from "@/lib/api-guards";
 import { hasPermission, isAdminUser } from "@/lib/permissions";
 import { getQatarDate, getQatarDateString } from "@/lib/roster-engine";
 import { getRelieverEligibilityWhere } from "@/lib/contract-helpers";
+import { getRosterCoverageAggregations } from "@/lib/roster-coverage-helpers";
 
 export async function GET(request: Request) {
   const auth = await checkApiAuth();

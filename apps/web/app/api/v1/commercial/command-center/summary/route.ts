@@ -3,6 +3,7 @@ import { prisma } from "@ahh-wfm/database";
 import { checkApiAuth } from "@/lib/api-guards";
 import { hasPermission, isAdminUser } from "@/lib/permissions";
 import { getQatarDate, getQatarDateString } from "@/lib/roster-engine";
+import { getAttendancePulseAggregations } from "@/lib/attendance-helpers";
 
 export async function GET(request: Request) {
   const auth = await checkApiAuth();
@@ -149,47 +150,12 @@ export async function GET(request: Request) {
     if (companyId) empWhere.companyId = companyId;
     if (operationType && operationType !== "ALL") empWhere.operationType = operationType;
 
-    const attendanceRecords = await prisma.attendanceRecord.findMany({
-      where: {
-        checkIn: {
-          gte: new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), 0, 0, 0),
-          lte: new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), 23, 59, 59)
-        },
-        ...(companyId ? { companyId } : {})
-      },
-      select: {
-        id: true,
-        employeeId: true,
-        status: true,
-        lateMinutes: true,
-        checkIn: true,
-        checkOut: true
-      }
+    const attendancePulse = await getAttendancePulseAggregations({
+      companyId,
+      operationType,
+      businessDateStr
     });
-
-    const presentToday = attendanceRecords.filter(
-      (a) => a.status === "ON_TIME" || a.status === "CORRECTED" || a.checkIn !== null
-    ).length;
-    const absentToday = attendanceRecords.filter((a) => a.status === "ABSENT").length;
-    const lateToday = attendanceRecords.filter((a) => a.status === "LATE" || a.lateMinutes > 0).length;
-    const missingPunch = attendanceRecords.filter((a) => a.checkIn !== null && a.checkOut === null).length;
-
-    // Active approved leaves today
-    const leavesToday = await prisma.leaveRequest.count({
-      where: {
-        status: "APPROVED",
-        startDate: { lte: targetDate },
-        endDate: { gte: targetDate },
-        employee: empWhere
-      }
-    });
-
-    // Unresolved attendance corrections
-    const unresolvedCorrections = await prisma.attendanceCorrection.count({
-      where: {
-        status: "Pending"
-      }
-    });
+    const { presentToday, absentToday, lateToday, missingPunch, leavesToday, unresolvedCorrections } = attendancePulse;
 
     // 3. Reliever Readiness Queries
     const relieverReqs = await prisma.contractRelieverRequirement.count({

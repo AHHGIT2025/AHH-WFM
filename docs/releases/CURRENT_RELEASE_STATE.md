@@ -1,6 +1,6 @@
 # AHH WFM — Current Release State
 
-Last updated: August 8, 2026
+Last updated: August 9, 2026
 
 Timezone: Asia/Qatar
 
@@ -26,55 +26,47 @@ Current programme:
 
 * Commercial & Contracts lifecycle foundation (CL-0, PC-2A, CL-1 CRM & Deal Opportunities, CL-2 Pre-Contract Site Surveys & Audits)
 
-* Commercial Command Center Phase CCC-0 Programme, Phase CCC-1 Operational Health, Phase CCC-2 Roster Coverage & Reliever Readiness Console, Phase CCC-3 Operational Escalation Queue & Workflow
+* Commercial Command Center Phase CCC-0 Programme, Phase CCC-1 Operational Health, Phase CCC-2 Roster Coverage & Reliever Readiness Console, Phase CCC-3 Operational Escalation Queue & Workflow, Phase CCC-4 Commercial Health / Contract / SLA Analytics
+
+* Commercial Command Center Phase CCC-5 Executive Wallboard / Control-Room View
 
 * SECFAC Phase 6A.2 schema reconciliation (SECFAC Status: PAUSED BY CIO)
 
 Current release objective:
 
-1. Finalize Commercial Lifecycle Phase CL-2 Pre-Contract Site Surveys & Audits (Web route `/commercial/surveys`, canonical APIs `GET/POST /api/v1/commercial/surveys`, `GET/PATCH /api/v1/commercial/surveys/[id]`, `POST /api/v1/commercial/surveys/[id]/workflow`).
+1. Implement Commercial Command Center Phase CCC-5 Executive Wallboard / Control-Room View (`/commercial/command-center/wallboard`, canonical API `GET /api/v1/commercial/command-center/wallboard`).
 
-2. Enforce Commercial Opportunity Eligibility Rule: Active opportunity cases (`DRAFT`, `IN_WORKFLOW`, `COMPLETED`) can create a Site Survey. Ineligible opportunity cases (`CANCELLED`, `SUPERSEDED`) return `400 Bad Request`.
+2. Extract shared server domain helpers: `attendance-helpers.ts` (CCC-1), `roster-coverage-helpers.ts` (CCC-2), `escalation-helpers.ts` (CCC-3), and `commercial-health-helpers.ts` (CCC-4), ensuring original CCC endpoints and Wallboard route consume shared functions without domain code duplication.
 
-3. Enforce Centralized Workflow Engine Governance (`Settings > Workflow Setup`) via `WorkflowInstance` and `WorkflowActionHistory` audit trails, including missing template rejection (400), approver role eligibility checks, multi-level progression, RETURN to DRAFT, REJECT to CANCELLED, and Segregation of Duties (SoD) enforcement.
+3. Wallboard API orchestrates shared aggregators in parallel via `Promise.all()`, applies company and operation scope isolation, and sets `Cache-Control: private, no-cache, no-store, must-revalidate`.
 
-4. Configuration-Driven Survey Workspace: Survey questions/sections loaded dynamically from `SurveyTemplateVersion` and saved as immutable `SurveyConfigurationSnapshot`.
+4. Wallboard Web UI features Executive Header, Primary KPI Cards, Operational Attendance Pulse, Executive Exception Queue Ticker, Commercial Portfolio Monitor, Fullscreen API, 30s auto-refresh, manual refresh, 60s stale data banner, and console drill-down buttons.
 
-5. Approved Survey Immutability & Re-Survey Revision Policy: Approved survey evidence (`COMPLETED`) is immutable (PATCH returns 400). Re-survey / revision creates a new `PreContractSurvey` record linked to the same opportunity case and prospective site.
+5. Enforce SECFAC pause (no SECFAC code, migrations, or workers modified).
 
-6. Site Condition Configuration & Prospective Site Reuse: Reuses `SiteConditionConfiguration` master data and `PreContractProspectiveSite` records to prevent duplicate prospective site entries.
+6. Complete all mandatory verification gates (Prisma validate, tsc Web/Mobile, 5 Jest test suites / 105 tests passed, Web/Mobile production builds).
 
-7. Pass 24-test expanded matrix in `tests/api/commercial-lifecycle-cl2.spec.ts` (24/24 passed).
-
-8. Enforce SECFAC pause (no SECFAC code, migrations, or workers modified).
-
-9. Complete all 6 mandatory verification gates (Prisma validate, tsc Web/Mobile, 24-test Jest spec, Web/Mobile production builds).
-
-10. Deploy only after CIO / ChatGPT review and explicit deployment authorization.
+7. Deploy only after CIO / ChatGPT review and explicit deployment authorization.
 
 CCC-1 Status:
 
-`DEPLOYED AND CLOSED (LOCAL HEAD LINEAGE)`
+`DEPLOYED AND CLOSED`
 
 CCC-2 Status:
 
-`DEPLOYED AND CLOSED (LOCAL HEAD LINEAGE)`
-
-CL-1 Status:
-
-`DEPLOYED AND CLOSED (COMMITTED & PUSHED)`
-
-CCC-4 Status:
-
-`VERIFIED LOCALLY (15/15 TESTS PASSED, ALL 6 GATES PASSED, COMMITTED & PUSHED TO REMOTE)`
+`DEPLOYED AND CLOSED`
 
 CCC-3 Status:
 
-`DEPLOYED AND CLOSED (LOCAL HEAD LINEAGE)`
+`DEPLOYED AND CLOSED`
 
-CL-2 Status:
+CCC-4 Status:
 
-`VERIFIED LOCALLY (24/24 TESTS PASSED, ALL 6 GATES PASSED)`
+`DEPLOYED AND CLOSED`
+
+CCC-5 Status:
+
+`VERIFIED LOCALLY (105/105 TESTS PASSED, ALL 6 GATES PASSED)`
 
 Deployment approval state:
 

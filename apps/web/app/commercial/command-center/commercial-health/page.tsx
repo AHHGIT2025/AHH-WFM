@@ -258,6 +258,12 @@ export default function CommercialHealthConsolePage() {
             >
               Commercial &amp; SLA Health
             </Link>
+            <Link
+              href="/commercial/command-center/wallboard"
+              className="px-4 py-2.5 text-sm font-medium text-slate-400 hover:text-white border-b-2 border-transparent hover:border-slate-500"
+            >
+              Executive Wallboard
+            </Link>
           </nav>
         </div>
       </header>

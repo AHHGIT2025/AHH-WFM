@@ -312,6 +312,11 @@ export default function OperationalEscalationsPage() {
               Commercial &amp; SLA Health (CCC-4)
             </Button>
           </Link>
+          <Link href="/commercial/command-center/wallboard">
+            <Button variant="secondary" style={{ border: "1px solid #0f172a", backgroundColor: "#0f172a", color: "#ffffff" }}>
+              Executive Wallboard (CCC-5)
+            </Button>
+          </Link>
           <Button variant="primary" onClick={fetchEscalations} disabled={loading}>
             {loading ? "Refreshing..." : "↻ Refresh Queue"}
           </Button>

@@ -238,6 +238,13 @@ export default function RosterCoverageConsolePage() {
             </Button>
           </Link>
 
+          <Link href="/commercial/command-center/wallboard">
+            <Button variant="primary" size="sm" className="inline-flex items-center gap-1.5 bg-slate-900 text-white border border-slate-700 hover:bg-slate-800">
+              <span className="material-symbols-outlined text-[16px]">tv</span>
+              Executive Wallboard (CCC-5)
+            </Button>
+          </Link>
+
           <Link href="/commercial/command-center">
             <Button variant="ghost" size="sm" className="inline-flex items-center gap-1">
               <span className="material-symbols-outlined text-[16px]">arrow_back</span>
