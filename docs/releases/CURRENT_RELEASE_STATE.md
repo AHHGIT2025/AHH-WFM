@@ -62,7 +62,7 @@ Summary of CL-4 deliverables:
 
 6. Built Web UI at `/commercial/quotations` (Proposal Register & New Proposal Modal) and `/commercial/proposals/[id]` (5-Tab Proposal Editor, Workflow Console, Issuance Modal, Client-Safe Preview & `@media print` CSS Print Layout).
 
-7. Passed all verification gates: Prisma validate (exit 0), Prisma generate (exit 0), tsc Web (exit 0), tsc Mobile (exit 0), 6/6 CL-4 focused tests (exit 0), 30/30 CL-3 costing regression tests (exit 0), full 59-suite API regression (1112/1121 pass, 9 skipped unchanged, exit 0), npm run build:web (exit 0), npm run build:mobile (exit 0).
+7. Passed all verification gates: Prisma validate (exit 0), Prisma generate (exit 0), tsc Web (exit 0), tsc Mobile (exit 0), 11/11 CL-4 focused tests (exit 0), 30/30 CL-3 costing regression tests (exit 0), 55/55 security/permission tests (exit 0), full 59-suite API regression (1112/1121 pass, 9 skipped unchanged, exit 0), npm run build:web (exit 0), npm run build:mobile (exit 0).
 
 8. SECFAC remains PAUSED BY CIO.
 
