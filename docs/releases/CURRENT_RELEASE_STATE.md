@@ -30,51 +30,37 @@ Current programme:
 
 * Commercial Command Center Phase CCC-6 Mobile Command Suite
 
+* Commercial Lifecycle Phase CL-3 — Pre-Contract Costing & Estimation
+
 * SECFAC Phase 6A.2 schema reconciliation (SECFAC Status: PAUSED BY CIO)
 
 Current release objective:
 
-1. Implement Commercial Command Center Phase CCC-6 Mobile Command Suite (`/command-center` in `apps/mobile`).
+1. Implement Commercial Lifecycle Phase CL-3 — Pre-Contract Costing & Estimation.
 
-2. Implement Pattern A Thin Mobile BFF Proxy routes under `apps/mobile/app/api/v1/commercial/command-center/` (`wallboard`, `escalations`, `escalations/[id]`, `roster-coverage`, `commercial-health`) which forward full incoming session cookies to authoritative Web APIs without duplicating domain calculations or database schema logic.
+2. Added 4 transactional models (`PreContractCostEstimate`, `PreContractCostEstimateVersion`, `PreContractCostEstimateItem`, `PreContractCostOverrideLog`) and relation linkages to `PreContractCase` and `PreContractSurvey` in Prisma schema, with migration `20260809130000_add_cl3_precontract_costing`.
 
-3. Mobile Command Suite UI features Mobile Control-Room Header, Live Qatar Business Date badge, Operation Scope selector, 60s auto-refresh countdown, manual refresh button, in-page Critical Alert Banner, 4 tabbed sections (Overview, Escalations, Coverage, Commercial Health), and Escalation Action Drawer (`ACKNOWLEDGE`, `ASSIGN`, `COMMENT`, `RESOLVE`, `CANCEL`).
+3. Registered `precontract.costing.view`, `precontract.costing.manage`, `precontract.costing.override`, `precontract.costing.crossCompany` permissions under `SUPER_ADMIN` and `ADMIN` roles in `apps/web/lib/permissions.ts`.
 
-4. Enforce Authoritative Source Protection Rule on `AttendanceCorrection` items (resolution in Command Center does NOT approve correction; approval remains exclusive to Attendance module).
+4. Built domain calculation engine (`apps/web/lib/precontract-costing.ts`) using Prisma `Decimal` arithmetic for exact Gross Margin %, Target Margin Selling Price, Markup %, Target Markup Selling Price, line items breakdown, and SHA-256 snapshot generation.
 
-5. Enforce Terminal State Guards (`RESOLVED`/`CANCELLED` items cannot be re-opened; post-closure `COMMENT` only permitted).
+5. Built REST APIs under `/api/v1/commercial/costing/` (`GET` list, `POST` draft creation, `GET` detail, `PATCH` line overrides/recalculation, `POST` workflow actions `SUBMIT`/`APPROVE`/`REJECT`/`RETURN`).
 
-6. Integrate permission-gated entrance card on Mobile Home (`/`) guarded by `commercial.commandCenter.view` or `SUPER_ADMIN`/`ADMIN` role.
+6. Built Web UI Register & Interactive Calculator Editor at `/commercial/costing` in `apps/web/app/commercial/costing/page.tsx`.
 
-7. Enforce SECFAC pause (no SECFAC code, migrations, or workers modified).
+7. Passed all 6 mandatory verification gates (Prisma validate, Web tsc, Mobile tsc, Jest test suite 6/6 passed, Web build, Mobile build).
 
-8. Pass all 6 mandatory verification gates (Prisma validate, tsc Web, tsc Mobile, Jest test suite 6/6 passed, Web build, Mobile build).
+8. SECFAC remains PAUSED BY CIO.
 
-9. Deploy only after CIO / ChatGPT review and explicit deployment authorization.
-
-CCC-1 Status:
-
-`DEPLOYED AND CLOSED`
-
-CCC-2 Status:
-
-`DEPLOYED AND CLOSED`
-
-CCC-3 Status:
-
-`DEPLOYED AND CLOSED`
-
-CCC-4 Status:
-
-`DEPLOYED AND CLOSED`
-
-CCC-5 Status:
-
-`VERIFIED LOCALLY (COMMITTED & PUSHED TO REMOTE)`
+9. Deployment to SERVER remains BLOCKED pending explicit CIO authorization.
 
 CCC-6 Status:
 
-`VERIFIED LOCALLY (6/6 TESTS PASSED, ALL GATES PASSED, NAVIGATION DISCOVERABILITY DEFECT RESOLVED)`
+`DEPLOYED AND CLOSED`
+
+CL-3 Status:
+
+`VERIFIED LOCALLY (ALL 6 GATES PASSED, 6/6 JEST TESTS PASSED, COMMITTED & PUSHED TO REMOTE)`
 
 Deployment approval state:
 

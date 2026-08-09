@@ -4448,6 +4448,7 @@ model PreContractCase {
   updatedAt DateTime @updatedAt
 
   surveys PreContractSurvey[]
+  costEstimates PreContractCostEstimate[]
 }
 
 model PreContractProspectiveSite {
@@ -4581,6 +4582,7 @@ model PreContractSurvey {
   snapshot       SurveyConfigurationSnapshot?
   responses      SurveyResponse[]
   siteConditions SurveySiteCondition[]
+  costEstimates  PreContractCostEstimate[]
 }
 
 model SurveyConfigurationSnapshot {
@@ -5088,6 +5090,87 @@ model CostDriverMapping {
   rateRuleAst       Json?
   escalationRuleAst Json?
 }
+
+// ---------------------------------------------------------
+// PRE-CONTRACT COSTING ESTIMATION (CL-3)
+// ---------------------------------------------------------
+
+model PreContractCostEstimate {
+  id                   String                  @id @default(uuid())
+  estimateNumber       String?
+  caseId               String
+  case                 PreContractCase         @relation(fields: [caseId], references: [id])
+  surveyId             String
+  survey               PreContractSurvey       @relation(fields: [surveyId], references: [id])
+  companyId            String?
+  operationType        String?
+  currentVersionNumber Int                     @default(1)
+  status               String                  @default("DRAFT") // DRAFT, IN_WORKFLOW, APPROVED, SUPERSEDED, REJECTED
+  createdBy            String
+  createdAt            DateTime                @default(now())
+  updatedAt            DateTime                @updatedAt
+
+  versions PreContractCostEstimateVersion[]
+}
+
+model PreContractCostEstimateVersion {
+  id                     String                      @id @default(uuid())
+  estimateId             String
+  estimate               PreContractCostEstimate     @relation(fields: [estimateId], references: [id], onDelete: Cascade)
+  versionNumber          Int
+  clonedFromVersionId    String?
+  status                 String                      @default("DRAFT") // DRAFT, SUBMITTED, APPROVED, REJECTED, SUPERSEDED
+  workflowTemplateId     String?
+  workflowInstanceId     String?
+  costConfigVersionId    String?
+  pricingBasis           String                      @default("MARGIN") // MARGIN, MARKUP, MANUAL
+  currency               String                      @default("QAR")
+  totalDirectCost        Decimal                     @db.Decimal(12, 2)
+  totalIndirectCost      Decimal                     @db.Decimal(12, 2)
+  totalCost              Decimal                     @db.Decimal(12, 2)
+  targetMarginPercentage Decimal?                    @db.Decimal(5, 2)
+  targetMarkupPercentage Decimal?                    @db.Decimal(5, 2)
+  sellingPrice           Decimal                     @db.Decimal(12, 2)
+  snapshotJson           String?                     @db.LongText
+  checksum               String?
+  createdBy              String
+  createdAt              DateTime                    @default(now())
+  updatedAt              DateTime                    @updatedAt
+
+  items     PreContractCostEstimateItem[]
+  overrides PreContractCostOverrideLog[]
+}
+
+model PreContractCostEstimateItem {
+  id                String                         @id @default(uuid())
+  estimateVersionId String
+  estimateVersion   PreContractCostEstimateVersion @relation(fields: [estimateVersionId], references: [id], onDelete: Cascade)
+  elementCode       String
+  elementName       String
+  categoryCode      String
+  isDirect          Boolean                        @default(true)
+  unitOfMeasure     String?
+  quantity          Decimal                        @db.Decimal(12, 4)
+  unitRate          Decimal                        @db.Decimal(12, 2)
+  totalAmount       Decimal                        @db.Decimal(12, 2)
+  calculationBasis  String                         @default("CONFIGURED") // CONFIGURED, DRIVER, FORMULA, OVERRIDE
+  overrideReason    String?
+  createdAt         DateTime                       @default(now())
+  updatedAt         DateTime                       @updatedAt
+}
+
+model PreContractCostOverrideLog {
+  id                String                         @id @default(uuid())
+  estimateVersionId String
+  estimateVersion   PreContractCostEstimateVersion @relation(fields: [estimateVersionId], references: [id], onDelete: Cascade)
+  fieldPath         String
+  priorValue        String
+  newValue          String
+  reason            String
+  overriddenBy      String
+  overriddenAt      DateTime                       @default(now())
+}
+
 
 enum SecFacWelfareCheckStatus {
   PENDING

@@ -41,6 +41,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "precontract.siteConditionConfig.view", "precontract.siteConditionConfig.manage", "precontract.costConfig.view", "precontract.costConfig.manage",
     "precontract.formulaRuleConfig.view", "precontract.formulaRuleConfig.manage", "precontract.config.activate", "precontract.config.retire",
     "precontract.workflow.submit", "precontract.workflow.review", "precontract.workflow.approve",
+    "precontract.costing.view", "precontract.costing.manage", "precontract.costing.override", "precontract.costing.crossCompany",
     "commercial.commandCenter.view", "commercial.commandCenter.crossCompany", "commercial.commandCenter.contractHealth", "commercial.commandCenter.exceptions",
     "commercial.commandCenter.rosterCoverage", "commercial.commandCenter.relieverReadiness"
   ],
@@ -86,6 +87,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "precontract.siteConditionConfig.view", "precontract.siteConditionConfig.manage", "precontract.costConfig.view", "precontract.costConfig.manage",
     "precontract.formulaRuleConfig.view", "precontract.formulaRuleConfig.manage", "precontract.config.activate", "precontract.config.retire",
     "precontract.workflow.submit", "precontract.workflow.review", "precontract.workflow.approve",
+    "precontract.costing.view", "precontract.costing.manage", "precontract.costing.override", "precontract.costing.crossCompany",
     "commercial.commandCenter.view", "commercial.commandCenter.crossCompany", "commercial.commandCenter.contractHealth", "commercial.commandCenter.exceptions",
     "commercial.commandCenter.rosterCoverage", "commercial.commandCenter.relieverReadiness"
   ],
