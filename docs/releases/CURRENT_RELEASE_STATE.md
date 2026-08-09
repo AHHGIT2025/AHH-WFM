@@ -26,27 +26,31 @@ Current programme:
 
 * Commercial & Contracts lifecycle foundation (CL-0, PC-2A, CL-1 CRM & Deal Opportunities, CL-2 Pre-Contract Site Surveys & Audits)
 
-* Commercial Command Center Phase CCC-0 Programme, Phase CCC-1 Operational Health, Phase CCC-2 Roster Coverage & Reliever Readiness Console, Phase CCC-3 Operational Escalation Queue & Workflow, Phase CCC-4 Commercial Health / Contract / SLA Analytics
+* Commercial Command Center Phase CCC-0 Programme, Phase CCC-1 Operational Health, Phase CCC-2 Roster Coverage & Reliever Readiness Console, Phase CCC-3 Operational Escalation Queue & Workflow, Phase CCC-4 Commercial Health / Contract / SLA Analytics, Phase CCC-5 Executive Wallboard / Control-Room View
 
-* Commercial Command Center Phase CCC-5 Executive Wallboard / Control-Room View
+* Commercial Command Center Phase CCC-6 Mobile Command Suite
 
 * SECFAC Phase 6A.2 schema reconciliation (SECFAC Status: PAUSED BY CIO)
 
 Current release objective:
 
-1. Implement Commercial Command Center Phase CCC-5 Executive Wallboard / Control-Room View (`/commercial/command-center/wallboard`, canonical API `GET /api/v1/commercial/command-center/wallboard`).
+1. Implement Commercial Command Center Phase CCC-6 Mobile Command Suite (`/command-center` in `apps/mobile`).
 
-2. Extract shared server domain helpers: `attendance-helpers.ts` (CCC-1), `roster-coverage-helpers.ts` (CCC-2), `escalation-helpers.ts` (CCC-3), and `commercial-health-helpers.ts` (CCC-4), ensuring original CCC endpoints and Wallboard route consume shared functions without domain code duplication.
+2. Implement Pattern A Thin Mobile BFF Proxy routes under `apps/mobile/app/api/v1/commercial/command-center/` (`wallboard`, `escalations`, `escalations/[id]`, `roster-coverage`, `commercial-health`) which forward full incoming session cookies to authoritative Web APIs without duplicating domain calculations or database schema logic.
 
-3. Wallboard API orchestrates shared aggregators in parallel via `Promise.all()`, applies company and operation scope isolation, and sets `Cache-Control: private, no-cache, no-store, must-revalidate`.
+3. Mobile Command Suite UI features Mobile Control-Room Header, Live Qatar Business Date badge, Operation Scope selector, 60s auto-refresh countdown, manual refresh button, in-page Critical Alert Banner, 4 tabbed sections (Overview, Escalations, Coverage, Commercial Health), and Escalation Action Drawer (`ACKNOWLEDGE`, `ASSIGN`, `COMMENT`, `RESOLVE`, `CANCEL`).
 
-4. Wallboard Web UI features Executive Header, Primary KPI Cards, Operational Attendance Pulse, Executive Exception Queue Ticker, Commercial Portfolio Monitor, Fullscreen API, 30s auto-refresh, manual refresh, 60s stale data banner, and console drill-down buttons.
+4. Enforce Authoritative Source Protection Rule on `AttendanceCorrection` items (resolution in Command Center does NOT approve correction; approval remains exclusive to Attendance module).
 
-5. Enforce SECFAC pause (no SECFAC code, migrations, or workers modified).
+5. Enforce Terminal State Guards (`RESOLVED`/`CANCELLED` items cannot be re-opened; post-closure `COMMENT` only permitted).
 
-6. Complete all mandatory verification gates (Prisma validate, tsc Web/Mobile, 5 Jest test suites / 105 tests passed, Web/Mobile production builds).
+6. Integrate permission-gated entrance card on Mobile Home (`/`) guarded by `commercial.commandCenter.view` or `SUPER_ADMIN`/`ADMIN` role.
 
-7. Deploy only after CIO / ChatGPT review and explicit deployment authorization.
+7. Enforce SECFAC pause (no SECFAC code, migrations, or workers modified).
+
+8. Pass all 6 mandatory verification gates (Prisma validate, tsc Web, tsc Mobile, Jest test suite 6/6 passed, Web build, Mobile build).
+
+9. Deploy only after CIO / ChatGPT review and explicit deployment authorization.
 
 CCC-1 Status:
 
@@ -66,7 +70,11 @@ CCC-4 Status:
 
 CCC-5 Status:
 
-`VERIFIED LOCALLY (105/105 TESTS PASSED, ALL 6 GATES PASSED)`
+`VERIFIED LOCALLY (COMMITTED & PUSHED TO REMOTE)`
+
+CCC-6 Status:
+
+`VERIFIED LOCALLY (6/6 TESTS PASSED, ALL 6 GATES PASSED)`
 
 Deployment approval state:
 

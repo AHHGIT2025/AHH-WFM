@@ -180,7 +180,7 @@ export default function MobileDashboard() {
       </div>
 
       {/* Supervisor Link if Admin/Supervisor */}
-      {(session?.user as any)?.role === "SUPERVISOR" || (session?.user as any)?.role === "ADMIN" ? (
+      {(session?.user as any)?.role === "SUPERVISOR" || (session?.user as any)?.role === "ADMIN" || (session?.user as any)?.role === "SUPER_ADMIN" ? (
         <Link href="/supervisor" className="bg-[#b89d7e] text-white p-4 rounded-2xl flex items-center justify-between shadow-sm active:scale-95 transition-transform">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
@@ -192,6 +192,27 @@ export default function MobileDashboard() {
             </div>
           </div>
           <span className="material-symbols-outlined">chevron_right</span>
+        </Link>
+      ) : null}
+
+      {/* Command Center Entrance for Authorized Users */}
+      {((session?.user as any)?.role === "SUPER_ADMIN" ||
+        (session?.user as any)?.role === "ADMIN" ||
+        ((session?.user as any)?.permissions && Array.isArray((session?.user as any)?.permissions) && (
+          (session?.user as any)?.permissions.includes("commercial.commandCenter.view") ||
+          (session?.user as any)?.permissions.includes("manpower.admin.full_access")
+        ))) ? (
+        <Link href="/command-center" className="bg-slate-900 text-white p-4 rounded-2xl flex items-center justify-between shadow-md active:scale-95 transition-transform border border-slate-800">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
+              <span className="material-symbols-outlined text-primary text-[20px]">space_dashboard</span>
+            </div>
+            <div>
+              <p className="text-sm font-bold text-white">Mobile Command Suite</p>
+              <p className="text-[10px] text-slate-400">Executive operations & escalation queue</p>
+            </div>
+          </div>
+          <span className="material-symbols-outlined text-slate-400">chevron_right</span>
         </Link>
       ) : null}
 
