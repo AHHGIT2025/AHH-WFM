@@ -1397,6 +1397,8 @@ model ManpowerContract {
   reconciliations       AttendanceRosterReconciliation[]
   reconciliationConfigs ReconciliationGracePeriodConfig[]
   reconciliationRuns    ManpowerReconciliationRun[]
+  mobilizationChecklists ContractMobilizationChecklist[]
+  handoverLogs          ContractHandoverLog[]
 }
 
 model ManpowerProject {
@@ -5318,4 +5320,41 @@ enum SecfacPatrolExecutionCheckpointAssuranceStatus {
   SKIPPED
   EXCEPTION_ACKNOWLEDGED
 }
+
+// ---------------------------------------------------------
+// COMMERCIAL LIFECYCLE CL-6: OPERATIONS HANDOVER & REPORTS
+// ---------------------------------------------------------
+
+model ContractMobilizationChecklist {
+  id           String           @id @default(uuid())
+  contractId   String
+  contract     ManpowerContract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  taskName     String
+  department   String           @default("OPERATIONS") // "OPERATIONS" | "LOGISTICS" | "HR" | "FINANCE"
+  status       String           @default("PENDING") // "PENDING" | "IN_PROGRESS" | "COMPLETED" | "EXEMPTED"
+  assignedToId String?
+  remarks      String?          @db.Text
+  completedAt  DateTime?
+  completedBy  String?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  @@index([contractId])
+}
+
+model ContractHandoverLog {
+  id                String           @id @default(uuid())
+  contractId        String
+  contract          ManpowerContract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  clientSignoffName String
+  clientSignoffDate DateTime         @default(now())
+  clientRemarks     String?          @db.Text
+  handedOverBy      String
+  status            String           @default("SIGNED_OFF") // "DRAFT" | "SIGNED_OFF"
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  @@index([contractId])
+}
+
 

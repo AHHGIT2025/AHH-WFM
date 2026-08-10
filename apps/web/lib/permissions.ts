@@ -45,7 +45,8 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "precontract.proposal.view", "precontract.proposal.manage", "precontract.proposal.issue", "precontract.proposal.crossCompany",
     "precontract.acceptance.manage", "precontract.contractConversion.execute",
     "commercial.commandCenter.view", "commercial.commandCenter.crossCompany", "commercial.commandCenter.contractHealth", "commercial.commandCenter.exceptions",
-    "commercial.commandCenter.rosterCoverage", "commercial.commandCenter.relieverReadiness"
+    "commercial.commandCenter.rosterCoverage", "commercial.commandCenter.relieverReadiness",
+    "commercial.handover.view", "commercial.handover.manage", "commercial.reports.view"
   ],
   ADMIN: [
     "dashboard.view", "employees.view", "employees.create", "employees.edit", "employees.bulkUpload", "employees.manage",
@@ -92,7 +93,8 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "precontract.costing.view", "precontract.costing.manage", "precontract.costing.override", "precontract.costing.crossCompany",
     "precontract.proposal.view", "precontract.proposal.manage", "precontract.proposal.issue", "precontract.proposal.crossCompany",
     "commercial.commandCenter.view", "commercial.commandCenter.crossCompany", "commercial.commandCenter.contractHealth", "commercial.commandCenter.exceptions",
-    "commercial.commandCenter.rosterCoverage", "commercial.commandCenter.relieverReadiness"
+    "commercial.commandCenter.rosterCoverage", "commercial.commandCenter.relieverReadiness",
+    "commercial.handover.view", "commercial.handover.manage", "commercial.reports.view"
   ],
   SYSTEM_ADMIN: [
     "settings.view", "settings.manage", "users.view", "users.manage", "roles.view", "roles.manage",

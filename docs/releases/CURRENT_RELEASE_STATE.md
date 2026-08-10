@@ -36,15 +36,17 @@ Current programme:
 
 * Commercial Lifecycle Phase CL-5 — Client Acceptance, Award & Contract Conversion (LOCAL IMPLEMENTATION COMPLETED AND VERIFIED)
 
+* Commercial Lifecycle Phase CL-6 — Operations Handover & Reports (LOCAL IMPLEMENTATION COMPLETED AND VERIFIED)
+
 * SECFAC Phase 6A.2 schema reconciliation (SECFAC Status: PAUSED BY CIO)
 
 Current release objective:
 
-CL-5 Client Acceptance, Award & Contract Conversion — FULLY IMPLEMENTED AND VERIFIED LOCALLY.
+CL-6 Operations Handover & Reports — FULLY IMPLEMENTED AND VERIFIED LOCALLY.
 
 Current Git commit baseline:
 
-`d05d93c63e70545a6ec986742ee39e48635de0fe`
+`f1de7d3a13fcd906e5a99039d579fda942773155`
 
 Summary of CL-5 deliverables:
 
