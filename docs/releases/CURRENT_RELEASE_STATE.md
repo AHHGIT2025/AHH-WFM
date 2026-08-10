@@ -147,9 +147,9 @@ Branch:
 
 `manpower-operations-scope`
 
-Current release baseline (CL-3 final):
+Current release baseline (CL-4 final release candidate):
 
-`c5e1052bdd62974cf7d01899c6c1a8358803ef5a`
+`14fb15a6f8ad94371dede33f74d283dd7dadba46`
 
 Required direct verification:
 
@@ -165,11 +165,20 @@ Current values (as of 2026-08-09):
 
 | Item                | Value                          |
 | ------------------- | ------------------------------ |
-| LOCAL HEAD          | `c5e1052bdd62974cf7d01899c6c1a8358803ef5a` (CL-3 case-state guard + test hardening) |
-| REMOTE HEAD         | `c5e1052bdd62974cf7d01899c6c1a8358803ef5a` |
+| LOCAL HEAD          | `14fb15a6f8ad94371dede33f74d283dd7dadba46` (CL-4 implementation + .gitattributes EOL rule) |
+| REMOTE HEAD         | `14fb15a6f8ad94371dede33f74d283dd7dadba46` |
 | SERVER HEAD         | `13e7b516dc0ede72dc61b4a8f7173a95b5bd0f78` |
 | LOCAL working tree  | `CLEAN` |
 | SERVER working tree | `CLEAN` |
+
+---
+
+## 4.1 Mandatory Conversation Continuity & Branching Rule
+
+Per CIO governance directive, whenever context pressure occurs or a new conversation branch/thread is created:
+1. NEVER clear, delete, truncate, overwrite, or remove the beginning/prefix of existing conversation history.
+2. Create a structured continuation handoff carrying forward the complete authoritative project state under the SAME `AHH WFM Project`.
+3. Conversation branching is NOT Git branching. Continue using approved Git branch `manpower-operations-scope`.
 
 ---
 
