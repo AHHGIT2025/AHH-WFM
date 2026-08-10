@@ -2,7 +2,7 @@ import { prisma } from "@ahh-wfm/database";
 import { recordClientResponse, getConversionReadiness, convertToContract } from "../../apps/web/lib/contract-conversion";
 import crypto from "crypto";
 
-describe("CL-5 Client Acceptance, Award & Contract Conversion Suite", () => {
+describe("CL-5 Client Acceptance, Award & Contract Conversion Comprehensive Suite", () => {
   const companyId = "CMP-COMPA-CL5-TEST";
   let clientMasterId: string;
   let caseId: string;
@@ -108,7 +108,7 @@ describe("CL-5 Client Acceptance, Award & Contract Conversion Suite", () => {
         estimateId,
         versionNumber: 1,
         status: "APPROVED",
-        currency: "QAR",
+        currency: "USD",
         totalDirectCost: 40000,
         totalIndirectCost: 10000,
         totalCost: 50000,
@@ -162,7 +162,7 @@ describe("CL-5 Client Acceptance, Award & Contract Conversion Suite", () => {
         status: "ISSUED_TO_CLIENT",
         title: "CL5 Commercial Proposal for Security Guarding",
         sellingPrice: 60000,
-        currency: "QAR",
+        currency: "USD",
         snapshotChecksum: checksum,
         snapshotJson: JSON.stringify({ items: [] }),
         createdBy: "ADM-CL5"
@@ -216,7 +216,6 @@ describe("CL-5 Client Acceptance, Award & Contract Conversion Suite", () => {
 
   describe("1. Client Response Recording (recordClientResponse)", () => {
     it("should reject client response recording if proposal version status is not ISSUED_TO_CLIENT", async () => {
-      // Create a draft version
       const draftVer = await prisma.preContractProposalVersion.create({
         data: {
           proposalId,
@@ -226,7 +225,7 @@ describe("CL-5 Client Acceptance, Award & Contract Conversion Suite", () => {
           status: "DRAFT",
           title: "Draft Revision",
           sellingPrice: 60000,
-          currency: "QAR",
+          currency: "USD",
           snapshotChecksum: "draft-checksum",
           snapshotJson: "{}",
           createdBy: "ADM-CL5"
@@ -240,6 +239,33 @@ describe("CL-5 Client Acceptance, Award & Contract Conversion Suite", () => {
         snapshotChecksum: "draft-checksum",
         recordedById: "test-user"
       })).rejects.toThrow(/Client response can only be recorded for ISSUED_TO_CLIENT proposals/);
+    });
+
+    it("should reject client response recording if proposal version has dynamically expired", async () => {
+      const expiredVer = await prisma.preContractProposalVersion.create({
+        data: {
+          proposalId,
+          versionNumber: 3,
+          costEstimateId: estimateId,
+          costEstimateVersionId: estimateVersionId,
+          status: "ISSUED_TO_CLIENT",
+          title: "Expired Version",
+          sellingPrice: 60000,
+          currency: "USD",
+          validUntil: new Date(Date.now() - 86400000), // Yesterday
+          snapshotChecksum: "expired-checksum",
+          snapshotJson: "{}",
+          createdBy: "ADM-CL5"
+        }
+      });
+
+      await expect(recordClientResponse({
+        proposalId,
+        proposalVersionId: expiredVer.id,
+        responseType: "ACCEPTED",
+        snapshotChecksum: "expired-checksum",
+        recordedById: "test-user"
+      })).rejects.toThrow(/Proposal version has expired/);
     });
 
     it("should reject client response if snapshot checksum mismatches", async () => {
@@ -293,12 +319,35 @@ describe("CL-5 Client Acceptance, Award & Contract Conversion Suite", () => {
       expect(readiness.blockers).toHaveLength(0);
       expect(readiness.clientResponse?.responseType).toBe("ACCEPTED");
     });
+
+    it("should report ready = false if proposal version is dynamically expired", async () => {
+      const expVer = await prisma.preContractProposalVersion.create({
+        data: {
+          proposalId,
+          versionNumber: 4,
+          costEstimateId: estimateId,
+          costEstimateVersionId: estimateVersionId,
+          status: "ISSUED_TO_CLIENT",
+          title: "Expired Version 4",
+          sellingPrice: 60000,
+          currency: "USD",
+          validUntil: new Date(Date.now() - 3600000),
+          snapshotChecksum: "exp4-checksum",
+          snapshotJson: "{}",
+          createdBy: "ADM-CL5"
+        }
+      });
+
+      const readiness = await getConversionReadiness(expVer.id);
+      expect(readiness.ready).toBe(false);
+      expect(readiness.blockers.some((b: string) => b.includes("expired"))).toBe(true);
+    });
   });
 
   describe("3. Contract Conversion Execution (convertToContract)", () => {
     let convertedContractId: string;
 
-    it("should convert accepted proposal into DRAFT ManpowerContract with zero auto-activation", async () => {
+    it("should convert accepted proposal into DRAFT ManpowerContract inheriting exact Proposal currency (USD) with zero auto-activation", async () => {
       const contractNum = `CON-CL5-${Date.now()}`;
       const result = await convertToContract({
         proposalVersionId,
@@ -307,7 +356,7 @@ describe("CL-5 Client Acceptance, Award & Contract Conversion Suite", () => {
         endDate: "2027-08-31",
         clientId: clientMasterId,
         billingBasis: "MONTHLY",
-        totalContractValue: 720000,
+        totalContractValue: undefined, // Total contract value omitted intentionally
         userId: "test-user"
       });
 
@@ -318,19 +367,21 @@ describe("CL-5 Client Acceptance, Award & Contract Conversion Suite", () => {
       expect(contract.contractNumber).toBe(contractNum);
       expect(contract.status).toBe("DRAFT");
       expect(contract.approvalStatus).toBe("DRAFT");
-      expect(contract.currency).toBe("QAR");
+      expect(contract.currency).toBe("USD"); // Inherited exact from ProposalVersion currency ("USD"), NO default QAR
       expect(contract.sourceClientResponseId).toBeDefined();
       expect(contract.sourceProposalVersionId).toBe(proposalVersionId);
       expect(contract.sourceSnapshotChecksum).toBe(checksum);
-      expect(contract.totalContractValue).toBe(720000);
+      expect(contract.totalContractValue).toBeNull(); // NULL when omitted, sellingPrice not auto-copied
 
-      // Verify requirements inherited
+      // Verify requirements inherited with zero internal cost leakage
       expect(contract.manpowerRequirements).toHaveLength(2);
       const guardReq = contract.manpowerRequirements.find((r: any) => r.position === "Security Guard Senior");
       expect(guardReq).toBeDefined();
       expect(guardReq.quantity).toBe(5);
-      expect(guardReq.billingEligible).toBe(true);
-      expect(guardReq.focStatus).toBe("NOT_APPLICABLE");
+      expect(guardReq.unitPrice).toBeNull(); // NULL unless explicitly entered
+      expect(guardReq.lineTotal).toBeNull(); // NULL unless explicitly entered
+      expect(guardReq.billingEligible).toBe(true); // Prisma model default
+      expect(guardReq.focStatus).toBe("NOT_APPLICABLE"); // Prisma model default
     });
 
     it("should enforce duplicate conversion protection (Idempotency: returns existing contract on 2nd call)", async () => {
@@ -347,8 +398,13 @@ describe("CL-5 Client Acceptance, Award & Contract Conversion Suite", () => {
       expect(result.contract.id).toBe(convertedContractId);
     });
 
+    it("should verify Case businessOutcome remains completely untouched during contract conversion", async () => {
+      const cRec = await prisma.preContractCase.findUnique({ where: { id: caseId } });
+      // Verify businessOutcome is not auto-mutated to WON or LOST
+      expect(cRec?.businessOutcome || null).toBeNull();
+    });
+
     it("should prevent duplicate contractNumber across system", async () => {
-      // Create a fresh accepted version
       const p2 = await prisma.preContractProposal.create({
         data: { companyId, caseId, proposalCode: `PROP-CL5-2-${Date.now()}`, status: "ISSUED_TO_CLIENT", createdBy: "ADM-CL5" }
       });
@@ -361,7 +417,7 @@ describe("CL-5 Client Acceptance, Award & Contract Conversion Suite", () => {
           status: "ISSUED_TO_CLIENT",
           title: "Proposal 2",
           sellingPrice: 50000,
-          currency: "QAR",
+          currency: "EUR",
           snapshotChecksum: "checksum-v2",
           snapshotJson: "{}",
           createdBy: "ADM-CL5"
@@ -375,7 +431,6 @@ describe("CL-5 Client Acceptance, Award & Contract Conversion Suite", () => {
         recordedById: "test-user"
       });
 
-      // Fetch the contract number of the first converted contract
       const existingContract = await prisma.manpowerContract.findUnique({ where: { id: convertedContractId } });
 
       await expect(convertToContract({

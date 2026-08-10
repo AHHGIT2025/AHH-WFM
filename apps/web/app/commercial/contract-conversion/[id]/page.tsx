@@ -116,10 +116,15 @@ export default function ContractConversionWizardPage() {
           <p><strong>Title:</strong> {successContract.title}</p>
           <div style={{ marginTop: "1.5rem" }}>
             <button
-              onClick={() => router.push(`/contracts/${successContract.id}`)}
+              onClick={() => {
+                const targetRoute = successContract.operationType === "FACILITY_MANAGEMENT"
+                  ? "/manpower/facility-management/contracts"
+                  : "/manpower/security-guarding/contracts";
+                router.push(targetRoute);
+              }}
               style={{ padding: "0.75rem 1.5rem", background: "#059669", color: "#fff", border: "none", borderRadius: "6px", cursor: "pointer", fontWeight: "bold" }}
             >
-              Open Contract Detail
+              Open Contracts Register
             </button>
             <button
               onClick={() => router.push("/commercial/quotations")}

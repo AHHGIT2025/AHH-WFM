@@ -1,4 +1,5 @@
 import { prisma } from "@ahh-wfm/database";
+import { isProposalExpired } from "./precontract-proposal";
 
 export interface RecordClientResponseInput {
   proposalId: string;
@@ -45,9 +46,10 @@ export interface ConvertToContractInput {
 }
 
 /**
- * 1. Record Client Response for an Issued Proposal Version.
+ * 1. Record Client Response for an ISSUED_TO_CLIENT Proposal Version.
  * Enforces:
  * - ProposalVersion must be ISSUED_TO_CLIENT.
+ * - ProposalVersion must not be dynamically expired.
  * - Exactly 1 terminal ClientResponse per ProposalVersion (@unique proposalVersionId).
  * - Checksum match.
  * - Preserves ProposalVersion.status = "ISSUED_TO_CLIENT".
@@ -70,6 +72,10 @@ export async function recordClientResponse(input: RecordClientResponseInput) {
 
   if (version.status !== "ISSUED_TO_CLIENT") {
     throw new Error(`Client response can only be recorded for ISSUED_TO_CLIENT proposals. Current status: ${version.status}`);
+  }
+
+  if (isProposalExpired(version.status, version.validUntil)) {
+    throw new Error("Cannot record client response: Proposal version has expired.");
   }
 
   if (version.clientResponse) {
@@ -129,6 +135,10 @@ export async function getConversionReadiness(proposalVersionId: string) {
 
   if (version.status !== "ISSUED_TO_CLIENT") {
     blockers.push(`Proposal version status must be ISSUED_TO_CLIENT. Current: ${version.status}`);
+  }
+
+  if (isProposalExpired(version.status, version.validUntil)) {
+    blockers.push(`Proposal version has expired (valid until ${version.validUntil}).`);
   }
 
   if (!version.clientResponse) {
