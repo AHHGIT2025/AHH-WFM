@@ -44,7 +44,7 @@ CL-5 Client Acceptance, Award & Contract Conversion — FULLY IMPLEMENTED AND VE
 
 Current Git commit baseline:
 
-`069314a4581f9e6a25e7ea32aef764598afa1e6c`
+`d05d93c63e70545a6ec986742ee39e48635de0fe`
 
 Summary of CL-5 deliverables:
 
@@ -74,7 +74,7 @@ Summary of CL-5 deliverables:
    - Built dedicated Contract Conversion Wizard at `/commercial/contract-conversion/[id]` with real-time readiness gates and atomic creation redirect to `/manpower/contracts`.
 
 6. **Automated Testing & Build Verification**:
-   - Expanded executable API test suite `tests/api/cl5-contract-conversion.spec.ts` (**11/11 tests pass, 100% pass, exit 0**).
+   - Expanded executable API test suite `tests/api/cl5-contract-conversion.spec.ts` (**15/15 tests pass, 100% pass, exit 0**).
    - Hard-gate corrections verified: Expiry validation, currency inheritance matching proposal, omitted totalContractValue NULL handling, zero internal cost leakage, case outcome non-mutation.
    - `npx prisma validate`: **PASS (exit 0)**
    - `npx tsc --noEmit --project apps/web/tsconfig.json`: **PASS (exit 0)**
@@ -87,7 +87,7 @@ Summary of CL-5 deliverables:
 
 CL-5 Status:
 
-`FULLY VERIFIED LOCALLY — COMMITTED 069314a AND PUSHED TO REMOTE`
+`FULLY VERIFIED LOCALLY — COMMITTED d05d93c AND PUSHED TO REMOTE`
 
 Deployment approval state:
 
