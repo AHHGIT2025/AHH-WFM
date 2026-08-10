@@ -44,7 +44,7 @@ CL-5 Client Acceptance, Award & Contract Conversion — FULLY IMPLEMENTED AND VE
 
 Current Git commit baseline:
 
-`d8b95d9c43c2c1057a79d641217dd6964b83e9e3`
+`069314a4581f9e6a25e7ea32aef764598afa1e6c`
 
 Summary of CL-5 deliverables:
 
@@ -55,9 +55,9 @@ Summary of CL-5 deliverables:
    - Created additive migration `20260810100000_add_cl5_client_acceptance_contract_conversion`.
 
 2. **Client Acceptance & Contract Conversion Engine (`apps/web/lib/contract-conversion.ts`)**:
-   - `recordClientResponse()`: Validates `ISSUED_TO_CLIENT` status and SHA-256 snapshot checksum integrity before recording client response (`ACCEPTED`, `REJECTED`, `CHANGE_REQUESTED`).
+   - `recordClientResponse()`: Validates `ISSUED_TO_CLIENT` status, dynamic non-expiry (`validUntil >= now`), and SHA-256 snapshot checksum integrity before recording client response (`ACCEPTED`, `REJECTED`, `CHANGE_REQUESTED`).
    - `getConversionReadiness()`: Evaluates 5 conversion readiness gates (Accepted response presence, Client Master resolution, Proposal Version snapshot integrity, Duplicate contract conversion guard, Requirements completeness).
-   - `convertToContract()`: Atomic transaction executing contract conversion into `DRAFT` status with **ZERO auto-activation**. Reuses existing `ManpowerContract` model, links audit lineage, and inherits manpower requirements into `ContractManpowerRequirement`.
+   - `convertToContract()`: Atomic transaction executing contract conversion into `DRAFT` status with **ZERO auto-activation**. Reuses existing `ManpowerContract` model, links audit lineage, inherits exact `ProposalVersion` currency (without defaulting QAR), leaves `totalContractValue` NULL when omitted, maintains zero internal cost leakage (unitPrice & lineTotal NULL), and preserves `PreContractCase.businessOutcome` untouched.
 
 3. **REST APIs & Client Documents Module**:
    - `POST /api/v1/commercial/proposals/[id]/response` — Client response recording.
@@ -74,7 +74,8 @@ Summary of CL-5 deliverables:
    - Built dedicated Contract Conversion Wizard at `/commercial/contract-conversion/[id]` with real-time readiness gates and atomic creation redirect to `/manpower/contracts`.
 
 6. **Automated Testing & Build Verification**:
-   - Created executable API test suite `tests/api/cl5-contract-conversion.spec.ts` (**8/8 tests pass, 100% pass, exit 0**).
+   - Expanded executable API test suite `tests/api/cl5-contract-conversion.spec.ts` (**11/11 tests pass, 100% pass, exit 0**).
+   - Hard-gate corrections verified: Expiry validation, currency inheritance matching proposal, omitted totalContractValue NULL handling, zero internal cost leakage, case outcome non-mutation.
    - `npx prisma validate`: **PASS (exit 0)**
    - `npx tsc --noEmit --project apps/web/tsconfig.json`: **PASS (exit 0)**
    - `npx tsc --noEmit --project apps/mobile/tsconfig.json`: **PASS (exit 0)**
@@ -86,7 +87,7 @@ Summary of CL-5 deliverables:
 
 CL-5 Status:
 
-`FULLY VERIFIED LOCALLY — COMMITTED d8b95d9 AND PUSHED TO REMOTE`
+`FULLY VERIFIED LOCALLY — COMMITTED 069314a AND PUSHED TO REMOTE`
 
 Deployment approval state:
 
@@ -168,7 +169,7 @@ The following Commercial Lifecycle (CL-1 through CL-5) functionality is visible 
 
 ```text
 Test Suites: 1 passed, 1 total
-Tests:       8 passed, 8 total
+Tests:       11 passed, 11 total
 Snapshots:   0 total
 Time:        ~10 s
 Exit code:   0
