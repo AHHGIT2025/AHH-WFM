@@ -1336,6 +1336,14 @@ model ManpowerContract {
   workflows            ContractApprovalWorkflow[]
   documents            ManpowerClientDocument[]
 
+  // CL-5 Provenance fields
+  sourceClientResponseId  String?                    @unique
+  sourceClientResponse    PreContractClientResponse? @relation("ContractSourceClientResponse", fields: [sourceClientResponseId], references: [id], onDelete: SetNull)
+  sourceProposalVersionId String?
+  sourceProposalVersion   PreContractProposalVersion? @relation(fields: [sourceProposalVersionId], references: [id], onDelete: SetNull)
+  sourceSnapshotChecksum  String?
+  currency                String?
+
   // Payment Terms
   paymentTerms         String?
   paymentCycle         String?
@@ -1836,6 +1844,11 @@ model ManpowerClientDocument {
   uploadedAt   DateTime          @default(now())
   createdAt    DateTime          @default(now())
   updatedAt    DateTime          @updatedAt
+
+  clientResponseId  String?
+  clientResponse    PreContractClientResponse?  @relation(fields: [clientResponseId], references: [id], onDelete: SetNull)
+  proposalVersionId String?
+  proposalVersion   PreContractProposalVersion? @relation(fields: [proposalVersionId], references: [id], onDelete: SetNull)
 }
 
 model ManpowerContractAddendum {
@@ -5187,6 +5200,7 @@ model PreContractProposal {
   createdAt            DateTime                     @default(now())
   updatedAt            DateTime                     @updatedAt
   versions             PreContractProposalVersion[]
+  clientResponses      PreContractClientResponse[]
 }
 
 model PreContractProposalVersion {
@@ -5220,6 +5234,30 @@ model PreContractProposalVersion {
   createdAt             DateTime                       @default(now())
   updatedAt             DateTime                       @updatedAt
   issuanceLogs          ProposalIssuanceLog[]
+  clientResponse        PreContractClientResponse?
+  contracts             ManpowerContract[]
+  clientDocuments       ManpowerClientDocument[]
+}
+
+model PreContractClientResponse {
+  id                String                     @id @default(uuid())
+  proposalId        String
+  proposal          PreContractProposal        @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  proposalVersionId String                     @unique
+  proposalVersion   PreContractProposalVersion @relation(fields: [proposalVersionId], references: [id], onDelete: Cascade)
+  responseType      String                     // "ACCEPTED" | "REJECTED" | "CHANGE_REQUESTED"
+  responseDate      DateTime                   @default(now())
+  clientContactName String?
+  clientReference   String?
+  notes             String?                    @db.Text
+  snapshotChecksum  String
+  recordedById      String
+  createdAt         DateTime                   @default(now())
+
+  contract          ManpowerContract?          @relation("ContractSourceClientResponse")
+  documents         ManpowerClientDocument[]
+
+  @@index([proposalId])
 }
 
 model ProposalIssuanceLog {

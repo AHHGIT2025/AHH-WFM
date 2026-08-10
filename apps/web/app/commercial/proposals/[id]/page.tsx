@@ -39,6 +39,14 @@ export default function ProposalDetailPage() {
   // Preview / Print Modal State
   const [showPreviewModal, setShowPreviewModal] = useState(false);
 
+  // Client Response Modal State
+  const [showResponseModal, setShowResponseModal] = useState(false);
+  const [responseType, setResponseType] = useState<"ACCEPTED" | "REJECTED" | "CHANGE_REQUESTED">("ACCEPTED");
+  const [clientContactName, setClientContactName] = useState("");
+  const [clientReference, setClientReference] = useState("");
+  const [responseNotes, setResponseNotes] = useState("");
+  const [recordingResponse, setRecordingResponse] = useState(false);
+
   useEffect(() => {
     fetchProposal();
   }, [proposalId]);
@@ -184,6 +192,40 @@ export default function ProposalDetailPage() {
     }
   };
 
+  const handleRecordResponse = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setRecordingResponse(true);
+    setMsg(null);
+    try {
+      const ver = proposal?.versions[0];
+      const res = await fetch(`/api/v1/commercial/proposals/${proposalId}/response`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          proposalVersionId: ver?.id,
+          responseType,
+          clientContactName,
+          clientReference,
+          notes: responseNotes,
+          snapshotChecksum: ver?.snapshotChecksum
+        })
+      });
+
+      if (res.ok) {
+        setShowResponseModal(false);
+        setMsg({ type: "success", text: `Client response (${responseType}) recorded successfully!` });
+        fetchProposal();
+      } else {
+        const data = await res.json();
+        setMsg({ type: "error", text: data.error || "Failed to record client response." });
+      }
+    } catch (err: any) {
+      setMsg({ type: "error", text: err.message || "An error occurred while recording client response." });
+    } finally {
+      setRecordingResponse(false);
+    }
+  };
+
   if (loading) {
     return <div className="p-12 text-center text-slate-500">Loading proposal editor...</div>;
   }
@@ -246,6 +288,26 @@ export default function ProposalDetailPage() {
                 <span className="material-icons-outlined text-lg mr-1.5">send</span>
                 Issue to Client
               </button>
+            )}
+
+            {isIssued && (
+              <>
+                <button
+                  onClick={() => setShowResponseModal(true)}
+                  className="inline-flex items-center px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-sm font-medium rounded-lg transition-colors"
+                >
+                  <span className="material-icons-outlined text-lg mr-1.5">rate_review</span>
+                  Record Client Response
+                </button>
+
+                <Link
+                  href={`/commercial/contract-conversion/${proposalId}`}
+                  className="inline-flex items-center px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg transition-colors shadow-sm"
+                >
+                  <span className="material-icons-outlined text-lg mr-1.5">gavel</span>
+                  Convert to Contract
+                </Link>
+              </>
             )}
 
             {(isApproved || isIssued) && (
@@ -749,6 +811,96 @@ export default function ProposalDetailPage() {
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Record Client Response Modal */}
+      {showResponseModal && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-5">
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+              <h3 className="text-lg font-bold text-slate-900">Record Client Response</h3>
+              <button
+                onClick={() => setShowResponseModal(false)}
+                className="text-slate-400 hover:text-slate-600 rounded-lg p-1"
+              >
+                <span className="material-icons-outlined">close</span>
+              </button>
+            </div>
+
+            <form onSubmit={handleRecordResponse} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+                  Client Response Outcome *
+                </label>
+                <select
+                  value={responseType}
+                  onChange={(e: any) => setResponseType(e.target.value)}
+                  className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 font-semibold"
+                >
+                  <option value="ACCEPTED">ACCEPTED (Ready for Contract Conversion)</option>
+                  <option value="REJECTED">REJECTED (Declined by Client)</option>
+                  <option value="CHANGE_REQUESTED">CHANGE REQUESTED (Requires New Revision)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+                  Client Contact Name
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Mr. Ahmed Al-Mansoori"
+                  value={clientContactName}
+                  onChange={(e) => setClientContactName(e.target.value)}
+                  className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+                  Client Reference / Award Document No.
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. LOA-2026-0891"
+                  value={clientReference}
+                  onChange={(e) => setClientReference(e.target.value)}
+                  className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
+                  Response Notes & Remarks
+                </label>
+                <textarea
+                  rows={3}
+                  placeholder="Enter details regarding client acceptance, conditions, or requested changes..."
+                  value={responseNotes}
+                  onChange={(e) => setResponseNotes(e.target.value)}
+                  className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setShowResponseModal(false)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium text-xs rounded-lg transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={recordingResponse}
+                  className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-medium text-xs rounded-lg transition-colors shadow-sm"
+                >
+                  {recordingResponse ? "Saving..." : "Record Response"}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

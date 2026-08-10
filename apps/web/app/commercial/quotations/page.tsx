@@ -313,13 +313,21 @@ export default function ProposalRegisterPage() {
                     <td className="py-3.5 px-4 text-xs text-slate-600">
                       {p.validUntil ? new Date(p.validUntil).toLocaleDateString() : "Not set"}
                     </td>
-                    <td className="py-3.5 px-4 text-right">
+                    <td className="py-3.5 px-4 text-right flex items-center justify-end gap-2">
                       <Link
                         href={`/commercial/proposals/${p.id}`}
                         className="inline-flex items-center px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium text-xs rounded-lg transition-colors"
                       >
                         View / Edit
                       </Link>
+                      {p.status === "ISSUED_TO_CLIENT" && (
+                        <Link
+                          href={`/commercial/contract-conversion/${p.id}`}
+                          className="inline-flex items-center px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-medium text-xs rounded-lg transition-colors shadow-sm"
+                        >
+                          Convert
+                        </Link>
+                      )}
                     </td>
                   </tr>
                 ))}
