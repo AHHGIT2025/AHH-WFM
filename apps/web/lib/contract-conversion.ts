@@ -225,15 +225,24 @@ export async function convertToContract(input: ConvertToContractInput) {
   const endDt = new Date(endDate);
 
   // Resolve manpower items to inherit from cost estimate items if not explicitly provided
-  const itemsToCreate = manpowerItems && manpowerItems.length > 0
+  const rawItems = manpowerItems && manpowerItems.length > 0
     ? manpowerItems
     : (version.costEstimateVersion?.items || []).map(item => ({
         position: item.elementName || item.elementCode || "General Staff",
         quantity: Number(item.quantity) || 1,
-        deploymentType: "REGULAR",
+        deploymentType: (item as any).deploymentType || "REGULAR",
         unitPrice: null,
         lineTotal: null
       }));
+
+  // Enforce USER_INPUT_REQUIRED validation for deploymentType
+  for (const item of rawItems) {
+    if (!item.deploymentType || !item.deploymentType.trim()) {
+      throw new Error(`deploymentType is required for manpower requirement '${item.position}'.`);
+    }
+  }
+
+  const itemsToCreate = rawItems;
 
   // Execute in single atomic transaction
   const result = await prisma.$transaction(async (tx) => {
@@ -268,7 +277,7 @@ export async function convertToContract(input: ConvertToContractInput) {
           create: itemsToCreate.map(m => ({
             position: m.position,
             quantity: m.quantity,
-            deploymentType: m.deploymentType || "REGULAR",
+            deploymentType: m.deploymentType,
             unitPrice: m.unitPrice !== undefined ? m.unitPrice : null,
             lineTotal: m.lineTotal !== undefined ? m.lineTotal : null
             // billingEligible and focStatus intentionally omitted to use Prisma model defaults

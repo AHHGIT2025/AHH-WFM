@@ -404,6 +404,44 @@ describe("CL-5 Client Acceptance, Award & Contract Conversion Comprehensive Suit
       expect(cRec?.businessOutcome || null).toBeNull();
     });
 
+    it("should reject contract conversion if manpower item is missing explicit deploymentType", async () => {
+      const p3 = await prisma.preContractProposal.create({
+        data: { companyId, caseId, proposalCode: `PROP-CL5-3-${Date.now()}`, status: "ISSUED_TO_CLIENT", createdBy: "ADM-CL5" }
+      });
+      const v3 = await prisma.preContractProposalVersion.create({
+        data: {
+          proposalId: p3.id,
+          versionNumber: 1,
+          costEstimateId: estimateId,
+          costEstimateVersionId: estimateVersionId,
+          status: "ISSUED_TO_CLIENT",
+          title: "Proposal 3",
+          sellingPrice: 50000,
+          currency: "EUR",
+          snapshotChecksum: "checksum-v3",
+          snapshotJson: "{}",
+          createdBy: "ADM-CL5"
+        }
+      });
+      await recordClientResponse({
+        proposalId: p3.id,
+        proposalVersionId: v3.id,
+        responseType: "ACCEPTED",
+        snapshotChecksum: "checksum-v3",
+        recordedById: "test-user"
+      });
+
+      await expect(convertToContract({
+        proposalVersionId: v3.id,
+        contractNumber: `CON-MISSING-DEP-${Date.now()}`,
+        startDate: "2026-09-01",
+        endDate: "2027-08-31",
+        clientId: clientMasterId,
+        manpowerItems: [{ position: "Guard", quantity: 2, deploymentType: "" }],
+        userId: "test-user"
+      })).rejects.toThrow(/deploymentType is required for manpower requirement/);
+    });
+
     it("should prevent duplicate contractNumber across system", async () => {
       const p2 = await prisma.preContractProposal.create({
         data: { companyId, caseId, proposalCode: `PROP-CL5-2-${Date.now()}`, status: "ISSUED_TO_CLIENT", createdBy: "ADM-CL5" }
