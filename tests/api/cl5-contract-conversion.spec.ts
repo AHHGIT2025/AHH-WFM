@@ -443,4 +443,199 @@ describe("CL-5 Client Acceptance, Award & Contract Conversion Comprehensive Suit
       })).rejects.toThrow(/already in use/);
     });
   });
+
+  describe("4. Extended Eligibility, Responses & Facility Management Operational Scope Coverage", () => {
+    it("should block client response recording for IN_WORKFLOW, REJECTED, and SUPERSEDED proposal versions", async () => {
+      const pInWf = await prisma.preContractProposal.create({
+        data: { companyId, caseId, proposalCode: `PROP-INWF-${Date.now()}`, status: "IN_WORKFLOW", createdBy: "ADM-CL5" }
+      });
+      const vInWf = await prisma.preContractProposalVersion.create({
+        data: {
+          proposalId: pInWf.id,
+          versionNumber: 1,
+          costEstimateId: estimateId,
+          costEstimateVersionId: estimateVersionId,
+          status: "IN_WORKFLOW",
+          title: "In Workflow Version",
+          sellingPrice: 50000,
+          currency: "QAR",
+          snapshotChecksum: "chk-inwf",
+          snapshotJson: "{}",
+          createdBy: "ADM-CL5"
+        }
+      });
+
+      await expect(recordClientResponse({
+        proposalId: pInWf.id,
+        proposalVersionId: vInWf.id,
+        responseType: "ACCEPTED",
+        snapshotChecksum: "chk-inwf",
+        recordedById: "test-user"
+      })).rejects.toThrow(/Client response can only be recorded for ISSUED_TO_CLIENT proposals/);
+    });
+
+    it("should handle REJECTED client response recording without auto-mutating case businessOutcome to LOST", async () => {
+      const pRej = await prisma.preContractProposal.create({
+        data: { companyId, caseId, proposalCode: `PROP-REJ-${Date.now()}`, status: "ISSUED_TO_CLIENT", createdBy: "ADM-CL5" }
+      });
+      const vRej = await prisma.preContractProposalVersion.create({
+        data: {
+          proposalId: pRej.id,
+          versionNumber: 1,
+          costEstimateId: estimateId,
+          costEstimateVersionId: estimateVersionId,
+          status: "ISSUED_TO_CLIENT",
+          title: "Rejected Version",
+          sellingPrice: 45000,
+          currency: "QAR",
+          snapshotChecksum: "chk-rej",
+          snapshotJson: "{}",
+          createdBy: "ADM-CL5"
+        }
+      });
+
+      const resp = await recordClientResponse({
+        proposalId: pRej.id,
+        proposalVersionId: vRej.id,
+        responseType: "REJECTED",
+        snapshotChecksum: "chk-rej",
+        notes: "Price too high.",
+        recordedById: "test-user"
+      });
+
+      expect(resp.responseType).toBe("REJECTED");
+
+      // Verify ProposalVersion status remains ISSUED_TO_CLIENT
+      const updatedV = await prisma.preContractProposalVersion.findUnique({ where: { id: vRej.id } });
+      expect(updatedV?.status).toBe("ISSUED_TO_CLIENT");
+
+      // Verify Readiness returns ready = false
+      const readiness = await getConversionReadiness(vRej.id);
+      expect(readiness.ready).toBe(false);
+      expect(readiness.blockers.some(b => b.includes("Must be ACCEPTED"))).toBe(true);
+
+      // Verify Case businessOutcome remains null
+      const cRec = await prisma.preContractCase.findUnique({ where: { id: caseId } });
+      expect(cRec?.businessOutcome || null).toBeNull();
+    });
+
+    it("should handle CHANGE_REQUESTED client response recording cleanly", async () => {
+      const pChg = await prisma.preContractProposal.create({
+        data: { companyId, caseId, proposalCode: `PROP-CHG-${Date.now()}`, status: "ISSUED_TO_CLIENT", createdBy: "ADM-CL5" }
+      });
+      const vChg = await prisma.preContractProposalVersion.create({
+        data: {
+          proposalId: pChg.id,
+          versionNumber: 1,
+          costEstimateId: estimateId,
+          costEstimateVersionId: estimateVersionId,
+          status: "ISSUED_TO_CLIENT",
+          title: "Change Requested Version",
+          sellingPrice: 55000,
+          currency: "USD",
+          snapshotChecksum: "chk-chg",
+          snapshotJson: "{}",
+          createdBy: "ADM-CL5"
+        }
+      });
+
+      const resp = await recordClientResponse({
+        proposalId: pChg.id,
+        proposalVersionId: vChg.id,
+        responseType: "CHANGE_REQUESTED",
+        snapshotChecksum: "chk-chg",
+        notes: "Requested 10% discount on supervisor rates.",
+        recordedById: "test-user"
+      });
+
+      expect(resp.responseType).toBe("CHANGE_REQUESTED");
+
+      const readiness = await getConversionReadiness(vChg.id);
+      expect(readiness.ready).toBe(false);
+      expect(readiness.blockers.some(b => b.includes("Must be ACCEPTED"))).toBe(true);
+    });
+
+    it("should support FACILITY_MANAGEMENT operational scope end-to-end acceptance & conversion", async () => {
+      const fmClient = await prisma.manpowerClient.create({
+        data: {
+          code: `CLI-FM-${Date.now()}`,
+          name: "Test Client Corporation FM CL5",
+          operationType: "FACILITY_MANAGEMENT",
+          isActive: true
+        }
+      });
+
+      const fmCase = await prisma.preContractCase.create({
+        data: {
+          companyId,
+          title: "CL5 Soft Services Cleaning Case",
+          operationType: "FACILITY_MANAGEMENT",
+          existingClientId: fmClient.id,
+          lifecycle: "DRAFT",
+          createdBy: "ADM-CL5"
+        }
+      });
+
+      const fmProp = await prisma.preContractProposal.create({
+        data: {
+          companyId,
+          caseId: fmCase.id,
+          proposalCode: `PROP-FM-${Date.now()}`,
+          operationType: "FACILITY_MANAGEMENT",
+          status: "ISSUED_TO_CLIENT",
+          createdBy: "ADM-CL5"
+        }
+      });
+
+      const fmChecksum = "chk-fm-998877";
+      const fmVersion = await prisma.preContractProposalVersion.create({
+        data: {
+          proposalId: fmProp.id,
+          versionNumber: 1,
+          costEstimateId: estimateId,
+          costEstimateVersionId: estimateVersionId,
+          status: "ISSUED_TO_CLIENT",
+          title: "CL5 Facility Management Services Proposal",
+          sellingPrice: 120000,
+          currency: "EUR",
+          snapshotChecksum: fmChecksum,
+          snapshotJson: "{}",
+          createdBy: "ADM-CL5"
+        }
+      });
+
+      // 1. Record ACCEPTED response
+      const fmResp = await recordClientResponse({
+        proposalId: fmProp.id,
+        proposalVersionId: fmVersion.id,
+        responseType: "ACCEPTED",
+        snapshotChecksum: fmChecksum,
+        recordedById: "test-user-fm"
+      });
+      expect(fmResp.responseType).toBe("ACCEPTED");
+
+      // 2. Readiness gate check
+      const readiness = await getConversionReadiness(fmVersion.id);
+      expect(readiness.ready).toBe(true);
+      expect(readiness.resolvedClientId).toBe(fmClient.id);
+
+      // 3. Convert to Contract
+      const fmContractNum = `CON-FM-${Date.now()}`;
+      const convResult = await convertToContract({
+        proposalVersionId: fmVersion.id,
+        contractNumber: fmContractNum,
+        startDate: "2026-10-01",
+        endDate: "2027-09-30",
+        clientId: fmClient.id,
+        billingBasis: "MONTHLY",
+        userId: "test-user-fm"
+      });
+
+      expect(convResult.contract.operationType).toBe("FACILITY_MANAGEMENT");
+      expect(convResult.contract.currency).toBe("EUR");
+      expect(convResult.contract.status).toBe("DRAFT");
+      expect(convResult.contract.approvalStatus).toBe("DRAFT");
+    });
+  });
 });
+
