@@ -4,6 +4,7 @@ import { NextRequest } from "next/server";
 
 import { GET as getRenewals, POST as initiateRenewal } from "../../apps/web/app/api/v1/commercial/renewals/route";
 import { POST as processDecision } from "../../apps/web/app/api/v1/commercial/renewals/[caseId]/decision/route";
+import { isContractDateValid } from "../../apps/web/lib/contract-helpers";
 
 jest.mock("next-auth/next", () => ({
   getServerSession: jest.fn()
@@ -17,6 +18,8 @@ describe("Commercial Lifecycle Phase CL-8: Contract Renewal & Expiry Management 
   let testWorkflowTemplateId: string;
   let testRenewalCaseId: string;
   let testDraftContractId: string;
+  let testSecondContractId: string;
+  let testSecondCaseId: string;
 
   beforeAll(async () => {
     const rand = `${Date.now()}-${Math.floor(Math.random() * 100000)}`;
@@ -82,6 +85,22 @@ describe("Commercial Lifecycle Phase CL-8: Contract Renewal & Expiry Management 
     });
     testActiveContractId = activeContract.id;
 
+    // Create second contract for extension / non-renewal testing
+    const secondContract = await prisma.manpowerContract.create({
+      data: {
+        clientId: testClientId,
+        contractNumber: `CONC8-SEC-${rand}`,
+        title: "CL-8 Second Test Contract",
+        startDate: new Date("2025-09-01"),
+        endDate: new Date("2026-08-31"),
+        operationType: "SECURITY_GUARDING",
+        status: "ACTIVE",
+        approvalStatus: "APPROVED",
+        mobilisationStatus: "MOBILISED"
+      }
+    });
+    testSecondContractId = secondContract.id;
+
     // Create approved CL-7 Addendum to test requirement delta baseline preservation
     const addendum = await prisma.manpowerContractAddendum.create({
       data: {
@@ -122,6 +141,12 @@ describe("Commercial Lifecycle Phase CL-8: Contract Renewal & Expiry Management 
       await prisma.contractManpowerRequirement.deleteMany({ where: { contractId: testDraftContractId } });
       await prisma.manpowerContract.deleteMany({ where: { id: testDraftContractId } });
     }
+    if (testSecondContractId) {
+      await prisma.manpowerContractRenewalCase.deleteMany({ where: { contractId: testSecondContractId } });
+      await prisma.manpowerContractAddendumLineItem.deleteMany({ where: { addendum: { contractId: testSecondContractId } } });
+      await prisma.manpowerContractAddendum.deleteMany({ where: { contractId: testSecondContractId } });
+      await prisma.manpowerContract.deleteMany({ where: { id: testSecondContractId } });
+    }
     if (testActiveContractId) {
       await prisma.manpowerContractRenewalCase.deleteMany({ where: { contractId: testActiveContractId } });
       await prisma.manpowerContractAddendumLineItem.deleteMany({ where: { addendum: { contractId: testActiveContractId } } });
@@ -135,6 +160,16 @@ describe("Commercial Lifecycle Phase CL-8: Contract Renewal & Expiry Management 
     if (testCompanyId) {
       await prisma.company.deleteMany({ where: { id: testCompanyId } });
     }
+  });
+
+  describe("Dynamic Expiry Safety Checks", () => {
+    it("should evaluate dynamic contract date validity correctly regardless of stored ACTIVE status", () => {
+      const validContract = { endDate: new Date("2026-12-31") };
+      const expiredContract = { endDate: new Date("2025-01-01") };
+
+      expect(isContractDateValid(validContract, "2026-06-01")).toBe(true);
+      expect(isContractDateValid(expiredContract, "2026-06-01")).toBe(false);
+    });
   });
 
   describe("GET /api/v1/commercial/renewals", () => {
@@ -316,6 +351,49 @@ describe("Commercial Lifecycle Phase CL-8: Contract Renewal & Expiry Management 
       const data = await res.json();
       expect(data.success).toBe(true);
       expect(data.alreadyFinalized).toBe(true);
+    });
+
+    it("should handle RENEW_ADDENDUM_EXTENSION decision outcome", async () => {
+      (getServerSession as jest.Mock).mockResolvedValue({
+        user: {
+          id: "emp-admin-cl8",
+          role: "SUPER_ADMIN",
+          companyId: testCompanyId,
+          permissions: ["commercial.renewal.manage"]
+        }
+      });
+
+      // Initiate renewal case for second contract
+      const initReq = new NextRequest("http://localhost:3100/api/v1/commercial/renewals", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contractId: testSecondContractId,
+          targetStartDate: "2026-09-01",
+          targetEndDate: "2027-02-28"
+        })
+      });
+      const initRes = await initiateRenewal(initReq);
+      const initData = await initRes.json();
+      testSecondCaseId = initData.renewalCase.id;
+
+      const req = new NextRequest(`http://localhost:3100/api/v1/commercial/renewals/${testSecondCaseId}/decision`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          decision: "RENEW_ADDENDUM_EXTENSION",
+          newEndDate: "2027-02-28",
+          addenumTitle: "CL-8 6-Month Term Extension"
+        })
+      });
+
+      const res = await processDecision(req, { params: { caseId: testSecondCaseId } });
+      expect(res.status).toBe(200);
+
+      const data = await res.json();
+      expect(data.success).toBe(true);
+      expect(data.renewalCase.status).toBe("RENEWED");
+      expect(data.resultingAddendumId).toBeDefined();
     });
   });
 });

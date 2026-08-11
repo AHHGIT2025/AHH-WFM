@@ -319,6 +319,18 @@ export function getRelieverEligibilityWhere(options?: {
   return where;
 }
 
+/**
+ * Dynamic Contract Expiry & Operational Validity Check
+ * Enforces date validity even if stored status is ACTIVE.
+ */
+export function isContractDateValid(contract: any, targetDate?: Date | string): boolean {
+  if (!contract || !contract.endDate) return true;
+  const targetObj = targetDate ? new Date(targetDate) : new Date();
+  const endDate = new Date(contract.endDate);
+  return targetObj.getTime() <= endDate.getTime();
+}
+
+
 
 
 
