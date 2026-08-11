@@ -47,6 +47,7 @@ describe("Commercial Lifecycle Phase CL-7: Post-Award Addendums & Amendments API
         title: "CL-7 Active Test Contract",
         startDate: new Date("2026-09-01"),
         endDate: new Date("2027-08-31"),
+        totalContractValue: 100000,
         operationType: "SECURITY_GUARDING",
         status: "ACTIVE",
         approvalStatus: "APPROVED",
@@ -97,6 +98,20 @@ describe("Commercial Lifecycle Phase CL-7: Post-Award Addendums & Amendments API
       const req = new NextRequest(`http://localhost:3100/api/v1/commercial/contracts/${testActiveContractId}/addendums`);
       const res = await getAddendums(req, { params: { contractId: testActiveContractId } });
       expect(res.status).toBe(401);
+    });
+
+    it("should return 403 if missing commercial.addendum.view permission", async () => {
+      (getServerSession as jest.Mock).mockResolvedValueOnce({
+        user: {
+          id: "emp-unauthorized",
+          role: "EMPLOYEE",
+          permissions: ["self.profile.view"]
+        }
+      });
+
+      const req = new NextRequest(`http://localhost:3100/api/v1/commercial/contracts/${testActiveContractId}/addendums`);
+      const res = await getAddendums(req, { params: { contractId: testActiveContractId } });
+      expect(res.status).toBe(403);
     });
 
     it("should return contract addendums for authorized users", async () => {
@@ -201,7 +216,7 @@ describe("Commercial Lifecycle Phase CL-7: Post-Award Addendums & Amendments API
   });
 
   describe("POST /api/v1/commercial/contracts/[contractId]/addendums/[addendumId]/approve", () => {
-    it("should approve addendum and update contract effective end date atomically", async () => {
+    it("should approve addendum and update contract totalContractValue and effective end date atomically", async () => {
       (getServerSession as jest.Mock).mockResolvedValue({
         user: {
           id: "emp-admin-cl7",
@@ -223,6 +238,7 @@ describe("Commercial Lifecycle Phase CL-7: Post-Award Addendums & Amendments API
       expect(data.success).toBe(true);
       expect(data.alreadyApproved).toBe(false);
       expect(data.addendum.status).toBe("APPROVED");
+      expect(data.contract.totalContractValue).toBe(145000); // 100000 + 45000
     });
 
     it("should be idempotent on repeated approve calls", async () => {
@@ -247,9 +263,64 @@ describe("Commercial Lifecycle Phase CL-7: Post-Award Addendums & Amendments API
       expect(data.success).toBe(true);
       expect(data.alreadyApproved).toBe(true);
     });
+
+    it("should enforce immutability and reject edit attempts on approved addendums", async () => {
+      (getServerSession as jest.Mock).mockResolvedValue({
+        user: {
+          id: "emp-admin-cl7",
+          role: "SUPER_ADMIN",
+          companyId: testCompanyId,
+          permissions: ["commercial.addendum.manage"]
+        }
+      });
+
+      const editReq = new NextRequest(
+        `http://localhost:3100/api/v1/commercial/contracts/${testActiveContractId}/addendums`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            addendumId: testAddendumId,
+            title: "Illegal Modification Attempt",
+            addendumType: "SCOPE_CHANGE",
+            effectiveFrom: "2026-09-01"
+          })
+        }
+      );
+
+      const res = await createAddendum(editReq, { params: { contractId: testActiveContractId } });
+      expect(res.status).toBe(400);
+
+      const data = await res.json();
+      expect(data.error).toContain("immutable");
+    });
   });
 
   describe("POST /api/v1/commercial/contracts/[contractId]/terminate", () => {
+    it("should return 403 if missing commercial.contract.terminate permission", async () => {
+      (getServerSession as jest.Mock).mockResolvedValueOnce({
+        user: {
+          id: "emp-unauthorized-term",
+          role: "EMPLOYEE",
+          permissions: ["self.profile.view"]
+        }
+      });
+
+      const req = new NextRequest(
+        `http://localhost:3100/api/v1/commercial/contracts/${testActiveContractId}/terminate`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            terminationReason: "Unauthorized termination attempt"
+          })
+        }
+      );
+
+      const res = await terminateContract(req, { params: { contractId: testActiveContractId } });
+      expect(res.status).toBe(403);
+    });
+
     it("should terminate active contract and update status to TERMINATED", async () => {
       (getServerSession as jest.Mock).mockResolvedValue({
         user: {

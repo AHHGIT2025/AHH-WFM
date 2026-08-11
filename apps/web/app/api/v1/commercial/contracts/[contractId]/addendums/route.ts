@@ -43,6 +43,7 @@ export async function GET(
         mobilisationStatus: contract.mobilisationStatus,
         startDate: contract.startDate,
         endDate: contract.endDate,
+        totalContractValue: contract.totalContractValue,
         client: contract.client ? { id: contract.client.id, name: contract.client.name } : null
       },
       addendums: contract.addendums
@@ -76,7 +77,7 @@ export async function POST(
       return NextResponse.json({ error: "Contract not found." }, { status: 404 });
     }
 
-    // Business Rule: Addendums are only permitted for ACTIVE contracts
+    // Business Rule: Addendums are only permitted for ACTIVE or APPROVED contracts
     if (contract.status !== "ACTIVE" && contract.status !== "APPROVED") {
       return NextResponse.json(
         { error: `Contract scope addendums are only permitted for ACTIVE contracts. Current status: ${contract.status}` },
@@ -85,7 +86,20 @@ export async function POST(
     }
 
     const body = await req.json();
-    const { title, addendumType, effectiveFrom, effectiveTo, description, commercialImpact, calculatedCommercialImpact, lineItems } = body;
+    const { addendumId, title, addendumType, effectiveFrom, effectiveTo, description, commercialImpact, calculatedCommercialImpact, lineItems } = body;
+
+    // Check immutability if updating an existing addendum
+    if (addendumId) {
+      const existingAddendum = await prisma.manpowerContractAddendum.findUnique({
+        where: { id: addendumId }
+      });
+      if (existingAddendum && existingAddendum.status === "APPROVED") {
+        return NextResponse.json(
+          { error: "Approved addendums are locked and immutable. Direct edits are prohibited." },
+          { status: 400 }
+        );
+      }
+    }
 
     if (!title || !addendumType || !effectiveFrom) {
       return NextResponse.json(
