@@ -24,19 +24,22 @@ Do not store passwords, API keys, tokens, connection strings, `.env` values or s
 
 Current programme phases:
 
-* Commercial Lifecycle Phase CL-5 — Client Acceptance, Award & Contract Conversion (DEPLOYED AND CLOSED)
-* Commercial Lifecycle Phase CL-6 — Operations Handover & Reports (DEPLOYED AND CLOSED)
-* Commercial Lifecycle Phase CL-7 — Post-Award Contract Addendums & Amendments (DEPLOYED AND CLOSED)
-* Commercial Lifecycle Phase CL-8 — Contract Renewal & Expiry Management (DEPLOYED AND CLOSED)
-* Commercial Lifecycle Phase CL-1 — Planned Activities Gap Completion (LOCAL IMPLEMENTATION COMPLETED AND VERIFIED — PENDING SERVER DEPLOYMENT)
+* SECFAC Phase 6B — Security Post Orders, Shift Briefings, Incident/Occurrence Management & Supervisor Field Inspections (LOCAL IMPLEMENTATION COMPLETED AND VERIFIED — PENDING SERVER DEPLOYMENT)
+* SECFAC Phase 6A.2 — Patrol Assurance, Offline Emergency Sync & Welfare Checks (DEPLOYED AND VERIFIED)
+* Commercial Lifecycle Phase CL-5 through CL-8 — Operations Handover, Addendums, Renewals (DEPLOYED AND CLOSED)
 
 Current release objective:
 
-`CL-1 Planned Activities Gap Completion — FULLY IMPLEMENTED AND VERIFIED LOCALLY.`
+`SECFAC Phase 6B — Security Post Orders, Shift Briefings, Incident/Occurrence Management & Supervisor Field Inspections — FULLY IMPLEMENTED AND VERIFIED LOCALLY.`
 
 Current Git commit candidate:
 
-`071869c08c963e283d92fbf05d9bdb959df18419`
+`b0792de5b291d2cdf11a6849989937e9c658277b`
+
+Authoritative starting baseline:
+
+`458cff1149fd55ba7d06c51ecaf8f36ba2aba4a3`
+
 
 ---
 
