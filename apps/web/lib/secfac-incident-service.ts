@@ -23,45 +23,49 @@ export interface ReportIncidentParams {
 
 /**
  * Concurrency-safe, atomic, company-scoped and month-scoped reference generator.
- * Format: INC-YYYYMM-XXXX (e.g. INC-202608-0001)
+ * Format: INC-YYYYMM-XXXX or OCC-YYYYMM-XXXX (e.g. INC-202608-0001)
+ * Uses atomic sequence counter row (secfac_number_sequences) with incrementing currentValue.
  */
 export async function generateIncidentNumber(companyId: string, type: string = "INCIDENT"): Promise<string> {
   const now = new Date();
-  const yearMonth = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}`;
-  const prefix = type === "OCCURRENCE" ? `OCC-${yearMonth}-` : `INC-${yearMonth}-`;
+  const period = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const recordType = type === "OCCURRENCE" ? "OCC" : "INC";
 
   let attempts = 0;
+  let lastErr: any = null;
   while (attempts < 5) {
     attempts++;
-    // Query max sequence within transaction for current month & company
-    const count = await prisma.secfacIncident.count({
-      where: {
-        companyId,
-        incidentNumber: { startsWith: prefix }
-      }
-    });
-
-    const seq = String(count + attempts).padStart(4, "0");
-    const candidateNumber = `${prefix}${seq}`;
-
-    // Verify candidate does not already exist
-    const existing = await prisma.secfacIncident.findUnique({
-      where: {
-        companyId_incidentNumber: {
+    try {
+      const seqRecord = await prisma.secfacNumberSequence.upsert({
+        where: {
+          companyId_period_recordType: {
+            companyId,
+            period,
+            recordType
+          }
+        },
+        create: {
           companyId,
-          incidentNumber: candidateNumber
+          period,
+          recordType,
+          currentValue: 1
+        },
+        update: {
+          currentValue: { increment: 1 }
         }
-      }
-    });
+      });
 
-    if (!existing) {
-      return candidateNumber;
+      const seqStr = String(seqRecord.currentValue).padStart(4, "0");
+      return `${recordType}-${period}-${seqStr}`;
+    } catch (err) {
+      lastErr = err;
+      await new Promise(res => setTimeout(res, 20 * attempts));
     }
   }
 
-  // Fallback random timestamp hash for high contention
-  return `${prefix}${Math.floor(1000 + Math.random() * 9000)}`;
+  throw lastErr || new Error("Failed to allocate atomic incident reference number.");
 }
+
 
 
 export async function reportIncident(params: ReportIncidentParams) {

@@ -1019,7 +1019,9 @@ model Company {
   CostRateCardMaster         CostRateCardMaster[]
   CostFormulaDefinition      CostFormulaDefinition[]
   CostPackageMaster          CostPackageMaster[]
+  secfacNumberSequences      SecfacNumberSequence[]
 }
+
 
 model CompanyAttendancePolicy {
   id                          String   @id @default(uuid())
@@ -3548,7 +3550,24 @@ model SecfacSupervisorInspection {
   @@index([status])
 }
 
+model SecfacNumberSequence {
+  id           String   @id @default(uuid())
+  companyId    String
+  period       String
+  recordType   String
+  currentValue Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  company      Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, period, recordType], name: "companyId_period_recordType")
+  @@index([companyId, period])
+  @@map("secfac_number_sequences")
+}
+
 model RosterRequirementSlot {
+
 
   id                    String                           @id @default(uuid())
   operationType         String // "SECURITY_GUARDING" | "FACILITY_MANAGEMENT"

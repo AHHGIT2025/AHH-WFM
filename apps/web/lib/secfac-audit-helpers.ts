@@ -1,4 +1,6 @@
-import { mockDb } from "@ahh-wfm/mock-data";
+import { mockDb, isDbConnected } from "@ahh-wfm/mock-data";
+import { prisma } from "@ahh-wfm/database";
+
 
 export interface SecfacFieldExecutionAuditPayload {
   operationType: string;
@@ -95,9 +97,7 @@ export async function createSecfacFieldExecutionAudit(data: SecfacFieldExecution
   };
 
   try {
-    const dbConnected = require("@ahh-wfm/mock-data").isDbConnected();
-    if (dbConnected) {
-      const { prisma } = require("@ahh-wfm/database");
+    if (isDbConnected()) {
       // Double check if record with same idempotencyKey and actionType already exists for IDEMPOTENT_REPLAY checks
       if (payload.idempotencyKey && payload.actionType) {
         const existing = await prisma.secfacFieldExecutionAudit.findFirst({
@@ -120,12 +120,10 @@ export async function createSecfacFieldExecutionAudit(data: SecfacFieldExecution
     }
   } catch (err) {
     console.error("Non-critical SECFAC audit log insertion failure:", err);
-    if (process.env.NODE_ENV === "development" || process.env.NODE_ENV === "test") {
-      throw err;
-    }
     return null;
   }
 }
+
 
 export function extractAuditHeaders(req: Request) {
   const headers = req.headers;

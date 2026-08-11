@@ -689,5 +689,60 @@ describe("SECFAC Phase 6B - Incidents, Post Orders, Briefings & Supervisor Inspe
       expect(inc1.incidentNumber).toBe(inc2.incidentNumber);
     });
   });
+
+  describe("9. Atomic Concurrency & Multi-Tenant Sequence Verification", () => {
+    it("handles 10 simultaneous concurrent incident submissions cleanly across Company A and Company B", async () => {
+      const companyB = "COMP002";
+      const siteB = "SITE02";
+      const empB = "EMP_COMP_B_01";
+
+      // 5 concurrent submissions for Company A
+      const compAPromises = Array.from({ length: 5 }).map((_, i) =>
+        reportIncident({
+          companyId,
+          siteId,
+          reportedById: employeeId,
+          title: `Concurrent Incident CompA #${i + 1}`,
+          description: `Simultaneous submission test item A${i + 1}`
+        })
+      );
+
+      // 5 concurrent submissions for Company B
+      const compBPromises = Array.from({ length: 5 }).map((_, i) =>
+        reportIncident({
+          companyId: companyB,
+          siteId: siteB,
+          reportedById: empB,
+          title: `Concurrent Incident CompB #${i + 1}`,
+          description: `Simultaneous submission test item B${i + 1}`
+        })
+      );
+
+      const [resA, resB] = await Promise.all([
+        Promise.all(compAPromises),
+        Promise.all(compBPromises)
+      ]);
+
+      // Verify Company A references
+      const numbersA = resA.map(r => r.incidentNumber);
+      const uniqueA = new Set(numbersA);
+      expect(uniqueA.size).toBe(5);
+      numbersA.forEach(num => expect(num).toMatch(/^INC-\d{6}-\d{4}$/));
+
+      // Verify Company B references
+      const numbersB = resB.map(r => r.incidentNumber);
+      const uniqueB = new Set(numbersB);
+      expect(uniqueB.size).toBe(5);
+      numbersB.forEach(num => expect(num).toMatch(/^INC-\d{6}-\d{4}$/));
+
+      // Verify zero cross-company leakage
+      const crossIntersection = numbersA.filter(num => numbersB.includes(num));
+      expect(crossIntersection.length).toBe(0);
+
+      console.log("Observed Company A Concurrent References:", numbersA);
+      console.log("Observed Company B Concurrent References:", numbersB);
+    });
+  });
 });
+
 
