@@ -25,10 +25,10 @@ export interface ReportIncidentParams {
  * Concurrency-safe, atomic, company-scoped and month-scoped reference generator.
  * Format: INC-YYYYMM-XXXX (e.g. INC-202608-0001)
  */
-export async function generateIncidentNumber(companyId: string): Promise<string> {
+export async function generateIncidentNumber(companyId: string, type: string = "INCIDENT"): Promise<string> {
   const now = new Date();
   const yearMonth = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}`;
-  const prefix = `INC-${yearMonth}-`;
+  const prefix = type === "OCCURRENCE" ? `OCC-${yearMonth}-` : `INC-${yearMonth}-`;
 
   let attempts = 0;
   while (attempts < 5) {
@@ -63,6 +63,7 @@ export async function generateIncidentNumber(companyId: string): Promise<string>
   return `${prefix}${Math.floor(1000 + Math.random() * 9000)}`;
 }
 
+
 export async function reportIncident(params: ReportIncidentParams) {
   const idempotencyKey = params.idempotencyKey || `INC-${params.companyId}-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
 
@@ -77,42 +78,58 @@ export async function reportIncident(params: ReportIncidentParams) {
   }
 
   const opType = params.operationType || "SECURITY_GUARDING";
-  const incidentNumber = await generateIncidentNumber(params.companyId);
+  let attempts = 0;
+  let incident: any = null;
 
-  const incident = await prisma.secfacIncident.create({
-    data: {
-      incidentNumber,
-      operationType: opType,
-      companyId: params.companyId,
-      siteId: params.siteId,
-      checkpointId: params.checkpointId || null,
-      reportedById: params.reportedById,
-      source: params.source || "MOBILE_APP",
-      type: params.type || "INCIDENT",
-      category: params.category || "OTHER",
-      severity: params.severity || "MINOR",
-      title: params.title,
-      description: params.description,
-      immediateAction: params.immediateAction || null,
-      incidentDate: params.incidentDate ? new Date(params.incidentDate) : new Date(),
-      assignedToId: params.assignedToId || null,
-      status: "REPORTED",
-      sosAlertId: params.sosAlertId || null,
-      dispatchAssignmentId: params.dispatchAssignmentId || null,
-      idempotencyKey,
-      history: {
-        create: {
-          toStatus: "REPORTED",
-          action: "INCIDENT_REPORTED",
-          remarks: `Incident ${incidentNumber} reported via ${params.source || "MOBILE_APP"}`,
-          performedById: params.reportedById
+  while (attempts < 5) {
+    attempts++;
+    const incidentNumber = await generateIncidentNumber(params.companyId, params.type);
+
+    try {
+      incident = await prisma.secfacIncident.create({
+        data: {
+          incidentNumber,
+          operationType: opType,
+          companyId: params.companyId,
+          siteId: params.siteId,
+          checkpointId: params.checkpointId || null,
+          reportedById: params.reportedById,
+          source: params.source || "MOBILE_APP",
+          type: params.type || "INCIDENT",
+          category: params.category || "OTHER",
+          severity: params.severity || "MINOR",
+          title: params.title,
+          description: params.description,
+          immediateAction: params.immediateAction || null,
+          incidentDate: params.incidentDate ? new Date(params.incidentDate) : new Date(),
+          assignedToId: params.assignedToId || null,
+          status: "REPORTED",
+          sosAlertId: params.sosAlertId || null,
+          dispatchAssignmentId: params.dispatchAssignmentId || null,
+          idempotencyKey,
+          history: {
+            create: {
+              toStatus: "REPORTED",
+              action: "INCIDENT_REPORTED",
+              remarks: `Incident ${incidentNumber} reported via ${params.source || "MOBILE_APP"}`,
+              performedById: params.reportedById
+            }
+          }
+        },
+        include: {
+          history: true
         }
+      });
+      break;
+    } catch (err: any) {
+      if (err.code === "P2002" && err.meta?.target?.includes("incidentNumber") && attempts < 5) {
+        // Concurrency race on incidentNumber, retry with fresh sequence
+        continue;
       }
-    },
-    include: {
-      history: true
+      throw err;
     }
-  });
+  }
+
 
   await createSecfacFieldExecutionAudit({
     operationType: opType,
@@ -122,7 +139,7 @@ export async function reportIncident(params: ReportIncidentParams) {
     actionType: "INCIDENT_REPORTED",
     actionSource: params.source || "MOBILE_APP",
     resultStatus: "SUCCESS",
-    resultMessage: `Incident ${incidentNumber} (${params.severity}) reported`
+    resultMessage: `Incident ${incident.incidentNumber} (${params.severity}) reported`
   }).catch(() => {});
 
   return incident;
