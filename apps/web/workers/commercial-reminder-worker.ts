@@ -5,9 +5,12 @@ export interface CommercialReminderWorkerResult {
   completedAt: Date;
   remindersProcessed: number;
   notificationsDispatched: number;
+  failedCount: number;
 }
 
-export async function runCommercialReminderCycle(): Promise<CommercialReminderWorkerResult> {
+export async function runCommercialReminderCycle(
+  failureInjector?: (taskId: string) => void
+): Promise<CommercialReminderWorkerResult> {
   const startedAt = new Date();
   const now = new Date();
 
@@ -21,25 +24,57 @@ export async function runCommercialReminderCycle(): Promise<CommercialReminderWo
   });
 
   let notificationsDispatched = 0;
+  let failedCount = 0;
 
   for (const task of dueTasks) {
-    // Atomic Claim: Ensure concurrent/repeat worker scans process each task exactly once
-    const updated = await prisma.commercialTask.updateMany({
-      where: {
-        id: task.id,
-        status: { in: ["PENDING", "IN_PROGRESS"] },
-        reminderSent: false,
-        reminderAt: { lte: now }
-      },
-      data: {
-        reminderSent: true
-      }
-    });
+    try {
+      // Transaction guarantees: NOTIFICATION_CREATED + REMINDER_MARKED_SENT or NEITHER COMMITTED
+      await prisma.$transaction(async (tx) => {
+        // Atomic claim within transaction
+        const updated = await tx.commercialTask.updateMany({
+          where: {
+            id: task.id,
+            status: { in: ["PENDING", "IN_PROGRESS"] },
+            reminderSent: false,
+            reminderAt: { lte: now }
+          },
+          data: {
+            reminderSent: true
+          }
+        });
 
-    if (updated.count === 1) {
-      notificationsDispatched++;
-      // Dispatch in-app Web notification / System Alert
-      console.log(`[Commercial Reminder Worker] Dispatched reminder notification for Task '${task.title}' (ID: ${task.id}) assigned to ${task.assignedToName || task.assignedToId}`);
+        if (updated.count === 0) {
+          // Already claimed by concurrent worker cycle or task completed/cancelled
+          return;
+        }
+
+        // Failure injection testing
+        if (failureInjector) {
+          failureInjector(task.id);
+        }
+
+        // Record UserActivityLog in-app notification event within same transaction
+        await tx.userActivityLog.create({
+          data: {
+            userId: task.assignedToId || "system",
+            action: "DISPATCH_COMMERCIAL_REMINDER",
+            entityType: "CommercialTask",
+            entityId: task.id,
+            afterJson: JSON.stringify({
+              taskId: task.id,
+              title: task.title,
+              reminderAt: task.reminderAt,
+              dispatchedAt: new Date()
+            })
+          }
+        });
+
+        notificationsDispatched++;
+      });
+    } catch (err: any) {
+      failedCount++;
+      console.error(`[Commercial Reminder Worker] Transaction failed for task '${task.title}' (${task.id}): ${err.message}. Reminder remains retryable.`);
+      // Rolled back transaction ensures task.reminderSent remains false in DB and is retried on subsequent scans!
     }
   }
 
@@ -47,12 +82,13 @@ export async function runCommercialReminderCycle(): Promise<CommercialReminderWo
     startedAt,
     completedAt: new Date(),
     remindersProcessed: dueTasks.length,
-    notificationsDispatched
+    notificationsDispatched,
+    failedCount
   };
 }
 
 if (require.main === module) {
-  console.log("[ahh-wfm-commercial-reminder-worker-dev] Starting Commercial Reminder Worker loop...");
+  console.log("[ahh-wfm-commercial-reminder-worker-dev] Starting Commercial Reminder Worker cycle...");
   runCommercialReminderCycle()
     .then((res) => {
       console.log("[ahh-wfm-commercial-reminder-worker-dev] Cycle complete:", res);

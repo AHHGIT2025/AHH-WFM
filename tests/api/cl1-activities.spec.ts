@@ -313,6 +313,43 @@ describe("Commercial Lifecycle Phase CL-1: Planned Activities & Tasks Final Rele
 
       await prisma.commercialTask.delete({ where: { id: taskForReminder.id } });
     });
+
+    it("10. should roll back transaction on notification persistence failure, keeping reminder retryable", async () => {
+      const taskForFail = await prisma.commercialTask.create({
+        data: {
+          title: "Failure Injection Test Task",
+          priority: "HIGH",
+          status: "PENDING",
+          reminderAt: new Date(Date.now() - 120000),
+          reminderSent: false,
+          contractId: testContractId,
+          operationType: "SECURITY_GUARDING"
+        }
+      });
+
+      // Inject simulated notification persistence failure
+      const failureInjector = (taskId: string) => {
+        if (taskId === taskForFail.id) {
+          throw new Error("Simulated Notification Persist Error");
+        }
+      };
+
+      const resultFail = await runCommercialReminderCycle(failureInjector);
+      expect(resultFail.failedCount).toBeGreaterThanOrEqual(1);
+
+      // Verify task.reminderSent is STILL false due to transaction rollback
+      const recheckedTask = await prisma.commercialTask.findUnique({ where: { id: taskForFail.id } });
+      expect(recheckedTask?.reminderSent).toBe(false);
+
+      // Subsequent scan without failure injector succeeds and marks reminderSent = true
+      const resultSuccess = await runCommercialReminderCycle();
+      expect(resultSuccess.notificationsDispatched).toBeGreaterThanOrEqual(1);
+
+      const finalTask = await prisma.commercialTask.findUnique({ where: { id: taskForFail.id } });
+      expect(finalTask?.reminderSent).toBe(true);
+
+      await prisma.commercialTask.delete({ where: { id: taskForFail.id } });
+    });
   });
 
   describe("Hybrid Chronological Activity Feed", () => {
@@ -348,7 +385,7 @@ describe("Commercial Lifecycle Phase CL-1: Planned Activities & Tasks Final Rele
       });
 
       expect(logs.length).toBeGreaterThan(0);
-      expect(["CREATE_COMMERCIAL_ACTIVITY", "CREATE_COMMERCIAL_TASK", "COMPLETE_COMMERCIAL_TASK", "LINK_OUTLOOK_ACTIVITY"]).toContain(logs[0].action);
+      expect(["CREATE_COMMERCIAL_ACTIVITY", "CREATE_COMMERCIAL_TASK", "COMPLETE_COMMERCIAL_TASK", "LINK_OUTLOOK_ACTIVITY", "DISPATCH_COMMERCIAL_REMINDER"]).toContain(logs[0].action);
     });
   });
 

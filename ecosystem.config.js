@@ -97,6 +97,21 @@ module.exports = {
         RECONCILIATION_WORKER_ENABLED: "true",
         RECONCILIATION_WORKER_INTERVAL_MS: "300000"
       }
+    },
+    {
+      name: "ahh-wfm-commercial-reminder-worker-dev",
+      script: "dist/workers/apps/web/workers/commercial-reminder-worker.js",
+      cwd: "D:\\Apps\\AHH-WFM\\dev",
+      instances: 1,
+      exec_mode: "fork",
+      autorestart: true,
+      watch: false,
+      max_memory_restart: "500M",
+      env: {
+        NODE_ENV: "development",
+        COMMERCIAL_REMINDER_WORKER_ENABLED: "true",
+        COMMERCIAL_REMINDER_INTERVAL_MS: "60000"
+      }
     }
   ]
 };
