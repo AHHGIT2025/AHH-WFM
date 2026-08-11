@@ -34,7 +34,8 @@ Current release objective:
 
 Current Git commit candidate:
 
-`b0792de5b291d2cdf11a6849989937e9c658277b`
+`ddae695c010a3ac7065961db6be9e1bd610fa78c`
+
 
 Authoritative starting baseline:
 
