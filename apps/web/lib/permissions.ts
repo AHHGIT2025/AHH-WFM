@@ -46,7 +46,8 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "precontract.acceptance.manage", "precontract.contractConversion.execute",
     "commercial.commandCenter.view", "commercial.commandCenter.crossCompany", "commercial.commandCenter.contractHealth", "commercial.commandCenter.exceptions",
     "commercial.commandCenter.rosterCoverage", "commercial.commandCenter.relieverReadiness",
-    "commercial.handover.view", "commercial.handover.manage", "commercial.reports.view"
+    "commercial.handover.view", "commercial.handover.manage", "commercial.reports.view",
+    "commercial.addendum.view", "commercial.addendum.manage", "commercial.contract.terminate"
   ],
   ADMIN: [
     "dashboard.view", "employees.view", "employees.create", "employees.edit", "employees.bulkUpload", "employees.manage",
@@ -94,7 +95,8 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "precontract.proposal.view", "precontract.proposal.manage", "precontract.proposal.issue", "precontract.proposal.crossCompany",
     "commercial.commandCenter.view", "commercial.commandCenter.crossCompany", "commercial.commandCenter.contractHealth", "commercial.commandCenter.exceptions",
     "commercial.commandCenter.rosterCoverage", "commercial.commandCenter.relieverReadiness",
-    "commercial.handover.view", "commercial.handover.manage", "commercial.reports.view"
+    "commercial.handover.view", "commercial.handover.manage", "commercial.reports.view",
+    "commercial.addendum.view", "commercial.addendum.manage", "commercial.contract.terminate"
   ],
   SYSTEM_ADMIN: [
     "settings.view", "settings.manage", "users.view", "users.manage", "roles.view", "roles.manage",

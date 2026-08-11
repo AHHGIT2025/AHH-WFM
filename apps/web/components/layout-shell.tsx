@@ -110,6 +110,7 @@ export const LayoutShell: React.FC<{ children: React.ReactNode }> = ({ children 
       { label: "Quotations", path: "/commercial/quotations", icon: "request_quote" },
       { label: "Contracts", path: "/commercial/contracts", icon: "description" },
       { label: "Handover", path: "/commercial/handover", icon: "assignment_turned_in" },
+      { label: "Contract Amendments", path: "/commercial/amendments", icon: "edit_document" },
       { label: "Activities", path: "/commercial/activities", icon: "history" },
       { label: "Reports", path: "/commercial/reports", icon: "analytics" }
     ];
