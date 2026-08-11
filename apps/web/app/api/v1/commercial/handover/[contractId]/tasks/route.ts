@@ -27,9 +27,11 @@ export async function POST(
     const body = await req.json();
     const { taskId, taskName, department, status, assignedToId, remarks } = body;
 
-    if (taskId) {
-      // Update existing task
-      const updatedTask = await prisma.contractMobilizationChecklist.update({
+    let updatedTask;
+
+    if (taskId && !taskId.startsWith("default-")) {
+      // Update existing persistent task
+      updatedTask = await prisma.contractMobilizationChecklist.update({
         where: { id: taskId },
         data: {
           status: status || undefined,
@@ -39,33 +41,36 @@ export async function POST(
           completedBy: status === "COMPLETED" ? (user.id || "user") : (status ? null : undefined)
         }
       });
-
-      return NextResponse.json({
-        success: true,
-        task: updatedTask
-      });
     } else {
-      // Create new custom task
-      if (!taskName) {
-        return NextResponse.json({ error: "taskName is required for new task creation." }, { status: 400 });
-      }
+      // Create new persistent task (or persist a default task being completed)
+      const nameToUse = taskName || (taskId === "default-ops-1" ? "Operations Readiness & Site Inspection Review" :
+                        taskId === "default-log-1" ? "Uniform & Equipment Allocation Verification" :
+                        taskId === "default-hr-1" ? "HR, Guard Licensing & Gate Pass Clearance" :
+                        taskId === "default-fin-1" ? "Finance Setup & Billing Schedule Confirmation" : "Mobilization Task");
 
-      const newTask = await prisma.contractMobilizationChecklist.create({
+      const deptToUse = department || (taskId === "default-ops-1" ? "OPERATIONS" :
+                         taskId === "default-log-1" ? "LOGISTICS" :
+                         taskId === "default-hr-1" ? "HR" :
+                         taskId === "default-fin-1" ? "FINANCE" : "OPERATIONS");
+
+      updatedTask = await prisma.contractMobilizationChecklist.create({
         data: {
           contractId: contract.id,
-          taskName,
-          department: department || "OPERATIONS",
-          status: status || "PENDING",
+          taskName: nameToUse,
+          department: deptToUse,
+          status: status || "COMPLETED",
           assignedToId: assignedToId || null,
-          remarks: remarks || null
+          remarks: remarks || null,
+          completedAt: (status === "COMPLETED" || !status) ? new Date() : null,
+          completedBy: (status === "COMPLETED" || !status) ? (user.id || "user") : null
         }
       });
-
-      return NextResponse.json({
-        success: true,
-        task: newTask
-      });
     }
+
+    return NextResponse.json({
+      success: true,
+      task: updatedTask
+    });
   } catch (err: any) {
     return NextResponse.json(
       { error: err.message || "Failed to update mobilization task." },

@@ -17,11 +17,27 @@ export async function POST(
 
   try {
     const contract = await prisma.manpowerContract.findUnique({
-      where: { id: params.contractId }
+      where: { id: params.contractId },
+      include: {
+        handoverLogs: {
+          orderBy: { createdAt: "desc" },
+          take: 1
+        }
+      }
     });
 
     if (!contract) {
       return NextResponse.json({ error: "Contract not found." }, { status: 404 });
+    }
+
+    // Idempotency check: if contract is already MOBILISED or has a sign-off log, return existing state cleanly
+    if (contract.mobilisationStatus === "MOBILISED" && contract.handoverLogs.length > 0) {
+      return NextResponse.json({
+        success: true,
+        alreadySignedOff: true,
+        handoverLog: contract.handoverLogs[0],
+        contractStatus: contract.mobilisationStatus
+      });
     }
 
     const body = await req.json();
@@ -56,6 +72,7 @@ export async function POST(
 
     return NextResponse.json({
       success: true,
+      alreadySignedOff: false,
       handoverLog: result.handoverLog,
       contractStatus: result.contract.mobilisationStatus
     });

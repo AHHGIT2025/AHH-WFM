@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@ahh-wfm/database";
 import { checkApiAuth } from "../../../../../../lib/api-guards";
-import { hasPermission } from "../../../../../../lib/permissions";
 
 const DEFAULT_MOBILIZATION_TASKS = [
-  { taskName: "Operations Readiness & Site Inspection Review", department: "OPERATIONS" },
-  { taskName: "Uniform & Equipment Allocation Verification", department: "LOGISTICS" },
-  { taskName: "HR, Guard Licensing & Gate Pass Clearance", department: "HR" },
-  { taskName: "Finance Setup & Billing Schedule Confirmation", department: "FINANCE" }
+  { id: "default-ops-1", taskName: "Operations Readiness & Site Inspection Review", department: "OPERATIONS", status: "PENDING", isDefault: true },
+  { id: "default-log-1", taskName: "Uniform & Equipment Allocation Verification", department: "LOGISTICS", status: "PENDING", isDefault: true },
+  { id: "default-hr-1", taskName: "HR, Guard Licensing & Gate Pass Clearance", department: "HR", status: "PENDING", isDefault: true },
+  { id: "default-fin-1", taskName: "Finance Setup & Billing Schedule Confirmation", department: "FINANCE", status: "PENDING", isDefault: true }
 ];
 
 export async function GET(
@@ -21,7 +20,6 @@ export async function GET(
   if (error || !session || !session.user) {
     return error || NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const user = session.user as any;
 
   try {
     const contract = await prisma.manpowerContract.findUnique({
@@ -43,25 +41,12 @@ export async function GET(
       return NextResponse.json({ error: "Contract not found." }, { status: 404 });
     }
 
-    // Auto-seed default tasks if none exist
-    let checklists = contract.mobilizationChecklists;
-    if (checklists.length === 0) {
-      checklists = await prisma.$transaction(
-        DEFAULT_MOBILIZATION_TASKS.map(task =>
-          prisma.contractMobilizationChecklist.create({
-            data: {
-              contractId: contract.id,
-              taskName: task.taskName,
-              department: task.department,
-              status: "PENDING"
-            }
-          })
-        )
-      );
-    }
+    // Pure read-only checklist resolution without database mutations
+    const storedChecklists = contract.mobilizationChecklists;
+    const checklists = storedChecklists.length > 0 ? storedChecklists : DEFAULT_MOBILIZATION_TASKS;
 
     const totalTasks = checklists.length;
-    const completedTasks = checklists.filter(t => t.status === "COMPLETED" || t.status === "EXEMPTED").length;
+    const completedTasks = checklists.filter((t: any) => t.status === "COMPLETED" || t.status === "EXEMPTED").length;
     const isReadyForHandover = totalTasks > 0 && completedTasks === totalTasks;
 
     return NextResponse.json({
