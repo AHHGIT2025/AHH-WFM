@@ -6,12 +6,13 @@ import { GET as getActivities, POST as logActivity } from "../../apps/web/app/ap
 import { GET as getTasks, POST as createTask } from "../../apps/web/app/api/v1/commercial/tasks/route";
 import { PATCH as updateTask } from "../../apps/web/app/api/v1/commercial/tasks/[id]/route";
 import { GET as getOutlookStatus } from "../../apps/web/app/api/v1/commercial/outlook/status/route";
+import { runCommercialReminderCycle } from "../../apps/web/workers/commercial-reminder-worker";
 
 jest.mock("next-auth/next", () => ({
   getServerSession: jest.fn()
 }));
 
-describe("Commercial Lifecycle Phase CL-1: Planned Activities & Tasks Gap Completion API Suite", () => {
+describe("Commercial Lifecycle Phase CL-1: Planned Activities & Tasks Final Release Hardening API Suite", () => {
   let testCompanyId: string;
   let testClientId: string;
   let testContractId: string;
@@ -23,8 +24,8 @@ describe("Commercial Lifecycle Phase CL-1: Planned Activities & Tasks Gap Comple
 
     const company = await prisma.company.create({
       data: {
-        companyCode: `CC1-${rand}`,
-        companyName: `CL-1 Activities Test Company ${rand}`,
+        companyCode: `CC1-H-${rand}`,
+        companyName: `CL-1 Hardened Test Company ${rand}`,
         isActive: true
       }
     });
@@ -32,8 +33,8 @@ describe("Commercial Lifecycle Phase CL-1: Planned Activities & Tasks Gap Comple
 
     const client = await prisma.manpowerClient.create({
       data: {
-        code: `CLIC1-${rand}`,
-        name: `CL1 Test Client ${rand}`,
+        code: `CLIC1-H-${rand}`,
+        name: `CL1 Hardened Test Client ${rand}`,
         operationType: "SECURITY_GUARDING",
         isActive: true
       }
@@ -43,8 +44,8 @@ describe("Commercial Lifecycle Phase CL-1: Planned Activities & Tasks Gap Comple
     const contract = await prisma.manpowerContract.create({
       data: {
         clientId: testClientId,
-        contractNumber: `CONC1-ACT-${rand}`,
-        title: "CL-1 Active Test Contract",
+        contractNumber: `CONC1-ACT-H-${rand}`,
+        title: "CL-1 Hardened Active Test Contract",
         startDate: new Date("2026-01-01"),
         endDate: new Date("2026-12-31"),
         operationType: "SECURITY_GUARDING",
@@ -76,14 +77,14 @@ describe("Commercial Lifecycle Phase CL-1: Planned Activities & Tasks Gap Comple
   });
 
   describe("Authentication & Authorization Gates", () => {
-    it("should return 401 if unauthenticated on activities GET", async () => {
+    it("1. should return 401 if unauthenticated on activities GET", async () => {
       (getServerSession as jest.Mock).mockResolvedValueOnce(null);
       const req = new NextRequest("http://localhost:3100/api/v1/commercial/activities");
       const res = await getActivities(req);
       expect(res.status).toBe(401);
     });
 
-    it("should return 403 if user lacks commercial.activity.view permission", async () => {
+    it("2. should return 403 if user lacks commercial.activity.view permission", async () => {
       (getServerSession as jest.Mock).mockResolvedValueOnce({
         user: { id: "emp-unauthorized", role: "EMPLOYEE", permissions: ["self.profile.view"] }
       });
@@ -94,7 +95,7 @@ describe("Commercial Lifecycle Phase CL-1: Planned Activities & Tasks Gap Comple
   });
 
   describe("Client Interaction Logging (EMAIL, CALL, MEETING, NOTE)", () => {
-    it("should log an EMAIL activity with Outlook metadata linkage", async () => {
+    it("3. should log an EMAIL activity with Outlook metadata linkage", async () => {
       (getServerSession as jest.Mock).mockResolvedValue({
         user: {
           id: "emp-admin-cl1",
@@ -104,6 +105,7 @@ describe("Commercial Lifecycle Phase CL-1: Planned Activities & Tasks Gap Comple
         }
       });
 
+      const extId = `MSG-OUTLOOK-${Date.now()}`;
       const req = new NextRequest("http://localhost:3100/api/v1/commercial/activities", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -113,8 +115,8 @@ describe("Commercial Lifecycle Phase CL-1: Planned Activities & Tasks Gap Comple
           notes: "Sent proposal draft for 2 additional security guards.",
           contractId: testContractId,
           externalProvider: "OUTLOOK",
-          externalItemId: "MSG-OUTLOOK-998822",
-          externalWebLink: "https://outlook.office365.com/owa/?itemid=MSG-OUTLOOK-998822"
+          externalItemId: extId,
+          externalWebLink: `https://outlook.office365.com/owa/?itemid=${extId}`
         })
       });
 
@@ -125,12 +127,12 @@ describe("Commercial Lifecycle Phase CL-1: Planned Activities & Tasks Gap Comple
       expect(data.success).toBe(true);
       expect(data.activity.activityType).toBe("EMAIL");
       expect(data.activity.externalProvider).toBe("OUTLOOK");
-      expect(data.activity.externalItemId).toBe("MSG-OUTLOOK-998822");
+      expect(data.activity.externalItemId).toBe(extId);
 
       testActivityId = data.activity.id;
     });
 
-    it("should log a CALL activity with call metadata", async () => {
+    it("4. should log a CALL activity with call metadata", async () => {
       (getServerSession as jest.Mock).mockResolvedValue({
         user: {
           id: "emp-admin-cl1",
@@ -161,10 +163,68 @@ describe("Commercial Lifecycle Phase CL-1: Planned Activities & Tasks Gap Comple
       expect(data.success).toBe(true);
       expect(data.activity.direction).toBe("OUTBOUND");
     });
+
+    it("5. should log a MEETING activity with location and attendees", async () => {
+      (getServerSession as jest.Mock).mockResolvedValue({
+        user: {
+          id: "emp-admin-cl1",
+          role: "SUPER_ADMIN",
+          companyId: testCompanyId,
+          permissions: ["commercial.activity.manage"]
+        }
+      });
+
+      const req = new NextRequest("http://localhost:3100/api/v1/commercial/activities", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          activityType: "MEETING",
+          subject: "Annual Rate Negotiation Meeting",
+          notes: "Agreed on 3% cost indexation for 2027.",
+          meetingLocation: "West Bay HQ Conference Room A",
+          attendees: "John Doe, Jane Smith, Client Director",
+          contractId: testContractId
+        })
+      });
+
+      const res = await logActivity(req);
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.success).toBe(true);
+      expect(data.activity.activityType).toBe("MEETING");
+    });
+
+    it("6. should log an internal NOTE activity", async () => {
+      (getServerSession as jest.Mock).mockResolvedValue({
+        user: {
+          id: "emp-admin-cl1",
+          role: "SUPER_ADMIN",
+          companyId: testCompanyId,
+          permissions: ["commercial.activity.manage"]
+        }
+      });
+
+      const req = new NextRequest("http://localhost:3100/api/v1/commercial/activities", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          activityType: "NOTE",
+          subject: "Internal Commercial Assessment Remark",
+          notes: "Client requested option for weekend night shift extension.",
+          contractId: testContractId
+        })
+      });
+
+      const res = await logActivity(req);
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.success).toBe(true);
+      expect(data.activity.activityType).toBe("NOTE");
+    });
   });
 
   describe("Commercial Task Scheduler & Follow-Ups", () => {
-    it("should create and assign a commercial follow-up task", async () => {
+    it("7. should create and assign a commercial follow-up task", async () => {
       (getServerSession as jest.Mock).mockResolvedValue({
         user: {
           id: "emp-admin-cl1",
@@ -181,6 +241,7 @@ describe("Commercial Lifecycle Phase CL-1: Planned Activities & Tasks Gap Comple
           title: "Follow up on signed renewal agreement",
           description: "Verify signed contract copy received from client legal team.",
           dueAt: "2026-09-15",
+          reminderAt: new Date(Date.now() - 60000).toISOString(), // Due for reminder
           priority: "HIGH",
           contractId: testContractId
         })
@@ -198,7 +259,7 @@ describe("Commercial Lifecycle Phase CL-1: Planned Activities & Tasks Gap Comple
       testTaskId = data.task.id;
     });
 
-    it("should complete a commercial task and set completedAt timestamp", async () => {
+    it("8. should complete a commercial task and set completedAt timestamp", async () => {
       (getServerSession as jest.Mock).mockResolvedValue({
         user: {
           id: "emp-admin-cl1",
@@ -222,10 +283,40 @@ describe("Commercial Lifecycle Phase CL-1: Planned Activities & Tasks Gap Comple
       expect(data.task.status).toBe("COMPLETED");
       expect(data.task.completedAt).toBeDefined();
     });
+
+    it("9. should execute Commercial Reminder Worker cycle with atomic claim idempotency", async () => {
+      // Create a pending task with past reminderAt
+      const taskForReminder = await prisma.commercialTask.create({
+        data: {
+          title: "Automated Reminder Test Task",
+          priority: "URGENT",
+          status: "PENDING",
+          reminderAt: new Date(Date.now() - 120000),
+          reminderSent: false,
+          contractId: testContractId,
+          operationType: "SECURITY_GUARDING"
+        }
+      });
+
+      // First run of worker cycle should process the reminder
+      const result1 = await runCommercialReminderCycle();
+      expect(result1.remindersProcessed).toBeGreaterThanOrEqual(1);
+
+      // Verify task reminderSent flag was set to true
+      const updatedTask = await prisma.commercialTask.findUnique({ where: { id: taskForReminder.id } });
+      expect(updatedTask?.reminderSent).toBe(true);
+
+      // Repeat run of worker cycle should find 0 pending reminders (atomic claim idempotency)
+      const result2 = await runCommercialReminderCycle();
+      const recheckTask = result2.remindersProcessed;
+      expect(recheckTask).toBe(0);
+
+      await prisma.commercialTask.delete({ where: { id: taskForReminder.id } });
+    });
   });
 
   describe("Hybrid Chronological Activity Feed", () => {
-    it("should return unified feed combining activities and task milestones", async () => {
+    it("10. should return unified feed combining activities and task milestones in chronological order", async () => {
       (getServerSession as jest.Mock).mockResolvedValue({
         user: {
           id: "emp-admin-cl1",
@@ -246,8 +337,23 @@ describe("Commercial Lifecycle Phase CL-1: Planned Activities & Tasks Gap Comple
     });
   });
 
+  describe("UserActivityLog Audit Recording", () => {
+    it("11. should record UserActivityLog on commercial activity and task mutations", async () => {
+      const logs = await prisma.userActivityLog.findMany({
+        where: {
+          entityType: { in: ["CommercialActivity", "CommercialTask"] }
+        },
+        orderBy: { createdAt: "desc" },
+        take: 5
+      });
+
+      expect(logs.length).toBeGreaterThan(0);
+      expect(["CREATE_COMMERCIAL_ACTIVITY", "CREATE_COMMERCIAL_TASK", "COMPLETE_COMMERCIAL_TASK", "LINK_OUTLOOK_ACTIVITY"]).toContain(logs[0].action);
+    });
+  });
+
   describe("Outlook Integration Status Endpoint", () => {
-    it("should return controlled configuration status when Azure credentials are absent without crashing", async () => {
+    it("12. should return controlled configuration status when Azure credentials are absent without crashing", async () => {
       (getServerSession as jest.Mock).mockResolvedValue({
         user: {
           id: "emp-admin-cl1",

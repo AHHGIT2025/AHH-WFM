@@ -27,13 +27,13 @@ CREATE TABLE `CommercialActivity` (
     `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
     `updatedAt` DATETIME(3) NOT NULL,
 
+    UNIQUE INDEX `CommercialActivity_externalProvider_externalItemId_key`(`externalProvider`, `externalItemId`),
     INDEX `CommercialActivity_contractId_idx`(`contractId`),
     INDEX `CommercialActivity_prospectClientId_idx`(`prospectClientId`),
     INDEX `CommercialActivity_preContractCaseId_idx`(`preContractCaseId`),
     INDEX `CommercialActivity_activityType_idx`(`activityType`),
     INDEX `CommercialActivity_companyId_idx`(`companyId`),
     INDEX `CommercialActivity_operationType_idx`(`operationType`),
-    INDEX `CommercialActivity_externalProvider_externalItemId_idx`(`externalProvider`, `externalItemId`),
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
@@ -73,31 +73,31 @@ CREATE TABLE `CommercialTask` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- AddForeignKey
-ALTER TABLE `CommercialActivity` ADD CONSTRAINT `CommercialActivity_prospectClientId_fkey` FOREIGN KEY (`prospectClientId`) REFERENCES `ManpowerClient`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `CommercialActivity` ADD CONSTRAINT `CommercialActivity_prospectClientId_fkey` FOREIGN KEY (`prospectClientId`) REFERENCES `ManpowerClient`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `CommercialActivity` ADD CONSTRAINT `CommercialActivity_preContractCaseId_fkey` FOREIGN KEY (`preContractCaseId`) REFERENCES `PreContractCase`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `CommercialActivity` ADD CONSTRAINT `CommercialActivity_preContractCaseId_fkey` FOREIGN KEY (`preContractCaseId`) REFERENCES `PreContractCase`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `CommercialActivity` ADD CONSTRAINT `CommercialActivity_contractId_fkey` FOREIGN KEY (`contractId`) REFERENCES `ManpowerContract`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `CommercialActivity` ADD CONSTRAINT `CommercialActivity_contractId_fkey` FOREIGN KEY (`contractId`) REFERENCES `ManpowerContract`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `CommercialActivity` ADD CONSTRAINT `CommercialActivity_addendumId_fkey` FOREIGN KEY (`addendumId`) REFERENCES `ManpowerContractAddendum`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `CommercialActivity` ADD CONSTRAINT `CommercialActivity_addendumId_fkey` FOREIGN KEY (`addendumId`) REFERENCES `ManpowerContractAddendum`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `CommercialActivity` ADD CONSTRAINT `CommercialActivity_renewalCaseId_fkey` FOREIGN KEY (`renewalCaseId`) REFERENCES `ManpowerContractRenewalCase`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `CommercialActivity` ADD CONSTRAINT `CommercialActivity_renewalCaseId_fkey` FOREIGN KEY (`renewalCaseId`) REFERENCES `ManpowerContractRenewalCase`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `CommercialTask` ADD CONSTRAINT `CommercialTask_prospectClientId_fkey` FOREIGN KEY (`prospectClientId`) REFERENCES `ManpowerClient`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `CommercialTask` ADD CONSTRAINT `CommercialTask_prospectClientId_fkey` FOREIGN KEY (`prospectClientId`) REFERENCES `ManpowerClient`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `CommercialTask` ADD CONSTRAINT `CommercialTask_preContractCaseId_fkey` FOREIGN KEY (`preContractCaseId`) REFERENCES `PreContractCase`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `CommercialTask` ADD CONSTRAINT `CommercialTask_preContractCaseId_fkey` FOREIGN KEY (`preContractCaseId`) REFERENCES `PreContractCase`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `CommercialTask` ADD CONSTRAINT `CommercialTask_contractId_fkey` FOREIGN KEY (`contractId`) REFERENCES `ManpowerContract`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `CommercialTask` ADD CONSTRAINT `CommercialTask_contractId_fkey` FOREIGN KEY (`contractId`) REFERENCES `ManpowerContract`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `CommercialTask` ADD CONSTRAINT `CommercialTask_addendumId_fkey` FOREIGN KEY (`addendumId`) REFERENCES `ManpowerContractAddendum`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `CommercialTask` ADD CONSTRAINT `CommercialTask_addendumId_fkey` FOREIGN KEY (`addendumId`) REFERENCES `ManpowerContractAddendum`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE `CommercialTask` ADD CONSTRAINT `CommercialTask_renewalCaseId_fkey` FOREIGN KEY (`renewalCaseId`) REFERENCES `ManpowerContractRenewalCase`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `CommercialTask` ADD CONSTRAINT `CommercialTask_renewalCaseId_fkey` FOREIGN KEY (`renewalCaseId`) REFERENCES `ManpowerContractRenewalCase`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;

@@ -131,6 +131,22 @@ export async function POST(req: NextRequest) {
       }
     });
 
+    // Record UserActivityLog mutation audit
+    await prisma.userActivityLog.create({
+      data: {
+        userId: user.id || "system",
+        action: "CREATE_COMMERCIAL_TASK",
+        entityType: "CommercialTask",
+        entityId: task.id,
+        afterJson: JSON.stringify({
+          title,
+          priority: task.priority,
+          assignedToId: task.assignedToId,
+          dueAt: task.dueAt
+        })
+      }
+    });
+
     return NextResponse.json({
       success: true,
       task

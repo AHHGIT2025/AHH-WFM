@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { Card, Badge, Button, Input } from "@ahh-wfm/ui/src";
+import CommercialActivityFeedPanel from "../../../components/commercial/CommercialActivityFeedPanel";
 
 interface ProspectClient {
   id: string;
@@ -434,6 +435,9 @@ export default function OpportunitiesPage() {
           </div>
         </Card>
       )}
+
+      {/* Opportunity Deals Activity Feed */}
+      <CommercialActivityFeedPanel title="Opportunity Deals Activity Feed" />
 
       {/* New Opportunity Modal */}
       {showCreateModal && (

@@ -55,6 +55,26 @@ export async function PATCH(
       data: updateData
     });
 
+    // Record UserActivityLog mutation audit
+    await prisma.userActivityLog.create({
+      data: {
+        userId: user.id || "system",
+        action: status === "COMPLETED" ? "COMPLETE_COMMERCIAL_TASK" : "UPDATE_COMMERCIAL_TASK",
+        entityType: "CommercialTask",
+        entityId: taskId,
+        beforeJson: JSON.stringify({
+          status: existingTask.status,
+          priority: existingTask.priority,
+          assignedToId: existingTask.assignedToId
+        }),
+        afterJson: JSON.stringify({
+          status: updatedTask.status,
+          priority: updatedTask.priority,
+          assignedToId: updatedTask.assignedToId
+        })
+      }
+    });
+
     return NextResponse.json({
       success: true,
       task: updatedTask

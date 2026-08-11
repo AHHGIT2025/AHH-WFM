@@ -1464,15 +1464,15 @@ model CommercialActivity {
   
   // Related Commercial Entities
   prospectClientId    String?
-  prospectClient      ManpowerClient?  @relation(fields: [prospectClientId], references: [id], onDelete: Cascade)
+  prospectClient      ManpowerClient?  @relation(fields: [prospectClientId], references: [id], onDelete: SetNull)
   preContractCaseId   String?
-  preContractCase     PreContractCase? @relation(fields: [preContractCaseId], references: [id], onDelete: Cascade)
+  preContractCase     PreContractCase? @relation(fields: [preContractCaseId], references: [id], onDelete: SetNull)
   contractId          String?
-  contract            ManpowerContract? @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  contract            ManpowerContract? @relation(fields: [contractId], references: [id], onDelete: SetNull)
   addendumId          String?
-  addendum            ManpowerContractAddendum? @relation(fields: [addendumId], references: [id], onDelete: Cascade)
+  addendum            ManpowerContractAddendum? @relation(fields: [addendumId], references: [id], onDelete: SetNull)
   renewalCaseId       String?
-  renewalCase         ManpowerContractRenewalCase? @relation(fields: [renewalCaseId], references: [id], onDelete: Cascade)
+  renewalCase         ManpowerContractRenewalCase? @relation(fields: [renewalCaseId], references: [id], onDelete: SetNull)
   
   // Governance & Multi-Tenancy
   companyId           String?
@@ -1482,13 +1482,13 @@ model CommercialActivity {
   createdAt           DateTime         @default(now())
   updatedAt           DateTime         @updatedAt
 
+  @@unique([externalProvider, externalItemId])
   @@index([contractId])
   @@index([prospectClientId])
   @@index([preContractCaseId])
   @@index([activityType])
   @@index([companyId])
   @@index([operationType])
-  @@index([externalProvider, externalItemId])
 }
 
 model CommercialTask {
@@ -1508,15 +1508,15 @@ model CommercialTask {
   
   // Related Commercial Entities
   prospectClientId    String?
-  prospectClient      ManpowerClient?  @relation(fields: [prospectClientId], references: [id], onDelete: Cascade)
+  prospectClient      ManpowerClient?  @relation(fields: [prospectClientId], references: [id], onDelete: SetNull)
   preContractCaseId   String?
-  preContractCase     PreContractCase? @relation(fields: [preContractCaseId], references: [id], onDelete: Cascade)
+  preContractCase     PreContractCase? @relation(fields: [preContractCaseId], references: [id], onDelete: SetNull)
   contractId          String?
-  contract            ManpowerContract? @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  contract            ManpowerContract? @relation(fields: [contractId], references: [id], onDelete: SetNull)
   addendumId          String?
-  addendum            ManpowerContractAddendum? @relation(fields: [addendumId], references: [id], onDelete: Cascade)
+  addendum            ManpowerContractAddendum? @relation(fields: [addendumId], references: [id], onDelete: SetNull)
   renewalCaseId       String?
-  renewalCase         ManpowerContractRenewalCase? @relation(fields: [renewalCaseId], references: [id], onDelete: Cascade)
+  renewalCase         ManpowerContractRenewalCase? @relation(fields: [renewalCaseId], references: [id], onDelete: SetNull)
   
   // Governance & Multi-Tenancy
   companyId           String?

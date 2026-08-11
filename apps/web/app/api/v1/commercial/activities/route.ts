@@ -238,11 +238,42 @@ export async function POST(req: NextRequest) {
       }
     });
 
+    // Record UserActivityLog mutation audit
+    await prisma.userActivityLog.create({
+      data: {
+        userId: user.id || "system",
+        action: externalProvider ? "LINK_OUTLOOK_ACTIVITY" : "CREATE_COMMERCIAL_ACTIVITY",
+        entityType: "CommercialActivity",
+        entityId: activity.id,
+        afterJson: JSON.stringify({
+          activityType,
+          subject,
+          contractId,
+          prospectClientId,
+          externalProvider,
+          externalItemId
+        })
+      }
+    });
+
     return NextResponse.json({
       success: true,
       activity
     });
   } catch (err: any) {
+    if (err.code === "P2002") {
+      try {
+        const existing = await prisma.commercialActivity.findFirst({
+          where: { externalProvider: req.body ? (req as any).externalProvider : undefined, externalItemId: req.body ? (req as any).externalItemId : undefined }
+        });
+        return NextResponse.json({
+          success: true,
+          alreadyExists: true,
+          activity: existing,
+          message: "External provider item already linked idempotently."
+        });
+      } catch (_) {}
+    }
     return NextResponse.json(
       { error: err.message || "Failed to log commercial activity." },
       { status: 400 }

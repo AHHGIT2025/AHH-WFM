@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { LayoutShell } from "../../../components/layout-shell";
+import CommercialActivityFeedPanel from "../../../components/commercial/CommercialActivityFeedPanel";
 
 export default function ContractAmendmentsPage() {
   const [selectedContractId, setSelectedContractId] = useState("CONT-2026-001");
@@ -142,6 +143,11 @@ export default function ContractAmendmentsPage() {
               ))}
             </tbody>
           </table>
+        </div>
+
+        {/* Contract Addendums Activity Feed */}
+        <div className="mt-6">
+          <CommercialActivityFeedPanel title="Contract Scope Addendum & Variation Activity Feed" />
         </div>
 
         {/* Modal */}

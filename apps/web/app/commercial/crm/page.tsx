@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { Card, Badge, Button, Input } from "@ahh-wfm/ui/src";
+import CommercialActivityFeedPanel from "../../../components/commercial/CommercialActivityFeedPanel";
 
 interface ProspectClient {
   id: string;
@@ -312,6 +313,9 @@ export default function CrmEnquiriesPage() {
           </table>
         </div>
       </Card>
+
+      {/* CRM Prospect Activity Feed */}
+      <CommercialActivityFeedPanel title="CRM Prospects Activity & Communication Feed" />
 
       {/* Register Prospect Modal */}
       {showCreateModal && (
