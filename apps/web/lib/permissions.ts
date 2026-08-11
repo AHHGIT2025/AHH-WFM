@@ -47,7 +47,8 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "commercial.commandCenter.view", "commercial.commandCenter.crossCompany", "commercial.commandCenter.contractHealth", "commercial.commandCenter.exceptions",
     "commercial.commandCenter.rosterCoverage", "commercial.commandCenter.relieverReadiness",
     "commercial.handover.view", "commercial.handover.manage", "commercial.reports.view",
-    "commercial.addendum.view", "commercial.addendum.manage", "commercial.contract.terminate"
+    "commercial.addendum.view", "commercial.addendum.manage", "commercial.contract.terminate",
+    "commercial.renewal.view", "commercial.renewal.manage"
   ],
   ADMIN: [
     "dashboard.view", "employees.view", "employees.create", "employees.edit", "employees.bulkUpload", "employees.manage",
@@ -58,6 +59,9 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "overtime.view", "overtime.approve", "reports.view", "reports.export", "reports.manage",
     "reports.executive.view", "reports.attendance.view", "reports.leave.view", "reports.overtime.view", "reports.shiftRoster.view", "reports.sapSync.view", "reports.audit.view", "reports.backup.view", "reports.productionReadiness.view",
     "reports.security.view", "reports.facility.view", "reports.patrol.view", "reports.deployment.view",
+    "commercial.handover.view", "commercial.handover.manage", "commercial.reports.view",
+    "commercial.addendum.view", "commercial.addendum.manage", "commercial.contract.terminate",
+    "commercial.renewal.view", "commercial.renewal.manage",
     "sap.view", "sap.sync", "sap.mapping",
     "backup.view", "backup.create", "backup.download",
     "settings.view", "masters.view", "masters.manage",

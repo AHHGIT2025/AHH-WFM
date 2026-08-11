@@ -40,15 +40,17 @@ Current programme:
 
 * Commercial Lifecycle Phase CL-7 — Post-Award Contract Addendums & Amendments (LOCAL IMPLEMENTATION COMPLETED AND VERIFIED)
 
+* Commercial Lifecycle Phase CL-8 — Contract Renewal & Expiry Management (LOCAL IMPLEMENTATION COMPLETED AND VERIFIED)
+
 * SECFAC Phase 6A.2 schema reconciliation (SECFAC Status: PAUSED BY CIO)
 
 Current release objective:
 
-CL-7 Post-Award Contract Addendums & Amendments — FULLY IMPLEMENTED AND VERIFIED LOCALLY.
+CL-8 Contract Renewal & Expiry Management — FULLY IMPLEMENTED AND VERIFIED LOCALLY.
 
 Current Git commit baseline:
 
-`484df64e05e036f7e8d79c68c28161391d6eb365`
+`7c136d5a1df773167d30c6b93da17c273a135b23`
 
 Summary of CL-5 deliverables:
 

@@ -1399,6 +1399,40 @@ model ManpowerContract {
   reconciliationRuns    ManpowerReconciliationRun[]
   mobilizationChecklists ContractMobilizationChecklist[]
   handoverLogs          ContractHandoverLog[]
+
+  // CL-8 Renewal fields & relations
+  renewalOfContractId   String?                        @unique
+  renewalOfContract     ManpowerContract?              @relation("ContractRenewalChain", fields: [renewalOfContractId], references: [id], onDelete: SetNull)
+  renewedByContracts    ManpowerContract[]             @relation("ContractRenewalChain")
+  renewalCases          ManpowerContractRenewalCase[]
+}
+
+model ManpowerContractRenewalCase {
+  id                  String           @id @default(uuid())
+  contractId          String
+  contract            ManpowerContract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  caseNumber          String           @unique
+  status              String           @default("UNDER_REVIEW") // "UNDER_REVIEW" | "RENEWED" | "NOT_RENEWED" | "DECLINED"
+  reviewWindowDays    Int?
+  noticePeriodDays    Int?
+  targetStartDate     DateTime?
+  targetEndDate       DateTime?
+  decision            String?          // "RENEW_NEW_TERM" | "RENEW_ADDENDUM_EXTENSION" | "NOT_RENEWED" | "DECLINED"
+  decisionDate        DateTime?
+  decisionReason      String?
+  decisionNotes       String?
+  resultingContractId String?
+  resultingAddendumId String?
+  companyId           String?
+  operationType       String           // "SECURITY_GUARDING" | "FACILITY_MANAGEMENT"
+  createdById         String?
+  createdByName       String?
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+
+  @@index([contractId])
+  @@index([status])
+  @@index([operationType])
 }
 
 model ManpowerProject {
