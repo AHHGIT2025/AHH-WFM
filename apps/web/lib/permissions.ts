@@ -48,7 +48,8 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "commercial.commandCenter.rosterCoverage", "commercial.commandCenter.relieverReadiness",
     "commercial.handover.view", "commercial.handover.manage", "commercial.reports.view",
     "commercial.addendum.view", "commercial.addendum.manage", "commercial.contract.terminate",
-    "commercial.renewal.view", "commercial.renewal.manage"
+    "commercial.renewal.view", "commercial.renewal.manage",
+    "commercial.activity.view", "commercial.activity.manage", "commercial.task.view", "commercial.task.manage"
   ],
   ADMIN: [
     "dashboard.view", "employees.view", "employees.create", "employees.edit", "employees.bulkUpload", "employees.manage",
@@ -62,6 +63,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "commercial.handover.view", "commercial.handover.manage", "commercial.reports.view",
     "commercial.addendum.view", "commercial.addendum.manage", "commercial.contract.terminate",
     "commercial.renewal.view", "commercial.renewal.manage",
+    "commercial.activity.view", "commercial.activity.manage", "commercial.task.view", "commercial.task.manage",
     "sap.view", "sap.sync", "sap.mapping",
     "backup.view", "backup.create", "backup.download",
     "settings.view", "masters.view", "masters.manage",

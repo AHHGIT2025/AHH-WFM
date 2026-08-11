@@ -1252,6 +1252,8 @@ model ManpowerClient {
   updatedAt                   DateTime                  @updatedAt
   contracts                   ManpowerContract[]
   documents                   ManpowerClientDocument[]
+  activities                  CommercialActivity[]
+  tasks                       CommercialTask[]
   customerType                String                    @default("COMPANY")
   tradingName                 String?
   businessType                String?
@@ -1405,6 +1407,8 @@ model ManpowerContract {
   renewalOfContract     ManpowerContract?              @relation("ContractRenewalChain", fields: [renewalOfContractId], references: [id], onDelete: SetNull)
   renewedByContracts    ManpowerContract[]             @relation("ContractRenewalChain")
   renewalCase           ManpowerContractRenewalCase?
+  activities            CommercialActivity[]
+  tasks                 CommercialTask[]
 }
 
 model ManpowerContractRenewalCase {
@@ -1430,7 +1434,104 @@ model ManpowerContractRenewalCase {
   createdAt           DateTime         @default(now())
   updatedAt           DateTime         @updatedAt
 
+  activities          CommercialActivity[]
+  tasks               CommercialTask[]
+
   @@index([status])
+  @@index([operationType])
+}
+
+model CommercialActivity {
+  id                  String           @id @default(uuid())
+  activityType        String           // "EMAIL" | "CALL" | "MEETING" | "NOTE"
+  subject             String
+  notes               String?          @db.Text
+  interactionDate     DateTime         @default(now())
+  
+  // Structured Type-Specific Metadata
+  direction           String?          // "INBOUND" | "OUTBOUND"
+  phoneNumber         String?
+  durationMinutes     Int?
+  callOutcome         String?
+  meetingLocation     String?
+  meetingLink         String?
+  attendees           String?          @db.Text
+  
+  // Outlook / External Integration Linkage
+  externalProvider    String?          // "OUTLOOK" | "TEAMS" | "OTHER"
+  externalItemId      String?
+  externalWebLink     String?
+  
+  // Related Commercial Entities
+  prospectClientId    String?
+  prospectClient      ManpowerClient?  @relation(fields: [prospectClientId], references: [id], onDelete: Cascade)
+  preContractCaseId   String?
+  preContractCase     PreContractCase? @relation(fields: [preContractCaseId], references: [id], onDelete: Cascade)
+  contractId          String?
+  contract            ManpowerContract? @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  addendumId          String?
+  addendum            ManpowerContractAddendum? @relation(fields: [addendumId], references: [id], onDelete: Cascade)
+  renewalCaseId       String?
+  renewalCase         ManpowerContractRenewalCase? @relation(fields: [renewalCaseId], references: [id], onDelete: Cascade)
+  
+  // Governance & Multi-Tenancy
+  companyId           String?
+  operationType       String           // "SECURITY_GUARDING" | "FACILITY_MANAGEMENT"
+  createdById         String?
+  createdByName       String?
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+
+  @@index([contractId])
+  @@index([prospectClientId])
+  @@index([preContractCaseId])
+  @@index([activityType])
+  @@index([companyId])
+  @@index([operationType])
+  @@index([externalProvider, externalItemId])
+}
+
+model CommercialTask {
+  id                  String           @id @default(uuid())
+  title               String
+  description         String?          @db.Text
+  dueAt               DateTime?
+  reminderAt          DateTime?
+  reminderSent        Boolean          @default(false)
+  priority            String           @default("MEDIUM") // "LOW" | "MEDIUM" | "HIGH" | "URGENT"
+  status              String           @default("PENDING") // "PENDING" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED"
+  
+  // Assignments
+  assignedToId        String?
+  assignedToName      String?
+  completedAt         DateTime?
+  
+  // Related Commercial Entities
+  prospectClientId    String?
+  prospectClient      ManpowerClient?  @relation(fields: [prospectClientId], references: [id], onDelete: Cascade)
+  preContractCaseId   String?
+  preContractCase     PreContractCase? @relation(fields: [preContractCaseId], references: [id], onDelete: Cascade)
+  contractId          String?
+  contract            ManpowerContract? @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  addendumId          String?
+  addendum            ManpowerContractAddendum? @relation(fields: [addendumId], references: [id], onDelete: Cascade)
+  renewalCaseId       String?
+  renewalCase         ManpowerContractRenewalCase? @relation(fields: [renewalCaseId], references: [id], onDelete: Cascade)
+  
+  // Governance & Multi-Tenancy
+  companyId           String?
+  operationType       String           // "SECURITY_GUARDING" | "FACILITY_MANAGEMENT"
+  createdById         String?
+  createdByName       String?
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+
+  @@index([contractId])
+  @@index([assignedToId])
+  @@index([status])
+  @@index([priority])
+  @@index([dueAt])
+  @@index([companyId])
   @@index([operationType])
 }
 
@@ -1904,6 +2005,8 @@ model ManpowerContractAddendum {
   createdAt                  DateTime                           @default(now())
   updatedAt                  DateTime                           @updatedAt
   lineItems                  ManpowerContractAddendumLineItem[]
+  activities                 CommercialActivity[]
+  tasks                      CommercialTask[]
 }
 
 model ManpowerMaterialMaster {
@@ -4498,6 +4601,8 @@ model PreContractCase {
   surveys PreContractSurvey[]
   costEstimates PreContractCostEstimate[]
   proposals PreContractProposal[]
+  activities CommercialActivity[]
+  tasks CommercialTask[]
 }
 
 model PreContractProspectiveSite {

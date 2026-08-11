@@ -40,17 +40,15 @@ Current programme:
 
 * Commercial Lifecycle Phase CL-7 — Post-Award Contract Addendums & Amendments (LOCAL IMPLEMENTATION COMPLETED AND VERIFIED)
 
-* Commercial Lifecycle Phase CL-8 — Contract Renewal & Expiry Management (LOCAL IMPLEMENTATION COMPLETED AND VERIFIED)
-
-* SECFAC Phase 6A.2 schema reconciliation (SECFAC Status: PAUSED BY CIO)
+* Commercial Lifecycle Phase CL-1 — Planned Activities Gap Completion: Client Interaction Logs, Task Scheduler, Hybrid Activity Feed, and Outlook Adapter (LOCAL IMPLEMENTATION COMPLETED AND VERIFIED)
 
 Current release objective:
 
-CL-8 Contract Renewal & Expiry Management — FULLY IMPLEMENTED AND VERIFIED LOCALLY.
+CL-1 Planned Activities Gap Completion — FULLY IMPLEMENTED AND VERIFIED LOCALLY.
 
-Current Git commit baseline:
+Current Git commit candidate:
 
-`7c136d5a1df773167d30c6b93da17c273a135b23`
+`5982cd1097d6c560648a7575caa50c5d308426fa`
 
 Summary of CL-5 deliverables:
 

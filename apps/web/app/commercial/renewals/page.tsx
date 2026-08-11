@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
+import CommercialActivityFeedPanel from "../../../components/commercial/CommercialActivityFeedPanel";
 
 interface ClientInfo {
   id: string;
@@ -360,6 +361,9 @@ export default function ContractRenewalsConsolePage() {
           </div>
         )}
       </div>
+
+      {/* Commercial Activity Feed */}
+      <CommercialActivityFeedPanel title="Contract Renewal Activity & Follow-Up Feed" />
 
       {/* Modal 1: Initiate Renewal Case */}
       {initModalOpen && selectedContract && (
