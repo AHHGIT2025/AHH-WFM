@@ -37,7 +37,7 @@ export async function POST(
       });
     }
 
-    // Centralized Workflow Template check (Settings > Workflow Setup)
+    // GATE 2: Enforce Centralized Workflow Configuration (Settings > Workflow Setup)
     const workflowTemplate = await prisma.workflowTemplate.findFirst({
       where: {
         moduleType: "COMMERCIAL_ADDENDUM",
@@ -45,23 +45,30 @@ export async function POST(
       }
     });
 
-    let activeWorkflowInstance = null;
-    if (workflowTemplate) {
-      activeWorkflowInstance = await prisma.workflowInstance.findFirst({
-        where: {
-          referenceId: addendum.id,
-          moduleType: "COMMERCIAL_ADDENDUM"
-        }
-      });
+    // WORKFLOW_CONFIGURATION_REQUIRED_BEFORE_SUBMISSION: Block silent local fallback if no central workflow template exists
+    if (!workflowTemplate) {
+      return NextResponse.json(
+        { error: "WORKFLOW_CONFIGURATION_REQUIRED_BEFORE_SUBMISSION: No active COMMERCIAL_ADDENDUM workflow definition is configured under Settings > Workflow Setup." },
+        { status: 400 }
+      );
+    }
 
-      if (!activeWorkflowInstance || activeWorkflowInstance.status !== "APPROVED") {
-        const isApprover = user.role === "SUPER_ADMIN" || user.role === "ADMIN";
-        if (!isApprover) {
-          return NextResponse.json(
-            { error: "Direct approval blocked. Centralized workflow approval under Settings > Workflow Setup is required." },
-            { status: 403 }
-          );
-        }
+    // Retrieve active WorkflowInstance
+    let workflowInstance = await prisma.workflowInstance.findFirst({
+      where: {
+        referenceId: addendum.id,
+        moduleType: "COMMERCIAL_ADDENDUM"
+      }
+    });
+
+    // If workflow instance is not in APPROVED state, check for authorized workflow approval action
+    if (!workflowInstance || workflowInstance.status !== "APPROVED") {
+      const isApprover = user.role === "SUPER_ADMIN" || user.role === "ADMIN";
+      if (!isApprover) {
+        return NextResponse.json(
+          { error: "Direct approval blocked. Centralized workflow approval under Settings > Workflow Setup is required." },
+          { status: 403 }
+        );
       }
     }
 
@@ -76,16 +83,19 @@ export async function POST(
         }
       });
 
-      // Update contract endDate and totalContractValue explicitly
+      // GATE 1: totalContractValue / Commercial Impact Safety
+      // Preserve endDate if effectiveTo is provided and later than contract endDate
       let updatedEndDate = addendum.contract.endDate;
       if (addendum.effectiveTo && addendum.effectiveTo > addendum.contract.endDate) {
         updatedEndDate = addendum.effectiveTo;
       }
 
+      // Preserve totalContractValue if base contract total is null; do not force 0 without explicit full-term authority
       let updatedTotalValue = addendum.contract.totalContractValue;
-      if (addendum.calculatedCommercialImpact && addendum.calculatedCommercialImpact !== 0) {
-        const currentValue = addendum.contract.totalContractValue || 0;
-        updatedTotalValue = currentValue + addendum.calculatedCommercialImpact;
+      if (addendum.contract.totalContractValue !== null && addendum.calculatedCommercialImpact !== null && addendum.calculatedCommercialImpact !== undefined) {
+        // Apply explicit full-term commercial impact delta (supports ADD, REMOVE, MODIFY)
+        const impactDelta = Number(addendum.calculatedCommercialImpact);
+        updatedTotalValue = addendum.contract.totalContractValue + impactDelta;
       }
 
       const updatedContract = await tx.manpowerContract.update({
@@ -96,15 +106,33 @@ export async function POST(
         }
       });
 
-      // Register action history if active workflow instance exists
-      if (activeWorkflowInstance) {
+      // Update or create WorkflowInstance to APPROVED status
+      if (!workflowInstance && workflowTemplate) {
+        workflowInstance = await tx.workflowInstance.create({
+          data: {
+            templateId: workflowTemplate.id,
+            moduleType: "COMMERCIAL_ADDENDUM",
+            referenceId: addendum.id,
+            status: "APPROVED",
+            currentLevelNumber: 1
+          }
+        });
+      } else if (workflowInstance && workflowInstance.status !== "APPROVED") {
+        workflowInstance = await tx.workflowInstance.update({
+          where: { id: workflowInstance.id },
+          data: { status: "APPROVED" }
+        });
+      }
+
+      // Record WorkflowActionHistory log
+      if (workflowInstance) {
         await tx.workflowActionHistory.create({
           data: {
-            instanceId: activeWorkflowInstance.id,
-            levelNumber: activeWorkflowInstance.currentLevelNumber || 1,
+            instanceId: workflowInstance.id,
+            levelNumber: workflowInstance.currentLevelNumber || 1,
             action: "APPROVE",
             actedBy: user.id || "system",
-            remarks: "Addendum approved and commercial terms applied."
+            remarks: "Addendum approved and commercial impact applied to contract."
           }
         }).catch(() => null);
       }

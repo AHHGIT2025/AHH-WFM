@@ -14,11 +14,25 @@ describe("Commercial Lifecycle Phase CL-7: Post-Award Addendums & Amendments API
   let testCompanyId: string;
   let testClientId: string;
   let testActiveContractId: string;
+  let testNullValueContractId: string;
   let testDraftContractId: string;
   let testAddendumId: string;
+  let testWorkflowTemplateId: string;
 
   beforeAll(async () => {
     const rand = `${Date.now()}-${Math.floor(Math.random() * 100000)}`;
+
+    // Create central workflow template for COMMERCIAL_ADDENDUM under Settings > Workflow Setup
+    const template = await prisma.workflowTemplate.create({
+      data: {
+        workflowName: `CL7 Central Addendum Workflow ${rand}`,
+        moduleType: "COMMERCIAL_ADDENDUM",
+        appliesTo: "ACTIVATION",
+        isDefault: true,
+        isActive: true
+      }
+    });
+    testWorkflowTemplateId = template.id;
 
     const company = await prisma.company.create({
       data: {
@@ -39,7 +53,7 @@ describe("Commercial Lifecycle Phase CL-7: Post-Award Addendums & Amendments API
     });
     testClientId = client.id;
 
-    // Create ACTIVE contract (eligible for addendums)
+    // Create ACTIVE contract with explicit totalContractValue (eligible for addendums)
     const activeContract = await prisma.manpowerContract.create({
       data: {
         clientId: testClientId,
@@ -55,6 +69,23 @@ describe("Commercial Lifecycle Phase CL-7: Post-Award Addendums & Amendments API
       }
     });
     testActiveContractId = activeContract.id;
+
+    // Create ACTIVE contract with NULL totalContractValue (for Gate 1 safety checks)
+    const nullContract = await prisma.manpowerContract.create({
+      data: {
+        clientId: testClientId,
+        contractNumber: `CONC7-NUL-${rand}`,
+        title: "CL-7 Null Value Test Contract",
+        startDate: new Date("2026-09-01"),
+        endDate: new Date("2027-08-31"),
+        totalContractValue: null,
+        operationType: "SECURITY_GUARDING",
+        status: "ACTIVE",
+        approvalStatus: "APPROVED",
+        mobilisationStatus: "MOBILISED"
+      }
+    });
+    testNullValueContractId = nullContract.id;
 
     // Create DRAFT contract (ineligible for addendums)
     const draftContract = await prisma.manpowerContract.create({
@@ -80,6 +111,11 @@ describe("Commercial Lifecycle Phase CL-7: Post-Award Addendums & Amendments API
       await prisma.manpowerContractAddendum.deleteMany({ where: { contractId: testActiveContractId } });
       await prisma.manpowerContract.deleteMany({ where: { id: testActiveContractId } });
     }
+    if (testNullValueContractId) {
+      await prisma.manpowerContractAddendumLineItem.deleteMany({ where: { addendum: { contractId: testNullValueContractId } } });
+      await prisma.manpowerContractAddendum.deleteMany({ where: { contractId: testNullValueContractId } });
+      await prisma.manpowerContract.deleteMany({ where: { id: testNullValueContractId } });
+    }
     if (testDraftContractId) {
       await prisma.manpowerContract.deleteMany({ where: { id: testDraftContractId } });
     }
@@ -88,6 +124,11 @@ describe("Commercial Lifecycle Phase CL-7: Post-Award Addendums & Amendments API
     }
     if (testCompanyId) {
       await prisma.company.deleteMany({ where: { id: testCompanyId } });
+    }
+    if (testWorkflowTemplateId) {
+      await prisma.workflowActionHistory.deleteMany({ where: { instance: { templateId: testWorkflowTemplateId } } });
+      await prisma.workflowInstance.deleteMany({ where: { templateId: testWorkflowTemplateId } });
+      await prisma.workflowTemplate.deleteMany({ where: { id: testWorkflowTemplateId } });
     }
   });
 
@@ -215,7 +256,7 @@ describe("Commercial Lifecycle Phase CL-7: Post-Award Addendums & Amendments API
     });
   });
 
-  describe("POST /api/v1/commercial/contracts/[contractId]/addendums/[addendumId]/approve", () => {
+  describe("POST /api/v1/commercial/contracts/[contractId]/addendums/[addendumId]/approve (Gates 1 & 2)", () => {
     it("should approve addendum and update contract totalContractValue and effective end date atomically", async () => {
       (getServerSession as jest.Mock).mockResolvedValue({
         user: {
@@ -238,7 +279,46 @@ describe("Commercial Lifecycle Phase CL-7: Post-Award Addendums & Amendments API
       expect(data.success).toBe(true);
       expect(data.alreadyApproved).toBe(false);
       expect(data.addendum.status).toBe("APPROVED");
-      expect(data.contract.totalContractValue).toBe(145000); // 100000 + 45000
+      expect(data.contract.totalContractValue).toBe(145000); // Gate 1: 100000 + 45000
+    });
+
+    it("should preserve NULL totalContractValue without forcing zero (Gate 1 Safety)", async () => {
+      (getServerSession as jest.Mock).mockResolvedValue({
+        user: {
+          id: "emp-admin-cl7",
+          role: "SUPER_ADMIN",
+          companyId: testCompanyId,
+          permissions: ["commercial.addendum.manage"]
+        }
+      });
+
+      // Create addendum on contract with NULL totalContractValue
+      const addReq = new NextRequest(
+        `http://localhost:3100/api/v1/commercial/contracts/${testNullValueContractId}/addendums`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: "Null Total Value Addendum",
+            addendumType: "SCOPE_CHANGE",
+            effectiveFrom: "2026-09-01",
+            calculatedCommercialImpact: 20000
+          })
+        }
+      );
+      const addRes = await createAddendum(addReq, { params: { contractId: testNullValueContractId } });
+      const addData = await addRes.json();
+
+      const appReq = new NextRequest(
+        `http://localhost:3100/api/v1/commercial/contracts/${testNullValueContractId}/addendums/${addData.addendum.id}/approve`,
+        { method: "POST" }
+      );
+      const appRes = await approveAddendum(appReq, { params: { contractId: testNullValueContractId, addendumId: addData.addendum.id } });
+      expect(appRes.status).toBe(200);
+
+      const appData = await appRes.json();
+      expect(appData.success).toBe(true);
+      expect(appData.contract.totalContractValue).toBeNull(); // Gate 1: Preserved NULL cleanly
     });
 
     it("should be idempotent on repeated approve calls", async () => {
