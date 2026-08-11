@@ -25,7 +25,7 @@ CREATE TABLE `ManpowerContractRenewalCase` (
     `updatedAt` DATETIME(3) NOT NULL,
 
     UNIQUE INDEX `ManpowerContractRenewalCase_caseNumber_key`(`caseNumber`),
-    INDEX `ManpowerContractRenewalCase_contractId_idx`(`contractId`),
+    UNIQUE INDEX `ManpowerContractRenewalCase_contractId_key`(`contractId`),
     INDEX `ManpowerContractRenewalCase_status_idx`(`status`),
     INDEX `ManpowerContractRenewalCase_operationType_idx`(`operationType`),
     PRIMARY KEY (`id`)

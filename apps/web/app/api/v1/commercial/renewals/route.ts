@@ -48,10 +48,7 @@ export async function GET(req: NextRequest) {
       },
       include: {
         client: true,
-        renewalCases: {
-          orderBy: { createdAt: "desc" },
-          take: 1
-        }
+        renewalCase: true
       },
       orderBy: { endDate: "asc" }
     });
@@ -77,7 +74,7 @@ export async function GET(req: NextRequest) {
         daysToExpiry,
         isInNoticeWindow,
         client: contract.client ? { id: contract.client.id, name: contract.client.name } : null,
-        activeRenewalCase: contract.renewalCases[0] || null
+        activeRenewalCase: contract.renewalCase || null
       };
     });
 
@@ -121,11 +118,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Contract not found." }, { status: 404 });
     }
 
-    // Check if an active UNDER_REVIEW renewal case already exists to prevent duplicates
+    // Check if a renewal case already exists to prevent duplicates
     const existingActiveCase = await prisma.manpowerContractRenewalCase.findFirst({
       where: {
-        contractId: contract.id,
-        status: "UNDER_REVIEW"
+        contractId: contract.id
       }
     });
 
@@ -140,32 +136,48 @@ export async function POST(req: NextRequest) {
     const count = await prisma.manpowerContractRenewalCase.count();
     const caseNumber = `REN-${contract.contractNumber}-${String(count + 1).padStart(2, "0")}`;
 
-    const renewalCase = await prisma.manpowerContractRenewalCase.create({
-      data: {
-        contractId: contract.id,
-        caseNumber,
-        status: "UNDER_REVIEW",
-        noticePeriodDays: contract.noticePeriodDays || null,
-        targetStartDate: targetStartDate ? new Date(targetStartDate) : null,
-        targetEndDate: targetEndDate ? new Date(targetEndDate) : null,
-        decisionNotes: reviewNotes || null,
-        companyId: user.companyId || null,
-        operationType: contract.operationType,
-        createdById: user.id || "system",
-        createdByName: user.name || "Commercial Officer"
-      },
-      include: {
-        contract: {
-          include: { client: true }
+    try {
+      const renewalCase = await prisma.manpowerContractRenewalCase.create({
+        data: {
+          contractId: contract.id,
+          caseNumber,
+          status: "UNDER_REVIEW",
+          noticePeriodDays: contract.noticePeriodDays || null,
+          targetStartDate: targetStartDate ? new Date(targetStartDate) : null,
+          targetEndDate: targetEndDate ? new Date(targetEndDate) : null,
+          decisionNotes: reviewNotes || null,
+          companyId: user.companyId || null,
+          operationType: contract.operationType,
+          createdById: user.id || "system",
+          createdByName: user.name || "Commercial Officer"
+        },
+        include: {
+          contract: {
+            include: { client: true }
+          }
+        }
+      });
+
+      return NextResponse.json({
+        success: true,
+        alreadyExists: false,
+        renewalCase
+      });
+    } catch (createErr: any) {
+      if (createErr.code === "P2002") {
+        const existingCase = await prisma.manpowerContractRenewalCase.findFirst({
+          where: { contractId: contract.id }
+        });
+        if (existingCase) {
+          return NextResponse.json({
+            success: true,
+            alreadyExists: true,
+            renewalCase: existingCase
+          });
         }
       }
-    });
-
-    return NextResponse.json({
-      success: true,
-      alreadyExists: false,
-      renewalCase
-    });
+      throw createErr;
+    }
   } catch (err: any) {
     return NextResponse.json(
       { error: err.message || "Failed to initiate contract renewal case." },

@@ -138,6 +138,7 @@ describe("Commercial Lifecycle Phase CL-8: Contract Renewal & Expiry Management 
       await prisma.workflowTemplate.deleteMany({ where: { id: testWorkflowTemplateId } });
     }
     if (testDraftContractId) {
+      await prisma.manpowerContractRenewalCase.deleteMany({ where: { contractId: testDraftContractId } });
       await prisma.contractManpowerRequirement.deleteMany({ where: { contractId: testDraftContractId } });
       await prisma.manpowerContract.deleteMany({ where: { id: testDraftContractId } });
     }
@@ -216,8 +217,8 @@ describe("Commercial Lifecycle Phase CL-8: Contract Renewal & Expiry Management 
     });
   });
 
-  describe("POST /api/v1/commercial/renewals (Initiate Case)", () => {
-    it("should initiate a new renewal review case", async () => {
+  describe("POST /api/v1/commercial/renewals (Initiate Case & Uniqueness)", () => {
+    it("should initiate a new renewal review case on first request", async () => {
       (getServerSession as jest.Mock).mockResolvedValue({
         user: {
           id: "emp-admin-cl8",
@@ -249,7 +250,7 @@ describe("Commercial Lifecycle Phase CL-8: Contract Renewal & Expiry Management 
       testRenewalCaseId = data.renewalCase.id;
     });
 
-    it("should handle duplicate initiation attempts idempotently", async () => {
+    it("should handle duplicate repeat initiation attempts idempotently without raw P2002", async () => {
       (getServerSession as jest.Mock).mockResolvedValue({
         user: {
           id: "emp-admin-cl8",
@@ -274,6 +275,25 @@ describe("Commercial Lifecycle Phase CL-8: Contract Renewal & Expiry Management 
       expect(data.success).toBe(true);
       expect(data.alreadyExists).toBe(true);
       expect(data.renewalCase.id).toBe(testRenewalCaseId);
+    });
+
+    it("should enforce database-level UNIQUE constraint on contractId preventing duplicate rows", async () => {
+      // Attempt direct Prisma creation with existing contractId
+      await expect(
+        prisma.manpowerContractRenewalCase.create({
+          data: {
+            contractId: testActiveContractId,
+            caseNumber: "REN-DUPLICATE-DIRECT-01",
+            operationType: "SECURITY_GUARDING"
+          }
+        })
+      ).rejects.toThrow();
+
+      // Verify exactly ONE physical renewal case exists in the DB for testActiveContractId
+      const count = await prisma.manpowerContractRenewalCase.count({
+        where: { contractId: testActiveContractId }
+      });
+      expect(count).toBe(1);
     });
   });
 
@@ -325,7 +345,7 @@ describe("Commercial Lifecycle Phase CL-8: Contract Renewal & Expiry Management 
       expect(renewedContract?.manpowerRequirements.length).toBeGreaterThan(0);
     });
 
-    it("should handle repeated decision processing idempotently", async () => {
+    it("should allow resulting renewed contract term to later own its own independent renewal case", async () => {
       (getServerSession as jest.Mock).mockResolvedValue({
         user: {
           id: "emp-admin-cl8",
@@ -335,22 +355,23 @@ describe("Commercial Lifecycle Phase CL-8: Contract Renewal & Expiry Management 
         }
       });
 
-      const req = new NextRequest(`http://localhost:3100/api/v1/commercial/renewals/${testRenewalCaseId}/decision`, {
+      const req = new NextRequest("http://localhost:3100/api/v1/commercial/renewals", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          decision: "RENEW_NEW_TERM",
-          newStartDate: "2026-09-01",
-          newEndDate: "2027-08-31"
+          contractId: testDraftContractId,
+          targetStartDate: "2027-09-01",
+          targetEndDate: "2028-08-31"
         })
       });
 
-      const res = await processDecision(req, { params: { caseId: testRenewalCaseId } });
+      const res = await initiateRenewal(req);
       expect(res.status).toBe(200);
 
       const data = await res.json();
       expect(data.success).toBe(true);
-      expect(data.alreadyFinalized).toBe(true);
+      expect(data.alreadyExists).toBe(false);
+      expect(data.renewalCase.contractId).toBe(testDraftContractId);
     });
 
     it("should handle RENEW_ADDENDUM_EXTENSION decision outcome", async () => {

@@ -1404,12 +1404,12 @@ model ManpowerContract {
   renewalOfContractId   String?                        @unique
   renewalOfContract     ManpowerContract?              @relation("ContractRenewalChain", fields: [renewalOfContractId], references: [id], onDelete: SetNull)
   renewedByContracts    ManpowerContract[]             @relation("ContractRenewalChain")
-  renewalCases          ManpowerContractRenewalCase[]
+  renewalCase           ManpowerContractRenewalCase?
 }
 
 model ManpowerContractRenewalCase {
   id                  String           @id @default(uuid())
-  contractId          String
+  contractId          String           @unique
   contract            ManpowerContract @relation(fields: [contractId], references: [id], onDelete: Cascade)
   caseNumber          String           @unique
   status              String           @default("UNDER_REVIEW") // "UNDER_REVIEW" | "RENEWED" | "NOT_RENEWED" | "DECLINED"
@@ -1430,7 +1430,6 @@ model ManpowerContractRenewalCase {
   createdAt           DateTime         @default(now())
   updatedAt           DateTime         @updatedAt
 
-  @@index([contractId])
   @@index([status])
   @@index([operationType])
 }
