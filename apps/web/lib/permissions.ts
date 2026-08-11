@@ -30,6 +30,10 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "secfac.welfare.view", "secfac.welfare.manage", "secfac.welfare.acknowledge",
     "secfac.patrolAssurance.view", "secfac.patrolAssurance.manage",
     "secfac.evidence.verify", "secfac.worker.monitor",
+    "secfac.postOrders.view", "secfac.postOrders.manage",
+    "secfac.briefings.view", "secfac.briefings.manage",
+    "secfac.incidents.view", "secfac.incidents.report", "secfac.incidents.manage", "secfac.incidents.close",
+    "secfac.inspections.view", "secfac.inspections.manage",
     "manpower.roster.publish", "manpower.roster.cancel", "manpower.roster.changeRequest.submit", "manpower.roster.changeRequest.review",
     "manpower.roster.changeRequest.approve", "manpower.roster.changeRequest.reject", "manpower.roster.changeRequest.withdraw",
     "manpower.roster.changeRequest.selfApprovalOverride", "manpower.roster.acknowledge", "manpower.roster.publication.viewHistory",
@@ -87,6 +91,10 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "secfac.welfare.view", "secfac.welfare.manage", "secfac.welfare.acknowledge",
     "secfac.patrolAssurance.view", "secfac.patrolAssurance.manage",
     "secfac.evidence.verify", "secfac.worker.monitor",
+    "secfac.postOrders.view", "secfac.postOrders.manage",
+    "secfac.briefings.view", "secfac.briefings.manage",
+    "secfac.incidents.view", "secfac.incidents.report", "secfac.incidents.manage", "secfac.incidents.close",
+    "secfac.inspections.view", "secfac.inspections.manage",
     "manpower.roster.publish", "manpower.roster.cancel", "manpower.roster.changeRequest.submit", "manpower.roster.changeRequest.review",
     "manpower.roster.changeRequest.approve", "manpower.roster.changeRequest.reject", "manpower.roster.changeRequest.withdraw",
     "manpower.roster.publication.viewHistory",
@@ -168,7 +176,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
   EMPLOYEE: [
     "dashboard.view", "employees.view", "attendance.view", "leaves.view", "shifts.view",
     "self.profile.view", "self.attendance.view", "self.attendance.punch", "self.leave.view", "self.leave.apply", "self.announcements.view", "self.password.change",
-    "manpower.roster.acknowledge"
+    "manpower.roster.acknowledge", "secfac.postOrders.view", "secfac.incidents.report"
   ],
   SAP_ADMIN: [
     "dashboard.view", "sap.view", "sap.sync", "sap.mapping", "reports.view",
@@ -189,6 +197,9 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "manpower.security.deployments.view", "manpower.security.deployments.manage", "manpower.security.relievers.view", "manpower.security.relievers.manage",
     "manpower.security.reports.view", "manpower.security.reports.export",
     "secfac.alerts.view", "secfac.alerts.manage", "secfac.alerts.acknowledge", "secfac.alerts.resolve", "secfac.alerts.escalate", "secfac.alert.rules.view", "secfac.alert.rules.manage",
+    "secfac.postOrders.view", "secfac.postOrders.manage", "secfac.briefings.view", "secfac.briefings.manage",
+    "secfac.incidents.view", "secfac.incidents.report", "secfac.incidents.manage", "secfac.incidents.close",
+    "secfac.inspections.view", "secfac.inspections.manage",
     "manpower.reconciliation.view", "manpower.reconciliation.run", "manpower.reconciliation.review", "manpower.reconciliation.excuse",
     "manpower.reconciliation.classifyUnexcused", "manpower.reconciliation.markSyncDelay", "manpower.reconciliation.manageConfig"
   ],
@@ -199,18 +210,25 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "manpower.security.deployments.view", "manpower.security.deployments.manage", "manpower.security.relievers.view", "manpower.security.relievers.manage",
     "manpower.security.reports.view", "manpower.security.reports.export",
     "secfac.alerts.view", "secfac.alerts.manage", "secfac.alerts.acknowledge", "secfac.alerts.resolve", "secfac.alerts.escalate", "secfac.alert.rules.view",
+    "secfac.postOrders.view", "secfac.postOrders.manage", "secfac.briefings.view", "secfac.briefings.manage",
+    "secfac.incidents.view", "secfac.incidents.report", "secfac.incidents.manage", "secfac.incidents.close",
+    "secfac.inspections.view", "secfac.inspections.manage",
     "manpower.reconciliation.view", "manpower.reconciliation.run", "manpower.reconciliation.review", "manpower.reconciliation.excuse",
     "manpower.reconciliation.classifyUnexcused", "manpower.reconciliation.markSyncDelay"
   ],
   SECURITY_PROJECT_MANAGER: [
     "dashboard.view", "manpower.security.view", "manpower.security.projects.view", "manpower.security.sites.view",
     "manpower.security.zones.view", "manpower.security.manpower.view", "manpower.security.shifts.view", "manpower.security.deployments.view",
+    "secfac.postOrders.view", "secfac.briefings.view", "secfac.incidents.view", "secfac.inspections.view",
     "manpower.reconciliation.view"
   ],
   SECURITY_SUPERVISOR: [
     "dashboard.view", "manpower.security.view", "manpower.security.manpower.view", "manpower.security.shifts.view",
     "manpower.security.deployments.manage",
     "secfac.alerts.view", "secfac.alerts.acknowledge", "secfac.alerts.resolve",
+    "secfac.postOrders.view", "secfac.briefings.view", "secfac.briefings.manage",
+    "secfac.incidents.view", "secfac.incidents.report", "secfac.incidents.manage",
+    "secfac.inspections.view", "secfac.inspections.manage",
     "manpower.reconciliation.view", "manpower.reconciliation.review", "manpower.reconciliation.excuse", "manpower.reconciliation.markSyncDelay"
   ],
   SECURITY_HR_PAYROLL_VIEWER: [
@@ -222,8 +240,10 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
   SECURITY_READ_ONLY: [
     "dashboard.view", "manpower.security.view", "manpower.security.clients.view", "manpower.security.contracts.view",
     "manpower.security.projects.view", "manpower.security.sites.view", "manpower.security.zones.view", "manpower.security.manpower.view",
-    "manpower.security.shifts.view", "manpower.security.deployments.view", "manpower.security.relievers.view", "manpower.security.reports.view"
+    "manpower.security.shifts.view", "manpower.security.deployments.view", "manpower.security.relievers.view", "manpower.security.reports.view",
+    "secfac.postOrders.view", "secfac.briefings.view", "secfac.incidents.view", "secfac.inspections.view"
   ],
+
 
   // Facility Management Default Roles
   FM_ADMIN: [

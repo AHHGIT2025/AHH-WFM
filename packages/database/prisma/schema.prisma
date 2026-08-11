@@ -141,6 +141,18 @@ model Employee {
   secfacWelfareChecks             SecFacWelfareCheck[]                   @relation("SecFacWelfareCheckEmployee")
   secfacFieldAudits               SecfacFieldExecutionAudit[]            @relation("SecfacFieldAuditEmployee")
   secfacPatrolCheckpointAcks      SecfacPatrolExecutionCheckpoint[]      @relation("SecfacPatrolCheckpointAckBy")
+  secfacPostOrdersCreated         SecfacPostOrder[]                      @relation("SecfacPostOrderCreatedBy")
+  secfacPostOrdersPublished       SecfacPostOrder[]                      @relation("SecfacPostOrderPublishedBy")
+  secfacPostOrderAcknowledgements SecfacPostOrderAcknowledgement[]       @relation("SecfacPostOrderAckEmployee")
+  secfacShiftBriefingsSupervised  SecfacShiftBriefing[]                  @relation("SecfacShiftBriefingSupervisor")
+  secfacBriefingParticipants      SecfacShiftBriefingParticipant[]       @relation("SecfacBriefingParticipantEmployee")
+  secfacBriefingParticipantsRec   SecfacShiftBriefingParticipant[]       @relation("SecfacBriefingParticipantRecordedBy")
+  secfacIncidentsReported         SecfacIncident[]                       @relation("SecfacIncidentReportedBy")
+  secfacIncidentsAssigned         SecfacIncident[]                       @relation("SecfacIncidentAssignedTo")
+  secfacIncidentsClosed           SecfacIncident[]                       @relation("SecfacIncidentClosedBy")
+  secfacIncidentHistories         SecfacIncidentHistory[]                @relation("SecfacIncidentHistoryPerformer")
+  secfacInspectionsSupervised     SecfacSupervisorInspection[]           @relation("SecfacSupervisorInspectionSupervisor")
+  secfacInspectionsInspected      SecfacSupervisorInspection[]           @relation("SecfacSupervisorInspectionEmployee")
   focRequestedRequirements        ContractManpowerRequirement[]          @relation("FocRequester")
   focApprovedRequirements         ContractManpowerRequirement[]          @relation("FocApprover")
   focRejectedRequirements         ContractManpowerRequirement[]          @relation("FocRejector")
@@ -1593,6 +1605,10 @@ model ManpowerSite {
   secfacScanProofs          SecfacScanProof[]
   secfacPatrolRoutes        SecfacPatrolRoute[]                    @relation("SecfacPatrolRouteSite")
   secfacWelfareChecks       SecFacWelfareCheck[]                   @relation("SecFacWelfareCheckSite")
+  secfacPostOrders          SecfacPostOrder[]                      @relation("SecfacPostOrderSite")
+  secfacShiftBriefings      SecfacShiftBriefing[]                  @relation("SecfacShiftBriefingSite")
+  secfacIncidents           SecfacIncident[]                       @relation("SecfacIncidentSite")
+  secfacSupervisorInspections SecfacSupervisorInspection[]           @relation("SecfacSupervisorInspectionSite")
   contracts                 ManpowerContract[]
   rosterSlots               RosterRequirementSlot[]
   rosterPublications        RosterPublication[]
@@ -2258,6 +2274,9 @@ model SecfacCheckpoint {
   secfacScanProofs                 SecfacScanProof[]
   secfacPatrolRouteCheckpoints     SecfacPatrolRouteCheckpoint[]     @relation("CheckpointToRouteCheckpoints")
   secfacPatrolExecutionCheckpoints SecfacPatrolExecutionCheckpoint[] @relation("CheckpointToExecutionCheckpoints")
+  secfacPostOrders                 SecfacPostOrder[]                 @relation("SecfacPostOrderCheckpoint")
+  secfacIncidents                  SecfacIncident[]                  @relation("SecfacIncidentCheckpoint")
+  secfacSupervisorInspections      SecfacSupervisorInspection[]      @relation("SecfacSupervisorInspectionCheckpoint")
 
   @@index([operationType])
   @@index([siteId])
@@ -2406,11 +2425,12 @@ model SecfacChecklistExecution {
   id String @id @default(uuid())
 
   operationType String
-  assignmentId  String
-  assignment    SecfacAssignment @relation(fields: [assignmentId], references: [id], onDelete: Restrict)
+  assignmentId  String?
+  assignment    SecfacAssignment? @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
 
   checklistTemplateId String
   checklistTemplate   SecfacChecklistTemplate @relation(fields: [checklistTemplateId], references: [id], onDelete: Restrict)
+
 
   employeeId String
   employee   Employee @relation("SecfacEmployeeExecutions", fields: [employeeId], references: [id], onDelete: Restrict)
@@ -2444,6 +2464,7 @@ model SecfacChecklistExecution {
   history             SecfacChecklistExecutionHistory[]
   evidenceAttachments SecfacEvidenceAttachment[]
   secfacScanProofs    SecfacScanProof[]
+  secfacSupervisorInspection SecfacSupervisorInspection? @relation("SecfacInspectionChecklistExecution")
 
   @@index([operationType])
   @@index([assignmentId])
@@ -2509,12 +2530,16 @@ model SecfacChecklistExecutionHistory {
 model SecfacEvidenceAttachment {
   id                String                   @id @default(uuid())
   operationType     String
-  executionId       String
-  execution         SecfacChecklistExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+  executionId       String?
+  execution         SecfacChecklistExecution? @relation(fields: [executionId], references: [id], onDelete: SetNull)
   responseId        String?
   response          SecfacChecklistResponse? @relation(fields: [responseId], references: [id], onDelete: SetNull)
   assignmentId      String?
   assignment        SecfacAssignment?        @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
+  incidentId        String?
+  incident          SecfacIncident?          @relation("SecfacIncidentEvidence", fields: [incidentId], references: [id], onDelete: SetNull)
+  postOrderId       String?
+  postOrder         SecfacPostOrder?         @relation("SecfacPostOrderEvidence", fields: [postOrderId], references: [id], onDelete: SetNull)
   employeeId        String
   employee          Employee                 @relation("SecfacEmployeeEvidence", fields: [employeeId], references: [id], onDelete: Restrict)
   siteId            String?
@@ -2551,7 +2576,10 @@ model SecfacEvidenceAttachment {
   @@index([executionId])
   @@index([responseId])
   @@index([assignmentId])
+  @@index([incidentId])
+  @@index([postOrderId])
   @@index([employeeId])
+
   @@index([siteId])
   @@index([checkpointId])
   @@index([evidenceType])
@@ -2776,6 +2804,9 @@ model SecfacFieldExecutionAudit {
   scanProofId           String?
   evidenceAttachmentId  String?
   syncConflictId        String?
+  incidentId            String?
+  postOrderId           String?
+  inspectionId          String?
 
   actionType   String
   actionSource String
@@ -2812,6 +2843,10 @@ model SecfacFieldExecutionAudit {
   @@index([checklistExecutionId])
   @@index([patrolExecutionId])
   @@index([syncConflictId])
+  @@index([incidentId])
+  @@index([postOrderId])
+  @@index([inspectionId])
+
   @@index([actionType])
   @@index([actionSource])
   @@index([resultStatus])
@@ -3284,7 +3319,237 @@ model SecFacWelfareCheck {
   @@index([graceExpiresAt])
 }
 
+// ==========================================
+// --- SECFAC Phase 6B Post Orders & Briefings ---
+// ==========================================
+
+model SecfacPostOrder {
+  id                      String    @id @default(cuid())
+  familyId                String
+  postOrderCode           String?
+  operationType           String    @default("SECURITY_GUARDING")
+  companyId               String
+  siteId                  String
+  site                    ManpowerSite @relation("SecfacPostOrderSite", fields: [siteId], references: [id], onDelete: Restrict)
+  checkpointId            String?
+  checkpoint              SecfacCheckpoint? @relation("SecfacPostOrderCheckpoint", fields: [checkpointId], references: [id], onDelete: SetNull)
+  title                   String
+  category                String    @default("GENERAL_POST_ORDER")
+  content                 String    @db.Text
+  version                 Int       @default(1)
+  effectiveFrom           DateTime  @default(now())
+  effectiveTo             DateTime?
+  status                  String    @default("DRAFT") // DRAFT | PUBLISHED | SUPERSEDED | RETIRED
+  requiresAcknowledgement  Boolean   @default(true)
+  createdById             String
+  createdBy               Employee  @relation("SecfacPostOrderCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  publishedById           String?
+  publishedBy             Employee? @relation("SecfacPostOrderPublishedBy", fields: [publishedById], references: [id], onDelete: SetNull)
+  publishedAt             DateTime?
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+
+  acknowledgements    SecfacPostOrderAcknowledgement[]
+  evidenceAttachments SecfacEvidenceAttachment[] @relation("SecfacPostOrderEvidence")
+
+  @@index([operationType])
+  @@index([companyId])
+  @@index([siteId])
+  @@index([checkpointId])
+  @@index([familyId])
+  @@index([status])
+}
+
+model SecfacPostOrderAcknowledgement {
+  id                    String    @id @default(cuid())
+  postOrderId           String
+  postOrder             SecfacPostOrder @relation(fields: [postOrderId], references: [id], onDelete: Restrict)
+  employeeId            String
+  employee              Employee  @relation("SecfacPostOrderAckEmployee", fields: [employeeId], references: [id], onDelete: Restrict)
+  deploymentId          String?
+  acknowledgedAt        DateTime  @default(now())
+  acknowledgementMethod String    @default("MOBILE_APP")
+  idempotencyKey        String    @unique
+  createdAt             DateTime  @default(now())
+
+  @@unique([postOrderId, employeeId])
+  @@index([postOrderId])
+  @@index([employeeId])
+}
+
+model SecfacShiftBriefing {
+  id                  String    @id @default(cuid())
+  operationType       String    @default("SECURITY_GUARDING")
+  companyId           String
+  siteId              String
+  site                ManpowerSite @relation("SecfacShiftBriefingSite", fields: [siteId], references: [id], onDelete: Restrict)
+  shiftId             String?
+  briefingDate        DateTime  @default(now())
+  supervisorId        String
+  supervisor          Employee  @relation("SecfacShiftBriefingSupervisor", fields: [supervisorId], references: [id], onDelete: Restrict)
+  stage               String    @default("BRIEFING_DRAFT") // BRIEFING_DRAFT | BRIEFING_COMPLETED | DEBRIEFING_COMPLETED
+  postAssignments     Json?
+  safetyNotes         String?   @db.Text
+  knownRisks          String?   @db.Text
+  temporaryInstructions String? @db.Text
+  briefingNotes       String?   @db.Text
+  briefingCompletedAt DateTime?
+  debriefingNotes     String?   @db.Text
+  debriefingCompletedAt DateTime?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  participants        SecfacShiftBriefingParticipant[]
+  carriedIncidents    SecfacShiftBriefingCarriedIncident[]
+
+  @@index([operationType])
+  @@index([companyId])
+  @@index([siteId])
+  @@index([supervisorId])
+  @@index([briefingDate])
+  @@index([stage])
+}
+
+model SecfacShiftBriefingParticipant {
+  id                String   @id @default(cuid())
+  briefingId        String
+  briefing          SecfacShiftBriefing @relation(fields: [briefingId], references: [id], onDelete: Cascade)
+  employeeId        String
+  employee          Employee @relation("SecfacBriefingParticipantEmployee", fields: [employeeId], references: [id], onDelete: Restrict)
+  deploymentId      String?
+  attendanceStatus  String   @default("PRESENT") // PRESENT | ABSENT | EXCUSED | LATE
+  acknowledgedAt    DateTime?
+  recordedById      String?
+  recordedBy        Employee? @relation("SecfacBriefingParticipantRecordedBy", fields: [recordedById], references: [id], onDelete: SetNull)
+  createdAt         DateTime @default(now())
+
+  @@unique([briefingId, employeeId])
+  @@index([briefingId])
+  @@index([employeeId])
+}
+
+model SecfacShiftBriefingCarriedIncident {
+  id          String   @id @default(cuid())
+  briefingId  String
+  briefing    SecfacShiftBriefing @relation(fields: [briefingId], references: [id], onDelete: Cascade)
+  incidentId  String
+  incident    SecfacIncident @relation(fields: [incidentId], references: [id], onDelete: Restrict)
+  remarks     String?  @db.Text
+  createdAt   DateTime @default(now())
+
+  @@unique([briefingId, incidentId])
+  @@index([briefingId])
+  @@index([incidentId])
+}
+
+// ==========================================
+// --- SECFAC Phase 6B Incidents & Inspections ---
+// ==========================================
+
+model SecfacIncident {
+  id                    String   @id @default(cuid())
+  incidentNumber        String
+  operationType         String   @default("SECURITY_GUARDING")
+  companyId             String
+  siteId                String
+  site                  ManpowerSite @relation("SecfacIncidentSite", fields: [siteId], references: [id], onDelete: Restrict)
+  checkpointId          String?
+  checkpoint            SecfacCheckpoint? @relation("SecfacIncidentCheckpoint", fields: [checkpointId], references: [id], onDelete: SetNull)
+  reportedById          String
+  reportedBy            Employee @relation("SecfacIncidentReportedBy", fields: [reportedById], references: [id], onDelete: Restrict)
+  source                String   @default("MOBILE_APP") // MOBILE_APP | CONTROL_ROOM | GUARD_PATROL | SOS_ALERT
+  type                  String   @default("INCIDENT") // OCCURRENCE | INCIDENT
+  category              String   @default("OTHER") // THEFT | UNAUTHORIZED_ACCESS | PROPERTY_DAMAGE | SAFETY_HAZARD | DISCIPLINE | EQUIPMENT_FAILURE | OTHER
+  severity              String   @default("MINOR") // MINOR | MODERATE | MAJOR | CRITICAL
+  title                 String
+  description           String   @db.Text
+  immediateAction       String?  @db.Text
+  incidentDate          DateTime @default(now())
+  assignedToId          String?
+  assignedTo            Employee? @relation("SecfacIncidentAssignedTo", fields: [assignedToId], references: [id], onDelete: SetNull)
+  status                String   @default("REPORTED") // REPORTED | ACKNOWLEDGED | INVESTIGATING | ACTION_IN_PROGRESS | PENDING_CLOSURE | CLOSED | CANCELLED
+  closureReason         String?  @db.Text
+  closedById            String?
+  closedBy              Employee? @relation("SecfacIncidentClosedBy", fields: [closedById], references: [id], onDelete: SetNull)
+  closedAt              DateTime?
+  workflowInstanceId    String?
+  workflowStatus        String   @default("NONE") // NONE | PENDING_APPROVAL | APPROVED | RETURNED | REJECTED
+  sosAlertId            String?
+  dispatchAssignmentId  String?
+  idempotencyKey        String   @unique
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  history               SecfacIncidentHistory[]
+  carriedInBriefings    SecfacShiftBriefingCarriedIncident[]
+  evidenceAttachments   SecfacEvidenceAttachment[] @relation("SecfacIncidentEvidence")
+
+  @@unique([companyId, incidentNumber])
+  @@index([operationType])
+  @@index([companyId])
+  @@index([siteId])
+  @@index([checkpointId])
+  @@index([reportedById])
+  @@index([assignedToId])
+  @@index([status])
+  @@index([type])
+  @@index([severity])
+  @@index([createdAt])
+}
+
+model SecfacIncidentHistory {
+  id            String         @id @default(cuid())
+  incidentId    String
+  incident      SecfacIncident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  fromStatus    String?
+  toStatus      String
+  action        String
+  remarks       String?        @db.Text
+  performedById String?
+  performedBy   Employee?      @relation("SecfacIncidentHistoryPerformer", fields: [performedById], references: [id], onDelete: SetNull)
+  createdAt     DateTime       @default(now())
+
+  @@index([incidentId])
+  @@index([toStatus])
+  @@index([performedById])
+  @@index([createdAt])
+}
+
+model SecfacSupervisorInspection {
+  id                    String   @id @default(cuid())
+  operationType         String   @default("SECURITY_GUARDING")
+  companyId             String
+  siteId                String
+  site                  ManpowerSite @relation("SecfacSupervisorInspectionSite", fields: [siteId], references: [id], onDelete: Restrict)
+  checkpointId          String?
+  checkpoint            SecfacCheckpoint? @relation("SecfacSupervisorInspectionCheckpoint", fields: [checkpointId], references: [id], onDelete: SetNull)
+  supervisorId          String
+  supervisor            Employee @relation("SecfacSupervisorInspectionSupervisor", fields: [supervisorId], references: [id], onDelete: Restrict)
+  inspectedEmployeeId   String
+  inspectedEmployee     Employee @relation("SecfacSupervisorInspectionEmployee", fields: [inspectedEmployeeId], references: [id], onDelete: Restrict)
+  inspectionDate        DateTime @default(now())
+  checklistExecutionId  String   @unique
+  checklistExecution    SecfacChecklistExecution @relation("SecfacInspectionChecklistExecution", fields: [checklistExecutionId], references: [id], onDelete: Restrict)
+  overallResult         String   @default("COMPLIANT") // COMPLIANT | NON_COMPLIANT | REQUIRES_ACTION
+  notes                 String?  @db.Text
+  correctiveAction      String?  @db.Text
+  followUpRequired      Boolean  @default(false)
+  followUpDueDate       DateTime?
+  status                String   @default("COMPLETED") // COMPLETED | FOLLOW_UP_PENDING | RESOLVED
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([operationType])
+  @@index([companyId])
+  @@index([siteId])
+  @@index([supervisorId])
+  @@index([inspectedEmployeeId])
+  @@index([overallResult])
+  @@index([status])
+}
+
 model RosterRequirementSlot {
+
   id                    String                           @id @default(uuid())
   operationType         String // "SECURITY_GUARDING" | "FACILITY_MANAGEMENT"
   companyId             String?

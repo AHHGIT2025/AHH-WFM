@@ -13,13 +13,16 @@ export default function SecfacLandingPage() {
     { title: "Control Room", path: "/secfac/control-room", icon: "dashboard", desc: "Live com feeds, real-time NFC scan log alerts, dispatcher response console." },
     { title: "Checkpoints Registry", path: "/secfac/checkpoints", icon: "location_on", desc: "Register physical NFC tags and bind location coordinates." },
     { title: "Checklist Builder", path: "/secfac/checklist-builder", icon: "rule", desc: "Design inspection forms and guard tour compliance rules." },
-    { title: "Assignments Linker", path: "/secfac/assignments", icon: "assignment", desc: "Map inspection tasks and routes to rostered shift workers." },
+    { title: "Post Orders", path: "/secfac/post-orders", icon: "assignment_late", desc: "Manage digital security post orders, version lineage, and guard acknowledgements." },
+    { title: "Shift Briefings", path: "/secfac/shift-briefings", icon: "groups", desc: "Manage pre-shift briefing notes, participant attendance, and carried incidents." },
+    { title: "Incident Review", path: "/secfac/incidents", icon: "warning", desc: "Review occurrences, security incidents, evidence, and workflow closure." },
+    { title: "Supervisor Inspections", path: "/secfac/supervisor-inspections", icon: "fact_check", desc: "Audit supervisor field inspections, compliance scores, and corrective actions." },
     { title: "Live Tour Monitoring", path: "/secfac/live-monitoring", icon: "visibility", desc: "Track guard timeline completions and coordinates on map." },
     { title: "SOS Alerts Center", path: "/secfac/sos-alerts", icon: "emergency", desc: "High-intensity center for reviewing mobile panic calls." },
-    { title: "Incident Review", path: "/secfac/incidents", icon: "warning", desc: "Review hazard reports, security breaches, and camera evidence." },
     { title: "Compliance Reports", path: "/secfac/reports", icon: "description", desc: "Verify inspection compliance statistics and scan completion rates." },
     { title: "Audit Trail", path: "/secfac/audit-trail", icon: "history", desc: "Trace dispatcher session modifications and checklist logs." }
   ];
+
 
   return (
     <SecfacPageGuard>

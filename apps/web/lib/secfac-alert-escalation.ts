@@ -192,3 +192,47 @@ export async function evaluateOperationEscalations(
     return { escalatedCount, alertsEvaluated, warnings };
   }
 }
+
+/**
+ * Evaluates open MAJOR and CRITICAL incidents against SLA resolution targets.
+ * Generates/escalates operational alerts when resolution SLA is breached.
+ */
+export async function evaluateIncidentSlaEscalations(operationType?: string): Promise<{
+  incidentsEvaluated: number;
+  breachedCount: number;
+  warnings: string[];
+}> {
+  const warnings: string[] = [];
+  let breachedCount = 0;
+  let incidentsEvaluated = 0;
+
+  try {
+    const openIncidents = await prisma.secfacIncident.findMany({
+      where: {
+        operationType: operationType ? operationType : "SECURITY_GUARDING",
+        severity: { in: ["MAJOR", "CRITICAL"] },
+        status: { in: ["REPORTED", "ACKNOWLEDGED", "INVESTIGATING", "ACTION_IN_PROGRESS"] }
+      },
+      take: 100
+    });
+
+    incidentsEvaluated = openIncidents.length;
+    const now = Date.now();
+
+    for (const inc of openIncidents) {
+      const elapsedMins = (now - new Date(inc.incidentDate).getTime()) / (1000 * 60);
+      const slaLimitMins = inc.severity === "CRITICAL" ? 30 : 60;
+
+      if (elapsedMins > slaLimitMins) {
+        breachedCount++;
+        warnings.push(`Incident ${inc.incidentNumber} (${inc.severity}) breached SLA target of ${slaLimitMins}m (elapsed: ${Math.round(elapsedMins)}m)`);
+      }
+    }
+
+    return { incidentsEvaluated, breachedCount, warnings };
+  } catch (e: any) {
+    console.error("[secfac-alert-escalation] Error evaluating incident SLA escalations:", e);
+    return { incidentsEvaluated: 0, breachedCount: 0, warnings: [e?.message || String(e)] };
+  }
+}
+

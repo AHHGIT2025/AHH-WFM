@@ -19,6 +19,9 @@ export interface SecfacFieldExecutionAuditPayload {
   scanProofId?: string | null;
   evidenceAttachmentId?: string | null;
   syncConflictId?: string | null;
+  incidentId?: string | null;
+  postOrderId?: string | null;
+  inspectionId?: string | null;
 
   actionType: string;
   actionSource: string;
@@ -68,6 +71,10 @@ export async function createSecfacFieldExecutionAudit(data: SecfacFieldExecution
     scanProofId: data.scanProofId || null,
     evidenceAttachmentId: data.evidenceAttachmentId || null,
     syncConflictId: data.syncConflictId || null,
+    incidentId: data.incidentId || null,
+    postOrderId: data.postOrderId || null,
+    inspectionId: data.inspectionId || null,
+
     actionType: data.actionType,
     actionSource: data.actionSource,
     queueItemId: data.queueItemId || null,
