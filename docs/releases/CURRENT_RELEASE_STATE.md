@@ -34,7 +34,8 @@ Current release objective:
 
 Current Git commit candidate:
 
-`24b423b7e77b67b14d249fbf12ae8b8ec4b96316`
+`faa3a1a361ef53d4ebf2ffecaa3c34ebfe4ff5cd`
+
 
 
 
