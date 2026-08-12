@@ -398,11 +398,17 @@ export function filterNavigationByPermissions(user: { role?: string; permissions
              hasPermission(user, "manpower.fm.view");
     }
     if (item.path === "/" || item.path === "/dashboard") return hasPermission(user, "dashboard.view");
+    if (item.path === "/secfac/post-orders") return hasPermission(user, "secfac.postOrders.view") || hasPermission(user, "manpower.security.view") || hasPermission(user, "manpower.admin.full_access");
+    if (item.path === "/secfac/shift-briefings") return hasPermission(user, "secfac.briefings.view") || hasPermission(user, "manpower.security.view") || hasPermission(user, "manpower.admin.full_access");
+    if (item.path === "/secfac/incidents") return hasPermission(user, "secfac.incidents.view") || hasPermission(user, "manpower.security.view") || hasPermission(user, "manpower.admin.full_access");
+    if (item.path === "/secfac/supervisor-inspections") return hasPermission(user, "secfac.inspections.view") || hasPermission(user, "manpower.security.view") || hasPermission(user, "manpower.admin.full_access");
+
     if (item.path.startsWith("/secfac")) {
       return hasPermission(user, "manpower.admin.full_access") || 
              hasPermission(user, "manpower.security.view") || 
              hasPermission(user, "manpower.fm.view");
     }
+
     if (item.path.startsWith("/workforce")) return hasPermission(user, "employees.view");
     if (item.path.startsWith("/attendance")) return hasPermission(user, "attendance.view");
     if (item.path.startsWith("/leave")) return hasPermission(user, "leaves.view");

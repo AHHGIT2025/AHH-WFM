@@ -92,6 +92,18 @@ export default function GuardTourPage() {
         </div>
       </div>
 
+      {/* Duty Action Shortcuts */}
+      <div className="grid grid-cols-2 gap-3">
+        <Link href="/secfac-post-orders" className="bg-surface border border-outline-variant/30 p-3 rounded-xl flex items-center gap-2 active:scale-95 transition-transform shadow-sm">
+          <span className="material-symbols-outlined text-primary text-[20px]">article</span>
+          <span className="text-[11px] font-bold text-on-surface">Duty Post Orders</span>
+        </Link>
+        <Link href="/incident-report" className="bg-surface border border-outline-variant/30 p-3 rounded-xl flex items-center gap-2 active:scale-95 transition-transform shadow-sm">
+          <span className="material-symbols-outlined text-status-warning text-[20px]">warning</span>
+          <span className="text-[11px] font-bold text-on-surface">Report Incident</span>
+        </Link>
+      </div>
+
       {/* Next Phase Notice Info Box */}
       <div className="bg-primary/5 border border-primary/20 rounded-2xl p-4 flex gap-3 text-xs">
         <span className="material-symbols-outlined text-primary text-[20px] shrink-0">info</span>
@@ -105,3 +117,4 @@ export default function GuardTourPage() {
     </div>
   );
 }
+

@@ -136,22 +136,39 @@ export default function MobileDashboard() {
             <span className="material-symbols-outlined text-[#00A3FF] text-[20px]">nfc</span>
             <span className="text-[10px] font-bold text-on-surface">NFC Scan</span>
           </Link>
-          <Link href="/facility-inspection" className="bg-surface-container-low border border-outline-variant/20 p-3 rounded-xl flex items-center gap-2 active:scale-95 transition-transform">
-            <span className="material-symbols-outlined text-secondary text-[20px]">assignment_turned_in</span>
-            <span className="text-[10px] font-bold text-on-surface">Inspection</span>
+          <Link href="/secfac-post-orders" className="bg-surface-container-low border border-outline-variant/20 p-3 rounded-xl flex items-center gap-2 active:scale-95 transition-transform">
+            <span className="material-symbols-outlined text-primary text-[20px]">article</span>
+            <span className="text-[10px] font-bold text-on-surface">Post Orders</span>
           </Link>
           <Link href="/incident-report" className="bg-surface-container-low border border-outline-variant/20 p-3 rounded-xl flex items-center gap-2 active:scale-95 transition-transform">
             <span className="material-symbols-outlined text-status-warning text-[20px]">warning</span>
-            <span className="text-[10px] font-bold text-on-surface">Incident</span>
+            <span className="text-[10px] font-bold text-on-surface">Report Incident</span>
           </Link>
-          <Link href="/sync-status" className="bg-surface-container-low border border-outline-variant/20 p-3 rounded-xl flex items-center gap-2 col-span-2 active:scale-95 transition-transform">
+          {((session?.user as any)?.role === "SUPERVISOR" || (session?.user as any)?.role === "ADMIN" || (session?.user as any)?.role === "SUPER_ADMIN" || hasClientPermission(session?.user as any, "secfac.briefings.view")) && (
+            <Link href="/secfac-briefing" className="bg-surface-container-low border border-outline-variant/20 p-3 rounded-xl flex items-center gap-2 active:scale-95 transition-transform">
+              <span className="material-symbols-outlined text-[#00A3FF] text-[20px]">groups</span>
+              <span className="text-[10px] font-bold text-on-surface">Shift Briefing</span>
+            </Link>
+          )}
+          {((session?.user as any)?.role === "SUPERVISOR" || (session?.user as any)?.role === "ADMIN" || (session?.user as any)?.role === "SUPER_ADMIN" || hasClientPermission(session?.user as any, "secfac.inspections.manage")) && (
+            <Link href="/secfac-supervisor-inspection" className="bg-surface-container-low border border-outline-variant/20 p-3 rounded-xl flex items-center gap-2 active:scale-95 transition-transform">
+              <span className="material-symbols-outlined text-secondary text-[20px]">fact_check</span>
+              <span className="text-[10px] font-bold text-on-surface">Supervisor Inspection</span>
+            </Link>
+          )}
+          <Link href="/facility-inspection" className="bg-surface-container-low border border-outline-variant/20 p-3 rounded-xl flex items-center gap-2 active:scale-95 transition-transform">
+            <span className="material-symbols-outlined text-secondary text-[20px]">assignment_turned_in</span>
+            <span className="text-[10px] font-bold text-on-surface">Facility Audit</span>
+          </Link>
+          <Link href="/sync-status" className="bg-surface-container-low border border-outline-variant/20 p-3 rounded-xl flex items-center gap-2 active:scale-95 transition-transform">
             <span className="material-symbols-outlined text-on-surface-variant text-[20px]">cloud_sync</span>
             <span className="text-[10px] font-bold text-on-surface">
-              {isOffline ? "Sync Queue (Offline)" : `Sync Queue (Pending: ${pendingCount})`}
+              {isOffline ? "Sync Queue" : `Sync Queue (${pendingCount})`}
             </span>
           </Link>
         </div>
       </div>
+
 
       {/* Quick Stats */}
       <div className="bg-surface border border-outline-variant/30 rounded-2xl p-4 shadow-sm">
