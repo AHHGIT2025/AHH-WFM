@@ -1,46 +1,44 @@
 import { test, expect } from '@playwright/test';
 
 test.describe('AHH WFM Web E2E Navigation', () => {
-  const email = process.env.E2E_EMAIL || 'admin@alhattab.qa';
-  const password = process.env.E2E_PASSWORD || 'Password123!';
-
   test('should load login page and navigate through all main modules', async ({ page }) => {
-    // 1. Login page loads
+    const email = process.env.PW_ADMIN_EMAIL || 'admin@alhattab.qa';
+    const password = process.env.PW_ADMIN_PASSWORD;
+
+    if (!password) {
+      throw new Error('PW_ADMIN_PASSWORD environment variable is not defined.');
+    }
+
+    // 1. Login Page loads
     console.log('Navigating to login page...');
     await page.goto('/login');
     await expect(page).toHaveURL(/\/login/);
-    await expect(page.locator('input[type="email"]')).toBeVisible();
 
-    // 2. Login using credentials
+    // 2. Submit credentials
     console.log('Logging in...');
-    await page.type('input[type="email"]', email);
-    await page.type('input[type="password"]', password);
-    const submitBtn = await page.$('button[type="submit"]');
-    if (submitBtn) {
-      await submitBtn.click();
-    } else {
-      await page.click('button');
-    }
+    await page.fill('input[type="email"]', email);
+    await page.fill('input[type="password"]', password);
+    await page.click('button[type="submit"]');
 
     // 3. Dashboard loads
     console.log('Waiting for Dashboard...');
-    await page.waitForURL(url => url.pathname === '/' || url.pathname === '/dashboard');
-    expect(page.url()).toContain('/');
+    await page.waitForURL((url) => url.pathname === '/' || url.pathname === '/dashboard', { timeout: 15000 });
+    await expect(page).not.toHaveURL(/\/login/);
 
     // 4. Workforce Directory loads
     console.log('Navigating to Workforce Directory...');
     await page.goto('/workforce');
     await expect(page).toHaveURL(/\/workforce/);
 
-    // 5. Master Data Hub loads
-    console.log('Navigating to Master Data Hub...');
-    await page.goto('/settings/masters');
-    await expect(page).toHaveURL(/\/settings\/masters/);
+    // 5. SECFAC Center loads
+    console.log('Navigating to SECFAC Center...');
+    await page.goto('/secfac');
+    await expect(page).toHaveURL(/\/secfac/);
 
-    // 6. Settings loads
-    console.log('Navigating to Settings...');
-    await page.goto('/settings');
-    await expect(page).toHaveURL(/\/settings/);
+    // 6. Commercial & Contracts loads
+    console.log('Navigating to Commercial & Contracts...');
+    await page.goto('/commercial');
+    await expect(page).toHaveURL(/\/commercial/);
 
     // 7. Security Guarding Dashboard loads
     console.log('Navigating to Security Guarding Dashboard...');
@@ -61,7 +59,12 @@ test.describe('AHH WFM Web E2E Navigation', () => {
     console.log('Navigating to Leave Page...');
     await page.goto('/leave');
     await expect(page).toHaveURL(/\/leave/);
-    
-    console.log('All E2E web navigation routes loaded successfully!');
+
+    // 11. Settings page loads
+    console.log('Navigating to Settings Page...');
+    await page.goto('/settings');
+    await expect(page).toHaveURL(/\/settings/);
+
+    console.log('Web E2E Navigation completed successfully!');
   });
 });
