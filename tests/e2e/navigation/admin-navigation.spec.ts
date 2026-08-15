@@ -18,30 +18,31 @@ test.describe('ADMIN Navigation & Layout Verification', () => {
     await expect(page.getByText('WFM Control Suite')).toBeVisible();
   });
 
-  test('ADMIN can navigate through all 12 core application routes via sidebar', async ({ page }) => {
-    const routes = [
-      { name: /Workforce Directory/i, path: '/workforce' },
-      { name: /Security Guarding/i, path: '/manpower/security-guarding/dashboard' },
-      { name: /Facility Management/i, path: '/manpower/facility-management/dashboard' },
-      { name: /Commercial & Contracts/i, path: '/commercial/dashboard' },
-      { name: /Attendance Monitor/i, path: '/attendance' },
-      { name: /Leave Management/i, path: '/leave' },
-      { name: /Clearance Management/i, path: '/clearance' },
-      { name: /Reports Hub/i, path: '/reports' },
-      { name: /Shift Master/i, path: '/shifts' },
-      { name: /Master Data Hub/i, path: '/settings/masters' },
-      { name: /Settings/i, path: '/settings' },
-    ];
+  const routes = [
+    { name: /Workforce Directory/i, path: '/workforce' },
+    { name: /Security Guarding/i, path: '/manpower/security-guarding/dashboard' },
+    { name: /Facility Management/i, path: '/manpower/facility-management/dashboard' },
+    { name: /Commercial & Contracts/i, path: '/commercial/dashboard' },
+    { name: /Attendance Monitor/i, path: '/attendance' },
+    { name: /Leave Management/i, path: '/leave' },
+    { name: /Clearance Management/i, path: '/clearance' },
+    { name: /Reports Hub/i, path: '/reports' },
+    { name: /Shift Master/i, path: '/shifts' },
+    { name: /Master Data Hub/i, path: '/settings/masters' },
+    { name: /Settings/i, path: '/settings' },
+  ];
 
-    for (const route of routes) {
+  for (const route of routes) {
+    test(`ADMIN sidebar navigation to ${route.path}`, async ({ page }) => {
       await page.goto('/');
+      await page.waitForURL((url) => url.pathname === '/', { timeout: 10000 });
       const link = page.locator('aside nav').getByRole('link', { name: route.name });
       await expect(link).toBeVisible();
       await link.click();
       await page.waitForURL(new RegExp(route.path.replace(/\//g, '\\/')), { timeout: 15000 });
       expect(page.url()).toMatch(new RegExp(route.path.replace(/\//g, '\\/')));
-    }
-  });
+    });
+  }
 
   test('Direct URL navigation for authorized ADMIN user', async ({ page }) => {
     await page.goto('/settings/masters');

@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-test.describe('Playwright Planner Seed Initialization', () => {
+test.describe('Playwright Planner Seed Initialization @planner-seed', () => {
   test('ADMIN local authentication and dashboard readiness seed', async ({ page }) => {
     const adminEmail = process.env.PW_ADMIN_EMAIL || 'admin@alhattab.qa';
     const adminPassword = process.env.PW_ADMIN_PASSWORD;

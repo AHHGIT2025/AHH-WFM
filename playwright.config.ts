@@ -29,15 +29,20 @@ export default defineConfig({
     {
       name: 'auth-setup',
       testMatch: /.*\.setup\.ts/,
-      testIgnore: ['**/tests/api/**', '**/seed.spec.ts'],
+      testIgnore: ['**/seed.spec.ts'],
     },
     {
-      name: 'seed',
+      name: 'planner-seed',
       testMatch: /seed\.spec\.ts/,
+      use: {
+        ...devices['Desktop Chrome'],
+        baseURL: WEB_BASE_URL,
+      },
+      dependencies: ['auth-setup'],
     },
     {
       name: 'chromium',
-      testIgnore: ['**/tests/api/**', '**/seed.spec.ts', '**/mobile/**'],
+      testIgnore: ['**/seed.spec.ts', '**/mobile/**', '**/*.setup.ts'],
       use: {
         ...devices['Desktop Chrome'],
         baseURL: WEB_BASE_URL,
