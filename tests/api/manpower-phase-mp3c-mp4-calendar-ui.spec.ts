@@ -169,12 +169,15 @@ describe("MP-3C / MP-4 Calendar Administration UI & API Verification", () => {
 
   // 13-16. Ramadan Period Workflow
   test("13-16. Ramadan Period creation, approval, and immutability", async () => {
+    const testYear = 2085 + (runTag % 10);
+    await prisma.$executeRawUnsafe(`UPDATE ManpowerRamadanPeriod SET supersedesPeriodId = NULL WHERE year = ${testYear}`);
+    await prisma.$executeRawUnsafe(`DELETE FROM ManpowerRamadanPeriod WHERE year = ${testYear}`);
     const ramadan = await prisma.manpowerRamadanPeriod.create({
       data: {
-        year: 2026,
-        name: `Ramadan 2026 UI Test ${runTag}`,
-        startDate: new Date("2026-03-01"),
-        endDate: new Date("2026-03-30"),
+        year: testYear,
+        name: `Ramadan ${testYear} UI Test ${runTag}`,
+        startDate: new Date(`${testYear}-03-01`),
+        endDate: new Date(`${testYear}-03-30`),
         approvalStatus: "DRAFT" as any,
         version: 1,
         notes: `[TEST-UI-${runTag}]`
