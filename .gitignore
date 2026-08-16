@@ -37,6 +37,7 @@ playwright/.auth/
 *.storageState.json
 .env.test
 .k6/
+.playwright-mcp/
 
 # Generated / transient files — do not commit
 db.json
