@@ -1,8 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@ahh-wfm/database";
+import { checkApiAuth } from "@/lib/api-guards";
+import { isAdminUser } from "@/lib/permissions";
 
 export async function GET(request: NextRequest) {
   try {
+    const auth = await checkApiAuth(undefined, { requiredPermission: "clearance.view" });
+    if (auth.error) {
+      return auth.error;
+    }
+    const user = auth.session.user;
+
     const { searchParams } = new URL(request.url);
     const clearanceType = searchParams.get("clearanceType");
     const status = searchParams.get("status");
@@ -10,6 +18,16 @@ export async function GET(request: NextRequest) {
     const whereClause: any = {};
     if (clearanceType) whereClause.clearanceType = clearanceType;
     if (status) whereClause.status = status;
+
+    // Fail-closed Company & Self-Service Isolation using canonical Employee ID
+    if (!isAdminUser(user)) {
+      const canonicalEmployeeId = user.employeeId || user.id;
+      if (user.isSelfServiceOnly || user.role === "EMPLOYEE") {
+        whereClause.employeeId = canonicalEmployeeId;
+      } else if (user.companyId) {
+        whereClause.companyId = user.companyId;
+      }
+    }
 
     const clearances = await prisma.clearanceRequest.findMany({
       where: whereClause,
@@ -38,6 +56,12 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const auth = await checkApiAuth(undefined, { requiredPermission: "clearance.create" });
+    if (auth.error) {
+      return auth.error;
+    }
+    const user = auth.session.user;
+
     const data = await request.json();
     
     // Validate employee and load active deployments/relations
@@ -69,12 +93,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: "Employee not found" }, { status: 404 });
     }
 
-    // Resolve "Working For" priority:
-    // 1. active project/site assignment
-    // 2. default project/site
-    // 3. company + department
-    // 4. company
-    // 5. Not set
+    // Company isolation check on target employee
+    if (!isAdminUser(user) && user.companyId && employee.companyId && employee.companyId !== user.companyId) {
+      return NextResponse.json({ success: false, error: "Forbidden: Cannot create clearance for employee in another company" }, { status: 403 });
+    }
+
+    // Resolve "Working For" priority
     let workingFor = "Not set";
     const activeDeployment = employee.deployments?.[0];
     if (activeDeployment?.project?.projectName) {
@@ -112,7 +136,7 @@ export async function POST(request: NextRequest) {
         departureDate: data.departureDate ? new Date(data.departureDate) : null,
         returningDate: data.returningDate ? new Date(data.returningDate) : null,
         lastWorkingDate: data.lastWorkingDate ? new Date(data.lastWorkingDate) : null,
-        requestedById: data.requestedById || "system",
+        requestedById: user.id || data.requestedById || "system",
         
         // Snapshots
         dateOfJoiningSnapshot: employee.dateOfJoining ? employee.dateOfJoining.toISOString() : null,
@@ -164,7 +188,7 @@ export async function POST(request: NextRequest) {
     await prisma.clearanceHistory.create({
       data: {
         clearanceRequestId: newClearance.id,
-        actorId: data.requestedById || "system",
+        actorId: user.id || "system",
         actionType: data.status === "PENDING_EMPLOYEE_SIGNATURE" ? "SUBMITTED" : "CREATED",
         details: data.status === "PENDING_EMPLOYEE_SIGNATURE" 
           ? `Clearance request submitted and waiting for employee signature.`

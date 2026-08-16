@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@ahh-wfm/database";
+import { checkApiAuth } from "@/lib/api-guards";
 
 interface RouteParams {
   params: {
@@ -9,6 +10,11 @@ interface RouteParams {
 
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
+    const auth = await checkApiAuth(undefined, { requiredPermission: "clearance.view" });
+    if (auth.error) {
+      return auth.error;
+    }
+
     const template = await prisma.clearanceTemplate.findUnique({
       where: { id: params.id },
       include: {
@@ -31,6 +37,11 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   try {
+    const auth = await checkApiAuth(undefined, { requiredPermission: "clearance.manage" });
+    if (auth.error) {
+      return auth.error;
+    }
+
     const id = params.id;
     const data = await request.json();
     const { name, description, isActive, sections } = data;
@@ -52,14 +63,11 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       }
     });
 
-    // Update sections if provided
     if (Array.isArray(sections)) {
-      // Delete existing
       await prisma.clearanceTemplateSection.deleteMany({
         where: { templateId: id }
       });
 
-      // Create new
       for (let i = 0; i < sections.length; i++) {
         const sec = sections[i];
         await prisma.clearanceTemplateSection.create({
@@ -86,6 +94,11 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
+    const auth = await checkApiAuth(undefined, { requiredPermission: "clearance.manage" });
+    if (auth.error) {
+      return auth.error;
+    }
+
     const id = params.id;
 
     await prisma.clearanceTemplate.delete({

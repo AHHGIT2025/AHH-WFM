@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@ahh-wfm/database";
+import { checkApiAuth } from "@/lib/api-guards";
 
 const defaultSteps = [
   "Employee Declaration",
@@ -48,7 +49,6 @@ async function seedDefaultTemplates() {
         }
       });
 
-      // Create sections
       for (let i = 0; i < defaultSteps.length; i++) {
         await prisma.clearanceTemplateSection.create({
           data: {
@@ -56,7 +56,10 @@ async function seedDefaultTemplates() {
             sectionName: defaultSteps[i],
             stepOrder: i + 1,
             isRequiredByDefault: true,
-            isExecutive: i >= 12 // Last 3 are executive
+            isExecutive: i >= 12
+            // defaultApproverId/defaultApproverRole are NOT set here.
+            // Approver routing is resolved exclusively from WorkflowTemplate
+            // (moduleType: "CLEARANCE") at submission time.
           }
         });
       }
@@ -66,10 +69,14 @@ async function seedDefaultTemplates() {
 
 export async function GET(request: NextRequest) {
   try {
+    const auth = await checkApiAuth(undefined, { requiredPermission: "clearance.view" });
+    if (auth.error) {
+      return auth.error;
+    }
+
     const { searchParams } = new URL(request.url);
     const clearanceType = searchParams.get("clearanceType");
 
-    // Make sure default templates are seeded
     await seedDefaultTemplates();
 
     const whereClause: any = {};
@@ -95,6 +102,11 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const auth = await checkApiAuth(undefined, { requiredPermission: "clearance.manage" });
+    if (auth.error) {
+      return auth.error;
+    }
+
     const data = await request.json();
     const { name, clearanceType, description, sections } = data;
 
@@ -102,7 +114,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: "Name and clearanceType are required" }, { status: 400 });
     }
 
-    // Check unique name
     const existing = await prisma.clearanceTemplate.findUnique({
       where: { name }
     });
@@ -119,7 +130,6 @@ export async function POST(request: NextRequest) {
       }
     });
 
-    // Create sections if provided
     if (Array.isArray(sections)) {
       for (let i = 0; i < sections.length; i++) {
         const sec = sections[i];
@@ -128,8 +138,10 @@ export async function POST(request: NextRequest) {
             templateId: template.id,
             sectionName: sec.sectionName,
             stepOrder: sec.stepOrder || (i + 1),
-            defaultApproverId: sec.defaultApproverId || null,
-            defaultApproverRole: sec.defaultApproverRole || null,
+            // defaultApproverId and defaultApproverRole are INTENTIONALLY OMITTED.
+            // Approver routing is resolved exclusively from the central WorkflowTemplate
+            // (moduleType: "CLEARANCE") via Settings > Workflow Setup at submission time.
+            // Local Clearance templates must not own approval routing.
             isRequiredByDefault: sec.isRequiredByDefault !== undefined ? sec.isRequiredByDefault : true,
             isExecutive: sec.isExecutive || false,
             conditionalRule: sec.conditionalRule || null

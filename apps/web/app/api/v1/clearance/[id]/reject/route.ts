@@ -1,8 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@ahh-wfm/database";
+import { checkApiAuth } from "@/lib/api-guards";
+import { validateClearanceCompanyAndAccess, validateClearanceApproverSoD } from "@/lib/clearance-auth";
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
+    const auth = await checkApiAuth(undefined, { requiredPermission: "clearance.approve" });
+    if (auth.error) {
+      return auth.error;
+    }
+    const user = auth.session.user;
     const clearanceId = params.id;
     const data = await request.json(); 
     
@@ -15,6 +22,9 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       return NextResponse.json({ success: false, error: "Clearance not found" }, { status: 404 });
     }
 
+    const accessError = validateClearanceCompanyAndAccess(user, clearance);
+    if (accessError) return accessError;
+
     const step = await prisma.clearanceApprovalStep.findUnique({
       where: { id: data.stepId }
     });
@@ -22,6 +32,9 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     if (!step || step.clearanceRequestId !== clearanceId) {
       return NextResponse.json({ success: false, error: "Invalid approval step" }, { status: 400 });
     }
+
+    const sodError = validateClearanceApproverSoD(user, clearance, step);
+    if (sodError) return sodError;
 
     // Update step
     await prisma.clearanceApprovalStep.update({
@@ -33,7 +46,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         signatureName: data.signatureName,
         signatureDate: new Date(),
         actedAt: new Date(),
-        actedById: data.actorId
+        actedById: user.id
       }
     });
 
@@ -42,7 +55,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       data: {
         stepId: step.id,
         actionType: "REJECT",
-        actorId: data.actorId || "system",
+        actorId: user.id || "system",
         remarks: data.remarks
       }
     });
@@ -51,18 +64,16 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     await prisma.clearanceHistory.create({
       data: {
         clearanceRequestId: clearance.id,
-        actorId: data.actorId || "system",
+        actorId: user.id || "system",
         actionType: "REJECT",
         details: `Step ${step.sectionName} was REJECTED.`
       }
     });
 
-    
-        await prisma.clearanceRequest.update({
-            where: { id: clearanceId },
-            data: { status: "REJECTED" }
-        });
-    
+    await prisma.clearanceRequest.update({
+      where: { id: clearanceId },
+      data: { status: "REJECTED" }
+    });
 
     return NextResponse.json({ success: true, message: "Action recorded successfully" });
   } catch (error: any) {

@@ -7,7 +7,6 @@ import { useRouter } from "next/navigation";
 export default function ClearanceTemplates() {
   const router = useRouter();
   const [templates, setTemplates] = useState<any[]>([]);
-  const [employees, setEmployees] = useState<any[]>([]);
   
   // Selection
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
@@ -24,19 +23,7 @@ export default function ClearanceTemplates() {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState({ text: "", type: "" });
 
-  const approverTypes = [
-    { value: "SPECIFIC_EMPLOYEE", label: "Specific Employee" },
-    { value: "ROLE", label: "Role / Department Head" },
-    { value: "IMMEDIATE_SUPERVISOR", label: "Immediate Supervisor" },
-    { value: "REPORTING_MANAGER", label: "Reporting Manager" },
-    { value: "PROJECT_SUPERVISOR", label: "Project Supervisor" },
-    { value: "SITE_SUPERVISOR", label: "Site Supervisor" },
-    { value: "DEPARTMENT_HEAD", label: "Department Head" },
-    { value: "EXECUTIVE_ROLE", label: "Executive Role" },
-    { value: "FALLBACK", label: "HR/Admin Fallback Queue" }
-  ];
-
-  // Fetch templates & employees
+  // Fetch templates
   const fetchTemplates = async (selectId?: string) => {
     setLoading(true);
     try {
@@ -61,15 +48,6 @@ export default function ClearanceTemplates() {
 
   useEffect(() => {
     fetchTemplates();
-    
-    // Fetch employees for specific approver select list
-    fetch("/api/v1/employees")
-      .then(res => res.json())
-      .then(data => {
-        const list = Array.isArray(data) ? data : data.data || [];
-        setEmployees(list);
-      })
-      .catch(err => console.error(err));
   }, []);
 
   const loadTemplateDetail = (templateId: string, currentTemplates?: any[]) => {
@@ -80,26 +58,7 @@ export default function ClearanceTemplates() {
       setName(t.name);
       setDescription(t.description || "");
       setClearanceType(t.clearanceType);
-      
-      // Load sections and map default approver type
-      const secs = (t.sections || []).map((sec: any) => {
-        let approverType = "FALLBACK";
-        if (sec.defaultApproverId) {
-          approverType = "SPECIFIC_EMPLOYEE";
-        } else if (sec.defaultApproverRole) {
-          if (["IMMEDIATE_SUPERVISOR", "REPORTING_MANAGER", "PROJECT_SUPERVISOR", "SITE_SUPERVISOR", "DEPARTMENT_HEAD", "EXECUTIVE_ROLE"].includes(sec.defaultApproverRole)) {
-            approverType = sec.defaultApproverRole;
-          } else {
-            approverType = "ROLE";
-          }
-        }
-        
-        return {
-          ...sec,
-          approverType
-        };
-      });
-      setSections(secs);
+      setSections(t.sections || []);
     }
   };
 
@@ -112,30 +71,13 @@ export default function ClearanceTemplates() {
   const handleSectionFieldChange = (index: number, field: string, value: any) => {
     const updated = [...sections];
     updated[index][field] = value;
-    
-    // Auto-adjust default values based on approverType change
-    if (field === "approverType") {
-      if (value === "SPECIFIC_EMPLOYEE") {
-        updated[index].defaultApproverRole = null;
-      } else if (value === "FALLBACK") {
-        updated[index].defaultApproverId = null;
-        updated[index].defaultApproverRole = null;
-      } else {
-        updated[index].defaultApproverId = null;
-        updated[index].defaultApproverRole = value; // Assign dynamic supervisor/role string directly
-      }
-    }
-    
     setSections(updated);
   };
 
   const handleAddSection = () => {
     const newSec = {
-      sectionName: "New Department / Role",
+      sectionName: "New Department / Section",
       stepOrder: sections.length + 1,
-      approverType: "FALLBACK",
-      defaultApproverId: null,
-      defaultApproverRole: null,
       isRequiredByDefault: true,
       isExecutive: false,
       conditionalRule: ""
@@ -168,10 +110,6 @@ export default function ClearanceTemplates() {
         sections: sections.map(sec => ({
           sectionName: sec.sectionName,
           stepOrder: sec.stepOrder,
-          defaultApproverId: sec.approverType === "SPECIFIC_EMPLOYEE" ? sec.defaultApproverId : null,
-          defaultApproverRole: sec.approverType !== "SPECIFIC_EMPLOYEE" && sec.approverType !== "FALLBACK"
-            ? (sec.approverType === "ROLE" ? sec.defaultApproverRole : sec.approverType)
-            : null,
           isRequiredByDefault: sec.isRequiredByDefault,
           isExecutive: sec.isExecutive,
           conditionalRule: sec.conditionalRule || null
@@ -205,8 +143,8 @@ export default function ClearanceTemplates() {
       {/* Header */}
       <div className="flex justify-between items-center border-b pb-4 border-gray-200">
         <div>
-          <h1 className="text-3xl font-extrabold text-[#800000] tracking-tight">Clearance Template Configuration</h1>
-          <p className="text-gray-500 mt-1">Configure approval departments, dynamic routing priorities, and conditions for employee exits</p>
+          <h1 className="text-3xl font-extrabold text-[#800000] tracking-tight">Clearance Operational Section Builder</h1>
+          <p className="text-gray-500 mt-1">Configure operational checklist sections, department scopes, and conditional requirements for employee exits</p>
         </div>
         <Button variant="primary" className="bg-[#800000] text-white" onClick={() => router.push("/clearance")}>
           Back to Clearance Dashboard
@@ -220,7 +158,7 @@ export default function ClearanceTemplates() {
       )}
 
       {loading ? (
-        <div className="text-center text-gray-500 py-12">Loading templates details...</div>
+        <div className="text-center text-gray-500 py-12">Loading template details...</div>
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           
@@ -253,7 +191,7 @@ export default function ClearanceTemplates() {
                 {/* Template Header Fields */}
                 <div className="border-b pb-4 space-y-4">
                   <h2 className="text-xl font-extrabold text-[#800000] flex justify-between items-center">
-                    <span>Configure Workflow Template</span>
+                    <span>Configure Operational Sections</span>
                     <span className="text-xs uppercase tracking-wider font-bold bg-[#800000]/10 text-[#800000] py-1 px-3.5 rounded-full">
                       {clearanceType === "LEAVE_VACATION" ? "Leave / Vacation" : "Separation"}
                     </span>
@@ -286,7 +224,7 @@ export default function ClearanceTemplates() {
                         type="text"
                         value={description}
                         onChange={(e) => setDescription(e.target.value)}
-                        placeholder="Describe the usage scope for this clearance flow..."
+                        placeholder="Describe the operational scope for this clearance flow..."
                         className="w-full text-sm border mt-1 py-1"
                       />
                     </div>
@@ -296,9 +234,9 @@ export default function ClearanceTemplates() {
                 {/* Template Sections/Steps List */}
                 <div className="space-y-4">
                   <div className="flex justify-between items-center border-b pb-2">
-                    <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wider">Clearance Steps & Routing Rules</h3>
+                    <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wider">Operational Sections & Checklist Scope</h3>
                     <Button onClick={handleAddSection} className="bg-white border text-xs text-[#800000] hover:bg-[#800000]/5 py-1.5 px-3 font-semibold">
-                      + Add New Step
+                      + Add New Section
                     </Button>
                   </div>
 
@@ -312,10 +250,10 @@ export default function ClearanceTemplates() {
                           onClick={() => handleRemoveSection(idx)}
                           className="absolute right-4 top-4 text-xs font-semibold text-red-500 hover:text-red-700 hover:underline"
                         >
-                          Delete Step
+                          Delete Section
                         </button>
 
-                        <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+                        <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
                           
                           {/* Order & Step Name */}
                           <div className="md:col-span-1 flex items-center justify-center">
@@ -324,8 +262,8 @@ export default function ClearanceTemplates() {
                             </span>
                           </div>
 
-                          <div className="md:col-span-4">
-                            <label className="block text-[10px] font-bold text-gray-500 uppercase">Step / Department Name</label>
+                          <div className="md:col-span-5">
+                            <label className="block text-[10px] font-bold text-gray-500 uppercase">Section / Department Name</label>
                             <Input
                               type="text"
                               value={sec.sectionName}
@@ -334,60 +272,7 @@ export default function ClearanceTemplates() {
                             />
                           </div>
 
-                          {/* Approver Type Selection */}
-                          <div className="md:col-span-4">
-                            <label className="block text-[10px] font-bold text-gray-500 uppercase">Approver Routing Type</label>
-                            <select
-                              value={sec.approverType}
-                              onChange={(e) => handleSectionFieldChange(idx, "approverType", e.target.value)}
-                              className="w-full rounded border border-gray-300 text-xs py-1.5 px-2 mt-1 bg-white"
-                            >
-                              {approverTypes.map(opt => (
-                                <option key={opt.value} value={opt.value}>{opt.label}</option>
-                              ))}
-                            </select>
-                          </div>
-
-                          {/* Specific Approver Detail / Role */}
-                          <div className="md:col-span-3">
-                            {sec.approverType === "SPECIFIC_EMPLOYEE" ? (
-                              <>
-                                <label className="block text-[10px] font-bold text-gray-500 uppercase">Select Approver User</label>
-                                <select
-                                  value={sec.defaultApproverId || ""}
-                                  onChange={(e) => handleSectionFieldChange(idx, "defaultApproverId", e.target.value)}
-                                  className="w-full rounded border border-gray-300 text-xs py-1.5 px-2 mt-1 bg-white"
-                                >
-                                  <option value="">-- Select Employee --</option>
-                                  {employees.map(emp => (
-                                    <option key={emp.id} value={emp.id}>{emp.id} — {emp.name}</option>
-                                  ))}
-                                </select>
-                              </>
-                            ) : sec.approverType === "ROLE" ? (
-                              <>
-                                <label className="block text-[10px] font-bold text-gray-500 uppercase">Approver Role Code</label>
-                                <Input
-                                  type="text"
-                                  value={sec.defaultApproverRole || ""}
-                                  onChange={(e) => handleSectionFieldChange(idx, "defaultApproverRole", e.target.value)}
-                                  placeholder="e.g. ROLE_FINANCE_MGR"
-                                  className="w-full text-xs mt-1 border border-gray-300 py-1"
-                                />
-                              </>
-                            ) : (
-                              <div className="pt-5 text-center">
-                                <span className="text-[10px] text-gray-400 font-medium italic">
-                                  Resolved dynamically
-                                </span>
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Flags and Conditions (Next Row inside Step) */}
-                          <div className="md:col-span-1"></div>
-                          
-                          <div className="md:col-span-3 flex items-center gap-2">
+                          <div className="md:col-span-3 flex items-center gap-2 pt-4">
                             <input
                               type="checkbox"
                               id={`req-${idx}`}
@@ -400,7 +285,7 @@ export default function ClearanceTemplates() {
                             </label>
                           </div>
 
-                          <div className="md:col-span-3 flex items-center gap-2">
+                          <div className="md:col-span-3 flex items-center gap-2 pt-4">
                             <input
                               type="checkbox"
                               id={`exec-${idx}`}
@@ -409,12 +294,14 @@ export default function ClearanceTemplates() {
                               className="rounded text-[#800000] focus:ring-[#800000] h-4 w-4 border-gray-300"
                             />
                             <label htmlFor={`exec-${idx}`} className="text-xs text-gray-600 font-semibold select-none cursor-pointer">
-                              Executive Sign-off Step
+                              Executive Sign-off Section
                             </label>
                           </div>
 
-                          <div className="md:col-span-5">
-                            <label className="block text-[10px] font-bold text-gray-500 uppercase">Applicability Rule / Condition</label>
+                          <div className="md:col-span-1"></div>
+                          
+                          <div className="md:col-span-11">
+                            <label className="block text-[10px] font-bold text-gray-500 uppercase">Applicability Condition Rule</label>
                             <Input
                               type="text"
                               value={sec.conditionalRule || ""}
@@ -437,7 +324,7 @@ export default function ClearanceTemplates() {
                     disabled={saving}
                     className="bg-[#800000] text-white hover:bg-[#600000] px-6 py-2.5 text-sm font-bold shadow-md"
                   >
-                    {saving ? "Saving Changes..." : "Save Template configuration"}
+                    {saving ? "Saving Changes..." : "Save Operational Sections"}
                   </Button>
                 </div>
 

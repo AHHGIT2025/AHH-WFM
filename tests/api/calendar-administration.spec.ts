@@ -23,9 +23,16 @@ describe("Calendar Administration API", () => {
     
     let dept = await prisma.department.findFirst({ where: { companyId: testCompanyId } });
     if (!dept) {
-      dept = await prisma.department.create({
-        data: {
-          id: "dept-1",
+      // Use unique deterministic test identifier to avoid colliding with or mutating unrelated existing department
+      const uniqueDeptId = "test-cal-admin-dept-1";
+      dept = await prisma.department.upsert({
+        where: { id: uniqueDeptId },
+        create: {
+          id: uniqueDeptId,
+          companyId: testCompanyId,
+          name: "Test Dept"
+        },
+        update: {
           companyId: testCompanyId,
           name: "Test Dept"
         }
