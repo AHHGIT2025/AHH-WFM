@@ -18,6 +18,7 @@ export interface NavItem {
 
 const navItems: NavItem[] = [
   { label: "Dashboard", path: "/", icon: "dashboard" },
+  { label: "Approval Center", path: "/approvals", icon: "task_alt" },
   { label: "Workforce Directory", path: "/workforce", icon: "group" },
   { label: "Security Guarding", path: "/manpower/security-guarding/dashboard", icon: "security" },
   { label: "Facility Management", path: "/manpower/facility-management/dashboard", icon: "business" },

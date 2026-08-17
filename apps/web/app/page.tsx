@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { hasPermission, isAdminUser } from "../lib/permissions";
 import { Card, Badge, Button } from "@ahh-wfm/ui/src";
+import { MyApprovalsWidget } from "@/components/dashboard/my-approvals-widget";
 
 interface DashboardData {
   workforceSummary: {
@@ -795,6 +796,11 @@ export default function DashboardPage() {
               </li>
             </ul>
           </Card>
+        </section>
+
+        {/* Universal Approval Center Widget */}
+        <section>
+          <MyApprovalsWidget />
         </section>
 
         {/* 5. Approval Center & Exception Risk Control */}

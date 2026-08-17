@@ -14988,55 +14988,57 @@ export const mockDb = {
     const remarks = data.remarks || null;
 
     if (isDbConnected()) {
-      if (isDefault) {
-        await prismaClient.workflowTemplate.updateMany({
-          where: { moduleType, isDefault: true },
-          data: { isDefault: false }
-        });
-      }
-      const t = await prismaClient.workflowTemplate.create({
-        data: {
-          id: templateId,
-          workflowName: templateName,
-          moduleType,
-          operationType,
-          appliesTo,
-          isDefault,
-          isActive,
-          remarks
+      await prismaClient.$transaction(async (tx: any) => {
+        if (isDefault) {
+          await tx.workflowTemplate.updateMany({
+            where: { moduleType, isDefault: true },
+            data: { isDefault: false }
+          });
         }
-      });
-
-      const levels = data.levels || [];
-      for (const lvl of levels) {
-        const levelId = uuid();
-        const level = await prismaClient.workflowTemplateLevel.create({
+        await tx.workflowTemplate.create({
           data: {
-            id: levelId,
-            templateId,
-            levelNumber: parseInt(lvl.levelNumber, 10) || 1,
-            levelName: lvl.levelName || `Level ${lvl.levelNumber}`,
-            approvalRule: lvl.approvalRule || "ANY_ONE",
-            isMandatory: lvl.isMandatory !== false,
-            remarks: lvl.remarks || null
+            id: templateId,
+            workflowName: templateName,
+            moduleType,
+            operationType,
+            appliesTo,
+            isDefault,
+            isActive,
+            remarks
           }
         });
 
-        const approvers = lvl.approvers || [];
-        for (const ap of approvers) {
-          await prismaClient.workflowTemplateApprover.create({
+        const levels = data.levels || [];
+        for (const lvl of levels) {
+          const levelId = uuid();
+          await tx.workflowTemplateLevel.create({
             data: {
-              levelId,
-              approverType: ap.approverType || "SPECIFIC_EMPLOYEE",
-              employeeId: ap.employeeId || null,
-              employeeName: ap.employeeName || null,
-              employeeCode: ap.employeeCode || null,
-              email: ap.email || null,
-              roleName: ap.roleName || null
+              id: levelId,
+              templateId,
+              levelNumber: parseInt(lvl.levelNumber, 10) || 1,
+              levelName: lvl.levelName || `Level ${lvl.levelNumber}`,
+              approvalRule: lvl.approvalRule || "ANY_ONE",
+              isMandatory: lvl.isMandatory !== false,
+              remarks: lvl.remarks || null
             }
           });
+
+          const approvers = lvl.approvers || [];
+          for (const ap of approvers) {
+            await tx.workflowTemplateApprover.create({
+              data: {
+                levelId,
+                approverType: ap.approverType || "SPECIFIC_EMPLOYEE",
+                employeeId: ap.employeeId || null,
+                employeeName: ap.employeeName || null,
+                employeeCode: ap.employeeCode || null,
+                email: ap.email || null,
+                roleName: ap.roleName || null
+              }
+            });
+          }
         }
-      }
+      });
       return await mockDb.getWorkflowTemplate(templateId);
     }
 
@@ -15111,65 +15113,211 @@ export const mockDb = {
     const remarks = data.remarks || null;
 
     if (isDbConnected()) {
-      if (isDefault) {
-        await prismaClient.workflowTemplate.updateMany({
-          where: { moduleType, isDefault: true },
-          data: { isDefault: false }
-        });
-      }
-      await prismaClient.workflowTemplate.update({
-        where: { id },
-        data: {
-          workflowName: templateName,
-          moduleType,
-          operationType,
-          appliesTo,
-          isDefault,
-          isActive,
-          remarks
-        }
-      });
-
-      await prismaClient.workflowTemplateLevel.deleteMany({
+      const instanceCount = await prismaClient.workflowInstance.count({
         where: { templateId: id }
       });
 
-      const levels = data.levels || [];
-      for (const lvl of levels) {
-        const levelId = uuid();
-        await prismaClient.workflowTemplateLevel.create({
+      if (instanceCount > 0) {
+        // OPTION A: Template is referenced by existing instances — create a NEW immutable version
+        const newTemplateId = uuid();
+        return await prismaClient.$transaction(async (tx: any) => {
+          if (isDefault) {
+            await tx.workflowTemplate.updateMany({
+              where: { moduleType, isDefault: true },
+              data: { isDefault: false }
+            });
+          }
+          await tx.workflowTemplate.update({
+            where: { id },
+            data: { isDefault: false }
+          });
+
+          await tx.workflowTemplate.create({
+            data: {
+              id: newTemplateId,
+              workflowName: templateName,
+              moduleType,
+              operationType,
+              appliesTo,
+              isDefault,
+              isActive,
+              remarks
+            }
+          });
+
+          const levels = data.levels || [];
+          for (const lvl of levels) {
+            const levelId = uuid();
+            await tx.workflowTemplateLevel.create({
+              data: {
+                id: levelId,
+                templateId: newTemplateId,
+                levelNumber: parseInt(lvl.levelNumber, 10) || 1,
+                levelName: lvl.levelName || `Level ${lvl.levelNumber}`,
+                approvalRule: lvl.approvalRule || "ANY_ONE",
+                isMandatory: lvl.isMandatory !== false,
+                remarks: lvl.remarks || null
+              }
+            });
+
+            const approvers = lvl.approvers || [];
+            for (const ap of approvers) {
+              await tx.workflowTemplateApprover.create({
+                data: {
+                  levelId,
+                  approverType: ap.approverType || "SPECIFIC_EMPLOYEE",
+                  employeeId: ap.employeeId || null,
+                  employeeName: ap.employeeName || null,
+                  employeeCode: ap.employeeCode || null,
+                  email: ap.email || null,
+                  roleName: ap.roleName || null
+                }
+              });
+            }
+          }
+          return await tx.workflowTemplate.findUnique({
+            where: { id: newTemplateId },
+            include: {
+              levels: {
+                orderBy: { levelNumber: "asc" },
+                include: { approvers: true }
+              }
+            }
+          });
+        });
+      }
+
+      // If template has NO instances, perform transactional in-place update
+      return await prismaClient.$transaction(async (tx: any) => {
+        if (isDefault) {
+          await tx.workflowTemplate.updateMany({
+            where: { moduleType, isDefault: true },
+            data: { isDefault: false }
+          });
+        }
+        await tx.workflowTemplate.update({
+          where: { id },
           data: {
-            id: levelId,
-            templateId: id,
-            levelNumber: parseInt(lvl.levelNumber, 10) || 1,
-            levelName: lvl.levelName || `Level ${lvl.levelNumber}`,
-            approvalRule: lvl.approvalRule || "ANY_ONE",
-            isMandatory: lvl.isMandatory !== false,
-            remarks: lvl.remarks || null
+            workflowName: templateName,
+            moduleType,
+            operationType,
+            appliesTo,
+            isDefault,
+            isActive,
+            remarks
           }
         });
 
-        const approvers = lvl.approvers || [];
-        for (const ap of approvers) {
-          await prismaClient.workflowTemplateApprover.create({
+        await tx.workflowTemplateLevel.deleteMany({
+          where: { templateId: id }
+        });
+
+        const levels = data.levels || [];
+        for (const lvl of levels) {
+          const levelId = uuid();
+          await tx.workflowTemplateLevel.create({
             data: {
-              levelId,
-              approverType: ap.approverType || "SPECIFIC_EMPLOYEE",
-              employeeId: ap.employeeId || null,
-              employeeName: ap.employeeName || null,
-              employeeCode: ap.employeeCode || null,
-              email: ap.email || null,
-              roleName: ap.roleName || null
+              id: levelId,
+              templateId: id,
+              levelNumber: parseInt(lvl.levelNumber, 10) || 1,
+              levelName: lvl.levelName || `Level ${lvl.levelNumber}`,
+              approvalRule: lvl.approvalRule || "ANY_ONE",
+              isMandatory: lvl.isMandatory !== false,
+              remarks: lvl.remarks || null
             }
           });
+
+          const approvers = lvl.approvers || [];
+          for (const ap of approvers) {
+            await tx.workflowTemplateApprover.create({
+              data: {
+                levelId,
+                approverType: ap.approverType || "SPECIFIC_EMPLOYEE",
+                employeeId: ap.employeeId || null,
+                employeeName: ap.employeeName || null,
+                employeeCode: ap.employeeCode || null,
+                email: ap.email || null,
+                roleName: ap.roleName || null
+              }
+            });
+          }
         }
-      }
-      return await mockDb.getWorkflowTemplate(id);
+        return await tx.workflowTemplate.findUnique({
+          where: { id },
+          include: {
+            levels: {
+              orderBy: { levelNumber: "asc" },
+              include: { approvers: true }
+            }
+          }
+        });
+      });
     }
 
     const db = readDb();
     const idx = (db.workflowTemplates || []).findIndex((x: any) => x.id === id);
     if (idx === -1) throw new Error("Template not found");
+
+    const instanceCount = ((db as any).workflowInstances || []).filter((i: any) => i.templateId === id).length;
+    if (instanceCount > 0) {
+      // Mock mode: Create new version
+      const newTemplateId = uuid();
+      if (isDefault) {
+        db.workflowTemplates.forEach((x: any) => {
+          if (x.moduleType === moduleType) x.isDefault = false;
+        });
+      }
+      db.workflowTemplates[idx].isDefault = false;
+
+      const newTemplate = {
+        id: newTemplateId,
+        workflowName: templateName,
+        moduleType,
+        operationType,
+        appliesTo,
+        isDefault,
+        isActive,
+        remarks,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      db.workflowTemplates.push(newTemplate);
+
+      const levels = data.levels || [];
+      levels.forEach((lvl: any) => {
+        const levelId = uuid();
+        db.workflowTemplateLevels.push({
+          id: levelId,
+          templateId: newTemplateId,
+          levelNumber: parseInt(lvl.levelNumber, 10) || 1,
+          levelName: lvl.levelName || `Level ${lvl.levelNumber}`,
+          approvalRule: lvl.approvalRule || "ANY_ONE",
+          isMandatory: lvl.isMandatory !== false,
+          remarks: lvl.remarks || null,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        });
+
+        const approvers = lvl.approvers || [];
+        approvers.forEach((ap: any) => {
+          db.workflowTemplateApprovers.push({
+            id: uuid(),
+            levelId,
+            approverType: ap.approverType || "SPECIFIC_EMPLOYEE",
+            employeeId: ap.employeeId || null,
+            employeeName: ap.employeeName || null,
+            employeeCode: ap.employeeCode || null,
+            email: ap.email || null,
+            roleName: ap.roleName || null,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          });
+        });
+      });
+
+      writeDb(db);
+      return newTemplate;
+    }
 
     if (isDefault) {
       db.workflowTemplates.forEach((x: any) => {
