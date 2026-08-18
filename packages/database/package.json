@@ -1,13 +1,22 @@
 {
   "name": "@ahh-wfm/database",
   "version": "1.0.0",
-  "main": "src/index.ts",
+  "main": "dist/index.js",
   "types": "src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts",
+      "require": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
   "private": true,
   "scripts": {
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
-    "build": "npm run db:generate"
+    "copy:client": "node -e \"const fs=require('fs');const path=require('path');fs.cpSync(path.join('src','generated','client'),path.join('dist','generated','client'),{recursive:true,force:true});\"",
+    "build": "tsc -p tsconfig.json && npm run copy:client"
   },
   "dependencies": {
     "@prisma/client": "^5.14.0"

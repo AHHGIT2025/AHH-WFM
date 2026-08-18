@@ -19,7 +19,7 @@ module.exports = {
   setupFilesAfterEnv: ['<rootDir>/tests/api/setupAfterEnv.ts'],
   // Exclude compiled output so Jest does not pick up generated package.json files
   // from dist/ which would collide with source package.json haste names.
-  modulePathIgnorePatterns: ['<rootDir>/dist/'],
-  watchPathIgnorePatterns: ['<rootDir>/dist/']
+  modulePathIgnorePatterns: ['<rootDir>/dist/', '<rootDir>/packages/database/dist/'],
+  watchPathIgnorePatterns: ['<rootDir>/dist/', '<rootDir>/packages/database/dist/']
 };
 
