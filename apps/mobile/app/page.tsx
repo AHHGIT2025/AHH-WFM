@@ -105,6 +105,20 @@ export default function MobileDashboard() {
         </Link>
       </div>
  
+      {/* Universal Approval Center Card */}
+      <Link href="/approvals" className="bg-primary/5 border border-primary/20 text-primary p-4 rounded-2xl flex items-center justify-between shadow-sm active:scale-95 transition-transform">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center">
+            <span className="material-symbols-outlined text-[20px]">approval</span>
+          </div>
+          <div>
+            <p className="text-sm font-bold text-on-surface">Universal Approval Center</p>
+            <p className="text-[10px] text-on-surface-variant">Review pending approvals & requests</p>
+          </div>
+        </div>
+        <span className="material-symbols-outlined text-primary">chevron_right</span>
+      </Link>
+
       {/* Guard Tour Card */}
       {data?.featureEntitlements?.canViewGuardTour ? (
         <Link href="/guard-tour" className="bg-[#58002a] text-white p-4 rounded-2xl flex items-center justify-between shadow-sm active:scale-95 transition-transform">

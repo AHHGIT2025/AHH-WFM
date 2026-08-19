@@ -79,6 +79,17 @@ const MobileShellInner: React.FC<{ children: React.ReactNode }> = ({ children })
                   <span className="material-symbols-outlined text-[20px]">space_dashboard</span>
                 </Link>
               )}
+              <Link
+                href="/approvals"
+                className={`p-2 rounded-full transition-colors relative flex items-center justify-center ${
+                  pathname.startsWith("/approvals")
+                    ? "bg-primary text-white font-bold shadow-sm"
+                    : "hover:bg-surface-container-high text-primary"
+                }`}
+                title="Universal Approval Center"
+              >
+                <span className="material-symbols-outlined text-[20px]">approval</span>
+              </Link>
               <button className="p-2 rounded-full hover:bg-surface-container-high text-primary transition-colors relative">
                 <span className="material-symbols-outlined text-[20px]">notifications</span>
                 <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-status-error rounded-full"></span>
