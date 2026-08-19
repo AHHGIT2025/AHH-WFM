@@ -14,6 +14,7 @@ export default function MobileCommandSuite() {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [errorCode, setErrorCode] = useState<number | null>(null);
   const [isStale, setIsStale] = useState(false);
   const [countdown, setCountdown] = useState(60);
 
@@ -41,30 +42,44 @@ export default function MobileCommandSuite() {
   const fetchData = async (isManual = false) => {
     if (isManual) setLoading(true);
     setError(null);
+    setErrorCode(null);
 
     try {
       const url = `/api/v1/commercial/command-center/wallboard?operationType=${operationType}`;
       const res = await fetch(url, { cache: "no-store" });
 
-      if (res.status === 401 || res.status === 403) {
-        setError(res.status === 401 ? "Unauthorized. Please log in." : "Forbidden. Requires commercial.commandCenter.view permission.");
+      if (res.status === 401) {
+        setErrorCode(401);
+        setError("Your session has expired or you are not logged in.");
+        setLoading(false);
+        return;
+      }
+
+      if (res.status === 403) {
+        setErrorCode(403);
+        const errJson = await res.json().catch(() => ({}));
+        setError(errJson.error || "Access Restricted: You do not have permission to view the Command Suite.");
         setLoading(false);
         return;
       }
 
       if (!res.ok) {
+        setErrorCode(res.status);
         const errJson = await res.json().catch(() => ({}));
-        throw new Error(errJson.error || `HTTP ${res.status}`);
+        throw new Error(errJson.error || `Unable to load Command Center data (HTTP ${res.status})`);
       }
 
       const json = await res.json();
       setData(json);
+      setError(null);
+      setErrorCode(null);
       setIsStale(false);
       lastFetchTimeRef.current = Date.now();
       setCountdown(60);
     } catch (e: any) {
       console.error("Mobile Command Suite fetch error:", e);
-      setError(e.message || "Failed to load Command Center data");
+      setError(e.message || "Unable to load Command Center data. Please check your network connection.");
+      setErrorCode((prev) => prev ?? 502);
       if (data) setIsStale(true); // Preserve last successful load on transient error
     } finally {
       setLoading(false);
@@ -145,15 +160,58 @@ export default function MobileCommandSuite() {
   }
 
   if (error && !data) {
+    const isAccessRestricted = errorCode === 403;
+    const isAuthRequired = errorCode === 401;
+
     return (
       <div className="p-4 space-y-4">
-        <div className="bg-status-error/10 border border-status-error/30 rounded-2xl p-5 text-center">
-          <span className="material-symbols-outlined text-status-error text-[36px] mb-2">lock</span>
-          <h3 className="text-sm font-bold text-status-error">Access Restricted</h3>
+        <div
+          className={`border rounded-2xl p-5 text-center ${
+            isAccessRestricted
+              ? "bg-status-error/10 border-status-error/30"
+              : "bg-status-warning/10 border-status-warning/30"
+          }`}
+        >
+          <span
+            className={`material-symbols-outlined text-[36px] mb-2 ${
+              isAccessRestricted ? "text-status-error" : "text-status-warning"
+            }`}
+          >
+            {isAccessRestricted ? "lock" : isAuthRequired ? "account_circle" : "cloud_off"}
+          </span>
+          <h3
+            className={`text-sm font-bold ${
+              isAccessRestricted ? "text-status-error" : "text-on-surface"
+            }`}
+          >
+            {isAccessRestricted
+              ? "Access Restricted"
+              : isAuthRequired
+              ? "Authentication Required"
+              : "Unable to load Command Center"}
+          </h3>
           <p className="text-xs text-on-surface-variant mt-1">{error}</p>
-          <Link href="/" className="inline-block mt-4 px-4 py-2 bg-primary text-white text-xs font-bold rounded-xl shadow-sm">
-            Back to Home
-          </Link>
+          <div className="flex items-center justify-center gap-2 mt-4">
+            {!isAccessRestricted && !isAuthRequired && (
+              <button
+                onClick={() => fetchData(true)}
+                className="px-4 py-2 bg-primary text-white text-xs font-bold rounded-xl shadow-sm active:scale-95 transition-transform flex items-center gap-1"
+              >
+                <span className="material-symbols-outlined text-[14px]">refresh</span>
+                Retry
+              </button>
+            )}
+            <Link
+              href={isAuthRequired ? "/login" : "/"}
+              className={`px-4 py-2 text-xs font-bold rounded-xl shadow-sm ${
+                isAccessRestricted || isAuthRequired
+                  ? "bg-primary text-white"
+                  : "bg-surface-variant text-on-surface hover:bg-surface-variant/80"
+              }`}
+            >
+              {isAuthRequired ? "Go to Login" : "Back to Home"}
+            </Link>
+          </div>
         </div>
       </div>
     );

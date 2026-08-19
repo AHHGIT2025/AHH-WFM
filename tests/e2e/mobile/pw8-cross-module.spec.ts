@@ -94,7 +94,17 @@ test.describe("PW-8 Mobile Cross-Module Operational Journeys", () => {
     await expect(page.locator("body")).not.toBeEmpty({ timeout: 10000 });
 
     await page.goto(`${MOBILE_URL}/command-center`);
-    await expect(page.locator("body")).not.toBeEmpty({ timeout: 10000 });
+    await expect(page.locator("h2:has-text('Command Suite')").or(page.locator("h3:has-text('Access Restricted')")).or(page.locator("h3:has-text('Unable to load Command Center')"))).toBeVisible({ timeout: 10000 });
+    
+    // If Command Suite header is visible, verify operations console elements and Home navigation
+    const commandSuiteHeader = page.locator("h2:has-text('Command Suite')");
+    if (await commandSuiteHeader.isVisible()) {
+      await expect(page.locator("text=Live Executive Operations Console")).toBeVisible();
+      // Test Back to Home navigation
+      const backHomeBtn = page.locator("a[href='/']").first();
+      await backHomeBtn.click();
+      await expect(page).toHaveURL(`${MOBILE_URL}/`);
+    }
   });
 
   test("10. Mobile Offline Sync Queue & Reconnect Status", async ({ page }) => {

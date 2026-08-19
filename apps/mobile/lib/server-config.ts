@@ -10,5 +10,15 @@ export function getWebApiBaseUrl(): string {
   if (process.env.WEB_API_URL && process.env.WEB_API_URL.trim().length > 0) {
     return process.env.WEB_API_URL.trim().replace(/\/+$/, "");
   }
+  if (process.env.NEXT_PUBLIC_WEB_URL && process.env.NEXT_PUBLIC_WEB_URL.trim().length > 0) {
+    return process.env.NEXT_PUBLIC_WEB_URL.trim().replace(/\/+$/, "");
+  }
+  if (process.env.PORT === "3201") {
+    return "http://127.0.0.1:3200";
+  }
+  if (process.env.NEXTAUTH_URL && process.env.NEXTAUTH_URL.includes(":3201")) {
+    return process.env.NEXTAUTH_URL.replace(":3201", ":3200").replace(/\/+$/, "");
+  }
   return "http://localhost:3100";
 }
+

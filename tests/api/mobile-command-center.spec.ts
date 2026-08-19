@@ -138,12 +138,27 @@ describe("CCC-6 Mobile Command Suite BFF & Authorization Tests", () => {
 
   test("5. getWebApiBaseUrl helper resolves SERVER vs LOCAL target deterministically", () => {
     delete process.env.WEB_API_URL;
+    delete process.env.NEXT_PUBLIC_WEB_URL;
+    delete process.env.PORT;
+    delete process.env.NEXTAUTH_URL;
     expect(getWebApiBaseUrl()).toBe("http://localhost:3100");
 
     process.env.WEB_API_URL = "http://10.10.50.24:3200";
     expect(getWebApiBaseUrl()).toBe("http://10.10.50.24:3200");
 
     process.env.WEB_API_URL = "http://10.10.50.24:3200/";
+    expect(getWebApiBaseUrl()).toBe("http://10.10.50.24:3200");
+
+    delete process.env.WEB_API_URL;
+    process.env.NEXT_PUBLIC_WEB_URL = "http://web.ahh-wfm.local:3200";
+    expect(getWebApiBaseUrl()).toBe("http://web.ahh-wfm.local:3200");
+
+    delete process.env.NEXT_PUBLIC_WEB_URL;
+    process.env.PORT = "3201";
+    expect(getWebApiBaseUrl()).toBe("http://127.0.0.1:3200");
+
+    delete process.env.PORT;
+    process.env.NEXTAUTH_URL = "http://10.10.50.24:3201";
     expect(getWebApiBaseUrl()).toBe("http://10.10.50.24:3200");
   });
 
@@ -156,5 +171,35 @@ describe("CCC-6 Mobile Command Suite BFF & Authorization Tests", () => {
     expect(res.status).toBe(502);
     const json = await res.json();
     expect(json.error).toContain("Failed to connect");
+  });
+
+  test("7. Preserves 401 Unauthorized from authoritative Web API", async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 401,
+      json: jest.fn().mockResolvedValue({ error: "Unauthorized: Missing session or invalid token" })
+    });
+
+    const req = new Request("http://localhost:3101/api/v1/commercial/command-center/wallboard");
+    const res = await wallboardGET(req);
+
+    expect(res.status).toBe(401);
+    const json = await res.json();
+    expect(json.error).toContain("Unauthorized");
+  });
+
+  test("8. Preserves 403 Forbidden with permission details from authoritative Web API", async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 403,
+      json: jest.fn().mockResolvedValue({ error: "Forbidden: Requires commercial.commandCenter.view permission" })
+    });
+
+    const req = new Request("http://localhost:3101/api/v1/commercial/command-center/wallboard");
+    const res = await wallboardGET(req);
+
+    expect(res.status).toBe(403);
+    const json = await res.json();
+    expect(json.error).toContain("Forbidden");
   });
 });

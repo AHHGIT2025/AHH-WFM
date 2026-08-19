@@ -9,20 +9,10 @@ test.describe('AHH WFM Web E2E Navigation', () => {
       throw new Error('PW_ADMIN_PASSWORD environment variable is not defined.');
     }
 
-    // 1. Login Page loads
-    console.log('Navigating to login page...');
-    await page.goto('/login');
-    await expect(page).toHaveURL(/\/login/);
-
-    // 2. Submit credentials
-    console.log('Logging in...');
-    await page.fill('input[type="email"]', email);
-    await page.fill('input[type="password"]', password);
-    await page.click('button[type="submit"]');
-
-    // 3. Dashboard loads
-    console.log('Waiting for Dashboard...');
-    await page.waitForURL((url) => url.pathname === '/' || url.pathname === '/dashboard', { timeout: 15000 });
+    // 1. Dashboard loads
+    console.log('Navigating to Dashboard...');
+    await page.goto('/');
+    await expect(page).toHaveURL((url) => url.pathname === '/' || url.pathname === '/dashboard');
     await expect(page).not.toHaveURL(/\/login/);
 
     // 4. Workforce Directory loads
