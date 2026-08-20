@@ -149,6 +149,27 @@ export default function WorkforcePage() {
   const [employmentStatusFilter, setEmploymentStatusFilter] = useState("all");
   const [dutyStatusFilter, setDutyStatusFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
+  const [viewMode, setViewMode] = useState<"tile" | "list">("tile");
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("ahh-wfm-workforce-directory-view");
+      if (saved === "list" || saved === "tile") {
+        setViewMode(saved);
+      }
+    } catch (e) {
+      // Ignore localStorage access errors
+    }
+  }, []);
+
+  const handleViewModeChange = (mode: "tile" | "list") => {
+    setViewMode(mode);
+    try {
+      localStorage.setItem("ahh-wfm-workforce-directory-view", mode);
+    } catch (e) {
+      // Ignore localStorage write errors
+    }
+  };
 
   // Modals state
   const [isAddEmpOpen, setIsAddEmpOpen] = useState(false);
@@ -1294,7 +1315,41 @@ export default function WorkforcePage() {
           <h1 className="text-2xl font-bold text-primary">Workforce Directory</h1>
           <p className="text-sm text-on-surface-variant">List of all registered field engineers, inspectors, and logistics staff</p>
         </div>
-        <div className="flex gap-2 self-start sm:self-auto">
+        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+          {/* Dual View Toggle */}
+          <div className="flex items-center bg-surface-container-low border border-outline-variant rounded-lg p-0.5" role="group" aria-label="View toggle">
+            <button
+              type="button"
+              onClick={() => handleViewModeChange("tile")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-colors ${
+                viewMode === "tile"
+                  ? "bg-primary text-white shadow-sm"
+                  : "text-on-surface-variant hover:text-primary hover:bg-surface"
+              }`}
+              title="Tile View"
+              aria-label="Tile View"
+              aria-pressed={viewMode === "tile"}
+            >
+              <span className="material-symbols-outlined text-[18px]">grid_view</span>
+              <span>Tiles</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleViewModeChange("list")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-colors ${
+                viewMode === "list"
+                  ? "bg-primary text-white shadow-sm"
+                  : "text-on-surface-variant hover:text-primary hover:bg-surface"
+              }`}
+              title="List View"
+              aria-label="List View"
+              aria-pressed={viewMode === "list"}
+            >
+              <span className="material-symbols-outlined text-[18px]">format_list_bulleted</span>
+              <span>List</span>
+            </button>
+          </div>
+
           <Button
             variant="secondary"
             onClick={() => {
@@ -1479,7 +1534,7 @@ export default function WorkforcePage() {
           <p className="text-sm text-on-surface-variant/60 mt-1">Try adjusting or resetting your filters.</p>
           <Button variant="secondary" onClick={handleResetFilters} className="mt-4 text-xs">Reset Filters</Button>
         </div>
-      ) : (
+      ) : viewMode === "tile" ? (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filtered.map((emp) => {
           const isEmpActive = isEmployeeActive(emp);
@@ -1642,6 +1697,162 @@ export default function WorkforcePage() {
           );
         })}
       </div>
+      ) : (
+        <Card className="overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="bg-surface-container-low border-b border-border-subtle">
+                <tr>
+                  <th className="px-4 py-3 font-bold text-on-surface-variant">Employee</th>
+                  <th className="px-4 py-3 font-bold text-on-surface-variant">Employee ID</th>
+                  <th className="px-4 py-3 font-bold text-on-surface-variant">Category</th>
+                  <th className="px-4 py-3 font-bold text-on-surface-variant">Company</th>
+                  <th className="px-4 py-3 font-bold text-on-surface-variant">Department</th>
+                  <th className="px-4 py-3 font-bold text-on-surface-variant">Trade / Position</th>
+                  <th className="px-4 py-3 font-bold text-on-surface-variant">Default Site</th>
+                  <th className="px-4 py-3 font-bold text-on-surface-variant">Employment Status</th>
+                  <th className="px-4 py-3 font-bold text-on-surface-variant">Duty Status</th>
+                  <th className="px-4 py-3 font-bold text-on-surface-variant">Contact</th>
+                  <th className="px-4 py-3 font-bold text-on-surface-variant text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border-subtle">
+                {filtered.map((emp) => {
+                  const isEmpActive = isEmployeeActive(emp);
+                  const empDept = departments.find(d => d.id === emp.departmentId)?.name || emp.department || "N/A";
+                  const defaultProject = projects.find(p => p.id === (emp as any).defaultProjectId);
+                  const defaultSite = allSites.find(s => s.id === (emp as any).defaultSiteId);
+                  const tradeCategory = positionCategories.find(c => c.id === (emp as any).positionCategoryId);
+                  const category = normalizeEmployeeCategory(emp);
+                  const comp = companies.find(c => c.id === emp.companyId);
+
+                  return (
+                    <tr key={emp.id} className={`hover:bg-surface-container-lowest transition-colors ${!isEmpActive ? "opacity-60 bg-surface-container-low" : ""}`}>
+                      <td className="px-4 py-3.5 whitespace-nowrap">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-secondary-container/10 flex items-center justify-center overflow-hidden font-bold text-primary border border-secondary-container/20 shrink-0 text-xs">
+                            {emp.profilePhotoUrl ? (
+                              <img src={`${emp.profilePhotoUrl}?v=${emp.profilePhotoUpdatedAt || ''}`} alt={emp.name} className="w-full h-full object-cover" />
+                            ) : (
+                              emp.name.split(" ").map((n) => n[0]).join("")
+                            )}
+                          </div>
+                          <div>
+                            <div className="font-bold text-primary text-sm">{emp.name}</div>
+                            <div className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">{emp.role}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3.5 whitespace-nowrap">
+                        <span className="font-mono text-xs text-primary font-bold">{emp.id}</span>
+                      </td>
+                      <td className="px-4 py-3.5 whitespace-nowrap">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-black bg-secondary/10 text-secondary uppercase">
+                          {category === "BLUE_COLLAR" ? "Blue Collar" : category === "WHITE_COLLAR" ? "White Collar" : "Unassigned"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3.5 whitespace-nowrap">
+                        {comp ? (
+                          <div className="text-xs font-bold text-primary">
+                            {comp.companyCode} — {comp.companyName}
+                          </div>
+                        ) : (
+                          <span className="font-bold text-status-error bg-status-error/10 px-2 py-0.5 rounded text-[10px] inline-flex items-center gap-1">
+                            ⚠️ Company missing
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3.5 whitespace-nowrap">
+                        <span className="text-xs font-bold text-primary">{empDept}</span>
+                      </td>
+                      <td className="px-4 py-3.5 whitespace-nowrap">
+                        <span className="text-xs font-medium text-primary">
+                          {tradeCategory?.name || (emp as any).tradeClassification?.name || (emp as any).designation?.name || "—"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3.5 whitespace-nowrap max-w-[180px] truncate" title={defaultSite ? `${defaultProject?.projectName || ""} - ${defaultSite?.siteName || ""}` : ""}>
+                        <span className="text-xs text-on-surface-variant font-medium">
+                          {defaultSite ? `${defaultProject?.projectCode || ""}: ${defaultSite.siteName}` : "—"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3.5 whitespace-nowrap">
+                        <Badge variant={isEmpActive ? "success" : "neutral"}>
+                          {isEmpActive ? "Active" : "Deactivated"}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-3.5 whitespace-nowrap">
+                        {isEmpActive ? (
+                          <Badge
+                            variant={
+                              emp.status === "On Duty" || emp.dutyStatus === "ON_DUTY"
+                                ? "success"
+                                : emp.status === "On Break" || emp.dutyStatus === "ON_BREAK"
+                                ? "warning"
+                                : emp.status === "On Leave" || emp.dutyStatus === "ON_LEAVE"
+                                ? "pending"
+                                : emp.status === "Suspended" || emp.dutyStatus === "SUSPENDED"
+                                ? "error"
+                                : "neutral"
+                            }
+                          >
+                            {emp.dutyStatus === "ON_DUTY" ? "On Duty" :
+                             emp.dutyStatus === "OFF_DUTY" ? "Offline" :
+                             emp.dutyStatus === "ON_BREAK" ? "On Break" :
+                             emp.dutyStatus === "ON_LEAVE" ? "On Leave" :
+                             emp.dutyStatus === "SUSPENDED" ? "Suspended" :
+                             emp.status || "Offline"}
+                          </Badge>
+                        ) : (
+                          <span className="text-xs text-on-surface-variant opacity-50">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3.5 whitespace-nowrap">
+                        <div className="text-xs text-primary font-medium">{emp.email || "—"}</div>
+                        {emp.phone && <div className="text-[11px] text-on-surface-variant">{emp.phone}</div>}
+                      </td>
+                      <td className="px-4 py-3.5 whitespace-nowrap text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <Button
+                            variant="secondary"
+                            className="font-bold text-xs py-1 px-2.5"
+                            onClick={() => { openEditModal(emp); }}
+                          >
+                            Edit Profile
+                          </Button>
+                          {!isEmpActive ? (
+                            (isStrictAdmin || isSessionAdminOrHR) && (
+                              <Button
+                                variant="success"
+                                className="font-bold text-xs py-1 px-2.5"
+                                onClick={() => handleActivate(emp.id)}
+                              >
+                                Activate
+                              </Button>
+                            )
+                          ) : (
+                            isStrictAdmin && (
+                              <Button
+                                variant="ghost"
+                                className="text-status-error hover:bg-red-50 font-bold text-xs py-1 px-2.5 border border-outline-variant"
+                                onClick={() => {
+                                  setEmployeeToDelete(emp.id);
+                                  setDeleteConfirmText("");
+                                  setIsDeleteModalOpen(true);
+                                }}
+                              >
+                                Delete Employee
+                              </Button>
+                            )
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </Card>
       )}
 
       {/* Delete Confirmation Modal */}
