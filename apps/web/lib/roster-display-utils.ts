@@ -178,3 +178,156 @@ export function resolveRosterDateStr(businessDate?: any): string {
     return "N/A";
   }
 }
+
+// ---------------------------------------------------------------------------
+// Defensive display helpers (Object / Scalar React #31 protection)
+// ---------------------------------------------------------------------------
+
+/**
+ * Safely resolves a Work Location / Site / Office display label.
+ * Tolerates: null, undefined, string, or Work Location objects.
+ */
+export function resolveLocationLabel(location?: any, fallback = "—"): string {
+  if (!location) return fallback;
+  if (typeof location === "string") {
+    const trimmed = location.trim();
+    return trimmed.length > 0 ? trimmed : fallback;
+  }
+  if (typeof location === "object") {
+    const name = location.locationName || location.name || location.siteName || location.address;
+    const code = location.locationCode || location.code || location.siteCode;
+    if (name && code) {
+      return `${code} — ${name}`;
+    }
+    if (name) return String(name);
+    if (code) return String(code);
+  }
+  return fallback;
+}
+
+/**
+ * Safely resolves a Company display label.
+ * Tolerates: null, undefined, string, or Company objects.
+ */
+export function resolveCompanyLabel(company?: any, fallback = "Al Hattab Holding"): string {
+  if (!company) return fallback;
+  if (typeof company === "string") {
+    const trimmed = company.trim();
+    return trimmed.length > 0 ? trimmed : fallback;
+  }
+  if (typeof company === "object") {
+    const name = company.companyName || company.name;
+    const code = company.companyCode || company.code;
+    if (name && code) {
+      return `${code} — ${name}`;
+    }
+    if (name) return String(name);
+    if (code) return String(code);
+  }
+  return fallback;
+}
+
+/**
+ * Safely resolves a Department display label.
+ * Tolerates: null, undefined, string, or Department objects.
+ */
+export function resolveDepartmentLabel(department?: any, fallback = "Unassigned"): string {
+  if (!department) return fallback;
+  if (typeof department === "string") {
+    const trimmed = department.trim();
+    return trimmed.length > 0 ? trimmed : fallback;
+  }
+  if (typeof department === "object") {
+    const name = department.departmentName || department.name;
+    const code = department.departmentCode || department.code;
+    if (name && code) {
+      return `${code} — ${name}`;
+    }
+    if (name) return String(name);
+    if (code) return String(code);
+  }
+  return fallback;
+}
+
+/**
+ * Safely resolves a Designation display label.
+ * Tolerates: null, undefined, string, or Designation objects.
+ */
+export function resolveDesignationLabel(designation?: any, fallback = "Not specified"): string {
+  if (!designation) return fallback;
+  if (typeof designation === "string") {
+    const trimmed = designation.trim();
+    return trimmed.length > 0 ? trimmed : fallback;
+  }
+  if (typeof designation === "object") {
+    const name = designation.designationName || designation.name || designation.title;
+    if (name) return String(name).trim();
+    const code = designation.designationCode || designation.code;
+    if (code) return String(code).trim();
+  }
+  return fallback;
+}
+
+/**
+ * Safely resolves a Site display label.
+ * Tolerates: null, undefined, string, or Site objects.
+ */
+export function resolveSiteLabel(site?: any, fallback = "—"): string {
+  if (!site) return fallback;
+  if (typeof site === "string") {
+    const trimmed = site.trim();
+    return trimmed.length > 0 ? trimmed : fallback;
+  }
+  if (typeof site === "object") {
+    const name = site.siteName || site.name || site.locationName;
+    const code = site.siteCode || site.code;
+    if (name && code) {
+      return `${code} — ${name}`;
+    }
+    if (name) return String(name);
+    if (code) return String(code);
+  }
+  return fallback;
+}
+
+/**
+ * Safely resolves a Project display label.
+ * Tolerates: null, undefined, string, or Project objects.
+ */
+export function resolveProjectLabel(project?: any, fallback = "—"): string {
+  if (!project) return fallback;
+  if (typeof project === "string") {
+    const trimmed = project.trim();
+    return trimmed.length > 0 ? trimmed : fallback;
+  }
+  if (typeof project === "object") {
+    const name = project.projectName || project.name;
+    const code = project.projectCode || project.code;
+    if (name && code) {
+      return `${code} — ${name}`;
+    }
+    if (name) return String(name);
+    if (code) return String(code);
+  }
+  return fallback;
+}
+
+/**
+ * Safely resolves any scalar or object to a string without crashing React.
+ */
+export function resolveScalarDisplay(value?: any, fallback = "—"): string {
+  if (value === null || value === undefined) return fallback;
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : fallback;
+  }
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  if (typeof value === "object") {
+    const candidate = value.locationName || value.name || value.title || value.code || value.label;
+    if (candidate) return String(candidate).trim();
+    return fallback;
+  }
+  return fallback;
+}

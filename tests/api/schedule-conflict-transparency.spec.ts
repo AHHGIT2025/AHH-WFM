@@ -572,4 +572,101 @@ describe("Shift Planner — 20-Scenario Schedule Conflict & Authoritative Source
       expect(maskedPhone).toBe("+974****01");
     });
   });
+
+  describe("D. Employee Detail Modal Defensive Display & Object Resilience (React #31 Protection)", () => {
+    const {
+      resolveLocationLabel,
+      resolveCompanyLabel,
+      resolveDepartmentLabel,
+      resolveDesignationLabel,
+      resolveSiteLabel,
+      resolveProjectLabel,
+      resolveScalarDisplay
+    } = require("../../apps/web/lib/roster-display-utils");
+
+    test("1. defaultLocation returned as object with locationName", () => {
+      const locObj = {
+        id: "loc-001",
+        companyId: "comp-1",
+        locationCode: "HQ-DOH",
+        locationName: "Doha Head Office",
+        address: "Grand Hamad St",
+        latitude: 25.2854,
+        longitude: 51.5310,
+        isActive: true
+      };
+      const label = resolveLocationLabel(locObj);
+      expect(label).toBe("HQ-DOH — Doha Head Office");
+      expect(typeof label).toBe("string");
+    });
+
+    test("2. currentWorkLocation returned as object with locationName only", () => {
+      const locObj = {
+        locationName: "Lusail Security Post"
+      };
+      const label = resolveLocationLabel(locObj);
+      expect(label).toBe("Lusail Security Post");
+      expect(typeof label).toBe("string");
+    });
+
+    test("3. location with locationName and locationCode", () => {
+      const locObj = {
+        locationCode: "SITE-01",
+        locationName: "West Bay Tower"
+      };
+      const label = resolveLocationLabel(locObj);
+      expect(label).toBe("SITE-01 — West Bay Tower");
+    });
+
+    test("4. null location returns default fallback", () => {
+      const label = resolveLocationLabel(null, "Default Office");
+      expect(label).toBe("Default Office");
+    });
+
+    test("5. undefined location returns default fallback", () => {
+      const label = resolveLocationLabel(undefined, "Default Office");
+      expect(label).toBe("Default Office");
+    });
+
+    test("6. string location returns clean string", () => {
+      const label = resolveLocationLabel("  Al Sadd Branch  ");
+      expect(label).toBe("Al Sadd Branch");
+    });
+
+    test("7. company object resolution handles code and name", () => {
+      const compObj = {
+        id: "c-1",
+        companyCode: "AHSS",
+        companyName: "Al Hattab Security Services"
+      };
+      const label = resolveCompanyLabel(compObj);
+      expect(label).toBe("AHSS — Al Hattab Security Services");
+    });
+
+    test("8. department object resolution handles code and name", () => {
+      const deptObj = {
+        id: "d-1",
+        name: "Security Operations",
+        code: "SEC-OPS"
+      };
+      const label = resolveDepartmentLabel(deptObj);
+      expect(label).toBe("SEC-OPS — Security Operations");
+    });
+
+    test("9. assignment site and project object resolution", () => {
+      const siteObj = { siteCode: "S-101", siteName: "Gate 1" };
+      const projObj = { projectCode: "P-202", projectName: "Perimeter Security" };
+      expect(resolveSiteLabel(siteObj)).toBe("S-101 — Gate 1");
+      expect(resolveProjectLabel(projObj)).toBe("P-202 — Perimeter Security");
+    });
+
+    test("10. resolveScalarDisplay prevents object rendering crash", () => {
+      expect(resolveScalarDisplay({ name: "Fallback Object Name" })).toBe("Fallback Object Name");
+      expect(resolveScalarDisplay({ title: "Guard Captain" })).toBe("Guard Captain");
+      expect(resolveScalarDisplay(null, "—")).toBe("—");
+      expect(resolveScalarDisplay(undefined, "—")).toBe("—");
+      expect(resolveScalarDisplay("Active", "—")).toBe("Active");
+      expect(resolveScalarDisplay(42)).toBe("42");
+    });
+  });
 });

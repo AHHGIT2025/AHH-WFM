@@ -92,16 +92,25 @@ describe("Commercial Command Center Phase CCC-4 Suite (Commercial Health & SLA A
     } catch (e) {}
 
     // Seed test Company & Client
-    testCompany = await prisma.company.create({
-      data: {
+    testCompany = await prisma.company.upsert({
+      where: { companyCode: "COMP-CCC4-01" },
+      create: {
         companyCode: "COMP-CCC4-01",
+        companyName: "CCC4 Test Security Services WLL"
+      },
+      update: {
         companyName: "CCC4 Test Security Services WLL"
       }
     });
 
-    testClient = await prisma.manpowerClient.create({
-      data: {
+    testClient = await prisma.manpowerClient.upsert({
+      where: { code: "CLI-CCC4-001" },
+      create: {
         code: "CLI-CCC4-001",
+        name: "CCC4 Commercial Client Corp",
+        operationType: "SECURITY_GUARDING"
+      },
+      update: {
         name: "CCC4 Commercial Client Corp",
         operationType: "SECURITY_GUARDING"
       }

@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React, { useEffect, useState } from "react";
 import { Button, Badge } from "@ahh-wfm/ui/src";
@@ -14,12 +14,162 @@ import {
   AlertCircle
 } from "lucide-react";
 import Link from "next/link";
+import {
+  resolveEmployeeTradePosition,
+  resolveLocationLabel,
+  resolveCompanyLabel,
+  resolveDepartmentLabel,
+  resolveDesignationLabel,
+  resolveSiteLabel,
+  resolveScalarDisplay
+} from "@/lib/roster-display-utils";
+
+export interface LocationSummary {
+  id?: string;
+  locationCode?: string | null;
+  locationName?: string | null;
+  address?: string | null;
+  code?: string | null;
+  name?: string | null;
+}
+
+export interface CompanySummary {
+  id?: string;
+  companyCode?: string | null;
+  companyName?: string | null;
+  code?: string | null;
+  name?: string | null;
+}
+
+export interface DepartmentSummary {
+  id?: string;
+  departmentCode?: string | null;
+  departmentName?: string | null;
+  code?: string | null;
+  name?: string | null;
+}
+
+export interface DesignationSummary {
+  id?: string;
+  code?: string | null;
+  name?: string | null;
+  title?: string | null;
+}
+
+export interface PositionCategorySummary {
+  id?: string;
+  code?: string | null;
+  name?: string | null;
+}
+
+export interface SiteSummary {
+  id?: string;
+  code?: string | null;
+  name?: string | null;
+  siteCode?: string | null;
+  siteName?: string | null;
+}
+
+export interface ProjectSummary {
+  id?: string;
+  code?: string | null;
+  name?: string | null;
+  projectCode?: string | null;
+  projectName?: string | null;
+}
+
+export interface AssignmentItem {
+  id: string;
+  slotId: string;
+  businessDate: string;
+  shiftName: string;
+  startTime?: string | null;
+  endTime?: string | null;
+  siteId?: string | null;
+  siteName?: string | null;
+  site?: SiteSummary | string | null;
+  projectId?: string | null;
+  projectName?: string | null;
+  project?: ProjectSummary | string | null;
+  contractId?: string | null;
+  companyName?: string | null;
+  company?: CompanySummary | string | null;
+  postOrRequirement?: string | null;
+  operationType?: string | null;
+  assignmentType?: string | null;
+  historyStatus?: string | null;
+  isToday?: boolean;
+  isPast?: boolean;
+  isUpcoming?: boolean;
+}
+
+export interface LeaveItem {
+  id: string;
+  type?: string | null;
+  startDate?: string | null;
+  endDate?: string | null;
+  reason?: string | null;
+  status?: string | null;
+}
+
+export interface CurrentAssignmentSummary {
+  shiftName?: string | null;
+  startTime?: string | null;
+  endTime?: string | null;
+  assignmentType?: string | null;
+  siteName?: string | null;
+  site?: SiteSummary | string | null;
+  postOrRequirement?: string | null;
+}
+
+export interface CurrentDutySummary {
+  dutyStatus?: string | null;
+  currentLocation?: LocationSummary | SiteSummary | string | null;
+  workLocation?: LocationSummary | SiteSummary | string | null;
+  currentAssignment?: CurrentAssignmentSummary | null;
+}
+
+export interface EmployeeDetailData {
+  id?: string;
+  name?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  role?: string | null;
+  employeeCategory?: string | null;
+  employmentStatus?: string | null;
+  isActive?: boolean;
+  dutyStatus?: string | null;
+  operationType?: string | null;
+  company?: CompanySummary | string | null;
+  department?: DepartmentSummary | string | null;
+  departmentRef?: DepartmentSummary | null;
+  designation?: DesignationSummary | string | null;
+  positionCategory?: PositionCategorySummary | null;
+  tradeClassification?: any | null;
+  tradePosition?: string | null;
+  defaultLocation?: LocationSummary | string | null;
+  defaultLocationId?: string | null;
+  profilePhotoUrl?: string | null;
+  manpowerCategoryId?: string | null;
+  currentWorkLocation?: LocationSummary | string | null;
+}
+
+export interface EmployeeApiResponse {
+  success?: boolean;
+  employee?: EmployeeDetailData;
+  currentDuty?: CurrentDutySummary;
+  assignments?: AssignmentItem[];
+  upcomingAssignments?: AssignmentItem[];
+  relieverAssignments?: AssignmentItem[];
+  activeLeaves?: LeaveItem[];
+  error?: string;
+}
 
 interface EmployeeDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
   employeeId: string | null;
-  initialData?: any;
+  initialData?: EmployeeDetailData | null;
   businessScope?: "security-guarding" | "facility-management" | string;
 }
 
@@ -32,7 +182,7 @@ export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = ({
 }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [data, setData] = useState<any | null>(null);
+  const [data, setData] = useState<EmployeeApiResponse | null>(null);
   const [activeTab, setActiveTab] = useState<"overview" | "schedule" | "leaves">("overview");
 
   useEffect(() => {
@@ -59,7 +209,7 @@ export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = ({
     setError(null);
     try {
       const res = await fetch(`/api/v1/employees/${id}/assignments`);
-      const json = await res.json();
+      const json: EmployeeApiResponse = await res.json();
       if (res.ok && json.success) {
         setData(json);
       } else {
@@ -74,16 +224,16 @@ export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = ({
 
   if (!isOpen) return null;
 
-  const emp = data?.employee || initialData || {};
-  const currentDuty = data?.currentDuty || {};
-  const assignments = data?.assignments || [];
-  const upcomingAssignments = data?.upcomingAssignments || [];
-  const activeLeaves = data?.activeLeaves || [];
+  const emp: EmployeeDetailData = data?.employee || initialData || {};
+  const currentDuty: CurrentDutySummary = data?.currentDuty || {};
+  const assignments: AssignmentItem[] = data?.assignments || [];
+  const upcomingAssignments: AssignmentItem[] = data?.upcomingAssignments || [];
+  const activeLeaves: LeaveItem[] = data?.activeLeaves || [];
 
   const isEmpActive = emp.employmentStatus === "ACTIVE" || emp.isActive !== false;
-  const isBlueCollar = emp.employeeCategory === "BLUE_COLLAR" || (!emp.employeeCategory && emp.positionCategoryId);
+  const isBlueCollar = emp.employeeCategory === "BLUE_COLLAR" || (!emp.employeeCategory && Boolean(emp.positionCategory));
 
-  const getDutyBadgeVariant = (duty: string) => {
+  const getDutyBadgeVariant = (duty?: string | null) => {
     const d = (duty || "").toUpperCase();
     if (d === "ON_DUTY" || d === "ON DUTY") return "success";
     if (d === "ON_BREAK" || d === "ON BREAK") return "warning";
@@ -91,6 +241,22 @@ export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = ({
     if (d === "SUSPENDED") return "error";
     return "neutral";
   };
+
+  // Safe scalar extractions
+  const empName = resolveScalarDisplay(emp.name, "Employee Details");
+  const empCode = resolveScalarDisplay(emp.id || employeeId, "—");
+  const empRole = resolveScalarDisplay(emp.role, "Staff");
+  const empTrade = resolveEmployeeTradePosition(emp);
+  const empDesig = resolveDesignationLabel(emp.designation, "Employee");
+  const empCompany = resolveCompanyLabel(emp.company, "Al Hattab Holding");
+  const empDept = resolveDepartmentLabel(emp.department || emp.departmentRef, "Unassigned");
+  const empDefaultLoc = resolveLocationLabel(emp.defaultLocation, "Default Office");
+  const empCurrentLoc = resolveLocationLabel(
+    currentDuty.currentLocation || currentDuty.workLocation || emp.currentWorkLocation,
+    "Default Location"
+  );
+  const empEmail = resolveScalarDisplay(emp.email, "—");
+  const empPhone = resolveScalarDisplay(emp.phone, "—");
 
   return (
     <div
@@ -105,22 +271,22 @@ export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = ({
           <div className="flex items-center gap-4">
             <div className="w-14 h-14 rounded-full bg-primary/10 border-2 border-primary/20 flex items-center justify-center text-primary font-black text-lg shrink-0 overflow-hidden shadow-inner">
               {emp.profilePhotoUrl ? (
-                <img src={emp.profilePhotoUrl} alt={emp.name} className="w-full h-full object-cover" />
+                <img src={emp.profilePhotoUrl} alt={empName} className="w-full h-full object-cover" />
               ) : (
-                (emp.name || "E").split(" ").map((n: string) => n[0]).join("").slice(0, 2)
+                empName.split(" ").map((n) => n[0]).join("").slice(0, 2)
               )}
             </div>
             <div>
               <div className="flex items-center gap-2.5">
                 <h3 id="employee-detail-modal-title" className="text-lg font-bold text-foreground">
-                  {emp.name || "Employee Details"}
+                  {empName}
                 </h3>
                 <span className="font-mono text-xs bg-surface-container-high px-2 py-0.5 rounded font-bold text-primary">
-                  {emp.id || employeeId}
+                  {empCode}
                 </span>
               </div>
               <p className="text-xs text-on-surface-variant font-medium mt-0.5">
-                {emp.role || "Staff"} • {emp.designation?.name || emp.designation || emp.tradePosition || "Employee"}
+                {empRole} • {empTrade !== "Not specified" ? empTrade : empDesig}
               </p>
               <div className="flex items-center gap-2 mt-2">
                 <Badge variant={isEmpActive ? "success" : "neutral"}>
@@ -225,7 +391,7 @@ export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = ({
                         <div>
                           <div className="text-[10px] font-bold uppercase tracking-wider text-primary">Current Operational Status</div>
                           <div className="text-sm font-bold text-foreground mt-0.5">
-                            {currentDuty.currentLocation || "Default Location"}
+                            {empCurrentLoc}
                           </div>
                         </div>
                       </div>
@@ -238,17 +404,17 @@ export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = ({
                       <div className="mt-3 pt-3 border-t border-primary/15 grid grid-cols-2 sm:grid-cols-3 gap-3 text-xs">
                         <div>
                           <span className="text-[10px] text-on-surface-variant font-medium block">Shift</span>
-                          <span className="font-bold text-foreground">{currentDuty.currentAssignment.shiftName}</span>
+                          <span className="font-bold text-foreground">{resolveScalarDisplay(currentDuty.currentAssignment.shiftName, "Shift")}</span>
                         </div>
                         <div>
                           <span className="text-[10px] text-on-surface-variant font-medium block">Hours</span>
                           <span className="font-bold text-foreground">
-                            {currentDuty.currentAssignment.startTime} – {currentDuty.currentAssignment.endTime}
+                            {resolveScalarDisplay(currentDuty.currentAssignment.startTime, "—")} – {resolveScalarDisplay(currentDuty.currentAssignment.endTime, "—")}
                           </span>
                         </div>
                         <div>
                           <span className="text-[10px] text-on-surface-variant font-medium block">Type</span>
-                          <span className="font-bold text-primary">{currentDuty.currentAssignment.assignmentType}</span>
+                          <span className="font-bold text-primary">{resolveScalarDisplay(currentDuty.currentAssignment.assignmentType, "PRIMARY")}</span>
                         </div>
                       </div>
                     )}
@@ -266,20 +432,20 @@ export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = ({
                         <div className="flex justify-between py-1 border-b border-outline-variant/40">
                           <span className="text-on-surface-variant">Company:</span>
                           <span className="font-bold text-foreground text-right">
-                            {emp.company ? `${emp.company.code} — ${emp.company.name}` : "Al Hattab Holding"}
+                            {empCompany}
                           </span>
                         </div>
                         <div className="flex justify-between py-1 border-b border-outline-variant/40">
                           <span className="text-on-surface-variant">Department:</span>
-                          <span className="font-bold text-foreground text-right">{emp.department || "Unassigned"}</span>
+                          <span className="font-bold text-foreground text-right">{empDept}</span>
                         </div>
                         <div className="flex justify-between py-1 border-b border-outline-variant/40">
                           <span className="text-on-surface-variant">Designation:</span>
-                          <span className="font-bold text-foreground text-right">{emp.designation?.name || emp.designation || "Not specified"}</span>
+                          <span className="font-bold text-foreground text-right">{resolveDesignationLabel(emp.designation, "Not specified")}</span>
                         </div>
                         <div className="flex justify-between py-1">
                           <span className="text-on-surface-variant">Trade / Position:</span>
-                          <span className="font-bold text-primary text-right">{emp.tradePosition || "Not specified"}</span>
+                          <span className="font-bold text-primary text-right">{empTrade}</span>
                         </div>
                       </div>
                     </div>
@@ -293,7 +459,7 @@ export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = ({
                       <div className="space-y-2 text-xs">
                         <div className="flex justify-between py-1 border-b border-outline-variant/40">
                           <span className="text-on-surface-variant">Default Site/Location:</span>
-                          <span className="font-bold text-foreground text-right">{emp.defaultLocation || "Default Office"}</span>
+                          <span className="font-bold text-foreground text-right">{empDefaultLoc}</span>
                         </div>
                         <div className="flex justify-between py-1 border-b border-outline-variant/40">
                           <span className="text-on-surface-variant">Operation Scope:</span>
@@ -304,11 +470,11 @@ export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = ({
                         </div>
                         <div className="flex justify-between py-1 border-b border-outline-variant/40">
                           <span className="text-on-surface-variant">Email:</span>
-                          <span className="font-medium text-foreground text-right truncate max-w-[180px]">{emp.email || "—"}</span>
+                          <span className="font-medium text-foreground text-right truncate max-w-[180px]">{empEmail}</span>
                         </div>
                         <div className="flex justify-between py-1">
                           <span className="text-on-surface-variant">Phone:</span>
-                          <span className="font-medium text-foreground text-right">{emp.phone || "—"}</span>
+                          <span className="font-medium text-foreground text-right">{empPhone}</span>
                         </div>
                       </div>
                     </div>
@@ -338,7 +504,7 @@ export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = ({
                     </div>
                   ) : (
                     <div className="space-y-2">
-                      {assignments.map((asg: any) => (
+                      {assignments.map((asg) => (
                         <div
                           key={asg.id}
                           className={`p-3.5 rounded-xl border transition-all flex items-center justify-between ${
@@ -355,26 +521,28 @@ export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = ({
                             </div>
                             <div>
                               <div className="flex items-center gap-2">
-                                <span className="font-bold text-xs text-foreground">{asg.businessDate}</span>
+                                <span className="font-bold text-xs text-foreground">{resolveScalarDisplay(asg.businessDate, "—")}</span>
                                 {asg.isToday && (
                                   <span className="bg-primary/20 text-primary text-[9px] font-black px-1.5 py-0.2 rounded uppercase">
                                     Today
                                   </span>
                                 )}
-                                <span className="text-xs font-bold text-primary">• {asg.shiftName}</span>
+                                <span className="text-xs font-bold text-primary">• {resolveScalarDisplay(asg.shiftName, "Shift")}</span>
                               </div>
                               <div className="text-[11px] text-on-surface-variant mt-0.5 flex items-center gap-2">
-                                <span>{asg.siteName}</span>
-                                <span>({asg.postOrRequirement})</span>
+                                <span>{resolveSiteLabel(asg.siteName || asg.site, "Unspecified Site")}</span>
+                                <span>({resolveScalarDisplay(asg.postOrRequirement, "General Post")})</span>
                                 <span>•</span>
-                                <span className="font-medium">{asg.startTime} – {asg.endTime}</span>
+                                <span className="font-medium">
+                                  {resolveScalarDisplay(asg.startTime, "—")} – {resolveScalarDisplay(asg.endTime, "—")}
+                                </span>
                               </div>
                             </div>
                           </div>
 
                           <div className="flex items-center gap-2">
                             <Badge variant={asg.assignmentType === "RELIEVER" ? "warning" : "success"}>
-                              {asg.assignmentType}
+                              {resolveScalarDisplay(asg.assignmentType, "PRIMARY")}
                             </Badge>
                             <Link
                               href={`/manpower/${businessScope}/deployment-calendar?date=${asg.businessDate}`}
@@ -406,18 +574,18 @@ export const EmployeeDetailModal: React.FC<EmployeeDetailModalProps> = ({
                     </div>
                   ) : (
                     <div className="space-y-2">
-                      {activeLeaves.map((l: any) => (
+                      {activeLeaves.map((l) => (
                         <div
                           key={l.id}
                           className="p-3.5 rounded-xl bg-amber-500/5 border border-amber-500/20 flex items-center justify-between"
                         >
                           <div>
                             <div className="font-bold text-xs text-foreground flex items-center gap-2">
-                              <span>{l.type} Leave</span>
+                              <span>{resolveScalarDisplay(l.type, "General")} Leave</span>
                               <Badge variant="warning">Approved</Badge>
                             </div>
                             <div className="text-[11px] text-on-surface-variant mt-0.5">
-                              {l.startDate} to {l.endDate} {l.reason ? `• Reason: ${l.reason}` : ""}
+                              {resolveScalarDisplay(l.startDate, "—")} to {resolveScalarDisplay(l.endDate, "—")} {l.reason ? `• Reason: ${resolveScalarDisplay(l.reason)}` : ""}
                             </div>
                           </div>
                         </div>
