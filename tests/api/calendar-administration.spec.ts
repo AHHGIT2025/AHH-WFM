@@ -5,7 +5,7 @@ describe("Calendar Administration API", () => {
   let testCompanyId: string;
   let testDepartmentId: string;
   let testUserId: string;
-  
+
   beforeAll(async () => {
     let comp = await prisma.company.findFirst({ where: { isActive: true } });
     if (!comp) {
@@ -20,29 +20,21 @@ describe("Calendar Administration API", () => {
       });
     }
     testCompanyId = comp.id;
-    
-    let dept = await prisma.department.findFirst({ where: { companyId: testCompanyId } });
+
+    let dept = await prisma.department.findFirst();
     if (!dept) {
-      // Use unique deterministic test identifier to avoid colliding with or mutating unrelated existing department
-      const uniqueDeptId = "test-cal-admin-dept-1";
-      dept = await prisma.department.upsert({
-        where: { id: uniqueDeptId },
-        create: {
-          id: uniqueDeptId,
+      dept = await prisma.department.create({
+        data: {
           companyId: testCompanyId,
-          name: "Test Dept"
-        },
-        update: {
-          companyId: testCompanyId,
-          name: "Test Dept"
+          name: `Test Dept ${Date.now()}`
         }
       });
     }
     testDepartmentId = dept.id;
-    
+
     const user = await prisma.employee.findFirst({ where: { role: "ADMIN" } });
     testUserId = user?.id || "user-1";
-    
+
     // Robust cleanup before tests in case of previous failure
     await prisma.manpowerWorkCalendarProfile.updateMany({
       where: { code: { startsWith: "TEST-PROF-" } },
@@ -140,7 +132,7 @@ describe("Calendar Administration API", () => {
           }
         }
       });
-      
+
       const updated = await prisma.$transaction(async (tx) => {
         await tx.manpowerWorkCalendarRestDay.deleteMany({ where: { profileId: p.id } });
         await tx.manpowerWorkCalendarRestDay.create({
@@ -288,7 +280,7 @@ describe("Calendar Administration API", () => {
           version: 1
         }
       });
-      
+
       const v2 = await prisma.manpowerWorkCalendarProfile.create({
         data: {
           code: `${p.code}-V2`,
@@ -303,7 +295,7 @@ describe("Calendar Administration API", () => {
           supersedesProfileId: p.id
         }
       });
-      
+
       expect(v2.applicableCompanyId).toBe(p.applicableCompanyId);
       expect(v2.version).toBe(2);
       expect(v2.supersedesProfileId).toBe(p.id);

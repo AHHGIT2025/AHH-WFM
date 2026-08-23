@@ -1,16 +1,19 @@
-"use client";
-
 import React, { useState, useEffect } from "react";
 import { Button, Badge } from "@ahh-wfm/ui/src";
-import { 
-  UserCheck, 
-  UserX, 
-  AlertTriangle, 
-  ShieldAlert, 
-  CheckCircle, 
+import {
+  UserCheck,
+  UserX,
+  AlertTriangle,
+  ShieldAlert,
+  CheckCircle,
   Search,
   X,
-  Info
+  Info,
+  ExternalLink,
+  Calendar,
+  Clock,
+  MapPin,
+  Shield
 } from "lucide-react";
 import {
   resolveEmployeeTradePosition,
@@ -46,6 +49,9 @@ export const RelieverDrawer: React.FC<RelieverDrawerProps> = ({
   const [selectedEmpForWarning, setSelectedEmpForWarning] = useState<any | null>(null);
   const [overrideReason, setOverrideReason] = useState("");
   const [submittingAssign, setSubmittingAssign] = useState(false);
+
+  // Conflict details inspection state
+  const [viewingConflictEmp, setViewingConflictEmp] = useState<any | null>(null);
 
   // Authoritative Context Resolution
   const resolvedSlot = slot ?? primaryAssignment?.slot ?? null;
@@ -92,7 +98,7 @@ export const RelieverDrawer: React.FC<RelieverDrawerProps> = ({
     const matchesSearch =
       empName.toLowerCase().includes(searchQuery.toLowerCase()) ||
       empId.toLowerCase().includes(searchQuery.toLowerCase());
-    
+
     if (!matchesSearch) return false;
 
     if (categoryFilter === "ELIGIBLE") return item.canDeploy && (item.warnings || []).length === 0;
@@ -283,21 +289,43 @@ export const RelieverDrawer: React.FC<RelieverDrawerProps> = ({
 
                         {/* Eligibility Checklist */}
                         <div className="mt-3 space-y-1 text-xs">
-                          {(item.checklist || []).map((chk: any, idx: number) => (
-                            <div key={idx} className="flex items-center gap-1.5 text-[11px]">
-                              {chk.status === "PASS" ? (
-                                <CheckCircle className="h-3 w-3 text-success shrink-0" />
-                              ) : chk.status === "WARN" ? (
-                                <AlertTriangle className="h-3 w-3 text-amber-500 shrink-0" />
-                              ) : chk.status === "FAIL" ? (
-                                <X className="h-3 w-3 text-destructive shrink-0" />
-                              ) : (
-                                <Info className="h-3 w-3 text-secondary shrink-0" />
-                              )}
-                              <span className="text-secondary font-medium">{chk.rule}:</span>
-                              <span className="text-foreground">{chk.details}</span>
-                            </div>
-                          ))}
+                          {(item.checklist || []).map((chk: any, idx: number) => {
+                            const hasConflicts =
+                              chk.rule === "SCHEDULE_CONFLICT" &&
+                              chk.status === "FAIL" &&
+                              ((chk.conflicts && chk.conflicts.length > 0) || (item.conflicts && item.conflicts.length > 0));
+
+                            return (
+                              <div key={idx} className="flex items-center justify-between text-[11px] py-0.5">
+                                <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                                  {chk.status === "PASS" ? (
+                                    <CheckCircle className="h-3 w-3 text-success shrink-0" />
+                                  ) : chk.status === "WARN" ? (
+                                    <AlertTriangle className="h-3 w-3 text-amber-500 shrink-0" />
+                                  ) : chk.status === "FAIL" ? (
+                                    <X className="h-3 w-3 text-destructive shrink-0" />
+                                  ) : (
+                                    <Info className="h-3 w-3 text-secondary shrink-0" />
+                                  )}
+                                  <span className="text-secondary font-medium shrink-0">{chk.rule}:</span>
+                                  <span className="text-foreground truncate">{chk.details}</span>
+                                </div>
+                                {hasConflicts && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setViewingConflictEmp(item);
+                                    }}
+                                    className="text-[10px] font-bold text-primary hover:underline inline-flex items-center gap-1 bg-primary/10 px-2 py-0.5 rounded border border-primary/20 shrink-0 ml-2"
+                                  >
+                                    <span>Conflict Details</span>
+                                    <ExternalLink className="w-2.5 h-2.5" />
+                                  </button>
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
 
                         {/* Warning override input dialog inline */}
@@ -377,6 +405,145 @@ export const RelieverDrawer: React.FC<RelieverDrawerProps> = ({
           )}
         </div>
       </div>
+
+      {/* Schedule Conflict Breakdown Modal */}
+      {viewingConflictEmp && (
+        <div
+          className="fixed inset-0 z-60 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-150"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="schedule-conflict-modal-title"
+        >
+          <div className="bg-surface text-on-surface border border-outline-variant rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[85vh]">
+            <div className="p-5 border-b border-outline-variant/60 bg-status-error/5 flex items-start justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-xl bg-status-error/15 text-status-error">
+                  <ShieldAlert className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 id="schedule-conflict-modal-title" className="text-sm font-bold text-foreground">
+                    Schedule Overlap Conflict
+                  </h3>
+                  <p className="text-xs text-on-surface-variant mt-0.5">
+                    {viewingConflictEmp.employee?.name} ({viewingConflictEmp.employee?.id})
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setViewingConflictEmp(null)}
+                aria-label="Close conflict details"
+                className="text-on-surface-variant hover:text-on-surface p-1 rounded-lg hover:bg-surface-container-high transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 overflow-y-auto space-y-4 text-xs">
+              {/* Requested Assignment Section */}
+              <div className="p-3.5 rounded-xl bg-surface-container-low border border-outline-variant/60 space-y-2">
+                <div className="text-[10px] font-bold text-on-surface-variant uppercase tracking-wider">
+                  Requested Reliever Assignment
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div>
+                    <span className="text-on-surface-variant text-[11px] block">Date:</span>
+                    <span className="font-bold text-foreground">{formattedDate}</span>
+                  </div>
+                  <div>
+                    <span className="text-on-surface-variant text-[11px] block">Shift:</span>
+                    <span className="font-bold text-primary">
+                      {resolvedSlot?.snapshotShiftName} ({resolvedSlot?.snapshotStartTime} – {resolvedSlot?.snapshotEndTime})
+                    </span>
+                  </div>
+                  <div>
+                    <span className="text-on-surface-variant text-[11px] block">Site:</span>
+                    <span className="font-bold text-foreground">{resolvedSlot?.site?.name || resolvedSlot?.siteId || "Site"}</span>
+                  </div>
+                  <div>
+                    <span className="text-on-surface-variant text-[11px] block">Post:</span>
+                    <span className="font-bold text-foreground">{resolvedSlot?.snapshotPosition || "Security Post"}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Conflicting Assignment(s) Section */}
+              <div className="space-y-2.5">
+                <div className="text-[10px] font-bold text-status-error uppercase tracking-wider flex items-center justify-between">
+                  <span>Conflicting Active Assignment(s)</span>
+                  <span className="bg-status-error/15 text-status-error px-1.5 py-0.2 rounded font-black text-[9px]">
+                    {(viewingConflictEmp.conflicts || []).length || 1} Conflict(s)
+                  </span>
+                </div>
+
+                {(viewingConflictEmp.conflicts || []).map((conf: any, cIdx: number) => (
+                  <div
+                    key={cIdx}
+                    className="p-3.5 rounded-xl bg-destructive/5 border border-destructive/20 space-y-2"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-xs text-destructive flex items-center gap-1.5">
+                        <AlertTriangle className="w-3.5 h-3.5" />
+                        <span>{conf.shiftName} ({conf.startTime} – {conf.endTime})</span>
+                      </span>
+                      <Badge variant={conf.assignmentType === "RELIEVER" ? "warning" : "pending"}>
+                        {conf.assignmentType || "PRIMARY"}
+                      </Badge>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 text-xs pt-1 border-t border-destructive/10">
+                      <div>
+                        <span className="text-on-surface-variant text-[10px] block">Date:</span>
+                        <span className="font-bold text-foreground">{conf.businessDate}</span>
+                      </div>
+                      <div>
+                        <span className="text-on-surface-variant text-[10px] block">Site:</span>
+                        <span className="font-bold text-foreground">{conf.site}</span>
+                      </div>
+                      <div>
+                        <span className="text-on-surface-variant text-[10px] block">Post / Requirement:</span>
+                        <span className="font-bold text-foreground">{conf.postOrRequirement}</span>
+                      </div>
+                      <div>
+                        <span className="text-on-surface-variant text-[10px] block">Status:</span>
+                        <span className="font-bold text-status-success">{conf.status || "ACTIVE"}</span>
+                      </div>
+                    </div>
+
+                    {/* View Existing Assignment Action */}
+                    <div className="pt-2 border-t border-destructive/10 flex justify-end">
+                      <a
+                        href={`/manpower/${resolvedSlot?.operationType === "SECURITY_GUARDING" ? "security-guarding" : "facility-management"}/deployment-calendar?date=${conf.businessDate}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-[11px] font-bold text-primary hover:underline bg-surface-container-lowest px-2.5 py-1 rounded-lg border border-outline-variant shadow-xs"
+                      >
+                        <span>View Existing Assignment</span>
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </div>
+                  </div>
+                ))}
+
+                {(!viewingConflictEmp.conflicts || viewingConflictEmp.conflicts.length === 0) && (
+                  <div className="p-3.5 rounded-xl bg-destructive/5 border border-destructive/20 text-xs text-destructive">
+                    Overlapping schedule detected with existing active roster assignment.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="p-4 border-t border-outline-variant bg-surface-container-lowest flex justify-end">
+              <Button
+                variant="secondary"
+                onClick={() => setViewingConflictEmp(null)}
+                className="text-xs"
+              >
+                Close
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

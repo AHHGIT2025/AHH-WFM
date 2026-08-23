@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { hasPermission, isAdminUser } from "../../../../lib/permissions";
 import { getEffectiveContractManpower } from "../../../../lib/contract-helpers";
+import { EmployeeDetailModal } from "../../../../components/workforce/EmployeeDetailModal";
 
 interface ChecklistItem {
   itemCode: string;
@@ -90,6 +91,10 @@ export default function ManpowerMasterPage() {
   const [showAddGatePassModal, setShowAddGatePassModal] = useState(false);
   // Gate pass modal — project/worksite cascade
   const [gatePassProjectId, setGatePassProjectId] = useState("");
+
+  // Employee Drill-Down Modal states
+  const [selectedEmployeeForDetail, setSelectedEmployeeForDetail] = useState<any | null>(null);
+  const [isEmployeeDetailOpen, setIsEmployeeDetailOpen] = useState(false);
 
   // Security Projects states
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
@@ -904,7 +909,7 @@ export default function ManpowerMasterPage() {
       if (summaryRes.ok) {
         summaryData = await summaryRes.json();
       }
-      
+
       const allocRes = await fetch(`/api/v1/security/projects/${projectId}/allocation-summary`);
       if (allocRes.ok && summaryData) {
         const allocData = await allocRes.json();
@@ -924,7 +929,7 @@ export default function ManpowerMasterPage() {
         const allSites = await sitesRes.json();
         const projectSites = allSites.filter((s: any) => s.projectId === projectId);
         const projectSiteIds = projectSites.map((s: any) => s.id);
-        
+
         const shiftsRes = await fetch(`/api/v1/shifts`);
         if (shiftsRes.ok) {
           const allShifts = await shiftsRes.json();
@@ -2022,8 +2027,8 @@ export default function ManpowerMasterPage() {
                             <td className="px-3 py-2">
                               {unit.type === "POST" ? (
                                 <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                                  unit.guardTourRequired 
-                                    ? "bg-status-success/15 text-status-success" 
+                                  unit.guardTourRequired
+                                    ? "bg-status-success/15 text-status-success"
                                     : "bg-on-surface-variant/10 text-on-surface-variant"
                                 }`}>
                                   {unit.guardTourRequired ? "REQUIRED" : "OPTIONAL"}
@@ -2036,8 +2041,8 @@ export default function ManpowerMasterPage() {
                               {unit.type === "POST" ? (
                                 <div className="flex items-center gap-1.5">
                                   <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                                    unit.checkpointRequired 
-                                      ? "bg-status-success/15 text-status-success" 
+                                    unit.checkpointRequired
+                                      ? "bg-status-success/15 text-status-success"
                                       : "bg-on-surface-variant/10 text-on-surface-variant"
                                   }`}>
                                     {unit.checkpointRequired ? "YES" : "NO"}
@@ -2107,7 +2112,7 @@ export default function ManpowerMasterPage() {
                 <form
                   onSubmit={async (e) => {
                     e.preventDefault();
-                    const url = editingLocationUnitId 
+                    const url = editingLocationUnitId
                       ? `/api/v1/security/sites/${selectedSiteId}/location-units/${editingLocationUnitId}`
                       : `/api/v1/security/sites/${selectedSiteId}/location-units`;
                     const method = editingLocationUnitId ? "PATCH" : "POST";
@@ -2281,7 +2286,7 @@ export default function ManpowerMasterPage() {
             </div>
           </div>
         )}
-        
+
         {/* Delete Dependency Diagnostic Modal */}
         {deleteSiteReport && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 p-4 animate-fade-in">
@@ -2290,7 +2295,7 @@ export default function ManpowerMasterPage() {
                 <span className="material-symbols-outlined text-[20px]">delete_forever</span>
                 Delete Site: {deleteSiteReport.siteName}
               </h3>
-              
+
               <div className="space-y-2">
                 <span className="block font-bold text-on-surface-variant uppercase tracking-wider text-[10px]">Dependency Diagnostic:</span>
                 <ul className="space-y-1.5 bg-surface-container-low p-3 rounded-lg border border-outline-variant/40 font-mono text-[10px]">
@@ -2340,8 +2345,8 @@ export default function ManpowerMasterPage() {
               </div>
 
               <div className={`p-3 rounded-lg text-[11px] leading-relaxed border ${
-                deleteSiteReport.canHardDelete 
-                  ? "bg-status-success/10 text-status-success border-status-success/20" 
+                deleteSiteReport.canHardDelete
+                  ? "bg-status-success/10 text-status-success border-status-success/20"
                   : deleteSiteReport.suggestedAction === "DEACTIVATE"
                     ? "bg-status-warning/10 text-status-warning border-status-warning/20"
                     : "bg-status-error/10 text-status-error border-status-error/20"
@@ -2686,20 +2691,20 @@ export default function ManpowerMasterPage() {
   const updateManpowerRow = (index: number, field: string, value: any) => {
     const list = [...(formData.manpowerRequirements || [])];
     const item = { ...list[index], [field]: value };
-    
+
     // Recalculate lineTotal dynamically
     const qty = field === "quantity" ? (parseInt(value, 10) || 0) : (parseInt(item.quantity, 10) || 0);
     const price = field === "unitPrice" ? (parseFloat(value) || 0) : (parseFloat(item.unitPrice) || 0);
     const periodCount = field === "billingPeriodCount" ? (parseInt(value, 10) || 1) : (parseInt(item.billingPeriodCount, 10) || 1);
-    
+
     // If APPROVED, unitPrice and lineTotal must be 0
     const isFoc = item.focStatus === "APPROVED" || item.isFoc;
-    
+
     item.lineTotal = isFoc ? 0 : qty * price * periodCount;
     if (isFoc) {
       item.unitPrice = 0;
     }
-    
+
     list[index] = item;
     setFormData({ ...formData, manpowerRequirements: list });
   };
@@ -2887,7 +2892,7 @@ export default function ManpowerMasterPage() {
       lineTotal: 0
     });
     setAddFormLineItems(listCopy);
-    
+
     const totalImpact = listCopy.reduce((sum, li) => sum + (li.lineTotal || 0), 0);
     const formattedImpact = (totalImpact >= 0 ? "+" : "") + `QAR ${totalImpact.toFixed(2)}`;
     setAddendumForm({
@@ -2901,7 +2906,7 @@ export default function ManpowerMasterPage() {
     const list = addFormLineItems.map(item => {
       if (item.id !== id) return item;
       const updatedItem = { ...item, [field]: value };
-      
+
       const qty = parseInt(updatedItem.quantity, 10) || 0;
       const price = parseFloat(updatedItem.unitPrice) || 0;
       const count = parseInt(updatedItem.billingPeriodCount, 10) || 1;
@@ -2923,7 +2928,7 @@ export default function ManpowerMasterPage() {
 
   const deleteAddendumLineById = (id: string) => {
     const list = addFormLineItems.filter(item => item.id !== id);
-    
+
     const totalImpact = list.reduce((sum, li) => sum + (li.lineTotal || 0), 0);
     const formattedImpact = (totalImpact >= 0 ? "+" : "") + `QAR ${totalImpact.toFixed(2)}`;
 
@@ -3029,7 +3034,7 @@ export default function ManpowerMasterPage() {
   const calculateMaterialLineTotal = (quantity: number, unitPrice: number, isFoc: boolean) => {
     return isFoc ? 0 : (quantity || 0) * (unitPrice || 0);
   };
-  
+
   const recalculateContractTotals = () => {
     // Totals are computed dynamically during render
   };
@@ -3596,7 +3601,7 @@ export default function ManpowerMasterPage() {
   function renderSecurityContractForm() {
     const currentScope = isSecurity ? "SECURITY_GUARDING" : "FACILITY_MANAGEMENT";
     const filteredClients = clients.filter((c: any) => c.operationType === currentScope);
-    
+
     const currentScopeCategories = categories.filter((c: any) => c.operationType === currentScope);
     const fallbackCategories = isSecurity ? [
       { id: "PM-CAT-SEC-01", name: "CCTV Operator", code: "CCTV" },
@@ -3615,7 +3620,7 @@ export default function ManpowerMasterPage() {
       { id: "PM-CAT-FM-03", name: "FM Cleaner", code: "FM_CLEANER" }
     ];
     const displayCategories = currentScopeCategories.length > 0 ? currentScopeCategories : fallbackCategories;
-    
+
     // Filter materials by scope
     const allowedMaterials = materialsList.filter((m: any) => {
       if (!m.isActive) return false;
@@ -3629,7 +3634,7 @@ export default function ManpowerMasterPage() {
     const totalRelievers = relieverReqs.reduce((sum: number, r: any) => sum + (parseInt(r.quantity, 10) || 0), 0);
     const shiftReqs = formData.shiftRequirements || [];
     const shiftCount = shiftReqs.length;
-    
+
     const materialReqs = formData.materials || [];
 
     // Sum of values
@@ -3660,7 +3665,7 @@ export default function ManpowerMasterPage() {
     if (formData.startDate && formData.endDate && new Date(formData.endDate) < new Date(formData.startDate)) {
       validationErrors.push("End Date must be greater than or equal to Start Date.");
     }
-    
+
     const activeErrors: string[] = [];
     if (isSecurity) {
       if (manpowerReqs.length === 0) activeErrors.push("At least one manpower requirement is required.");
@@ -3753,7 +3758,7 @@ export default function ManpowerMasterPage() {
                   value={formData.contractNumber || ""}
                 />
               </div>
-              
+
               {/* Duration Auto-Calculation Section */}
               <div className="bg-surface-container/60 border border-outline-variant/40 p-3 rounded-lg space-y-3">
                 <span className="block text-[10px] font-bold text-primary uppercase tracking-wider">Contract Duration Calculator</span>
@@ -3869,7 +3874,7 @@ export default function ManpowerMasterPage() {
               <h5 className="text-[11px] font-bold text-primary uppercase tracking-wider">
                 Temporary / Event Contract Parameters
               </h5>
-              
+
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-3">
                   <div className="grid grid-cols-2 gap-3">
@@ -4123,7 +4128,7 @@ export default function ManpowerMasterPage() {
                                 </span>
                                 {(() => {
                                   const isRequester = row.focRequestedById === (session?.user as any)?.id;
-                                  const canApprove = hasPermission(session?.user as any, "manpower.admin.full_access") || 
+                                  const canApprove = hasPermission(session?.user as any, "manpower.admin.full_access") ||
                                                      hasPermission(session?.user as any, business === "security-guarding" ? "manpower.security.contracts.foc_approve" : "manpower.fm.contracts.foc_approve");
                                   if (canApprove && !isRequester) {
                                     return (
@@ -4156,7 +4161,7 @@ export default function ManpowerMasterPage() {
                                   FOC Approved
                                 </span>
                                 {(() => {
-                                  const canApprove = hasPermission(session?.user as any, "manpower.admin.full_access") || 
+                                  const canApprove = hasPermission(session?.user as any, "manpower.admin.full_access") ||
                                                      hasPermission(session?.user as any, business === "security-guarding" ? "manpower.security.contracts.foc_approve" : "manpower.fm.contracts.foc_approve");
                                   if (canApprove) {
                                     return (
@@ -4176,7 +4181,7 @@ export default function ManpowerMasterPage() {
 
                             {row.focStatus === "REJECTED" && (
                               <div className="flex flex-col gap-1 items-center">
-                                <span 
+                                <span
                                   title={row.focRejectionReason || "No reason specified"}
                                   className="px-1.5 py-0.5 bg-red-100 text-red-800 border border-red-200 rounded text-[9px] font-bold uppercase tracking-wider cursor-help"
                                 >
@@ -4194,7 +4199,7 @@ export default function ManpowerMasterPage() {
 
                             {row.focStatus === "REVOKED" && (
                               <div className="flex flex-col gap-1 items-center">
-                                <span 
+                                <span
                                   title={row.focRevocationReason || "No reason specified"}
                                   className="px-1.5 py-0.5 bg-orange-100 text-orange-800 border border-orange-200 rounded text-[9px] font-bold uppercase tracking-wider cursor-help"
                                 >
@@ -4791,7 +4796,7 @@ export default function ManpowerMasterPage() {
                 <span className="font-bold text-status-warning">{focMaterialCount} items</span>
               </div>
             </div>
-            
+
             <div className="bg-primary/10 border border-primary/20 p-3.5 rounded-xl flex justify-between items-center">
               <span className="text-xs font-bold text-primary uppercase tracking-wider">Total Contract Value:</span>
               <span className="text-lg font-black text-primary">
@@ -4799,7 +4804,7 @@ export default function ManpowerMasterPage() {
               </span>
             </div>
           </div>
-          
+
           <div className="border-l border-outline-variant/50 pl-6 space-y-4">
             <h5 className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">Status & Blockers</h5>
             {validationErrors.length > 0 ? (
@@ -4828,7 +4833,7 @@ export default function ManpowerMasterPage() {
                 <p className="text-[10px] text-on-surface-variant italic">All mandatory requirements logged. You can finalize contract activation.</p>
               </div>
             )}
-            
+
             <div className="text-[10px] text-on-surface-variant bg-surface-container-low p-2 rounded-lg border border-outline-variant/30">
               <span className="font-bold text-[9px] block text-on-surface uppercase mb-0.5">Timeline Summary</span>
               <span>{formData.startDate || "—"} to {formData.endDate || "—"}</span>
@@ -4874,7 +4879,7 @@ export default function ManpowerMasterPage() {
     );
   }  const renderEnhancedCustomerForm = (isEdit: boolean) => {
     const customerType = formData.customerType || "COMPANY";
-    
+
     const handleTypeChange = (newType: string) => {
       if (isEdit) {
         let warnMsg = "Changing the customer type will change the profile layout. ";
@@ -4890,7 +4895,7 @@ export default function ManpowerMasterPage() {
         customerType: newType
       });
     };
-    
+
     return (
       <div className="space-y-6 text-on-surface">
         <div className="bg-surface-container-low border border-outline-variant p-4 rounded-xl space-y-3">
@@ -5637,7 +5642,7 @@ export default function ManpowerMasterPage() {
 
   const assignedProjectIds = myAssignments.map((a: any) => a.projectId);
   const mySites = sites.filter((site: any) => isManagerOrAdmin || assignedProjectIds.includes(site.projectId));
-  const myDeployments = deploymentsList.filter((d: any) => 
+  const myDeployments = deploymentsList.filter((d: any) =>
     isManagerOrAdmin || assignedProjectIds.includes(d.shiftRequirement?.site?.projectId)
   );
 
@@ -5673,9 +5678,9 @@ export default function ManpowerMasterPage() {
   const lookupGuardName = (code: string): { name: string; error?: string } => {
     if (!code || code.trim() === "") return { name: "" };
     const normalized = code.trim().toLowerCase();
-    
+
     // 1. Search in workforceEmployees (which holds the security-guarding synced directory)
-    const foundInDirectory = workforceEmployees.find((emp: any) => 
+    const foundInDirectory = workforceEmployees.find((emp: any) =>
       emp.id?.toLowerCase() === normalized ||
       emp.employeeCode?.toLowerCase() === normalized ||
       emp.username?.toLowerCase() === normalized
@@ -5702,9 +5707,9 @@ export default function ManpowerMasterPage() {
       }
     }
 
-    return { 
-      name: "", 
-      error: "Guard not found in Security Guarding manpower directory or today’s deployment." 
+    return {
+      name: "",
+      error: "Guard not found in Security Guarding manpower directory or today’s deployment."
     };
   };
 
@@ -5989,7 +5994,7 @@ export default function ManpowerMasterPage() {
                     const sorted = [...sitePatrols].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
                     const lastPatrol = sorted[0];
                     lastPatrolTime = new Date(lastPatrol.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                    
+
                     if (lastPatrol.verifications) {
                       Object.values(lastPatrol.verifications).forEach((v: any) => {
                         if (v.status === "Present" || v.status === "Replaced") {
@@ -7666,8 +7671,37 @@ export default function ManpowerMasterPage() {
                       )}
                       {master === "manpower" && (
                         <>
-                          <td className="px-4 py-3 text-xs font-bold text-primary">{item.id}</td>
-                          <td className="px-4 py-3 text-xs text-on-surface">{item.name}</td>
+                          <td className="px-4 py-3 text-xs font-bold">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedEmployeeForDetail(item);
+                                setIsEmployeeDetailOpen(true);
+                              }}
+                              className="font-mono text-xs font-bold text-primary hover:underline focus:outline-none focus:ring-1 focus:ring-primary rounded px-1 py-0.5 inline-block text-left"
+                              aria-label={`View details for employee ID ${item.id}`}
+                            >
+                              {item.id}
+                            </button>
+                          </td>
+                          <td className="px-4 py-3 text-xs text-on-surface">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedEmployeeForDetail(item);
+                                setIsEmployeeDetailOpen(true);
+                              }}
+                              className="font-bold text-left text-foreground hover:text-primary hover:underline focus:outline-none focus:ring-1 focus:ring-primary rounded px-1 py-0.5 inline-flex items-center gap-2 group cursor-pointer"
+                              aria-label={`View details for ${item.name}`}
+                            >
+                              <span className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[10px] font-black shrink-0 border border-primary/20">
+                                {(item.name || "E").split(" ").map((n: string) => n[0]).join("").slice(0, 2)}
+                              </span>
+                              <span className="group-hover:text-primary transition-colors">{item.name}</span>
+                            </button>
+                          </td>
                           <td className="px-4 py-3 text-xs text-on-surface font-medium">{item.positionCategory?.name || item.designation?.name || "Not specified"}</td>
                           <td className="px-4 py-3 text-xs text-on-surface-variant">{item.email}</td>
                           <td className="px-4 py-3 text-xs text-on-surface">{item.manpowerCategoryId || "General"}</td>
@@ -8353,7 +8387,7 @@ export default function ManpowerMasterPage() {
                                   if (!code) return "";
                                   return code.trim().toUpperCase();
                                 };
-                                
+
                                 const empCompanyCode = normalizeCompanyCode(emp.company?.companyCode || emp.companyCode);
                                 const empCategory = normalizeCategory(emp.employeeCategory);
                                 const targetCompanyCode = isSecurity ? "HS01" : "TC01";
@@ -9316,14 +9350,14 @@ export default function ManpowerMasterPage() {
                 </span>
                 <h3 className="text-base font-bold text-primary inline-block">{selectedClientDetail.name} ({selectedClientDetail.code})</h3>
               </div>
-              <button 
-                onClick={() => setSelectedClientDetail(null)} 
+              <button
+                onClick={() => setSelectedClientDetail(null)}
                 className="text-on-surface-variant hover:text-primary w-8 h-8 rounded-lg hover:bg-surface-container-high flex items-center justify-center"
               >
                 <span className="material-symbols-outlined text-[20px]">close</span>
               </button>
             </div>
-            
+
             <div className="p-6 space-y-6 flex-1 overflow-y-auto">
               <div className="grid grid-cols-2 gap-4">
                 <div className="bg-surface-container-low border border-outline-variant p-4 rounded-xl space-y-2 text-xs">
@@ -9345,13 +9379,13 @@ export default function ManpowerMasterPage() {
                       <p><span className="text-on-surface-variant font-medium">Passport Number:</span> <span className="font-semibold">{selectedClientDetail.passportNumber || "N/A"}</span></p>
                     </>
                   )}
-                  <p><span className="text-on-surface-variant font-medium">Status:</span> 
+                  <p><span className="text-on-surface-variant font-medium">Status:</span>
                     <span className={`ml-2 px-1.5 py-0.5 rounded text-[10px] font-bold ${selectedClientDetail.isActive ? "bg-status-success/15 text-status-success" : "bg-status-error/15 text-status-error"}`}>
                       {selectedClientDetail.isActive ? "Active" : "Inactive"}
                     </span>
                   </p>
                 </div>
-                
+
                 <div className="bg-surface-container-low border border-outline-variant p-4 rounded-xl space-y-2 text-xs">
                   <h4 className="text-[10px] font-bold text-primary uppercase tracking-wider border-b border-outline-variant pb-1">Main Contacts</h4>
                   <p><span className="text-on-surface-variant font-medium">Phone:</span> <span className="font-semibold">{selectedClientDetail.mainPhone || "N/A"}</span></p>
@@ -9376,7 +9410,7 @@ export default function ManpowerMasterPage() {
                   <p><span className="text-on-surface-variant font-medium">Mobile:</span> <span className="font-semibold">{selectedClientDetail.operationContactMobile || "N/A"}</span></p>
                   <p><span className="text-on-surface-variant font-medium">Email:</span> <span className="font-semibold">{selectedClientDetail.operationContactEmail || "N/A"}</span></p>
                 </div>
-                
+
                 <div className="bg-surface-container-low border border-outline-variant p-4 rounded-xl space-y-2 text-xs">
                   <h4 className="text-[10px] font-bold text-primary uppercase tracking-wider border-b border-outline-variant pb-1">Finance & Billing Contact</h4>
                   <p><span className="text-on-surface-variant font-medium">Name:</span> <span className="font-semibold">{selectedClientDetail.financeContactName || "N/A"}</span></p>
@@ -9445,8 +9479,8 @@ export default function ManpowerMasterPage() {
             </div>
 
             <div className="px-6 py-4 border-t border-outline-variant flex justify-end bg-surface-container-low">
-              <button 
-                onClick={() => setSelectedClientDetail(null)} 
+              <button
+                onClick={() => setSelectedClientDetail(null)}
                 className="px-4 py-2 bg-primary text-white text-xs font-bold rounded-lg hover:bg-primary-container transition-colors"
               >
                 Close View
@@ -9469,21 +9503,21 @@ export default function ManpowerMasterPage() {
                   </span>
                   <h3 className="text-base font-bold text-primary inline-block">{selectedContractDetail.title} ({selectedContractDetail.contractNumber})</h3>
                 </div>
-                <button 
-                  onClick={() => setSelectedContractDetail(null)} 
+                <button
+                  onClick={() => setSelectedContractDetail(null)}
                   className="text-on-surface-variant hover:text-primary w-8 h-8 rounded-lg hover:bg-surface-container-high flex items-center justify-center"
                 >
                   <span className="material-symbols-outlined text-[20px]">close</span>
                 </button>
               </div>
-              
+
               <div className="p-6 space-y-6 flex-1 overflow-y-auto text-xs">
                 <div className="bg-surface-container-low border border-outline-variant p-4 rounded-xl space-y-2">
                   <h4 className="text-[10px] font-bold text-primary uppercase tracking-wider border-b border-outline-variant pb-1">Contract Summary</h4>
                   <p><span className="text-on-surface-variant font-medium">Client:</span> <span className="font-semibold">{selectedContractDetail.client?.name || selectedContractDetail.clientId}</span></p>
                   <p><span className="text-on-surface-variant font-medium">Contract Type:</span> <span className="font-semibold uppercase text-primary">{selectedContractDetail.contractType || "PERMANENT"}</span></p>
                   <p><span className="text-on-surface-variant font-medium">Duration:</span> <span className="font-semibold">{new Date(selectedContractDetail.startDate).toLocaleDateString()} to {new Date(selectedContractDetail.endDate).toLocaleDateString()}</span></p>
-                  
+
                   {/* Temporary/Event specifics */}
                   {(selectedContractDetail.contractType === "TEMPORARY" || selectedContractDetail.contractType === "EVENT") && (
                     <div className="bg-surface-container/40 p-2.5 rounded border border-outline-variant/65 my-2 space-y-1 text-[11px]">
@@ -9501,7 +9535,7 @@ export default function ManpowerMasterPage() {
                     </div>
                   )}
 
-                  <p><span className="text-on-surface-variant font-medium">Status:</span> 
+                  <p><span className="text-on-surface-variant font-medium">Status:</span>
                     <span className={`ml-2 px-1.5 py-0.5 rounded text-[10px] font-bold ${selectedContractDetail.status === "ACTIVE" ? "bg-status-success/15 text-status-success" : "bg-surface-container-high/40 text-on-surface-variant"}`}>
                       {selectedContractDetail.status}
                     </span>
@@ -9706,7 +9740,7 @@ export default function ManpowerMasterPage() {
               {/* Contract Approval Workflow Status */}
               <div className="bg-surface-container-low border border-outline-variant p-4 rounded-xl space-y-3">
                 <h4 className="text-xs font-bold text-primary uppercase tracking-wider border-b border-outline-variant pb-1">Approval Workflow & Status</h4>
-                
+
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-semibold text-on-surface-variant">Workflow Status:</span>
                   <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
@@ -9719,7 +9753,7 @@ export default function ManpowerMasterPage() {
                     {selectedContractDetail.approvalStatus || selectedContractDetail.status || "DRAFT"}
                   </span>
                 </div>
-                
+
                 {selectedContractDetail.rejectionRemarks && (
                   <div className="bg-red-50 border border-red-200 p-2 rounded-lg text-xs text-red-700">
                     <span className="font-bold">Rejection Reason:</span> {selectedContractDetail.rejectionRemarks}
@@ -9758,10 +9792,10 @@ export default function ManpowerMasterPage() {
                 {selectedContractDetail.workflows?.[0] ? (
                   <div className="space-y-3 pt-2">
                     {[...selectedContractDetail.workflows[0].levels].sort((a: any, b: any) => (a.levelNumber || 0) - (b.levelNumber || 0)).map((lvl: any) => {
-                      const isLvlApproved = lvl.approvalRule === "ANY_ONE" 
+                      const isLvlApproved = lvl.approvalRule === "ANY_ONE"
                         ? lvl.approvers?.some((ap: any) => ap.approvalStatus === "APPROVED")
                         : lvl.approvers?.every((ap: any) => ap.approvalStatus === "APPROVED");
-                        
+
                       const isLvlRejected = lvl.approvers?.some((ap: any) => ap.approvalStatus === "REJECTED");
 
                       return (
@@ -9780,9 +9814,9 @@ export default function ManpowerMasterPage() {
                               {isLvlApproved ? "Approved" : isLvlRejected ? "Rejected" : "Pending"}
                             </span>
                           </div>
-                          
+
                           <p className="text-[10px] text-on-surface-variant mb-2">Rule: {lvl.approvalRule === "ANY_ONE" ? "Any one approver" : "All approvers required"}</p>
-                          
+
                           <div className="space-y-1.5">
                             {lvl.approvers?.map((ap: any) => (
                               <div key={ap.id} className="flex justify-between items-center text-[10px]">
@@ -9810,16 +9844,16 @@ export default function ManpowerMasterPage() {
               {selectedContractDetail.workflows?.[0] && selectedContractDetail.status === "PENDING_APPROVAL" && (
                 <div className="bg-surface-container-low border border-outline-variant p-4 rounded-xl space-y-3">
                   <h4 className="text-xs font-bold text-primary uppercase tracking-wider border-b border-outline-variant pb-1">Perform Approval Action</h4>
-                  
+
                   {(() => {
                     const sortedLevels = [...selectedContractDetail.workflows[0].levels].sort((a: any, b: any) => (a.levelNumber || 0) - (b.levelNumber || 0));
                     const activePendingLevel = sortedLevels.find((lvl: any) => {
-                      const isLvlApproved = lvl.approvalRule === "ANY_ONE" 
+                      const isLvlApproved = lvl.approvalRule === "ANY_ONE"
                         ? lvl.approvers?.some((ap: any) => ap.approvalStatus === "APPROVED")
                         : lvl.approvers?.every((ap: any) => ap.approvalStatus === "APPROVED");
                       return !isLvlApproved;
                     });
-                    
+
                     if (!activePendingLevel) return null;
 
                     const pendingApprovers = activePendingLevel.approvers?.filter((ap: any) => ap.approvalStatus === "PENDING") || [];
@@ -9827,7 +9861,7 @@ export default function ManpowerMasterPage() {
                     return (
                       <div className="space-y-3">
                         <p className="text-xs text-on-surface-variant">Acting on <span className="font-semibold text-primary">Level {activePendingLevel.levelNumber}: {activePendingLevel.levelName}</span></p>
-                        
+
                         <div>
                           <label className="block text-[9px] font-bold text-on-surface-variant uppercase mb-1">Select Approver Entity</label>
                           <select
@@ -9837,16 +9871,16 @@ export default function ManpowerMasterPage() {
                             {(() => {
                               const options: any[] = [];
                               const now = new Date();
-                              
+
                               pendingApprovers.forEach((ap: any) => {
                                 // Original option
                                 options.push({
                                   value: `${activePendingLevel.id}:${ap.employeeId}`,
                                   label: ap.employeeName || "Approver"
                                 });
-                                
+
                                 // Check if there is an active delegation for this pending approver
-                                const activeDel = (delegations || []).find((d: any) => 
+                                const activeDel = (delegations || []).find((d: any) =>
                                   d.originalApproverEmployeeId === ap.employeeId &&
                                   d.isActive &&
                                   new Date(d.effectiveFrom) <= now &&
@@ -9859,14 +9893,14 @@ export default function ManpowerMasterPage() {
                                   });
                                 }
                               });
-                              
+
                               return options.map((opt, oIdx) => (
                                 <option key={oIdx} value={opt.value}>{opt.label}</option>
                               ));
                             })()}
                           </select>
                         </div>
-                        
+
                         <div>
                           <label className="block text-[9px] font-bold text-on-surface-variant uppercase mb-1">Remarks / Comments</label>
                           <textarea
@@ -9876,7 +9910,7 @@ export default function ManpowerMasterPage() {
                             className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-2.5 py-1.5 text-xs text-on-surface resize-none"
                           />
                         </div>
-                        
+
                         <div className="flex gap-2">
                           <button
                             onClick={() => {
@@ -9911,27 +9945,27 @@ export default function ManpowerMasterPage() {
                 </div>
               )}
             </div>
-            
+
             <div className="px-6 py-4 border-t border-outline-variant flex justify-between bg-surface-container-low">
               <div className="flex gap-2">
                 {(selectedContractDetail.status === "DRAFT" || selectedContractDetail.status === "REJECTED") && (
-                  <button 
-                    onClick={() => handleWorkflowAction("submit")} 
+                  <button
+                    onClick={() => handleWorkflowAction("submit")}
                     className="px-4 py-2 bg-amber-600 text-white text-xs font-bold rounded-lg hover:bg-amber-700 transition-colors"
                   >
                     Submit for Approval
                   </button>
                 )}
                 {selectedContractDetail.status === "APPROVED" && (
-                  <button 
-                    onClick={() => handleWorkflowAction("activate")} 
+                  <button
+                    onClick={() => handleWorkflowAction("activate")}
                     className="px-4 py-2 bg-green-600 text-white text-xs font-bold rounded-lg hover:bg-green-700 transition-colors"
                   >
                     Activate Contract
                   </button>
                 )}
                 {selectedContractDetail.status === "ACTIVE" && (
-                  <button 
+                  <button
                     onClick={async () => {
                       const reason = prompt("Enter reason for contract termination:");
                       if (reason) {
@@ -9955,16 +9989,16 @@ export default function ManpowerMasterPage() {
                           alert("Connection error requesting termination");
                         }
                       }
-                    }} 
+                    }}
                     className="px-4 py-2 bg-status-error text-white text-xs font-bold rounded-lg hover:opacity-90 transition-opacity"
                   >
                     Terminate Contract
                   </button>
                 )}
               </div>
-              
-              <button 
-                onClick={() => setSelectedContractDetail(null)} 
+
+              <button
+                onClick={() => setSelectedContractDetail(null)}
                 className="px-4 py-2 bg-primary text-white text-xs font-bold rounded-lg hover:bg-primary-container transition-colors"
               >
                 Close View
@@ -9986,7 +10020,7 @@ export default function ManpowerMasterPage() {
                 <span className="material-symbols-outlined text-[20px]">close</span>
               </button>
             </div>
-            
+
             <form onSubmit={async (e) => {
               e.preventDefault();
               try {
@@ -10590,7 +10624,7 @@ export default function ManpowerMasterPage() {
                   </div>
                 )}
               </div>
-              
+
               <div className="px-6 py-4 border-t border-outline-variant flex justify-end gap-3 bg-surface-container-low">
                 <button
                   type="button"
@@ -10804,6 +10838,18 @@ export default function ManpowerMasterPage() {
           </div>
         </div>
       )}
+
+      {/* Authoritative Employee Drill-Down Detail Modal */}
+      <EmployeeDetailModal
+        isOpen={isEmployeeDetailOpen}
+        onClose={() => {
+          setIsEmployeeDetailOpen(false);
+          setSelectedEmployeeForDetail(null);
+        }}
+        employeeId={selectedEmployeeForDetail?.id || null}
+        initialData={selectedEmployeeForDetail}
+        businessScope={business}
+      />
     </div>
   );
 }

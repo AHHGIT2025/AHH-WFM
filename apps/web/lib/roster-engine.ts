@@ -60,8 +60,8 @@ export async function getEffectiveRequirementsForDate(
       contractRequirementId: req.id,
       position: req.position,
       quantity: req.quantity,
-      sourceType: contract.contractType === "TEMPORARY" || contract.contractType === "EVENT" 
-        ? "TEMPORARY_EVENT_REQUIREMENT" 
+      sourceType: contract.contractType === "TEMPORARY" || contract.contractType === "EVENT"
+        ? "TEMPORARY_EVENT_REQUIREMENT"
         : "CONTRACT_REQUIREMENT",
       sourceEffectiveFrom: new Date(getQatarDateString(contract.startDate)),
       sourceEffectiveTo: contract.endDate ? new Date(getQatarDateString(contract.endDate)) : null,
@@ -241,8 +241,8 @@ export async function syncSlotsForContractDate(
 
   // Generate slots for each resolved site
   for (const siteInfo of sitesToSync) {
-    const locationKey = siteInfo.siteId 
-      ? `site:${siteInfo.siteId}` 
+    const locationKey = siteInfo.siteId
+      ? `site:${siteInfo.siteId}`
       : (siteInfo.externalVenueSnapshot ? `venue:${siteInfo.externalVenueSnapshot}` : "unknown");
 
     for (const req of activeReqs) {
@@ -252,7 +252,7 @@ export async function syncSlotsForContractDate(
 
       for (const shift of shifts) {
         const shiftKey = shift.id ? `shift:${shift.id}` : "shift:DEFAULT";
-        
+
         // Generate up to quantity slots
         for (let i = 1; i <= req.quantity; i++) {
           const genSitePart = siteInfo.siteId || siteInfo.externalVenueSnapshot || "null";
@@ -657,6 +657,13 @@ export async function syncPublishedAssignmentsBatch(
   return { succeeded, failed };
 }
 
+export function parseShiftTimeToMinutes(t: string): number {
+  const parts = (t || "00:00").split(":");
+  const h = parseInt(parts[0], 10) || 0;
+  const m = parseInt(parts[1], 10) || 0;
+  return h * 60 + m;
+}
+
 // Check if two shift time ranges overlap, accounting for overnight wraps
 export function areShiftsOverlapping(
   start1: string,
@@ -664,17 +671,10 @@ export function areShiftsOverlapping(
   start2: string,
   end2: string
 ): boolean {
-  const parseMin = (t: string) => {
-    const parts = t.split(":");
-    const h = parseInt(parts[0], 10) || 0;
-    const m = parseInt(parts[1], 10) || 0;
-    return h * 60 + m;
-  };
-
-  const s1 = parseMin(start1);
-  let e1 = parseMin(end1);
-  const s2 = parseMin(start2);
-  let e2 = parseMin(end2);
+  const s1 = parseShiftTimeToMinutes(start1);
+  let e1 = parseShiftTimeToMinutes(end1);
+  const s2 = parseShiftTimeToMinutes(start2);
+  let e2 = parseShiftTimeToMinutes(end2);
 
   if (e1 < s1) e1 += 24 * 60;
   if (e2 < s2) e2 += 24 * 60;
@@ -687,7 +687,7 @@ export async function checkEmployeeSchedulingEligibility(
   employeeId: string,
   slotId: string,
   tx: any = prisma
-): Promise<{ canDeploy: boolean; errors: string[]; warnings: string[]; checklist: any[] }> {
+): Promise<{ canDeploy: boolean; errors: string[]; warnings: string[]; checklist: any[]; conflicts: any[]; historicalContext?: any[] }> {
   const errors: string[] = [];
   const warnings: string[] = [];
   const checklist: any[] = [];
@@ -762,47 +762,150 @@ export async function checkEmployeeSchedulingEligibility(
     checklist.push({ rule: "LEAVE_STATUS", status: "PASS", details: "Available" });
   }
 
-  // 4. Overlapping Roster Assignment
+  // 4. Overlapping Roster Assignment (Check D-1, D, and D+1 for accurate overnight boundary overlap)
+  const prevDate = new Date(qatarDate.getTime() - 24 * 60 * 60 * 1000);
+  const nextDate = new Date(qatarDate.getTime() + 24 * 60 * 60 * 1000);
+
+  const reqDateStr = getQatarDateString(slot.businessDate);
+  const reqStartMin = parseShiftTimeToMinutes(slot.snapshotStartTime || "06:00");
+  const reqEndMin = parseShiftTimeToMinutes(slot.snapshotEndTime || "18:00");
+  const reqIsOvernight = reqEndMin < reqStartMin;
+
+  const reqStartDt = new Date(`${reqDateStr}T${slot.snapshotStartTime || "06:00"}:00+03:00`);
+  const reqEndDt = new Date(
+    reqIsOvernight
+      ? `${getQatarDateString(nextDate)}T${slot.snapshotEndTime || "18:00"}:00+03:00`
+      : `${reqDateStr}T${slot.snapshotEndTime || "18:00"}:00+03:00`
+  );
+
   const rosterAssignments = await tx.rosterSlotAssignment.findMany({
     where: {
       employeeId,
       historyStatus: "ACTIVE",
       slot: {
-        businessDate: qatarDate,
+        businessDate: { gte: prevDate, lte: nextDate },
         fulfillmentStatus: { not: "CANCELLED" }
       }
     },
-    include: { slot: true }
+    include: {
+      slot: {
+        include: {
+          site: true,
+          project: true,
+          contract: true
+        }
+      }
+    }
   });
 
-  let scheduleConflict = false;
+  const conflicts: Array<{
+    assignmentId: string;
+    requirementSlotId?: string;
+    assignmentType: string;
+    source: "ROSTER" | "LEGACY_SHIFT" | "LEGACY_DEPLOYMENT";
+    company?: string;
+    companyCode?: string;
+    operationType: string;
+    project?: string;
+    site?: string;
+    postOrRequirement?: string;
+    shiftName: string;
+    startDateTime: string;
+    endDateTime: string;
+    startTime: string;
+    endTime: string;
+    businessDate: string;
+    status: string;
+  }> = [];
+
   for (const asg of rosterAssignments) {
-    if (asg.slotId !== slotId && areShiftsOverlapping(slot.snapshotStartTime, slot.snapshotEndTime, asg.slot.snapshotStartTime, asg.slot.snapshotEndTime)) {
-      errors.push(`Roster conflict: Overlaps with roster slot ${asg.slot.snapshotShiftName} (${asg.slot.snapshotStartTime}-${asg.slot.snapshotEndTime}).`);
-      scheduleConflict = true;
-      break;
+    if (asg.slotId === slotId) continue;
+
+    const asgSlot = asg.slot;
+    const asgDateStr = getQatarDateString(asgSlot.businessDate);
+    const asgNextDate = new Date(new Date(asgDateStr).getTime() + 24 * 60 * 60 * 1000);
+    const asgStartMin = parseShiftTimeToMinutes(asgSlot.snapshotStartTime || "06:00");
+    const asgEndMin = parseShiftTimeToMinutes(asgSlot.snapshotEndTime || "18:00");
+    const asgIsOvernight = asgEndMin < asgStartMin;
+
+    const asgStartDt = new Date(`${asgDateStr}T${asgSlot.snapshotStartTime || "06:00"}:00+03:00`);
+    const asgEndDt = new Date(
+      asgIsOvernight
+        ? `${getQatarDateString(asgNextDate)}T${asgSlot.snapshotEndTime || "18:00"}:00+03:00`
+        : `${asgDateStr}T${asgSlot.snapshotEndTime || "18:00"}:00+03:00`
+    );
+
+    // Standard interval overlap: start1 < end2 && start2 < end1
+    if (reqStartDt < asgEndDt && asgStartDt < reqEndDt) {
+      const siteName = asgSlot.site?.name || asgSlot.siteId || "Unspecified Site";
+      const projectName = asgSlot.project?.name || asgSlot.projectId || "Unspecified Project";
+      const compName = employee?.company?.companyName || "Al Hattab Holding";
+      const compCode = employee?.company?.companyCode || "AHH";
+
+      errors.push(
+        `Roster conflict: Overlaps with ${asgSlot.snapshotShiftName} (${asgSlot.snapshotStartTime}-${asgSlot.snapshotEndTime}) at ${siteName} [${asg.assignmentType}].`
+      );
+
+      conflicts.push({
+        assignmentId: asg.id,
+        requirementSlotId: asg.slotId,
+        assignmentType: asg.assignmentType || "PRIMARY",
+        source: "ROSTER",
+        company: compName,
+        companyCode: compCode,
+        operationType: asgSlot.operationType,
+        project: projectName,
+        site: siteName,
+        postOrRequirement: asgSlot.snapshotPosition || "Security / Manpower Post",
+        shiftName: asgSlot.snapshotShiftName || "Shift",
+        startDateTime: asgStartDt.toISOString(),
+        endDateTime: asgEndDt.toISOString(),
+        startTime: asgSlot.snapshotStartTime || "06:00",
+        endTime: asgSlot.snapshotEndTime || "18:00",
+        businessDate: asgDateStr,
+        status: asg.historyStatus || "ACTIVE"
+      });
     }
   }
 
-  // 5. Overlapping Legacy ShiftAssignment
+  // 5. Non-blocking Legacy ShiftAssignment (Historical / Diagnostic context only)
+  const historicalContext: any[] = [];
   const legacyShifts = await tx.shiftAssignment.findMany({
     where: {
       employeeId,
       date: qatarDate,
       assignmentStatus: "ACTIVE"
     },
-    include: { shiftTemplate: true }
+    include: {
+      shiftTemplate: true
+    }
   });
 
   for (const ls of legacyShifts) {
     if (ls.shiftTemplate && areShiftsOverlapping(slot.snapshotStartTime, slot.snapshotEndTime, ls.shiftTemplate.startTime, ls.shiftTemplate.endTime)) {
-      errors.push(`Legacy shift conflict: Overlaps with legacy shift ${ls.shiftTemplate.name} (${ls.shiftTemplate.startTime}-${ls.shiftTemplate.endTime}).`);
-      scheduleConflict = true;
-      break;
+      const shiftName = ls.shiftTemplate.name || "Legacy Shift";
+      const siteName = ls.siteId || "Site";
+
+      historicalContext.push({
+        assignmentId: ls.id,
+        assignmentType: "LEGACY_SHIFT",
+        source: "LEGACY_SHIFT",
+        operationType: slot.operationType,
+        site: siteName,
+        postOrRequirement: "Legacy Scheduled Shift",
+        shiftName: shiftName,
+        startDateTime: `${reqDateStr}T${ls.shiftTemplate.startTime}:00+03:00`,
+        endDateTime: `${reqDateStr}T${ls.shiftTemplate.endTime}:00+03:00`,
+        startTime: ls.shiftTemplate.startTime,
+        endTime: ls.shiftTemplate.endTime,
+        businessDate: reqDateStr,
+        status: ls.assignmentStatus || "ACTIVE",
+        isAuthoritative: false
+      });
     }
   }
 
-  // 6. Overlapping Legacy ManpowerDeploymentAssignment
+  // 6. Non-blocking Legacy ManpowerDeploymentAssignment (Historical / Diagnostic context only)
   const legacyDeployments = await tx.manpowerDeploymentAssignment.findMany({
     where: {
       employeeId,
@@ -811,23 +914,60 @@ export async function checkEmployeeSchedulingEligibility(
         date: qatarDate
       }
     },
-    include: { deployment: { include: { shiftRequirement: true } } }
+    include: {
+      deployment: {
+        include: {
+          shiftRequirement: {
+            include: {
+              site: true
+            }
+          }
+        }
+      }
+    }
   });
 
   for (const ld of legacyDeployments) {
-    const start = ld.deployment.shiftRequirement.shiftStartTime || "06:00";
-    const end = ld.deployment.shiftRequirement.shiftEndTime || "18:00";
+    const start = ld.deployment.shiftRequirement?.shiftStartTime || "06:00";
+    const end = ld.deployment.shiftRequirement?.shiftEndTime || "18:00";
     if (areShiftsOverlapping(slot.snapshotStartTime, slot.snapshotEndTime, start, end)) {
-      errors.push(`Legacy deployment conflict: Overlaps with legacy deployment assignment (${start}-${end}).`);
-      scheduleConflict = true;
-      break;
+      const siteName = ld.deployment.shiftRequirement?.site?.name || ld.deployment.shiftRequirement?.siteId || "Site";
+
+      historicalContext.push({
+        assignmentId: ld.id,
+        assignmentType: "LEGACY_DEPLOYMENT",
+        source: "LEGACY_DEPLOYMENT",
+        operationType: slot.operationType,
+        site: siteName,
+        postOrRequirement: "Legacy Deployment",
+        shiftName: "Legacy Duty",
+        startDateTime: `${reqDateStr}T${start}:00+03:00`,
+        endDateTime: `${reqDateStr}T${end}:00+03:00`,
+        startTime: start,
+        endTime: end,
+        businessDate: reqDateStr,
+        status: ld.deploymentType || "ACTIVE",
+        isAuthoritative: false
+      });
     }
   }
 
-  if (scheduleConflict) {
-    checklist.push({ rule: "SCHEDULE_CONFLICT", status: "FAIL", details: "Overlapping schedule detected" });
+  if (conflicts.length > 0) {
+    checklist.push({
+      rule: "SCHEDULE_CONFLICT",
+      status: "FAIL",
+      details: "Overlapping schedule detected",
+      conflicts,
+      historicalContext: historicalContext.length > 0 ? historicalContext : undefined
+    });
   } else {
-    checklist.push({ rule: "SCHEDULE_CONFLICT", status: "PASS", details: "No overlaps" });
+    checklist.push({
+      rule: "SCHEDULE_CONFLICT",
+      status: "PASS",
+      details: "No overlaps",
+      conflicts: [],
+      historicalContext: historicalContext.length > 0 ? historicalContext : undefined
+    });
   }
 
   // 7. Security specific licensing / gate pass check
@@ -937,7 +1077,9 @@ export async function checkEmployeeSchedulingEligibility(
     canDeploy: errors.length === 0,
     errors,
     warnings,
-    checklist
+    checklist,
+    conflicts,
+    historicalContext
   };
 }
 

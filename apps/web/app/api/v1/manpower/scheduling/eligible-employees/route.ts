@@ -73,7 +73,8 @@ export async function GET(request: Request) {
             canDeploy: check.canDeploy,
             errors: check.errors,
             warnings: check.warnings,
-            checklist: check.checklist
+            checklist: check.checklist,
+            conflicts: (check as any).conflicts || []
           };
         } catch (e) {
           return null;
