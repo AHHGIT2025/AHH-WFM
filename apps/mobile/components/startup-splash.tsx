@@ -1,6 +1,6 @@
-﻿"use client";
+"use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { usePathname, useRouter } from "next/navigation";
 import { BRANDING } from "../lib/branding";
@@ -18,7 +18,12 @@ export const StartupSplash: React.FC<StartupSplashProps> = ({ children }) => {
   const [animationCompleted, setAnimationCompleted] = useState<boolean>(false);
   const [mediaError, setMediaError] = useState<boolean>(false);
   const [reducedMotion, setReducedMotion] = useState<boolean>(false);
+  const [videoLoaded, setVideoLoaded] = useState<boolean>(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
+
+  const completeAnimation = useCallback(() => {
+    setAnimationCompleted(true);
+  }, []);
 
   // 1. Cold start detection & reduced motion check
   useEffect(() => {
@@ -34,19 +39,19 @@ export const StartupSplash: React.FC<StartupSplashProps> = ({ children }) => {
         setReducedMotion(true);
         // Reduced motion: short static display (300ms)
         const timer = setTimeout(() => {
-          setAnimationCompleted(true);
+          completeAnimation();
         }, 300);
         return () => clearTimeout(timer);
       }
 
-      // Default splash animation duration (2.5 seconds)
+      // Safety timeout: 4 seconds video duration + 200ms grace
       const timer = setTimeout(() => {
-        setAnimationCompleted(true);
-      }, 2500);
+        completeAnimation();
+      }, 4200);
 
       return () => clearTimeout(timer);
     }
-  }, []);
+  }, [completeAnimation]);
 
   // 2. Coordinate animation completion with session resolution
   useEffect(() => {
@@ -76,77 +81,98 @@ export const StartupSplash: React.FC<StartupSplashProps> = ({ children }) => {
   return (
     <div
       data-testid="startup-splash-container"
-      className="fixed inset-0 z-[9999] bg-[#031751] flex flex-col items-center justify-between p-8 font-sans text-white select-none overflow-hidden"
+      className="fixed inset-0 z-[9999] bg-[#031751] flex flex-col items-center justify-center font-sans text-white select-none overflow-hidden"
     >
-      {/* Background Subtle Gradient Blobs */}
-      <div className="absolute top-[-15%] left-[-15%] w-[70%] h-[70%] rounded-full bg-[#093FA6] opacity-30 blur-[120px] pointer-events-none" />
-      <div className="absolute bottom-[-15%] right-[-15%] w-[70%] h-[70%] rounded-full bg-[#116BEE] opacity-25 blur-[120px] pointer-events-none" />
+      {/* Background Ambient Layers */}
+      <div className="absolute inset-0 bg-[#031751]" />
 
-      {/* Top Spacer */}
-      <div className="h-10 w-full" />
+      {/* 1. Approved Google Flow MP4 Video Player (9:16 aspect ratio, centered, full-screen fit) */}
+      {!reducedMotion && !mediaError && (
+        <div className="relative w-full h-full max-w-[480px] max-h-screen flex items-center justify-center overflow-hidden z-10">
+          <video
+            ref={videoRef}
+            data-testid="google-flow-video"
+            src="/media/praxivo-wfm-splash.mp4"
+            className={`w-full h-full object-contain aspect-[9/16] transition-opacity duration-300 ${
+              videoLoaded ? "opacity-100" : "opacity-0"
+            }`}
+            autoPlay
+            muted
+            playsInline
+            preload="auto"
+            onLoadedData={() => setVideoLoaded(true)}
+            onEnded={completeAnimation}
+            onError={() => {
+              setMediaError(true);
+              completeAnimation();
+            }}
+          />
 
-      {/* Center Branding / Google Flow Animation Container */}
-      <div className="flex flex-col items-center justify-center text-center relative z-10 my-auto">
-        {/* Google Flow Video Integration Anchor */}
-        {!reducedMotion && !mediaError && (
-          <div className="relative w-28 h-28 mb-6 flex items-center justify-center">
-            {/* Hidden video element that attempts playback if asset is present, falls back gracefully */}
-            <video
-              ref={videoRef}
-              data-testid="google-flow-video"
-              src="/assets/splash/google_flow_splash.mp4"
-              className="w-full h-full object-contain hidden"
-              autoPlay
-              muted
-              playsInline
-              onError={() => setMediaError(true)}
-              onEnded={() => setAnimationCompleted(true)}
-            />
-            {/* Static high-resolution symbol container */}
-            <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-[#093FA6] to-[#116BEE] flex items-center justify-center shadow-2xl border border-white/20">
+          {/* Minimal non-blocking branded loader before video frames decode */}
+          {!videoLoaded && (
+            <div className="absolute inset-0 flex items-center justify-center bg-[#031751]">
+              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#093FA6] to-[#116BEE] flex items-center justify-center shadow-xl border border-white/20">
+                <span className="material-symbols-outlined text-white text-[32px]">domain</span>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 2. Resilient Static Branded Fallback (for reduced motion, error, or loading) */}
+      {(reducedMotion || mediaError) && (
+        <div className="relative z-10 flex flex-col items-center justify-between h-full w-full p-8 text-center max-w-[430px]">
+          {/* Subtle Ambient Blobs */}
+          <div className="absolute top-[-15%] left-[-15%] w-[70%] h-[70%] rounded-full bg-[#093FA6] opacity-30 blur-[120px] pointer-events-none" />
+          <div className="absolute bottom-[-15%] right-[-15%] w-[70%] h-[70%] rounded-full bg-[#116BEE] opacity-25 blur-[120px] pointer-events-none" />
+
+          {/* Top Spacer */}
+          <div className="h-10 w-full" />
+
+          {/* Center Brand Identity */}
+          <div className="flex flex-col items-center justify-center my-auto">
+            <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-[#093FA6] to-[#116BEE] flex items-center justify-center shadow-2xl border border-white/20 mb-6">
               <span className="material-symbols-outlined text-white text-[42px]">domain</span>
             </div>
+            <h1 className="text-3xl font-extrabold tracking-tight text-white mb-1">
+              {BRANDING.PRODUCT_NAME}
+            </h1>
+            <p className="text-xs font-semibold text-[#5FAFD8] uppercase tracking-widest mb-2">
+              {BRANDING.PORTAL_NAME}
+            </p>
           </div>
-        )}
 
-        {/* Static Fallback Symbol (for reduced motion or video error) */}
-        {(reducedMotion || mediaError) && (
-          <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-[#093FA6] to-[#116BEE] flex items-center justify-center shadow-2xl border border-white/20 mb-6">
-            <span className="material-symbols-outlined text-white text-[42px]">domain</span>
+          {/* Bottom Brand Signature */}
+          <div className="flex flex-col items-center w-full space-y-3 pb-4">
+            {status === "loading" && (
+              <div className="flex items-center gap-2 text-xs text-slate-300 font-medium py-1">
+                <div className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                <span>Connecting...</span>
+              </div>
+            )}
+
+            <div className="border-t border-white/10 pt-4 w-full max-w-[280px]">
+              <p className="text-xs font-bold text-white tracking-wide">
+                {BRANDING.BRAND_NAME}
+              </p>
+              <p className="text-[10px] text-slate-300 italic mt-0.5">
+                {BRANDING.TAGLINE}
+              </p>
+              <p className="text-[9px] text-slate-400 opacity-60 mt-1">
+                {BRANDING.COPYRIGHT_TEXT}
+              </p>
+            </div>
           </div>
-        )}
-
-        {/* Product Title */}
-        <h1 className="text-3xl font-extrabold tracking-tight text-white mb-1">
-          {BRANDING.PRODUCT_NAME}
-        </h1>
-        <p className="text-xs font-semibold text-[#5FAFD8] uppercase tracking-widest mb-2">
-          {BRANDING.PORTAL_NAME}
-        </p>
-      </div>
-
-      {/* Bottom Brand Identity & Loading Status */}
-      <div className="flex flex-col items-center text-center relative z-10 w-full space-y-3 pb-4">
-        {/* Loading Indicator when session is still determining */}
-        {status === "loading" && (
-          <div className="flex items-center gap-2 text-xs text-slate-300 font-medium py-1">
-            <div className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-            <span>Connecting...</span>
-          </div>
-        )}
-
-        <div className="border-t border-white/10 pt-4 w-full max-w-[280px]">
-          <p className="text-xs font-bold text-white tracking-wide">
-            {BRANDING.BRAND_NAME}
-          </p>
-          <p className="text-[10px] text-slate-300 italic mt-0.5">
-            {BRANDING.TAGLINE}
-          </p>
-          <p className="text-[9px] text-slate-400 opacity-60 mt-1">
-            {BRANDING.COPYRIGHT_TEXT}
-          </p>
         </div>
-      </div>
+      )}
+
+      {/* 3. Restrained Session Loading Status if Video Finishes before Session Resolves */}
+      {animationCompleted && status === "loading" && !reducedMotion && !mediaError && (
+        <div className="absolute bottom-10 z-20 flex items-center gap-2 bg-[#031751]/80 backdrop-blur-md px-4 py-2 rounded-full border border-white/10 text-xs text-slate-300 font-medium shadow-lg">
+          <div className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+          <span>Connecting...</span>
+        </div>
+      )}
     </div>
   );
 };

@@ -1,22 +1,31 @@
-﻿import fs from "fs";
+import fs from "fs";
 import path from "path";
 
 describe("WFM Mobile Startup Experience & Animated Splash Verification", () => {
   const rootDir = path.resolve(__dirname, "../..");
 
-  test("1. StartupSplash component exists and defines Praxivo Navy backdrop and branding", () => {
+  test("1. Production MP4 asset exists in apps/mobile/public/media/praxivo-wfm-splash.mp4", () => {
+    const mp4File = path.join(rootDir, "apps/mobile/public/media/praxivo-wfm-splash.mp4");
+    expect(fs.existsSync(mp4File)).toBe(true);
+    const stat = fs.statSync(mp4File);
+    expect(stat.size).toBeGreaterThan(1000000); // ~1.74 MB
+  });
+
+  test("2. StartupSplash component references /media/praxivo-wfm-splash.mp4 with required attributes", () => {
     const splashFile = path.join(rootDir, "apps/mobile/components/startup-splash.tsx");
     expect(fs.existsSync(splashFile)).toBe(true);
     const content = fs.readFileSync(splashFile, "utf8");
 
-    expect(content).toContain("bg-[#031751]");
-    expect(content).toContain("BRANDING.PRODUCT_NAME");
-    expect(content).toContain("BRANDING.BRAND_NAME");
-    expect(content).toContain("BRANDING.TAGLINE");
-    expect(content).toContain("BRANDING.COPYRIGHT_TEXT");
+    expect(content).toContain('src="/media/praxivo-wfm-splash.mp4"');
+    expect(content).toContain("autoPlay");
+    expect(content).toContain("muted");
+    expect(content).toContain("playsInline");
+    expect(content).toContain('preload="auto"');
+    expect(content).not.toContain("controls");
+    expect(content).not.toContain("loop");
   });
 
-  test("2. Startup coordinator implements parallel session resolution and cold-launch tracking", () => {
+  test("3. Startup coordinator implements parallel session resolution and cold-launch tracking", () => {
     const splashFile = path.join(rootDir, "apps/mobile/components/startup-splash.tsx");
     const content = fs.readFileSync(splashFile, "utf8");
 
@@ -26,7 +35,7 @@ describe("WFM Mobile Startup Experience & Animated Splash Verification", () => {
     expect(content).toContain("sessionStorage.setItem");
   });
 
-  test("3. Startup coordinator handles reduced motion preference gracefully", () => {
+  test("4. Startup coordinator handles reduced motion preference gracefully", () => {
     const splashFile = path.join(rootDir, "apps/mobile/components/startup-splash.tsx");
     const content = fs.readFileSync(splashFile, "utf8");
 
@@ -34,16 +43,18 @@ describe("WFM Mobile Startup Experience & Animated Splash Verification", () => {
     expect(content).toContain("setReducedMotion(true)");
   });
 
-  test("4. Startup coordinator provides resilient failure fallback for media playback", () => {
+  test("5. Startup coordinator provides resilient failure fallback for media playback", () => {
     const splashFile = path.join(rootDir, "apps/mobile/components/startup-splash.tsx");
     const content = fs.readFileSync(splashFile, "utf8");
 
-    expect(content).toContain("onError={() => setMediaError(true)}");
-    expect(content).toContain("mediaError");
-    expect(content).toContain("google_flow_splash");
+    expect(content).toContain("onError");
+    expect(content).toContain("setMediaError(true)");
+    expect(content).toContain("BRANDING.PRODUCT_NAME");
+    expect(content).toContain("BRANDING.BRAND_NAME");
+    expect(content).toContain("BRANDING.TAGLINE");
   });
 
-  test("5. Mobile RootLayout integrates StartupSplash component within AuthProvider", () => {
+  test("6. Mobile RootLayout integrates StartupSplash component within AuthProvider", () => {
     const layoutFile = path.join(rootDir, "apps/mobile/app/layout.tsx");
     const content = fs.readFileSync(layoutFile, "utf8");
 
@@ -51,10 +62,18 @@ describe("WFM Mobile Startup Experience & Animated Splash Verification", () => {
     expect(content).toContain("<StartupSplash>");
   });
 
-  test("6. Startup coordinator uses replace navigation to protect browser history", () => {
+  test("7. Startup coordinator uses replace navigation to protect browser history", () => {
     const splashFile = path.join(rootDir, "apps/mobile/components/startup-splash.tsx");
     const content = fs.readFileSync(splashFile, "utf8");
 
     expect(content).toContain('router.replace("/login")');
+  });
+
+  test("8. Video presentation maintains 9:16 aspect ratio on Praxivo Navy background", () => {
+    const splashFile = path.join(rootDir, "apps/mobile/components/startup-splash.tsx");
+    const content = fs.readFileSync(splashFile, "utf8");
+
+    expect(content).toContain("aspect-[9/16]");
+    expect(content).toContain("bg-[#031751]");
   });
 });
