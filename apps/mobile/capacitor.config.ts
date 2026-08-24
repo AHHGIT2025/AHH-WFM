@@ -7,6 +7,11 @@ const config: CapacitorConfig = {
   server: {
     url: 'http://10.10.50.24:3201',
     cleartext: true,
+    allowNavigation: [
+      '10.10.50.24',
+      '10.10.50.24:*',
+      '*.alhattabholding.com',
+    ],
   },
   android: {
     allowMixedContent: true,
