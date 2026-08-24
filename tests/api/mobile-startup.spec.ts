@@ -90,4 +90,27 @@ describe("WFM Mobile Startup Experience & Animated Splash Verification", () => {
     const publicStat = fs.statSync(publicAssetFile);
     expect(androidStat.size).toBe(publicStat.size);
   });
+
+  test("10. Offline fallback HTML contains Praxivo palette and zero unapproved gold (#CBA135)", () => {
+    const wwwIndex = path.join(rootDir, "apps/mobile/www/index.html");
+    const androidIndex = path.join(rootDir, "apps/mobile/android/app/src/main/assets/public/index.html");
+
+    expect(fs.existsSync(wwwIndex)).toBe(true);
+    expect(fs.existsSync(androidIndex)).toBe(true);
+
+    const wwwContent = fs.readFileSync(wwwIndex, "utf8");
+    const androidContent = fs.readFileSync(androidIndex, "utf8");
+
+    expect(wwwContent).not.toContain("CBA135");
+    expect(wwwContent).not.toContain("#CBA135");
+    expect(wwwContent).toContain("#031751");
+    expect(wwwContent).toContain("#5FAFD8");
+    expect(wwwContent).toContain("Praxivo Labs");
+    expect(wwwContent).toContain("WFM");
+
+    expect(androidContent).not.toContain("CBA135");
+    expect(androidContent).not.toContain("#CBA135");
+    expect(androidContent).toContain("#031751");
+    expect(androidContent).toContain("#5FAFD8");
+  });
 });
