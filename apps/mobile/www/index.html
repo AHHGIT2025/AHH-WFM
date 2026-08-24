@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>WFM</title>
+  <title>WFM — Praxivo Labs</title>
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-      background-color: #0f172a;
-      color: #f8fafc;
+      background-color: #031751;
+      color: #FFFFFF;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -18,29 +18,68 @@
       padding: 24px;
       text-align: center;
     }
-    .card {
-      background-color: #1e293b;
-      border-radius: 12px;
-      padding: 32px 24px;
-      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+    .container {
       max-width: 400px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    .logo-badge {
+      font-size: 2.5rem;
+      font-weight: 800;
+      letter-spacing: 0.1em;
+      color: #FFFFFF;
+      margin-bottom: 4px;
+    }
+    .brand-title {
+      font-size: 0.85rem;
+      font-weight: 600;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: #CBA135;
+      margin-bottom: 24px;
+    }
+    .card {
+      background-color: #072274;
+      border: 1px solid #1B365D;
+      border-radius: 16px;
+      padding: 28px 24px;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4);
+      width: 100%;
+      box-sizing: border-box;
     }
     h1 {
-      font-size: 1.25rem;
-      margin-bottom: 12px;
-      color: #ef4444;
+      font-size: 1.15rem;
+      margin: 0 0 10px 0;
+      color: #FFFFFF;
+      font-weight: 600;
     }
     p {
-      font-size: 0.95rem;
+      font-size: 0.9rem;
       line-height: 1.5;
-      color: #94a3b8;
+      color: #D1D5DB;
+      margin: 0;
+    }
+    .footer {
+      margin-top: 32px;
+      font-size: 0.75rem;
+      color: #9CA3AF;
+      line-height: 1.4;
     }
   </style>
 </head>
 <body>
-  <div class="card">
-    <h1>Connection Error</h1>
-    <p>WFM could not connect to the application server.<br>Connect to the network or VPN and try again.</p>
+  <div class="container">
+    <div class="logo-badge">WFM</div>
+    <div class="brand-title">Praxivo Labs</div>
+    <div class="card">
+      <h1>Server Connection Offline</h1>
+      <p>WFM could not reach the server.<br>Please check your network or VPN connection and retry.</p>
+    </div>
+    <div class="footer">
+      <div>Turning Ideas into Intelligence</div>
+      <div>&copy; 2026 Praxivo Labs. All rights reserved.</div>
+    </div>
   </div>
 </body>
 </html>

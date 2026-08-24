@@ -76,4 +76,18 @@ describe("WFM Mobile Startup Experience & Animated Splash Verification", () => {
     expect(content).toContain("aspect-[9/16]");
     expect(content).toContain("bg-[#031751]");
   });
+
+  test("9. MP4 asset is packaged locally in Android assets for offline APK startup", () => {
+    const androidAssetFile = path.join(rootDir, "apps/mobile/android/app/src/main/assets/public/media/praxivo-wfm-splash.mp4");
+    const publicAssetFile = path.join(rootDir, "apps/mobile/public/media/praxivo-wfm-splash.mp4");
+    const wwwAssetFile = path.join(rootDir, "apps/mobile/www/media/praxivo-wfm-splash.mp4");
+
+    expect(fs.existsSync(androidAssetFile)).toBe(true);
+    expect(fs.existsSync(publicAssetFile)).toBe(true);
+    expect(fs.existsSync(wwwAssetFile)).toBe(true);
+
+    const androidStat = fs.statSync(androidAssetFile);
+    const publicStat = fs.statSync(publicAssetFile);
+    expect(androidStat.size).toBe(publicStat.size);
+  });
 });
