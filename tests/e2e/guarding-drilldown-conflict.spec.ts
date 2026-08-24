@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 
-test.describe("AHH WFM — Guarding Manpower Drill-Down & Schedule Conflict Transparency", () => {
+test.describe("WFM — Guarding Manpower Drill-Down & Schedule Conflict Transparency", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("http://localhost:3100/manpower/security-guarding/manpower");
     await page.waitForLoadState("networkidle");

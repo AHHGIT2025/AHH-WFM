@@ -232,7 +232,7 @@ export default function AssignedTasksPage() {
           latitude: lat,
           longitude: lng,
           gpsAccuracyMeters: accuracy,
-          deviceInfo: "Mobile App Web Client (AHH WFM Mobile) (Offline)"
+          deviceInfo: "Mobile App Web Client (WFM Mobile) (Offline)"
         },
         assignmentId: activeTaskForModal.id,
         executionId: execution?.id || undefined,
@@ -274,7 +274,7 @@ export default function AssignedTasksPage() {
           latitude: lat,
           longitude: lng,
           gpsAccuracyMeters: accuracy,
-          deviceInfo: "Mobile App Web Client (AHH WFM Mobile)"
+          deviceInfo: "Mobile App Web Client (WFM Mobile)"
         })
       });
  
@@ -342,7 +342,7 @@ export default function AssignedTasksPage() {
           latitude: lat,
           longitude: lng,
           gpsAccuracyMeters: accuracy,
-          deviceInfo: "Mobile App Web Client (AHH WFM Mobile Patrol) (Offline)"
+          deviceInfo: "Mobile App Web Client (WFM Mobile Patrol) (Offline)"
         },
         assignmentId: activePatrolForModal.id,
         operationType: activePatrolForModal.operationType
@@ -410,7 +410,7 @@ export default function AssignedTasksPage() {
           latitude: lat,
           longitude: lng,
           gpsAccuracyMeters: accuracy,
-          deviceInfo: "Mobile App Web Client (AHH WFM Mobile Patrol)"
+          deviceInfo: "Mobile App Web Client (WFM Mobile Patrol)"
         })
       });
  
@@ -1112,7 +1112,7 @@ export default function AssignedTasksPage() {
       latitude: lat,
       longitude: lng,
       gpsAccuracyMeters: accuracy,
-      deviceInfo: "Mobile App Web Client (AHH WFM Mobile)",
+      deviceInfo: "Mobile App Web Client (WFM Mobile)",
       remarks,
       status: submitStatus
     };

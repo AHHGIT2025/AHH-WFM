@@ -2,7 +2,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
   appId: 'qa.com.alhattab.ahhwfm',
-  appName: 'AHH WFM Mobile',
+  appName: 'WFM',
   webDir: 'www',
   server: {
     url: 'http://10.10.50.24:3201',

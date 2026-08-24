@@ -22,7 +22,7 @@ export default function SecFacNotificationSettingsPage() {
     channel: "EMAIL",
     provider: "M365_SMTP",
     isEnabled: false,
-    senderName: "AHH WFM Alerts",
+    senderName: "WFM Alerts",
     senderAddress: "alerts@alhattab.com.qa",
     maximumAttempts: "3",
     baseRetryDelaySeconds: "60"
@@ -271,7 +271,7 @@ export default function SecFacNotificationSettingsPage() {
                         channel: ch,
                         provider: cfg?.provider || (ch === "EMAIL" ? "M365_SMTP" : ch === "PUSH" ? "FCM_CAPACITOR" : ch === "WHATSAPP" ? "META_CLOUD_API" : "ENTERPRISE_SMS_GATEWAY"),
                         isEnabled,
-                        senderName: cfg?.senderName || "AHH WFM Alerts",
+                        senderName: cfg?.senderName || "WFM Alerts",
                         senderAddress: cfg?.senderAddress || "alerts@alhattab.com.qa",
                         maximumAttempts: String(cfg?.maximumAttempts || 3),
                         baseRetryDelaySeconds: String(cfg?.baseRetryDelaySeconds || 60)

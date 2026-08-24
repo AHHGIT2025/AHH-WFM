@@ -11,7 +11,7 @@ test.describe('ADMIN Navigation & Layout Verification', () => {
     await page.goto('/');
 
     // Header logo & navigation
-    await expect(page.getByRole('link', { name: /AHH WFM/i }).first()).toBeVisible();
+    await expect(page.getByRole('link', { name: /WFM/i }).first()).toBeVisible();
     await expect(page.getByRole('link', { name: /Overview/i })).toBeVisible();
 
     // Sidebar Title
@@ -47,7 +47,7 @@ test.describe('ADMIN Navigation & Layout Verification', () => {
   test('Direct URL navigation for authorized ADMIN user', async ({ page }) => {
     await page.goto('/settings/masters');
     await expect(page).toHaveURL(/\/settings\/masters/);
-    await expect(page.getByRole('link', { name: /AHH WFM/i }).first()).toBeVisible();
+    await expect(page.getByRole('link', { name: /WFM/i }).first()).toBeVisible();
   });
 });
 

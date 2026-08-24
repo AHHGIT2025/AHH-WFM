@@ -24,7 +24,7 @@ export default function MobilePunchPage() {
             setEmployeeInfo({
                 id: "EMP002",
                 name: "Jane Smith",
-                companyName: "AHH WFM",
+                companyName: "Al Hattab Holding",
                 allowedLocations: allowed
             });
         }

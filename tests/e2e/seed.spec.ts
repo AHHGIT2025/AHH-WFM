@@ -24,7 +24,7 @@ test.describe('Playwright Planner Seed Initialization @planner-seed', () => {
     await expect(page).not.toHaveURL(/\/login/);
 
     // 4. Verify main layout/dashboard is ready using role-based locators
-    await expect(page.getByRole('link', { name: /AHH WFM/i }).first()).toBeVisible();
+    await expect(page.getByRole('link', { name: /WFM/i }).first()).toBeVisible();
     await expect(page.getByRole('link', { name: /Workforce Directory/i })).toBeVisible();
 
     // Seed state ready for Planner exploration

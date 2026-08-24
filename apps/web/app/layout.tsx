@@ -3,9 +3,11 @@ import AuthProvider from "../components/auth-provider";
 import { LayoutShell } from "../components/layout-shell";
 import "./globals.css";
 
+import { BRANDING } from "@/lib/branding";
+
 export const metadata: Metadata = {
-  title: "AHH WFM | Command Center",
-  description: "Enterprise Workforce Management Command Center & SAP SuccessFactors Sync Hub",
+  title: `${BRANDING.PRODUCT_NAME} | Command Center`,
+  description: BRANDING.DESCRIPTION,
 };
 
 export default function RootLayout({

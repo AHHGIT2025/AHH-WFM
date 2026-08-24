@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
 import { filterNavigationByPermissions } from "@/lib/permissions";
+import { BRANDING } from "@/lib/branding";
 
 
 // Class merging helper
@@ -241,7 +242,7 @@ export const LayoutShell: React.FC<{ children: React.ReactNode }> = ({ children 
           </button>
           <Link href="/" className="text-xl font-bold tracking-tight text-primary flex items-center gap-2 hover:opacity-90 transition-opacity">
             <span className="material-symbols-outlined text-secondary">domain</span>
-            AHH WFM
+            {BRANDING.PRODUCT_NAME}
           </Link>
           <nav className="hidden md:flex items-center gap-6 h-full text-sm font-medium">
             <Link
@@ -393,7 +394,11 @@ export const LayoutShell: React.FC<{ children: React.ReactNode }> = ({ children 
 
       {/* Footer */}
       <footer className="bg-surface-container-low border-t border-border-subtle py-4 w-full flex flex-col md:flex-row justify-between px-6 md:px-margin-desktop items-center gap-2 z-10 mt-auto md:pl-[18rem]">
-        <p className="text-xs text-on-surface-variant font-medium">© 2026 AHH WFM Enterprise. All rights reserved.</p>
+        <div className="flex flex-col sm:flex-row items-center sm:items-baseline gap-1 sm:gap-2">
+          <p className="text-xs text-on-surface-variant font-medium">{BRANDING.COPYRIGHT_TEXT}</p>
+          <span className="hidden sm:inline text-on-surface-variant/40 text-xs">•</span>
+          <p className="text-xs text-on-surface-variant/80 italic">{BRANDING.TAGLINE}</p>
+        </div>
         <div className="flex gap-6 text-xs text-on-surface-variant font-medium">
           <Link href="/settings" className="hover:text-primary transition-colors">Settings</Link>
           <Link href="#" className="hover:text-primary transition-colors">Privacy Policy</Link>

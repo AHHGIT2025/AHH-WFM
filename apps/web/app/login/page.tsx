@@ -3,6 +3,7 @@
 import React, { useState, Suspense, useEffect } from "react";
 import { signIn, useSession } from "next-auth/react";
 import { useSearchParams, useRouter } from "next/navigation";
+import { BRANDING } from "@/lib/branding";
 
 function LoginForm() {
   const searchParams = useSearchParams();
@@ -69,9 +70,13 @@ function LoginForm() {
       <div className="text-center mb-8">
         <div className="flex items-center justify-center gap-2 text-2xl font-bold tracking-tight text-white mb-2">
           <span className="material-symbols-outlined text-[#0058be] text-[32px]">domain</span>
-          AHH WFM
+          {BRANDING.PRODUCT_NAME}
         </div>
-        <p className="text-xs text-slate-400 font-medium uppercase tracking-widest">Enterprise Command Center</p>
+        <p className="text-xs text-slate-300 font-medium uppercase tracking-widest">{BRANDING.PORTAL_NAME}</p>
+        <p className="text-xs text-slate-400 mt-1">
+          by <span className="font-semibold text-white">{BRANDING.BRAND_NAME}</span>
+        </p>
+        <p className="text-[11px] text-slate-400 italic mt-0.5">{BRANDING.TAGLINE}</p>
       </div>
 
       {/* Error Banners */}
@@ -148,8 +153,9 @@ function LoginForm() {
         </button>
       </form>
 
-      <div className="mt-8 text-center border-t border-slate-800/80 pt-4">
-        <p className="text-[10px] text-slate-500 font-semibold">AHH WFM Secure Portal · Version 1.0.0</p>
+      <div className="mt-8 text-center border-t border-slate-800/80 pt-4 space-y-1">
+        <p className="text-[10px] text-slate-400 font-semibold">{BRANDING.PRODUCT_NAME} Secure Portal · {BRANDING.VERSION_TEXT}</p>
+        <p className="text-[10px] text-slate-500">{BRANDING.COPYRIGHT_TEXT}</p>
       </div>
     </div>
   );

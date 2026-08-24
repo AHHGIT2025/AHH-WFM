@@ -306,7 +306,7 @@ export default function DashboardPage() {
               </Badge>
             )}
           </div>
-          <p className="text-[11px] text-on-surface-variant mt-0.5">AHH WFM Global Command Console · Last Updated: {new Date(data.lastUpdated).toLocaleTimeString()}</p>
+          <p className="text-[11px] text-on-surface-variant mt-0.5">WFM Global Command Console · Last Updated: {new Date(data.lastUpdated).toLocaleTimeString()}</p>
         </div>
 
         {/* Global Operations Dynamic Filters */}

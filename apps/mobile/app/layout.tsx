@@ -2,11 +2,12 @@ import type { Metadata } from "next";
 import AuthProvider from "../components/auth-provider";
 import { MobileShell } from "../components/mobile-shell";
 import SecfacSessionInitializer from "../components/secfac-session-initializer";
+import { BRANDING } from "../lib/branding";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Al Hattab Geo-Attendance System",
-  description: "Al Hattab Holding Employee Portal & Real-time Location Attendance Tracker",
+  title: BRANDING.PRODUCT_NAME,
+  description: BRANDING.DESCRIPTION,
 };
 
 export default function RootLayout({

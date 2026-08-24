@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-test.describe('AHH WFM Web E2E Navigation', () => {
+test.describe('WFM Web E2E Navigation', () => {
   test('should load login page and navigate through all main modules', async ({ page }) => {
     const email = process.env.PW_ADMIN_EMAIL || 'admin@alhattab.qa';
     const password = process.env.PW_ADMIN_PASSWORD;

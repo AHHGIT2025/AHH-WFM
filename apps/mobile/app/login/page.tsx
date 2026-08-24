@@ -3,6 +3,7 @@
 import React, { useState, Suspense } from "react";
 import { signIn } from "next-auth/react";
 import { useSearchParams, useRouter } from "next/navigation";
+import { BRANDING } from "../../lib/branding";
 
 function MobileLoginForm() {
   const searchParams = useSearchParams();
@@ -54,8 +55,12 @@ function MobileLoginForm() {
         <div className="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-2 text-primary">
           <span className="material-symbols-outlined text-[26px]">fingerprint</span>
         </div>
-        <h2 className="text-base font-bold text-primary">Al Hattab Employee Portal</h2>
-        <p className="text-[10px] text-on-surface-variant leading-tight mt-0.5">Secure Geo-Attendance Client</p>
+        <h2 className="text-base font-bold text-primary">{BRANDING.PRODUCT_NAME}</h2>
+        <p className="text-[10px] text-on-surface-variant font-medium mt-0.5">{BRANDING.PORTAL_NAME}</p>
+        <p className="text-[10px] text-on-surface-variant/80 mt-1">
+          by <span className="font-semibold text-primary">{BRANDING.BRAND_NAME}</span>
+        </p>
+        <p className="text-[9px] text-on-surface-variant/70 italic mt-0.5">{BRANDING.TAGLINE}</p>
       </div>
 
       {/* Error Notification */}
@@ -131,8 +136,9 @@ function MobileLoginForm() {
         </button>
       </form>
 
-      <div className="mt-6 text-center border-t border-outline-variant/30 pt-3">
-        <p className="text-[9px] text-on-surface-variant/40 font-semibold">Security Level: High (SSL & JWT)</p>
+      <div className="mt-6 text-center border-t border-outline-variant/30 pt-3 space-y-1">
+        <p className="text-[9px] text-on-surface-variant/50 font-semibold">{BRANDING.PRODUCT_NAME} Secure Client · {BRANDING.VERSION_TEXT}</p>
+        <p className="text-[8px] text-on-surface-variant/40">{BRANDING.COPYRIGHT_TEXT}</p>
       </div>
     </div>
   );
@@ -143,7 +149,7 @@ export default function LoginPage() {
     <div className="flex flex-col flex-grow min-h-[580px] bg-background justify-center p-4">
       <Suspense fallback={
         <div className="w-full max-w-[380px] mx-auto bg-surface border border-outline-variant/35 rounded-2xl p-6 text-center text-[11px]">
-          Loading employee portal...
+          Loading {BRANDING.PRODUCT_NAME} portal...
         </div>
       }>
         <MobileLoginForm />

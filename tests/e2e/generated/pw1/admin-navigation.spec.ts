@@ -11,7 +11,7 @@ test.describe('ADMIN Navigation & Layout Verification (Agent Generated)', () => 
   test('Dashboard main layout elements are visible for ADMIN', async ({ page }) => {
     // 1. Navigate to "/" URL
     await page.goto('/');
-    await expect(page.getByRole('link', { name: /AHH WFM/i }).first()).toBeVisible();
+    await expect(page.getByRole('link', { name: /WFM/i }).first()).toBeVisible();
     await expect(page.getByRole('link', { name: /Overview/i })).toBeVisible();
     await expect(page.getByText('WFM Control Suite')).toBeVisible();
   });
@@ -45,7 +45,7 @@ test.describe('ADMIN Navigation & Layout Verification (Agent Generated)', () => 
   test('Direct URL navigation for authorized ADMIN user', async ({ page }) => {
     await page.goto('/settings/masters');
     await expect(page).toHaveURL(/\/settings\/masters/);
-    await expect(page.getByRole('link', { name: /AHH WFM/i }).first()).toBeVisible();
+    await expect(page.getByRole('link', { name: /WFM/i }).first()).toBeVisible();
   });
 });
 

@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-test.describe('AHH WFM Mobile E2E Duty & Geofence Checks', () => {
+test.describe('WFM Mobile E2E Duty & Geofence Checks', () => {
   test('should load mobile dashboard and punch pages correctly', async ({ page }) => {
     const email = process.env.PW_ADMIN_EMAIL || 'admin@alhattab.qa';
     const password = process.env.PW_ADMIN_PASSWORD;

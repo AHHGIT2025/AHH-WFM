@@ -3,6 +3,7 @@
 import React, { useRef, useState } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { useProfile } from "../../context/ProfileContext";
+import { BRANDING } from "../../lib/branding";
 
 export default function ProfilePage() {
   const { data: session } = useSession();
@@ -209,10 +210,11 @@ export default function ProfilePage() {
         <span className="text-[11px]">Sign Out Securely</span>
       </button>
 
-      <div className="text-center mt-6 opacity-60">
+      <div className="text-center mt-6 space-y-1">
         <p className="text-[9px] text-on-surface-variant font-bold uppercase tracking-widest">{data?.company?.name || "Al Hattab Holding"}</p>
-        <p className="text-[9px] text-on-surface-variant italic">"Endless Confidence"</p>
-        <p className="text-[8px] text-on-surface-variant mt-2">App Version 1.0.0 • Mobile Client</p>
+        <p className="text-[10px] text-on-surface-variant font-medium">{BRANDING.COPYRIGHT_TEXT}</p>
+        <p className="text-[9px] text-on-surface-variant/80 italic">{BRANDING.TAGLINE}</p>
+        <p className="text-[8px] text-on-surface-variant/60 mt-1">{BRANDING.PRODUCT_NAME} Mobile · {BRANDING.VERSION_TEXT}</p>
       </div>
     </div>
   );

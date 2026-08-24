@@ -29,7 +29,7 @@ export class LocationService {
    * Explanatory message required before triggering the system permission prompt
    */
   public static readonly PERMISSION_EXPLANATION =
-    "AHH WFM uses your location to verify that attendance is recorded at the assigned work location.";
+    "WFM uses your location to verify that attendance is recorded at the assigned work location.";
 
   /**
    * User-facing error message mapping
@@ -38,7 +38,7 @@ export class LocationService {
     PERMISSION_DENIED:
       "Location permission is denied. Enable it in Android Settings.",
     PERMANENTLY_DENIED:
-      "Location permission is denied. Enable it in Android Settings -> Apps -> AHH WFM Mobile -> Permissions.",
+      "Location permission is denied. Enable it in Android Settings -> Apps -> WFM -> Permissions.",
     APPROXIMATE_ONLY:
       "Precise location is required for attendance verification. Enable Precise location in Android Settings.",
     LOCATION_DISABLED:
