@@ -5,8 +5,16 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    --praxivo-navy: #031751;
+    --praxivo-core-blue: #093FA6;
+    --praxivo-innovation-blue: #116BEE;
+    --praxivo-intelligence-violet: #4643F3;
+    --praxivo-digital-cyan: #5FAFD8;
+  }
+
   body {
-    @apply bg-gray-50 text-gray-900 font-sans;
+    @apply bg-slate-50 text-slate-900 font-sans;
   }
 }
 

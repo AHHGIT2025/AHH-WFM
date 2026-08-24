@@ -69,14 +69,14 @@ function LoginForm() {
       {/* Header */}
       <div className="text-center mb-8">
         <div className="flex items-center justify-center gap-2 text-2xl font-bold tracking-tight text-white mb-2">
-          <span className="material-symbols-outlined text-[#0058be] text-[32px]">domain</span>
+          <span className="material-symbols-outlined text-[#5FAFD8] text-[32px]">domain</span>
           {BRANDING.PRODUCT_NAME}
         </div>
         <p className="text-xs text-slate-300 font-medium uppercase tracking-widest">{BRANDING.PORTAL_NAME}</p>
-        <p className="text-xs text-slate-400 mt-1">
+        <p className="text-xs text-slate-300 mt-1">
           by <span className="font-semibold text-white">{BRANDING.BRAND_NAME}</span>
         </p>
-        <p className="text-[11px] text-slate-400 italic mt-0.5">{BRANDING.TAGLINE}</p>
+        <p className="text-[11px] text-slate-300 italic mt-0.5">{BRANDING.TAGLINE}</p>
       </div>
 
       {/* Error Banners */}
@@ -97,7 +97,7 @@ function LoginForm() {
       {/* Microsoft Entra ID OAuth Sign In */}
       <button
         onClick={handleMicrosoftLogin}
-        className="w-full flex items-center justify-center gap-3 bg-white text-slate-900 font-bold py-3 px-4 rounded-xl shadow-lg hover:bg-slate-100 transition-colors active:scale-[0.98] transition-transform text-xs"
+        className="w-full flex items-center justify-center gap-3 bg-white text-[#031751] font-bold py-3 px-4 rounded-xl shadow-lg hover:bg-slate-100 transition-colors active:scale-[0.98] transition-transform text-xs"
       >
         {/* Mock Microsoft Icon */}
         <svg className="w-4 h-4 shrink-0" viewBox="0 0 23 23">
@@ -111,15 +111,15 @@ function LoginForm() {
 
       {/* Divider */}
       <div className="flex items-center my-6">
-        <div className="flex-grow h-px bg-slate-800"></div>
-        <span className="text-[10px] text-slate-500 font-bold uppercase px-3">or credentials bypass</span>
-        <div className="flex-grow h-px bg-slate-800"></div>
+        <div className="flex-grow h-px bg-slate-700/80"></div>
+        <span className="text-[10px] text-slate-400 font-bold uppercase px-3">or credentials bypass</span>
+        <div className="flex-grow h-px bg-slate-700/80"></div>
       </div>
 
       {/* Credentials Form */}
       <form onSubmit={handleCredentialsSubmit} className="space-y-4">
         <div>
-          <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1.5 tracking-wider">Email Address</label>
+          <label className="block text-[10px] uppercase font-bold text-slate-300 mb-1.5 tracking-wider">Email Address</label>
           <input
             type="email"
             required
@@ -127,12 +127,12 @@ function LoginForm() {
             placeholder="e.g. admin@alhattab.qa"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full px-4 py-3 bg-slate-950/40 border border-slate-800 rounded-xl focus:outline-none focus:border-[#0058be] text-xs font-medium placeholder-slate-600 transition-colors"
+            className="w-full px-4 py-3 bg-[#031751]/90 border border-slate-700 rounded-xl focus:outline-none focus:border-[#116BEE] text-xs font-medium placeholder-slate-400 transition-colors"
           />
         </div>
 
         <div>
-          <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1.5 tracking-wider">Password</label>
+          <label className="block text-[10px] uppercase font-bold text-slate-300 mb-1.5 tracking-wider">Password</label>
           <input
             type="password"
             required
@@ -140,22 +140,22 @@ function LoginForm() {
             placeholder="••••••••"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full px-4 py-3 bg-slate-950/40 border border-slate-800 rounded-xl focus:outline-none focus:border-[#0058be] text-xs font-medium placeholder-slate-600 transition-colors"
+            className="w-full px-4 py-3 bg-[#031751]/90 border border-slate-700 rounded-xl focus:outline-none focus:border-[#116BEE] text-xs font-medium placeholder-slate-400 transition-colors"
           />
         </div>
 
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-[#0058be] text-white font-bold py-3 rounded-xl hover:bg-[#004bb3] transition-colors active:scale-[0.98] transition-transform text-xs flex items-center justify-center"
+          className="w-full bg-[#093FA6] text-white font-bold py-3 rounded-xl hover:bg-[#116BEE] transition-colors active:scale-[0.98] transition-transform text-xs flex items-center justify-center shadow-md"
         >
           {loading ? "Authenticating..." : "Sign In"}
         </button>
       </form>
 
-      <div className="mt-8 text-center border-t border-slate-800/80 pt-4 space-y-1">
-        <p className="text-[10px] text-slate-400 font-semibold">{BRANDING.PRODUCT_NAME} Secure Portal · {BRANDING.VERSION_TEXT}</p>
-        <p className="text-[10px] text-slate-500">{BRANDING.COPYRIGHT_TEXT}</p>
+      <div className="mt-8 text-center border-t border-slate-700/80 pt-4 space-y-1">
+        <p className="text-[10px] text-slate-300 font-semibold">{BRANDING.PRODUCT_NAME} Secure Portal · {BRANDING.VERSION_TEXT}</p>
+        <p className="text-[10px] text-slate-400">{BRANDING.COPYRIGHT_TEXT}</p>
       </div>
     </div>
   );
@@ -163,13 +163,13 @@ function LoginForm() {
 
 export default function LoginPage() {
   return (
-    <div className="min-h-screen bg-[#091426] flex items-center justify-center px-4 font-sans text-white relative overflow-hidden">
+    <div className="min-h-screen bg-[#031751] flex items-center justify-center px-4 font-sans text-white relative overflow-hidden">
       {/* Background Subtle Gradient Blobs */}
-      <div className="absolute top-[-20%] left-[-20%] w-[60%] h-[60%] rounded-full bg-[#0058be] opacity-20 blur-[150px]"></div>
-      <div className="absolute bottom-[-20%] right-[-20%] w-[60%] h-[60%] rounded-full bg-[#800040] opacity-10 blur-[150px]"></div>
+      <div className="absolute top-[-20%] left-[-20%] w-[60%] h-[60%] rounded-full bg-[#093FA6] opacity-30 blur-[150px]"></div>
+      <div className="absolute bottom-[-20%] right-[-20%] w-[60%] h-[60%] rounded-full bg-[#116BEE] opacity-20 blur-[150px]"></div>
 
       <Suspense fallback={
-        <div className="w-full max-w-[450px] bg-slate-900/60 backdrop-blur-xl border border-slate-800 rounded-2xl shadow-2xl p-8 text-center text-xs">
+        <div className="w-full max-w-[450px] bg-[#031751]/80 backdrop-blur-xl border border-slate-700 rounded-2xl shadow-2xl p-8 text-center text-xs">
           Loading authentication gateway...
         </div>
       }>

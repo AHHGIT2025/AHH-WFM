@@ -5,6 +5,14 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    --praxivo-navy: #031751;
+    --praxivo-core-blue: #093FA6;
+    --praxivo-innovation-blue: #116BEE;
+    --praxivo-intelligence-violet: #4643F3;
+    --praxivo-digital-cyan: #5FAFD8;
+  }
+
   body {
     @apply bg-background text-on-surface font-sans;
     -webkit-tap-highlight-color: transparent;
@@ -29,5 +37,5 @@
 }
 
 .text-glow {
-  text-shadow: 0 0 15px rgba(88, 0, 42, 0.2);
+  text-shadow: 0 0 15px rgba(3, 23, 81, 0.15);
 }

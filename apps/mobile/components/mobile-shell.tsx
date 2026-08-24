@@ -45,9 +45,9 @@ const MobileShellInner: React.FC<{ children: React.ReactNode }> = ({ children })
 
         {/* Top App Header */}
         {!isLoginPage && !isChangePasswordPage && (
-          <header className="flex justify-between items-center px-4 sm:pt-10 pt-4 pb-3 w-full sticky top-0 z-50 bg-surface border-b border-outline-variant/30 shadow-sm">
+          <header className="flex justify-between items-center px-4 sm:pt-10 pt-4 pb-3 w-full sticky top-0 z-50 bg-white border-b border-slate-200 shadow-sm">
             <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-full bg-primary-fixed flex items-center justify-center overflow-hidden border border-primary/10">
+              <div className="w-9 h-9 rounded-full bg-[#093FA6]/10 flex items-center justify-center overflow-hidden border border-[#093FA6]/20">
                 {computedProfilePhotoSrc ? (
                   <img
                     alt="Profile"
@@ -55,14 +55,14 @@ const MobileShellInner: React.FC<{ children: React.ReactNode }> = ({ children })
                     src={computedProfilePhotoSrc}
                   />
                 ) : (
-                  <span className="text-primary text-sm font-bold">
+                  <span className="text-[#031751] text-sm font-bold">
                     {(profile?.name || session?.user?.name || "A").charAt(0)}
                   </span>
                 )}
               </div>
               <div>
-                <p className="text-[10px] text-on-surface-variant leading-tight">Welcome back,</p>
-                <h1 className="text-xs font-bold text-primary">{profile?.name || session?.user?.name || "Employee"}</h1>
+                <p className="text-[10px] text-slate-500 leading-tight">Welcome back,</p>
+                <h1 className="text-xs font-bold text-[#031751]">{profile?.name || session?.user?.name || "Employee"}</h1>
               </div>
             </div>
             <div className="flex items-center gap-1">
@@ -71,8 +71,8 @@ const MobileShellInner: React.FC<{ children: React.ReactNode }> = ({ children })
                   href="/command-center"
                   className={`p-2 rounded-full transition-colors relative flex items-center justify-center ${
                     pathname.startsWith("/command-center")
-                      ? "bg-slate-900 text-primary font-bold shadow-sm"
-                      : "hover:bg-surface-container-high text-primary"
+                      ? "bg-[#031751] text-white font-bold shadow-sm"
+                      : "hover:bg-slate-100 text-[#031751]"
                   }`}
                   title="Mobile Command Suite"
                 >
@@ -83,20 +83,20 @@ const MobileShellInner: React.FC<{ children: React.ReactNode }> = ({ children })
                 href="/approvals"
                 className={`p-2 rounded-full transition-colors relative flex items-center justify-center ${
                   pathname.startsWith("/approvals")
-                    ? "bg-primary text-white font-bold shadow-sm"
-                    : "hover:bg-surface-container-high text-primary"
+                    ? "bg-[#4643F3] text-white font-bold shadow-sm"
+                    : "hover:bg-slate-100 text-[#031751]"
                 }`}
                 title="Universal Approval Center"
               >
                 <span className="material-symbols-outlined text-[20px]">approval</span>
               </Link>
-              <button className="p-2 rounded-full hover:bg-surface-container-high text-primary transition-colors relative">
+              <button className="p-2 rounded-full hover:bg-slate-100 text-[#031751] transition-colors relative">
                 <span className="material-symbols-outlined text-[20px]">notifications</span>
-                <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-status-error rounded-full"></span>
+                <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-[#DC2626] rounded-full"></span>
               </button>
               <button
                 onClick={() => signOut({ callbackUrl: "/login" })}
-                className="p-2 rounded-full hover:bg-surface-container-high text-status-error transition-colors"
+                className="p-2 rounded-full hover:bg-slate-100 text-slate-500 hover:text-[#DC2626] transition-colors"
                 title="Sign Out"
               >
                 <span className="material-symbols-outlined text-[20px]">logout</span>
@@ -106,14 +106,14 @@ const MobileShellInner: React.FC<{ children: React.ReactNode }> = ({ children })
         )}
 
         {isChangePasswordPage && (
-          <header className="flex justify-between items-center px-4 sm:pt-10 pt-4 pb-3 w-full sticky top-0 z-50 bg-surface border-b border-outline-variant/30 shadow-sm">
+          <header className="flex justify-between items-center px-4 sm:pt-10 pt-4 pb-3 w-full sticky top-0 z-50 bg-white border-b border-slate-200 shadow-sm">
             <div className="flex items-center gap-2">
-              <span className="material-symbols-outlined text-primary text-[20px]">lock_reset</span>
-              <h1 className="text-xs font-bold text-primary">Change Password Required</h1>
+              <span className="material-symbols-outlined text-[#031751] text-[20px]">lock_reset</span>
+              <h1 className="text-xs font-bold text-[#031751]">Change Password Required</h1>
             </div>
             <button
               onClick={() => signOut({ callbackUrl: "/login" })}
-              className="p-2 rounded-full hover:bg-surface-container-high text-status-error transition-colors"
+              className="p-2 rounded-full hover:bg-slate-100 text-slate-500 hover:text-[#DC2626] transition-colors"
               title="Sign Out"
             >
               <span className="material-symbols-outlined text-[20px]">logout</span>
@@ -122,13 +122,13 @@ const MobileShellInner: React.FC<{ children: React.ReactNode }> = ({ children })
         )}
 
         {/* Scrollable View Area */}
-        <main className="flex-1 overflow-y-auto custom-scrollbar bg-background">
+        <main className="flex-1 overflow-y-auto custom-scrollbar bg-slate-50">
           <div className={`px-4 py-4 ${(isLoginPage || isChangePasswordPage) ? "" : "pb-28"}`}>{children}</div>
         </main>
 
         {/* Persistent Bottom Mobile Navigation Bar */}
         {!isLoginPage && !isChangePasswordPage && (
-          <nav className="absolute bottom-0 left-0 w-full z-50 flex justify-around items-center pt-2 pb-6 px-2 bg-surface rounded-t-xl border-t border-outline-variant/30 shadow-[0_-4px_16px_rgba(88,0,42,0.06)]">
+          <nav className="absolute bottom-0 left-0 w-full z-50 flex justify-around items-center pt-2 pb-6 px-2 bg-white rounded-t-xl border-t border-slate-200 shadow-[0_-4px_16px_rgba(3,23,81,0.06)]">
             {navItems.map((item) => {
               const active = isActive(item.path);
               return (
@@ -136,7 +136,7 @@ const MobileShellInner: React.FC<{ children: React.ReactNode }> = ({ children })
                   key={item.path}
                   href={item.path}
                   className={`flex flex-col items-center justify-center flex-1 py-1 transition-all active:scale-90 duration-150 relative ${
-                    active ? "text-primary font-semibold" : "text-on-surface-variant opacity-60"
+                    active ? "text-[#093FA6] font-semibold" : "text-slate-500 opacity-80 hover:text-[#031751]"
                   }`}
                 >
                   <span
@@ -147,7 +147,7 @@ const MobileShellInner: React.FC<{ children: React.ReactNode }> = ({ children })
                   </span>
                   <span className="text-[10px] tracking-wide mt-0.5">{item.label}</span>
                   {active && (
-                    <span className="w-1 h-1 bg-primary rounded-full absolute bottom-[-4px] left-1/2 -translate-x-1/2"></span>
+                    <span className="w-1 h-1 bg-[#093FA6] rounded-full absolute bottom-[-4px] left-1/2 -translate-x-1/2"></span>
                   )}
                 </Link>
               );

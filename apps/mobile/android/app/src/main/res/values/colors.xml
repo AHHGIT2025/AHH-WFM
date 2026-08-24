@@ -1,0 +1,12 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="colorPrimary">#031751</color>
+    <color name="colorPrimaryDark">#031751</color>
+    <color name="colorAccent">#093FA6</color>
+    <color name="praxivo_navy">#031751</color>
+    <color name="praxivo_core_blue">#093FA6</color>
+    <color name="praxivo_innovation_blue">#116BEE</color>
+    <color name="praxivo_intelligence_violet">#4643F3</color>
+    <color name="praxivo_digital_cyan">#5FAFD8</color>
+    <color name="splash_background">#031751</color>
+</resources>

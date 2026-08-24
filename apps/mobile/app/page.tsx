@@ -121,7 +121,7 @@ export default function MobileDashboard() {
 
       {/* Guard Tour Card */}
       {data?.featureEntitlements?.canViewGuardTour ? (
-        <Link href="/guard-tour" className="bg-[#58002a] text-white p-4 rounded-2xl flex items-center justify-between shadow-sm active:scale-95 transition-transform">
+        <Link href="/guard-tour" className="bg-[#031751] text-white p-4 rounded-2xl flex items-center justify-between shadow-sm active:scale-95 transition-transform">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
               <span className="material-symbols-outlined text-[20px]">verified_user</span>
@@ -147,7 +147,7 @@ export default function MobileDashboard() {
             <span className="text-[10px] font-bold text-on-surface">Assigned Tasks</span>
           </Link>
           <Link href="/nfc-scan" className="bg-surface-container-low border border-outline-variant/20 p-3 rounded-xl flex items-center gap-2 active:scale-95 transition-transform">
-            <span className="material-symbols-outlined text-[#00A3FF] text-[20px]">nfc</span>
+            <span className="material-symbols-outlined text-[#116BEE] text-[20px]">nfc</span>
             <span className="text-[10px] font-bold text-on-surface">NFC Scan</span>
           </Link>
           <Link href="/secfac-post-orders" className="bg-surface-container-low border border-outline-variant/20 p-3 rounded-xl flex items-center gap-2 active:scale-95 transition-transform">
@@ -160,7 +160,7 @@ export default function MobileDashboard() {
           </Link>
           {((session?.user as any)?.role === "SUPERVISOR" || (session?.user as any)?.role === "ADMIN" || (session?.user as any)?.role === "SUPER_ADMIN" || hasClientPermission(session?.user as any, "secfac.briefings.view")) && (
             <Link href="/secfac-briefing" className="bg-surface-container-low border border-outline-variant/20 p-3 rounded-xl flex items-center gap-2 active:scale-95 transition-transform">
-              <span className="material-symbols-outlined text-[#00A3FF] text-[20px]">groups</span>
+              <span className="material-symbols-outlined text-[#116BEE] text-[20px]">groups</span>
               <span className="text-[10px] font-bold text-on-surface">Shift Briefing</span>
             </Link>
           )}
@@ -213,7 +213,7 @@ export default function MobileDashboard() {
 
       {/* Supervisor Link if Admin/Supervisor */}
       {(session?.user as any)?.role === "SUPERVISOR" || (session?.user as any)?.role === "ADMIN" || (session?.user as any)?.role === "SUPER_ADMIN" ? (
-        <Link href="/supervisor" className="bg-[#b89d7e] text-white p-4 rounded-2xl flex items-center justify-between shadow-sm active:scale-95 transition-transform">
+        <Link href="/supervisor" className="bg-[#093FA6] text-white p-4 rounded-2xl flex items-center justify-between shadow-sm active:scale-95 transition-transform">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center">
               <span className="material-symbols-outlined text-[20px]">groups</span>

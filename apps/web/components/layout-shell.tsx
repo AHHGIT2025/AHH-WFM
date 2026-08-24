@@ -232,46 +232,46 @@ export const LayoutShell: React.FC<{ children: React.ReactNode }> = ({ children 
   return (
     <div className="min-h-screen bg-surface flex flex-col font-sans">
       {/* Header Bar */}
-      <header className="bg-surface-container-lowest border-b border-border-subtle fixed top-0 left-0 right-0 z-50 h-16 flex items-center justify-between px-6 md:px-margin-desktop w-full">
+      <header className="bg-white border-b border-slate-200 fixed top-0 left-0 right-0 z-50 h-16 flex items-center justify-between px-6 md:px-margin-desktop w-full shadow-sm">
         <div className="flex items-center gap-6">
           <button
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-            className="md:hidden p-2 rounded-lg hover:bg-surface-container-low text-on-surface-variant transition-colors"
+            className="md:hidden p-2 rounded-lg hover:bg-slate-100 text-slate-600 transition-colors"
           >
             <span className="material-symbols-outlined">menu</span>
           </button>
-          <Link href="/" className="text-xl font-bold tracking-tight text-primary flex items-center gap-2 hover:opacity-90 transition-opacity">
-            <span className="material-symbols-outlined text-secondary">domain</span>
+          <Link href="/" className="text-xl font-bold tracking-tight text-[#031751] flex items-center gap-2 hover:opacity-90 transition-opacity">
+            <span className="material-symbols-outlined text-[#093FA6]">domain</span>
             {BRANDING.PRODUCT_NAME}
           </Link>
           <nav className="hidden md:flex items-center gap-6 h-full text-sm font-medium">
             <Link
               href="/"
-              className={pathname === "/" || pathname === "/dashboard" ? "text-primary border-b-2 border-primary pb-1 font-bold" : "text-on-surface-variant hover:text-primary transition-colors pb-1"}
+              className={pathname === "/" || pathname === "/dashboard" ? "text-[#093FA6] border-b-2 border-[#093FA6] pb-1 font-bold" : "text-slate-600 hover:text-[#093FA6] transition-colors pb-1"}
             >
               Overview
             </Link>
           </nav>
         </div>
         <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2 text-on-surface-variant">
+          <div className="flex items-center gap-2 text-slate-600">
             <Link
               href={alertConsoleTarget}
               title="Operational Alerts Console"
-              className="p-2 hover:bg-surface-container-low rounded-full transition-colors relative flex items-center justify-center"
+              className="p-2 hover:bg-slate-100 rounded-full transition-colors relative flex items-center justify-center"
             >
               <span className="material-symbols-outlined text-[22px]">notifications</span>
               {(alertSummary && alertSummary.open > 0) ? (
-                <span className="absolute top-1 right-1 px-1.5 py-0.2 min-w-[18px] text-[10px] font-extrabold bg-status-error text-white rounded-full border border-white flex items-center justify-center leading-none">
+                <span className="absolute top-1 right-1 px-1.5 py-0.2 min-w-[18px] text-[10px] font-extrabold bg-[#DC2626] text-white rounded-full border border-white flex items-center justify-center leading-none">
                   {alertSummary.open > 99 ? "99+" : alertSummary.open}
                 </span>
               ) : null}
             </Link>
           </div>
 
-          <div className="h-8 w-px bg-outline-variant hidden sm:block"></div>
+          <div className="h-8 w-px bg-slate-200 hidden sm:block"></div>
           <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-full bg-secondary-container/20 overflow-hidden border border-outline-variant hidden sm:flex items-center justify-center shrink-0">
+            <div className="h-9 w-9 rounded-full bg-[#093FA6]/10 overflow-hidden border border-slate-200 hidden sm:flex items-center justify-center shrink-0">
               {(profile?.profilePhotoUrl || session?.user?.image) ? (
                 <img
                   alt="Profile"
@@ -279,18 +279,18 @@ export const LayoutShell: React.FC<{ children: React.ReactNode }> = ({ children 
                   src={`${profile?.profilePhotoUrl || session?.user?.image}?v=${profile?.profilePhotoUpdatedAt || (session?.user as any)?.profilePhotoUpdatedAt || ''}`}
                 />
               ) : (
-                <span className="text-xs font-bold text-primary">
+                <span className="text-xs font-bold text-[#031751]">
                   {((profile?.name || session?.user?.name || "System Admin").split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2))}
                 </span>
               )}
             </div>
             <div>
-              <p className="text-xs font-bold text-primary hidden md:block">{profile?.name || session?.user?.name || "System Admin"}</p>
-              <p className="text-[10px] text-on-surface-variant leading-none hidden md:block">{profile?.role || (session?.user as any)?.role || "Admin Console"}</p>
+              <p className="text-xs font-bold text-[#031751] hidden md:block">{profile?.name || session?.user?.name || "System Admin"}</p>
+              <p className="text-[10px] text-slate-500 leading-none hidden md:block">{profile?.role || (session?.user as any)?.role || "Admin Console"}</p>
             </div>
             <button
               onClick={() => signOut({ callbackUrl: "/login" })}
-              className="p-1.5 hover:bg-surface-container-low rounded-lg text-on-surface-variant hover:text-status-error transition-colors flex items-center justify-center"
+              className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-600 hover:text-[#DC2626] transition-colors flex items-center justify-center"
               title="Sign Out"
             >
               <span className="material-symbols-outlined text-[18px]">logout</span>
@@ -301,12 +301,12 @@ export const LayoutShell: React.FC<{ children: React.ReactNode }> = ({ children 
 
       <div className="flex flex-1 pt-16 relative">
         {/* Desktop Sidebar Navigation */}
-        <aside className="bg-primary fixed left-0 top-16 h-[calc(100vh-4rem)] w-64 border-r border-border-subtle py-6 flex flex-col gap-2 z-40 hidden md:flex text-on-primary">
+        <aside className="bg-[#031751] fixed left-0 top-16 h-[calc(100vh-4rem)] w-64 border-r border-slate-800/60 py-6 flex flex-col gap-2 z-40 hidden md:flex text-white">
           <div className="px-6 mb-6">
-            <p className="text-xs font-bold text-secondary-container uppercase tracking-widest">{sidebarTitle}</p>
-            <p className="text-[10px] text-outline-variant opacity-70">{sidebarSubtitle}</p>
+            <p className="text-xs font-bold text-[#5FAFD8] uppercase tracking-widest">{sidebarTitle}</p>
+            <p className="text-[10px] text-slate-300 opacity-80">{sidebarSubtitle}</p>
           </div>
-          <nav className="flex-1 px-3 space-y-1">
+          <nav className="flex-1 px-3 space-y-1 overflow-y-auto">
             {activeNavItems.map((item) => {
               const active = isActive(item.path);
               return (
@@ -316,8 +316,8 @@ export const LayoutShell: React.FC<{ children: React.ReactNode }> = ({ children 
                   className={cn(
                     "flex items-center gap-3 px-4 py-3 rounded-lg text-xs font-bold transition-all",
                     active
-                      ? "bg-secondary text-white shadow-md border-l-4 border-secondary-container"
-                      : "text-outline-variant hover:bg-primary-container hover:text-white"
+                      ? "bg-[#116BEE] text-white shadow-md border-l-4 border-[#5FAFD8]"
+                      : "text-slate-200 hover:bg-[#093FA6] hover:text-white"
                   )}
                 >
                   <span className="material-symbols-outlined text-[18px]">{item.icon}</span>
@@ -326,16 +326,16 @@ export const LayoutShell: React.FC<{ children: React.ReactNode }> = ({ children 
               );
             })}
           </nav>
-          <div className="px-4 mt-auto border-t border-primary-container pt-4 space-y-2">
+          <div className="px-4 mt-auto border-t border-slate-800/80 pt-4 space-y-2">
             <Link
               href="https://stitch.withgoogle.com/projects/204664606318977328?pli=1"
               target="_blank"
-              className="flex items-center gap-3 px-4 py-2 text-xs font-medium text-outline-variant hover:text-white transition-colors"
+              className="flex items-center gap-3 px-4 py-2 text-xs font-medium text-slate-300 hover:text-white transition-colors"
             >
               <span className="material-symbols-outlined text-[16px]">open_in_new</span>
               <span>Open Stitch Project</span>
             </Link>
-            <p className="text-[10px] text-outline-variant opacity-50 text-center">Version 1.0.0 (Localhost)</p>
+            <p className="text-[10px] text-slate-400 opacity-60 text-center">Version 1.0.0 (Localhost)</p>
           </div>
         </aside>
 
@@ -348,20 +348,20 @@ export const LayoutShell: React.FC<{ children: React.ReactNode }> = ({ children 
               onClick={() => setIsSidebarOpen(false)}
             />
             {/* Drawer */}
-            <aside className="relative bg-primary w-64 h-full py-6 flex flex-col gap-2 text-on-primary z-10 shadow-2xl">
+            <aside className="relative bg-[#031751] w-64 h-full py-6 flex flex-col gap-2 text-white z-10 shadow-2xl">
               <div className="px-6 mb-6 flex justify-between items-center">
                 <div>
-                  <p className="text-xs font-bold text-secondary-container uppercase tracking-widest">{sidebarTitle}</p>
-                  <p className="text-[10px] text-outline-variant opacity-70">{isSecurityGuarding ? "Operations & Compliance" : isFacilityManagement ? "Operations & Services" : "Mobile Drawer"}</p>
+                  <p className="text-xs font-bold text-[#5FAFD8] uppercase tracking-widest">{sidebarTitle}</p>
+                  <p className="text-[10px] text-slate-300 opacity-80">{isSecurityGuarding ? "Operations & Compliance" : isFacilityManagement ? "Operations & Services" : "Mobile Drawer"}</p>
                 </div>
                 <button
                   onClick={() => setIsSidebarOpen(false)}
-                  className="p-1 rounded-full hover:bg-primary-container text-white"
+                  className="p-1 rounded-full hover:bg-[#093FA6] text-white"
                 >
                   <span className="material-symbols-outlined">close</span>
                 </button>
               </div>
-              <nav className="flex-grow px-3 space-y-1">
+              <nav className="flex-grow px-3 space-y-1 overflow-y-auto">
                 {activeNavItems.map((item) => {
                   const active = isActive(item.path);
                   return (
@@ -372,8 +372,8 @@ export const LayoutShell: React.FC<{ children: React.ReactNode }> = ({ children 
                       className={cn(
                         "flex items-center gap-3 px-4 py-3 rounded-lg text-xs font-bold transition-all",
                         active
-                          ? "bg-secondary text-white shadow-md border-l-4 border-secondary-container"
-                          : "text-outline-variant hover:bg-primary-container hover:text-white"
+                          ? "bg-[#116BEE] text-white shadow-md border-l-4 border-[#5FAFD8]"
+                          : "text-slate-200 hover:bg-[#093FA6] hover:text-white"
                       )}
                     >
                       <span className="material-symbols-outlined text-[18px]">{item.icon}</span>
@@ -393,16 +393,16 @@ export const LayoutShell: React.FC<{ children: React.ReactNode }> = ({ children 
       </div>
 
       {/* Footer */}
-      <footer className="bg-surface-container-low border-t border-border-subtle py-4 w-full flex flex-col md:flex-row justify-between px-6 md:px-margin-desktop items-center gap-2 z-10 mt-auto md:pl-[18rem]">
+      <footer className="bg-[#031751] border-t border-slate-800 text-white py-4 w-full flex flex-col md:flex-row justify-between px-6 md:px-margin-desktop items-center gap-2 z-10 mt-auto md:pl-[18rem]">
         <div className="flex flex-col sm:flex-row items-center sm:items-baseline gap-1 sm:gap-2">
-          <p className="text-xs text-on-surface-variant font-medium">{BRANDING.COPYRIGHT_TEXT}</p>
-          <span className="hidden sm:inline text-on-surface-variant/40 text-xs">•</span>
-          <p className="text-xs text-on-surface-variant/80 italic">{BRANDING.TAGLINE}</p>
+          <p className="text-xs text-white/90 font-medium">{BRANDING.COPYRIGHT_TEXT}</p>
+          <span className="hidden sm:inline text-white/40 text-xs">•</span>
+          <p className="text-xs text-white/70 italic">{BRANDING.TAGLINE}</p>
         </div>
-        <div className="flex gap-6 text-xs text-on-surface-variant font-medium">
-          <Link href="/settings" className="hover:text-primary transition-colors">Settings</Link>
-          <Link href="#" className="hover:text-primary transition-colors">Privacy Policy</Link>
-          <Link href="/sap" className="hover:text-primary transition-colors">API Docs</Link>
+        <div className="flex gap-6 text-xs text-white/80 font-medium">
+          <Link href="/settings" className="hover:text-white transition-colors">Settings</Link>
+          <Link href="#" className="hover:text-white transition-colors">Privacy Policy</Link>
+          <Link href="/sap" className="hover:text-white transition-colors">API Docs</Link>
         </div>
       </footer>
     </div>

@@ -49,30 +49,30 @@ function MobileLoginForm() {
   };
 
   return (
-    <div className="w-full max-w-[380px] mx-auto bg-surface border border-outline-variant/35 rounded-2xl p-6 shadow-md">
+    <div className="w-full max-w-[380px] mx-auto bg-white border border-slate-200 rounded-2xl p-6 shadow-md">
       {/* Header */}
       <div className="text-center mb-6">
-        <div className="w-12 h-12 bg-primary/10 rounded-2xl flex items-center justify-center mx-auto mb-2 text-primary">
+        <div className="w-12 h-12 bg-[#093FA6]/10 rounded-2xl flex items-center justify-center mx-auto mb-2 text-[#093FA6]">
           <span className="material-symbols-outlined text-[26px]">fingerprint</span>
         </div>
-        <h2 className="text-base font-bold text-primary">{BRANDING.PRODUCT_NAME}</h2>
-        <p className="text-[10px] text-on-surface-variant font-medium mt-0.5">{BRANDING.PORTAL_NAME}</p>
-        <p className="text-[10px] text-on-surface-variant/80 mt-1">
-          by <span className="font-semibold text-primary">{BRANDING.BRAND_NAME}</span>
+        <h2 className="text-base font-bold text-[#031751]">{BRANDING.PRODUCT_NAME}</h2>
+        <p className="text-[10px] text-slate-500 font-medium mt-0.5">{BRANDING.PORTAL_NAME}</p>
+        <p className="text-[10px] text-slate-600 mt-1">
+          by <span className="font-semibold text-[#031751]">{BRANDING.BRAND_NAME}</span>
         </p>
-        <p className="text-[9px] text-on-surface-variant/70 italic mt-0.5">{BRANDING.TAGLINE}</p>
+        <p className="text-[9px] text-slate-500 italic mt-0.5">{BRANDING.TAGLINE}</p>
       </div>
 
       {/* Error Notification */}
       {error && error !== "CredentialsSignin" && (
-        <div className="mb-4 p-3 bg-status-error/10 border border-status-error/30 rounded-xl flex gap-2 text-[10px] font-semibold text-status-error">
+        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl flex gap-2 text-[10px] font-semibold text-[#DC2626]">
           <span className="material-symbols-outlined text-[16px] shrink-0">error</span>
           <span>{decodeURIComponent(error)}</span>
         </div>
       )}
 
       {loginError && (
-        <div className="mb-4 p-3 bg-status-error/10 border border-status-error/30 rounded-xl flex gap-2 text-[10px] font-semibold text-status-error">
+        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl flex gap-2 text-[10px] font-semibold text-[#DC2626]">
           <span className="material-symbols-outlined text-[16px] shrink-0">error</span>
           <span>{loginError}</span>
         </div>
@@ -81,7 +81,7 @@ function MobileLoginForm() {
       {/* Microsoft login button */}
       <button
         onClick={handleMicrosoftLogin}
-        className="w-full flex items-center justify-center gap-2.5 bg-primary text-white font-bold py-2.5 px-3 rounded-xl shadow-sm hover:opacity-90 transition-opacity active:scale-[0.98] transition-transform text-[11px]"
+        className="w-full flex items-center justify-center gap-2.5 bg-[#031751] text-white font-bold py-2.5 px-3 rounded-xl shadow-sm hover:bg-[#031751]/90 transition-all active:scale-[0.98] transition-transform text-[11px]"
       >
         <svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 23 23">
           <path fill="#F35325" d="M0 0h11v11H0z" />
@@ -94,15 +94,15 @@ function MobileLoginForm() {
 
       {/* Divider */}
       <div className="flex items-center my-4">
-        <div className="flex-grow h-px bg-outline-variant/40"></div>
-        <span className="text-[9px] text-on-surface-variant/50 font-bold uppercase px-2">or bypass</span>
-        <div className="flex-grow h-px bg-outline-variant/40"></div>
+        <div className="flex-grow h-px bg-slate-200"></div>
+        <span className="text-[9px] text-slate-400 font-bold uppercase px-2">or bypass</span>
+        <div className="flex-grow h-px bg-slate-200"></div>
       </div>
 
       {/* Credentials Bypass */}
       <form onSubmit={handleCredentialsSubmit} className="space-y-3">
         <div>
-          <label className="block text-[9px] font-bold text-on-surface-variant mb-1 uppercase tracking-wider">Email Address</label>
+          <label className="block text-[9px] font-bold text-slate-600 mb-1 uppercase tracking-wider">Email Address</label>
           <input
             type="email"
             required
@@ -110,12 +110,12 @@ function MobileLoginForm() {
             placeholder="e.g. ahmed.ali@alhattab.qa"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full px-3 py-2 border border-outline-variant rounded-xl focus:outline-none focus:border-primary text-[11px] font-medium bg-surface placeholder-on-surface-variant/40"
+            className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:border-[#116BEE] text-[11px] font-medium bg-white placeholder-slate-400"
           />
         </div>
 
         <div>
-          <label className="block text-[9px] font-bold text-on-surface-variant mb-1 uppercase tracking-wider">Password</label>
+          <label className="block text-[9px] font-bold text-slate-600 mb-1 uppercase tracking-wider">Password</label>
           <input
             type="password"
             required
@@ -123,22 +123,22 @@ function MobileLoginForm() {
             placeholder="••••••••"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full px-3 py-2 border border-outline-variant rounded-xl focus:outline-none focus:border-primary text-[11px] font-medium bg-surface placeholder-on-surface-variant/40"
+            className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:border-[#116BEE] text-[11px] font-medium bg-white placeholder-slate-400"
           />
         </div>
 
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-[#b89d7e] hover:bg-[#a5896a] text-white font-bold py-2.5 rounded-xl transition-colors active:scale-[0.98] transition-transform text-[11px] flex items-center justify-center"
+          className="w-full bg-[#093FA6] hover:bg-[#116BEE] text-white font-bold py-2.5 rounded-xl transition-colors active:scale-[0.98] transition-transform text-[11px] flex items-center justify-center shadow-sm"
         >
           {loading ? "Signing in..." : "Log In"}
         </button>
       </form>
 
-      <div className="mt-6 text-center border-t border-outline-variant/30 pt-3 space-y-1">
-        <p className="text-[9px] text-on-surface-variant/50 font-semibold">{BRANDING.PRODUCT_NAME} Secure Client · {BRANDING.VERSION_TEXT}</p>
-        <p className="text-[8px] text-on-surface-variant/40">{BRANDING.COPYRIGHT_TEXT}</p>
+      <div className="mt-6 text-center border-t border-slate-200 pt-3 space-y-1">
+        <p className="text-[9px] text-slate-500 font-semibold">{BRANDING.PRODUCT_NAME} Secure Client · {BRANDING.VERSION_TEXT}</p>
+        <p className="text-[8px] text-slate-400">{BRANDING.COPYRIGHT_TEXT}</p>
       </div>
     </div>
   );

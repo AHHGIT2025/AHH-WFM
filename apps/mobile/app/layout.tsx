@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import AuthProvider from "../components/auth-provider";
 import { MobileShell } from "../components/mobile-shell";
 import SecfacSessionInitializer from "../components/secfac-session-initializer";
+import { StartupSplash } from "../components/startup-splash";
 import { BRANDING } from "../lib/branding";
 import "./globals.css";
 
@@ -19,8 +20,10 @@ export default function RootLayout({
     <html lang="en">
       <body className="antialiased">
         <AuthProvider>
-          <SecfacSessionInitializer />
-          <MobileShell>{children}</MobileShell>
+          <StartupSplash>
+            <SecfacSessionInitializer />
+            <MobileShell>{children}</MobileShell>
+          </StartupSplash>
         </AuthProvider>
       </body>
     </html>

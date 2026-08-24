@@ -5,7 +5,7 @@ const cn = (...classes: (string | undefined | boolean)[]) => classes.filter(Bool
 
 // 1. Button Component
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: "primary" | "secondary" | "ghost" | "success" | "error" | "warning";
+  variant?: "primary" | "secondary" | "ghost" | "workflow" | "info" | "success" | "error" | "warning";
   size?: "xs" | "sm" | "md" | "lg";
   className?: string;
 }
@@ -16,16 +16,18 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       <button
         ref={ref}
         className={cn(
-          "inline-flex items-center justify-center font-medium transition-all active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none rounded-lg",
+          "inline-flex items-center justify-center font-medium transition-all active:scale-[0.98] disabled:opacity-50 disabled:bg-slate-200 disabled:text-slate-500 disabled:border-slate-300 disabled:pointer-events-none rounded-lg",
           // Sizes
           size === "xs" && "px-2 py-0.5 text-[10px] rounded",
           size === "sm" && "px-3 py-1 text-xs",
           size === "md" && "px-4 py-2 text-sm",
           size === "lg" && "px-6 py-3 text-base",
           // Variants
-          variant === "primary" && "bg-secondary text-white hover:bg-[#0047a3] focus:ring-2 focus:ring-[rgba(0,88,190,0.35)] outline-none",
-          variant === "secondary" && "bg-surface-container-high border border-outline-variant text-on-surface hover:bg-surface-container-highest",
-          variant === "ghost" && "bg-transparent text-on-surface-variant hover:bg-surface-container-low",
+          variant === "primary" && "bg-[#093FA6] text-white hover:bg-[#116BEE] focus:ring-2 focus:ring-[#116BEE]/40 outline-none active:bg-[#031751]",
+          variant === "secondary" && "bg-white border border-[#093FA6] text-[#093FA6] hover:bg-[#093FA6]/10 focus:ring-2 focus:ring-[#093FA6]/30",
+          variant === "workflow" && "bg-[#4643F3] text-white hover:bg-[#4643F3]/90 focus:ring-2 focus:ring-[#4643F3]/40",
+          variant === "info" && "bg-[#5FAFD8] text-[#031751] font-semibold hover:bg-[#5FAFD8]/90 focus:ring-2 focus:ring-[#5FAFD8]/40",
+          variant === "ghost" && "bg-transparent text-on-surface-variant hover:bg-[#093FA6]/10 hover:text-primary",
           variant === "success" && "bg-status-success text-white hover:opacity-90",
           variant === "error" && "bg-status-error text-white hover:opacity-90",
           variant === "warning" && "bg-status-warning text-white hover:opacity-90",
@@ -100,7 +102,7 @@ Card.displayName = "Card";
 
 // 4. Badge Component
 export interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
-  variant?: "success" | "error" | "warning" | "pending" | "info" | "neutral" | "primary" | "secondary";
+  variant?: "success" | "error" | "warning" | "pending" | "info" | "neutral" | "primary" | "secondary" | "workflow";
   className?: string;
 }
 
@@ -112,11 +114,12 @@ export const Badge: React.FC<BadgeProps> = ({ variant = "info", className, child
         variant === "success" && "bg-status-success/10 text-status-success border-status-success/20",
         variant === "error" && "bg-status-error/10 text-status-error border-status-error/20",
         variant === "warning" && "bg-status-warning/10 text-status-warning border-status-warning/20",
-        variant === "pending" && "bg-status-pending/10 text-status-pending border-status-pending/20",
-        variant === "info" && "bg-secondary/10 text-secondary border-secondary/20",
-        variant === "neutral" && "bg-surface-container-high text-on-surface-variant border-outline-variant",
-        variant === "primary" && "bg-primary/10 text-primary border-primary/20",
-        variant === "secondary" && "bg-surface-container-high text-on-surface-variant border-outline-variant",
+        variant === "pending" && "bg-[#116BEE]/10 text-[#116BEE] border-[#116BEE]/20",
+        variant === "info" && "bg-[#5FAFD8]/20 text-[#031751] border-[#5FAFD8]/40",
+        variant === "workflow" && "bg-[#4643F3]/15 text-[#4643F3] border-[#4643F3]/30",
+        variant === "neutral" && "bg-slate-100 text-slate-700 border-slate-200",
+        variant === "primary" && "bg-[#031751]/10 text-[#031751] border-[#031751]/20",
+        variant === "secondary" && "bg-[#093FA6]/10 text-[#093FA6] border-[#093FA6]/20",
         className
       )}
       {...props}
