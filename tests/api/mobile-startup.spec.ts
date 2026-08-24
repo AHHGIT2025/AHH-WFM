@@ -91,7 +91,7 @@ describe("WFM Mobile Startup Experience & Animated Splash Verification", () => {
     expect(androidStat.size).toBe(publicStat.size);
   });
 
-  test("10. Offline fallback HTML contains Praxivo palette and zero unapproved gold (#CBA135)", () => {
+  test("10. Offline fallback HTML contains Praxivo Core Palette and zero unapproved non-core shades (#CBA135, #072274, #1B365D)", () => {
     const wwwIndex = path.join(rootDir, "apps/mobile/www/index.html");
     const androidIndex = path.join(rootDir, "apps/mobile/android/app/src/main/assets/public/index.html");
 
@@ -103,14 +103,24 @@ describe("WFM Mobile Startup Experience & Animated Splash Verification", () => {
 
     expect(wwwContent).not.toContain("CBA135");
     expect(wwwContent).not.toContain("#CBA135");
+    expect(wwwContent).not.toContain("072274");
+    expect(wwwContent).not.toContain("#072274");
+    expect(wwwContent).not.toContain("1B365D");
+    expect(wwwContent).not.toContain("#1B365D");
     expect(wwwContent).toContain("#031751");
+    expect(wwwContent).toContain("#093FA6");
     expect(wwwContent).toContain("#5FAFD8");
     expect(wwwContent).toContain("Praxivo Labs");
     expect(wwwContent).toContain("WFM");
 
     expect(androidContent).not.toContain("CBA135");
     expect(androidContent).not.toContain("#CBA135");
+    expect(androidContent).not.toContain("072274");
+    expect(androidContent).not.toContain("#072274");
+    expect(androidContent).not.toContain("1B365D");
+    expect(androidContent).not.toContain("#1B365D");
     expect(androidContent).toContain("#031751");
+    expect(androidContent).toContain("#093FA6");
     expect(androidContent).toContain("#5FAFD8");
   });
 });
