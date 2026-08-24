@@ -10,7 +10,6 @@ const config: CapacitorConfig = {
     allowNavigation: [
       '10.10.50.24',
       '10.10.50.24:*',
-      '*.alhattabholding.com',
     ],
   },
   android: {
