@@ -32,6 +32,10 @@ Current release objective:
 
 `Phase AT-1: Unified Attendance Intake Foundation — Controlled Staging, RFC-4180 Parsing, Reference Resolution, Cross-Source Duplicate Protection & Non-Authoritative Review Console.`
 
+Current LOCAL Commit:
+
+`6d713479dbc475ce0eaeb86072c29393b7996c9e`
+
 Authoritative starting baseline:
 
 `cf459226991539d45d981ab418d51bdaba989f0e`
