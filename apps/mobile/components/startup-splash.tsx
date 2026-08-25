@@ -37,23 +37,46 @@ export const StartupSplash: React.FC<StartupSplashProps> = ({ children }) => {
       const mediaQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
       if (mediaQuery.matches) {
         setReducedMotion(true);
-        // Reduced motion: short static display (300ms)
         const timer = setTimeout(() => {
           completeAnimation();
         }, 300);
         return () => clearTimeout(timer);
       }
 
-      // Safety timeout: 4 seconds video duration + 200ms grace
+      // Safety timeout: 4 seconds video duration + 500ms grace
       const timer = setTimeout(() => {
         completeAnimation();
-      }, 4200);
+      }, 4500);
 
       return () => clearTimeout(timer);
     }
   }, [completeAnimation]);
 
-  // 2. Coordinate animation completion with session resolution
+  // 2. Proactive video playback initialization
+  const startPlayback = useCallback(() => {
+    if (videoRef.current) {
+      videoRef.current.muted = true;
+      const playPromise = videoRef.current.play();
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => {
+            setVideoLoaded(true);
+          })
+          .catch(() => {
+            // Autoplay policy or media issue - show fallback
+            setMediaError(true);
+            completeAnimation();
+          });
+      }
+    }
+  }, [completeAnimation]);
+
+  useEffect(() => {
+    if (!splashVisible || reducedMotion || mediaError) return;
+    startPlayback();
+  }, [splashVisible, reducedMotion, mediaError, startPlayback]);
+
+  // 3. Coordinate animation completion with session resolution
   useEffect(() => {
     if (!splashVisible) return;
 
@@ -100,7 +123,14 @@ export const StartupSplash: React.FC<StartupSplashProps> = ({ children }) => {
             muted
             playsInline
             preload="auto"
-            onLoadedData={() => setVideoLoaded(true)}
+            onLoadedData={() => {
+              setVideoLoaded(true);
+              startPlayback();
+            }}
+            onCanPlay={() => {
+              setVideoLoaded(true);
+              startPlayback();
+            }}
             onEnded={completeAnimation}
             onError={() => {
               setMediaError(true);
