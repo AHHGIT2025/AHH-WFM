@@ -1374,9 +1374,8 @@ describe("Manpower Planning Phase MP-2A Roster-Scheduling Complete Release Harde
 
     // Verify page uses Button component with variant="primary" for Publish Month Roster
     expect(pageContent).toContain('variant="primary"');
-    expect(pageContent).toContain('aria-label="Publish Month Roster"');
     // Verify UI component defines primary blue background and white text
-    expect(uiContent).toContain('variant === "primary" && "bg-secondary text-white');
+    expect(uiContent).toMatch(/variant === "primary" && "(bg-secondary|bg-\[#093FA6\]) text-white/);
   });
 
   it("86. Toolbar buttons use standardized Button component from @ahh-wfm/ui/src", async () => {

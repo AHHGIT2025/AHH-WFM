@@ -684,9 +684,206 @@ describe("Unified Attendance Intake Foundation (Phase AT-1) API & Validation Sui
     });
   });
 
-  describe("5. MANDATORY NON-AUTHORITATIVE BOUNDARY CERTIFICATION", () => {
-    it("5.1. CERTIFIES ZERO WRITES TO AUTHORITATIVE TABLES", async () => {
-      // Snapshot authoritative row counts before intake run
+  describe("5. Feature Flag Certification", () => {
+    it("5.1. Returns 403 on all routes when ATTENDANCE_IMPORT_ENABLED is false", async () => {
+      const originalFlag = process.env.ATTENDANCE_IMPORT_ENABLED;
+      process.env.ATTENDANCE_IMPORT_ENABLED = "false";
+
+      try {
+        (getServerSession as jest.Mock).mockResolvedValue({
+          user: { id: testActiveSecEmpId, role: "SUPER_ADMIN", permissions: ["attendance.import.create", "attendance.import.view", "attendance.import.validate", "attendance.import.review"] }
+        });
+
+        // 1. Batches List
+        const listReq = new NextRequest("http://localhost:3100/api/v1/attendance-import/batches");
+        const listRes = await getBatches(listReq);
+        expect(listRes.status).toBe(403);
+
+        // 2. Batch Upload
+        const uploadReq = new NextRequest("http://localhost:3100/api/v1/attendance-import/batches", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ fileContent: "test" })
+        });
+        const uploadRes = await createBatch(uploadReq);
+        expect(uploadRes.status).toBe(403);
+
+        // 3. Batch Detail
+        const detailReq = new NextRequest("http://localhost:3100/api/v1/attendance-import/batches/any-id");
+        const detailRes = await getBatchDetail(detailReq, { params: { id: "any-id" } });
+        expect(detailRes.status).toBe(403);
+
+        // 4. Batch Validate
+        const valReq = new NextRequest("http://localhost:3100/api/v1/attendance-import/batches/any-id/validate", { method: "POST" });
+        const valRes = await validateBatchRoute(valReq, { params: { id: "any-id" } });
+        expect(valRes.status).toBe(403);
+
+        // 5. Batch Rows
+        const rowsReq = new NextRequest("http://localhost:3100/api/v1/attendance-import/batches/any-id/rows");
+        const rowsRes = await getBatchRows(rowsReq, { params: { id: "any-id" } });
+        expect(rowsRes.status).toBe(403);
+
+        // 6. Batch Review
+        const revReq = new NextRequest("http://localhost:3100/api/v1/attendance-import/batches/any-id/review", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status: "UNDER_REVIEW" })
+        });
+        const revRes = await reviewBatchRoute(revReq, { params: { id: "any-id" } });
+        expect(revRes.status).toBe(403);
+
+        // 7. Batch Cancel
+        const cancelReq = new NextRequest("http://localhost:3100/api/v1/attendance-import/batches/any-id/cancel", { method: "POST" });
+        const cancelRes = await cancelBatchRoute(cancelReq, { params: { id: "any-id" } });
+        expect(cancelRes.status).toBe(403);
+
+        // 8. Template Download
+        const tplRes = await getTemplateRoute();
+        expect(tplRes.status).toBe(403);
+      } finally {
+        process.env.ATTENDANCE_IMPORT_ENABLED = originalFlag || "true";
+      }
+    });
+  });
+
+  describe("6. Validation Concurrency & Idempotency", () => {
+    let concurBatchId: string;
+
+    beforeAll(async () => {
+      const batch = await prisma.attendanceImportBatch.create({
+        data: {
+          batchNumber: `AIB-CONCUR-${rand}`,
+          companyId: testCompanyId,
+          operationType: "SECURITY_GUARDING",
+          originalFileName: "concurrency_test.csv",
+          status: "UPLOADED",
+          recordCount: 2
+        }
+      });
+      concurBatchId = batch.id;
+
+      await prisma.attendanceImportRow.createMany({
+        data: [
+          {
+            batchId: concurBatchId,
+            sourceRowNumber: 2,
+            rawAttendanceDate: "2026-08-27",
+            rawEmployeeCode: testActiveSecEmpId,
+            rawEmployeeName: "Security Officer Alpha",
+            rawActualTimeIn: "07:00",
+            rawActualTimeOut: "19:00"
+          },
+          {
+            batchId: concurBatchId,
+            sourceRowNumber: 3,
+            rawAttendanceDate: "2026-08-27",
+            rawEmployeeCode: testInactiveSecEmpId,
+            rawEmployeeName: "Inactive Guard",
+            rawActualTimeIn: "07:00",
+            rawActualTimeOut: "19:00"
+          }
+        ]
+      });
+    });
+
+    it("6.1. Repeated validation is idempotent and deterministic", async () => {
+      // First run
+      const run1 = await validateAttendanceImportBatch(concurBatchId);
+      expect(run1.status).toBe("VALIDATED");
+      expect(run1.recordCount).toBe(2);
+
+      // Second run on already validated batch
+      const run2 = await validateAttendanceImportBatch(concurBatchId);
+      expect(run2.status).toBe("VALIDATED");
+      expect(run2.recordCount).toBe(2);
+      expect(run2.validCount).toBe(run1.validCount);
+      expect(run2.errorCount).toBe(run1.errorCount);
+      expect(run2.warningCount).toBe(run1.warningCount);
+
+      // Verify row counts in database didn't multiply
+      const rowCount = await prisma.attendanceImportRow.count({
+        where: { batchId: concurBatchId }
+      });
+      expect(rowCount).toBe(2);
+    });
+
+    it("6.2. Rejects validation when batch status is CANCELLED", async () => {
+      const cancelledBatch = await prisma.attendanceImportBatch.create({
+        data: {
+          batchNumber: `AIB-CANC-${rand}`,
+          companyId: testCompanyId,
+          operationType: "SECURITY_GUARDING",
+          originalFileName: "cancelled.csv",
+          status: "CANCELLED",
+          recordCount: 1
+        }
+      });
+
+      (getServerSession as jest.Mock).mockResolvedValueOnce({
+        user: { id: testActiveSecEmpId, role: "SUPER_ADMIN", permissions: ["attendance.import.validate"] }
+      });
+
+      const valReq = new NextRequest(`http://localhost:3100/api/v1/attendance-import/batches/${cancelledBatch.id}/validate`, { method: "POST" });
+      const valRes = await validateBatchRoute(valReq, { params: { id: cancelledBatch.id } });
+      expect(valRes.status).toBe(400);
+      const data = await valRes.json();
+      expect(data.error).toContain("Cannot validate a cancelled batch");
+    });
+  });
+
+  describe("7. Security Agent Hardening & Negative Boundary Checks", () => {
+    it("7.1. Rejects payload exceeding row limit (> 5000 rows)", () => {
+      const header = "Attendance Date,Employee Code,Employee Name\n";
+      const rows = Array.from({ length: 5002 }, (_, i) => `2026-08-25,EMP${i},Worker ${i}`).join("\n");
+      const res = parseAttendanceImportContent(header + rows, "large.csv");
+      expect(res.success).toBe(false);
+      expect(res.errors[0]).toContain("maximum allowable limit of 5000 rows per batch");
+    });
+
+    it("7.2. Prevents Cross-Company IDOR access for non-admin user", async () => {
+      // Another company batch
+      const otherCompany = await prisma.company.create({
+        data: {
+          companyCode: `CMP-OTHER-${rand}`,
+          companyName: `Other Company ${rand}`,
+          isActive: true
+        }
+      });
+
+      const otherBatch = await prisma.attendanceImportBatch.create({
+        data: {
+          batchNumber: `AIB-OTHER-${rand}`,
+          companyId: otherCompany.id,
+          operationType: "SECURITY_GUARDING",
+          originalFileName: "other.csv",
+          status: "VALIDATED"
+        }
+      });
+
+      // User restricted to testCompanyId ONLY
+      (getServerSession as jest.Mock).mockResolvedValueOnce({
+        user: {
+          id: "restricted-user",
+          role: "HR_MANAGER",
+          permissions: ["attendance.import.view"],
+          operationAccess: {
+            allowedCompanyIds: [testCompanyId],
+            allowedSecurityGuarding: true
+          }
+        }
+      });
+
+      const req = new NextRequest(`http://localhost:3100/api/v1/attendance-import/batches/${otherBatch.id}`);
+      const res = await getBatchDetail(req, { params: { id: otherBatch.id } });
+      expect(res.status).toBe(403);
+      const data = await res.json();
+      expect(data.error).toContain("Cross-company access restricted");
+    });
+  });
+
+  describe("8. MANDATORY NON-AUTHORITATIVE BOUNDARY CERTIFICATION", () => {
+    it("8.1. CERTIFIES ZERO WRITES TO ALL 17 AUTHORITATIVE AND TRANSACTIONAL DOMAINS", async () => {
+      // Snapshot ALL authoritative row counts before intake run
       const [
         beforeAttendanceCount,
         beforeRosterSlotCount,
@@ -694,7 +891,17 @@ describe("Unified Attendance Intake Foundation (Phase AT-1) API & Validation Sui
         beforeEmployeeCount,
         beforeSiteCount,
         beforeContractCount,
-        beforeLeaveCount
+        beforeLeaveCount,
+        beforeDailyClosureCount,
+        beforeDailyClosureSnapshotCount,
+        beforePayrollRunCount,
+        beforePayrollLineCount,
+        beforePayrollDayCount,
+        beforeBillingRunCount,
+        beforeBillingLineCount,
+        beforeAddendumCount,
+        beforeAddendumLineCount,
+        beforeContractReqCount
       ] = await Promise.all([
         prisma.attendanceRecord.count(),
         prisma.rosterRequirementSlot.count(),
@@ -702,15 +909,25 @@ describe("Unified Attendance Intake Foundation (Phase AT-1) API & Validation Sui
         prisma.employee.count(),
         prisma.manpowerSite.count(),
         prisma.manpowerContract.count(),
-        prisma.leaveRequest.count()
+        prisma.leaveRequest.count(),
+        prisma.manpowerDailyClosure.count(),
+        prisma.manpowerDailyClosureSnapshot.count(),
+        prisma.manpowerPayrollAdvisoryRun.count(),
+        prisma.manpowerPayrollAdvisoryLine.count(),
+        prisma.manpowerPayrollAdvisoryDay.count(),
+        prisma.manpowerBillingSupportRun.count(),
+        prisma.manpowerBillingSupportLine.count(),
+        prisma.manpowerContractAddendum.count(),
+        prisma.manpowerContractAddendumLineItem.count(),
+        prisma.contractManpowerRequirement.count()
       ]);
 
       // Execute full intake lifecycle (Upload -> Parse -> Stage -> Validate -> Review -> Cancel)
       const csvData = [
         "Attendance Date,Employee Code,Employee Name,Site / Location,Contract Number,Shift Code,Actual Time In,Actual Time Out",
-        `2026-08-25,${testActiveSecEmpId},Security Officer Alpha,AT-1 Security Guarding Site ${rand},CNT-SEC-${rand},DAY-12H,07:00,19:00`,
-        `2026-08-25,${testFmEmpId},FM Tech Charlie,AT-1 FM Site ${rand},CNT-FM-${rand},DAY-8H,08:00,16:00`,
-        `2026-08-25,${testMobileAttendanceEmpId},Guard Echo,AT-1 Security Site,CNT-SEC-${rand},DAY,07:00,19:00`
+        `2026-08-28,${testActiveSecEmpId},Security Officer Alpha,AT-1 Security Guarding Site ${rand},CNT-SEC-${rand},DAY-12H,07:00,19:00`,
+        `2026-08-28,${testFmEmpId},FM Tech Charlie,AT-1 FM Site ${rand},CNT-FM-${rand},DAY-8H,08:00,16:00`,
+        `2026-08-28,${testMobileAttendanceEmpId},Guard Echo,AT-1 Security Site,CNT-SEC-${rand},DAY,07:00,19:00`
       ].join("\n");
 
       (getServerSession as jest.Mock).mockResolvedValue({
@@ -733,6 +950,12 @@ describe("Unified Attendance Intake Foundation (Phase AT-1) API & Validation Sui
       const batchData = await uploadRes.json();
       const bId = batchData.batch.id;
 
+      // Re-validate batch
+      const valReq = new NextRequest(`http://localhost:3100/api/v1/attendance-import/batches/${bId}/validate`, {
+        method: "POST"
+      });
+      await validateBatchRoute(valReq, { params: { id: bId } });
+
       // Review batch
       const reviewReq = new NextRequest(`http://localhost:3100/api/v1/attendance-import/batches/${bId}/review`, {
         method: "POST",
@@ -747,7 +970,7 @@ describe("Unified Attendance Intake Foundation (Phase AT-1) API & Validation Sui
       });
       await cancelBatchRoute(cancelReq, { params: { id: bId } });
 
-      // Snapshot authoritative row counts after intake run
+      // Snapshot ALL authoritative row counts after intake run
       const [
         afterAttendanceCount,
         afterRosterSlotCount,
@@ -755,7 +978,17 @@ describe("Unified Attendance Intake Foundation (Phase AT-1) API & Validation Sui
         afterEmployeeCount,
         afterSiteCount,
         afterContractCount,
-        afterLeaveCount
+        afterLeaveCount,
+        afterDailyClosureCount,
+        afterDailyClosureSnapshotCount,
+        afterPayrollRunCount,
+        afterPayrollLineCount,
+        afterPayrollDayCount,
+        afterBillingRunCount,
+        afterBillingLineCount,
+        afterAddendumCount,
+        afterAddendumLineCount,
+        afterContractReqCount
       ] = await Promise.all([
         prisma.attendanceRecord.count(),
         prisma.rosterRequirementSlot.count(),
@@ -763,10 +996,20 @@ describe("Unified Attendance Intake Foundation (Phase AT-1) API & Validation Sui
         prisma.employee.count(),
         prisma.manpowerSite.count(),
         prisma.manpowerContract.count(),
-        prisma.leaveRequest.count()
+        prisma.leaveRequest.count(),
+        prisma.manpowerDailyClosure.count(),
+        prisma.manpowerDailyClosureSnapshot.count(),
+        prisma.manpowerPayrollAdvisoryRun.count(),
+        prisma.manpowerPayrollAdvisoryLine.count(),
+        prisma.manpowerPayrollAdvisoryDay.count(),
+        prisma.manpowerBillingSupportRun.count(),
+        prisma.manpowerBillingSupportLine.count(),
+        prisma.manpowerContractAddendum.count(),
+        prisma.manpowerContractAddendumLineItem.count(),
+        prisma.contractManpowerRequirement.count()
       ]);
 
-      // ASSERT ZERO INSERT, ZERO UPDATE, ZERO DELETE ON AUTHORITATIVE DATA
+      // ASSERT ZERO INSERT, ZERO UPDATE, ZERO DELETE ON ALL 17 AUTHORITATIVE DOMAINS
       expect(afterAttendanceCount).toBe(beforeAttendanceCount);
       expect(afterRosterSlotCount).toBe(beforeRosterSlotCount);
       expect(afterRosterAssignmentCount).toBe(beforeRosterAssignmentCount);
@@ -774,6 +1017,16 @@ describe("Unified Attendance Intake Foundation (Phase AT-1) API & Validation Sui
       expect(afterSiteCount).toBe(beforeSiteCount);
       expect(afterContractCount).toBe(beforeContractCount);
       expect(afterLeaveCount).toBe(beforeLeaveCount);
+      expect(afterDailyClosureCount).toBe(beforeDailyClosureCount);
+      expect(afterDailyClosureSnapshotCount).toBe(beforeDailyClosureSnapshotCount);
+      expect(afterPayrollRunCount).toBe(beforePayrollRunCount);
+      expect(afterPayrollLineCount).toBe(beforePayrollLineCount);
+      expect(afterPayrollDayCount).toBe(beforePayrollDayCount);
+      expect(afterBillingRunCount).toBe(beforeBillingRunCount);
+      expect(afterBillingLineCount).toBe(beforeBillingLineCount);
+      expect(afterAddendumCount).toBe(beforeAddendumCount);
+      expect(afterAddendumLineCount).toBe(beforeAddendumLineCount);
+      expect(afterContractReqCount).toBe(beforeContractReqCount);
 
       // Verify existing mobile record was untouched
       const existingMobileRec = await prisma.attendanceRecord.findUnique({
