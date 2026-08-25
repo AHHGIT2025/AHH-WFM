@@ -53,11 +53,13 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "commercial.handover.view", "commercial.handover.manage", "commercial.reports.view",
     "commercial.addendum.view", "commercial.addendum.manage", "commercial.contract.terminate",
     "commercial.renewal.view", "commercial.renewal.manage",
-    "commercial.activity.view", "commercial.activity.manage", "commercial.task.view", "commercial.task.manage"
+    "commercial.activity.view", "commercial.activity.manage", "commercial.task.view", "commercial.task.manage",
+    "attendance.import.view", "attendance.import.create", "attendance.import.validate", "attendance.import.review"
   ],
   ADMIN: [
     "dashboard.view", "employees.view", "employees.create", "employees.edit", "employees.bulkUpload", "employees.manage",
     "attendance.view", "attendance.edit", "attendance.approveCorrection", "attendance.manage", "attendance.export",
+    "attendance.import.view", "attendance.import.create", "attendance.import.validate", "attendance.import.review",
     "leaves.view", "leaves.create", "leaves.edit", "leaves.approve", "leaves.manage",
     "clearance.view", "clearance.create", "clearance.edit", "clearance.approve", "clearance.manage",
     "shifts.view", "shifts.create", "shifts.edit", "shifts.delete", "shifts.manage",
@@ -140,7 +142,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
   ],
   HR_MANAGER: [
     "dashboard.view", "employees.view", "employees.create", "employees.edit", "employees.bulkUpload",
-    "attendance.view", "attendance.edit", "attendance.approveCorrection",
+    "attendance.view", "attendance.edit", "attendance.approveCorrection", "attendance.import.view", "attendance.import.create", "attendance.import.validate", "attendance.import.review",
     "leaves.view", "leaves.approve", "shifts.view", "shifts.edit",
     "reports.view", "reports.export", "masters.view",
     "users.view", "users.manage", "roles.view", "roles.manage", "audit.view",
@@ -196,6 +198,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "manpower.security.manpower.view", "manpower.security.manpower.manage", "manpower.security.shifts.view", "manpower.security.shifts.manage",
     "manpower.security.deployments.view", "manpower.security.deployments.manage", "manpower.security.relievers.view", "manpower.security.relievers.manage",
     "manpower.security.reports.view", "manpower.security.reports.export",
+    "attendance.import.view", "attendance.import.create", "attendance.import.validate", "attendance.import.review",
     "secfac.alerts.view", "secfac.alerts.manage", "secfac.alerts.acknowledge", "secfac.alerts.resolve", "secfac.alerts.escalate", "secfac.alert.rules.view", "secfac.alert.rules.manage",
     "secfac.postOrders.view", "secfac.postOrders.manage", "secfac.briefings.view", "secfac.briefings.manage",
     "secfac.incidents.view", "secfac.incidents.report", "secfac.incidents.manage", "secfac.incidents.close",
@@ -209,6 +212,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "manpower.security.manpower.view", "manpower.security.manpower.manage", "manpower.security.shifts.view", "manpower.security.shifts.manage",
     "manpower.security.deployments.view", "manpower.security.deployments.manage", "manpower.security.relievers.view", "manpower.security.relievers.manage",
     "manpower.security.reports.view", "manpower.security.reports.export",
+    "attendance.import.view", "attendance.import.validate", "attendance.import.review",
     "secfac.alerts.view", "secfac.alerts.manage", "secfac.alerts.acknowledge", "secfac.alerts.resolve", "secfac.alerts.escalate", "secfac.alert.rules.view",
     "secfac.postOrders.view", "secfac.postOrders.manage", "secfac.briefings.view", "secfac.briefings.manage",
     "secfac.incidents.view", "secfac.incidents.report", "secfac.incidents.manage", "secfac.incidents.close",
@@ -254,6 +258,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "manpower.fm.manpower.view", "manpower.fm.manpower.manage", "manpower.fm.shifts.view", "manpower.fm.shifts.manage",
     "manpower.fm.deployments.view", "manpower.fm.deployments.manage", "manpower.fm.relievers.view", "manpower.fm.relievers.manage",
     "manpower.fm.reports.view", "manpower.fm.reports.export",
+    "attendance.import.view", "attendance.import.create", "attendance.import.validate", "attendance.import.review",
     "secfac.alerts.view", "secfac.alerts.manage", "secfac.alerts.acknowledge", "secfac.alerts.resolve", "secfac.alerts.escalate", "secfac.alert.rules.view", "secfac.alert.rules.manage",
     "manpower.reconciliation.view", "manpower.reconciliation.run", "manpower.reconciliation.review", "manpower.reconciliation.excuse",
     "manpower.reconciliation.classifyUnexcused", "manpower.reconciliation.markSyncDelay", "manpower.reconciliation.manageConfig"
@@ -264,6 +269,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "manpower.fm.manpower.view", "manpower.fm.manpower.manage", "manpower.fm.shifts.view", "manpower.fm.shifts.manage",
     "manpower.fm.deployments.view", "manpower.fm.deployments.manage", "manpower.fm.relievers.view", "manpower.fm.relievers.manage",
     "manpower.fm.reports.view", "manpower.fm.reports.export",
+    "attendance.import.view", "attendance.import.validate", "attendance.import.review",
     "secfac.alerts.view", "secfac.alerts.manage", "secfac.alerts.acknowledge", "secfac.alerts.resolve", "secfac.alerts.escalate", "secfac.alert.rules.view",
     "manpower.reconciliation.view", "manpower.reconciliation.run", "manpower.reconciliation.review", "manpower.reconciliation.excuse",
     "manpower.reconciliation.classifyUnexcused", "manpower.reconciliation.markSyncDelay"
@@ -410,6 +416,7 @@ export function filterNavigationByPermissions(user: { role?: string; permissions
     }
 
     if (item.path.startsWith("/workforce")) return hasPermission(user, "employees.view");
+    if (item.path.startsWith("/attendance/import")) return hasPermission(user, "attendance.import.view") || hasPermission(user, "attendance.view") || hasPermission(user, "manpower.admin.full_access");
     if (item.path.startsWith("/attendance")) return hasPermission(user, "attendance.view");
     if (item.path.startsWith("/leave")) return hasPermission(user, "leaves.view");
     if (item.path.startsWith("/sap")) return hasPermission(user, "sap.view");

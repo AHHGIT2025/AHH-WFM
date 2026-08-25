@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import Link from "next/link";
 import { AttendanceRecord, AttendanceCorrection } from "@ahh-wfm/types";
 import { Card, Badge, Button, Input, Modal } from "@ahh-wfm/ui/src";
 
@@ -85,10 +86,18 @@ export default function AttendancePage() {
           <h1 className="text-2xl font-bold text-primary">Attendance Monitor</h1>
           <p className="text-sm text-on-surface-variant">Daily log ledger of employee check-ins and check-outs with GPS verification</p>
         </div>
-        <Button className="font-bold flex items-center gap-1.5 self-start sm:self-auto">
-          <span className="material-symbols-outlined text-[18px]">download</span>
-          <span>Export logs</span>
-        </Button>
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          <Link href="/attendance/import">
+            <Button variant="secondary" className="font-bold flex items-center gap-1.5">
+              <span className="material-symbols-outlined text-[18px]">upload_file</span>
+              <span>Intake & Staging</span>
+            </Button>
+          </Link>
+          <Button className="font-bold flex items-center gap-1.5">
+            <span className="material-symbols-outlined text-[18px]">download</span>
+            <span>Export logs</span>
+          </Button>
+        </div>
       </div>
 
       <Card className="p-4 flex items-center gap-4">

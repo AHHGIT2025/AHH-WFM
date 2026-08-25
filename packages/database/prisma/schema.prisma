@@ -175,6 +175,9 @@ model Employee {
   createdReconciliationConfigs    ReconciliationGracePeriodConfig[]      @relation("ReconciliationConfigCreator")
   updatedReconciliationConfigs    ReconciliationGracePeriodConfig[]      @relation("ReconciliationConfigUpdater")
   ManpowerRosterDayClassification ManpowerRosterDayClassification[]
+  uploadedAttendanceBatches       AttendanceImportBatch[]                @relation("AttendanceBatchUploadedBy")
+  reviewedAttendanceBatches       AttendanceImportBatch[]                @relation("AttendanceBatchReviewedBy")
+  attendanceImportRows            AttendanceImportRow[]                  @relation("AttendanceRowEmployee")
 }
 
 model Department {
@@ -231,6 +234,7 @@ model AttendanceRecord {
   allowedPunchLocation           AllowedPunchLocation?            @relation("AllowedLocationAttendance", fields: [allowedPunchLocationId], references: [id], onDelete: SetNull)
   punchLocationType              String?
   AttendanceRosterReconciliation AttendanceRosterReconciliation[]
+  attendanceImportRows           AttendanceImportRow[]            @relation("AttendanceRowExistingAttendance")
 }
 
 model Worksite {
@@ -1013,6 +1017,8 @@ model Company {
   holidayCalendars           ManpowerHolidayCalendar[]
   ManpowerBillingSupportRun  ManpowerBillingSupportRun[]
   ManpowerPayrollAdvisoryRun ManpowerPayrollAdvisoryRun[]
+  attendanceImportBatches    AttendanceImportBatch[]
+  attendanceImportRows       AttendanceImportRow[]           @relation("AttendanceRowCompany")
   CostCategoryMaster         CostCategoryMaster[]
   CostElementMaster          CostElementMaster[]
   CostDriverMaster           CostDriverMaster[]
@@ -1351,6 +1357,7 @@ model ManpowerContract {
   addendums            ManpowerContractAddendum[]
   workflows            ContractApprovalWorkflow[]
   documents            ManpowerClientDocument[]
+  attendanceImportRows AttendanceImportRow[]      @relation("AttendanceRowContract")
 
   // CL-5 Provenance fields
   sourceClientResponseId  String?                    @unique
@@ -1619,6 +1626,7 @@ model ManpowerSite {
   reconciliations           AttendanceRosterReconciliation[]
   reconciliationConfigs     ReconciliationGracePeriodConfig[]
   reconciliationRuns        ManpowerReconciliationRun[]
+  attendanceImportRows      AttendanceImportRow[]                  @relation("AttendanceRowSite")
 }
 
 model SecuritySiteManpowerAllocation {
@@ -3608,6 +3616,7 @@ model RosterRequirementSlot {
   planningExceptions    RosterPlanningException[]
   RosterChangeRequest   RosterChangeRequest[]
   reconciliations       AttendanceRosterReconciliation[]
+  attendanceImportRows  AttendanceImportRow[]            @relation("AttendanceRowRosterSlot")
 
   @@index([contractId])
   @@index([projectId])
@@ -3653,6 +3662,7 @@ model RosterSlotAssignment {
   activeCoverageKey        String?                    @unique
   primaryExceptions        RosterPlanningException[]  @relation("PrimaryAssignmentExceptions")
   RosterChangeRequest      RosterChangeRequest[]
+  attendanceImportRows     AttendanceImportRow[]      @relation("AttendanceRowRosterAssignment")
   RosterSlotAcknowledgment RosterSlotAcknowledgment[]
 
   @@index([slotId])
@@ -5778,5 +5788,129 @@ model ContractHandoverLog {
 
   @@index([contractId])
 }
+
+// ---------------------------------------------------------------------------------
+// UNIFIED ATTENDANCE INTAKE & RECONCILIATION PHASE AT-1: STAGING & VALIDATION MODELS
+// ---------------------------------------------------------------------------------
+
+model AttendanceImportBatch {
+  id                    String                @id @default(uuid())
+  batchNumber           String                @unique // e.g. "AIB-202608-0001"
+  companyId             String?
+  company               Company?              @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  operationType         String?               // "SECURITY_GUARDING" | "FACILITY_MANAGEMENT" | "WHITE_COLLAR" | "ALL"
+  attendancePeriodFrom  DateTime?             @db.Date
+  attendancePeriodTo    DateTime?             @db.Date
+  sourceType            String                @default("FILE_UPLOAD") // "FILE_UPLOAD" | "MOBILE" | "BIOMETRIC" | "API" | "MANUAL" | "SYSTEM_GENERATED" | "CORRECTION"
+  originalFileName      String
+  fileSize              Int?
+  fileMimeType          String?
+  fileHash              String?
+  recordCount           Int                   @default(0)
+  validCount            Int                   @default(0)
+  warningCount          Int                   @default(0)
+  errorCount            Int                   @default(0)
+  duplicateCount        Int                   @default(0)
+  unmatchedCount        Int                   @default(0)
+  status                String                @default("UPLOADED") // "UPLOADED" | "VALIDATING" | "VALIDATED" | "UNDER_REVIEW" | "REJECTED" | "CANCELLED"
+  uploadedById          String?
+  uploadedByName        String?
+  uploadedBy            Employee?             @relation("AttendanceBatchUploadedBy", fields: [uploadedById], references: [id], onDelete: SetNull)
+  uploadedAt            DateTime              @default(now())
+  validationStartedAt   DateTime?
+  validationCompletedAt DateTime?
+  reviewedById          String?
+  reviewedByName        String?
+  reviewedBy            Employee?             @relation("AttendanceBatchReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
+  reviewedAt            DateTime?
+  remarks               String?               @db.Text
+  metadata              Json?
+  createdAt             DateTime              @default(now())
+  updatedAt             DateTime              @updatedAt
+
+  rows                  AttendanceImportRow[]
+
+  @@index([companyId, status], map: "attendance_import_batches_companyId_status_idx")
+  @@index([companyId, attendancePeriodFrom, attendancePeriodTo], map: "attendance_import_batches_company_period_idx")
+  @@index([status], map: "attendance_import_batches_status_idx")
+  @@index([sourceType], map: "attendance_import_batches_sourceType_idx")
+  @@index([fileHash], map: "attendance_import_batches_fileHash_idx")
+  @@map("attendance_import_batches")
+}
+
+model AttendanceImportRow {
+  id                         String                 @id @default(uuid())
+  batchId                    String
+  batch                      AttendanceImportBatch  @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  sourceRowNumber            Int
+  rawPayload                 Json?
+  rowFingerprint             String?
+
+  // Raw Values
+  rawAttendanceDate          String?
+  rawEmployeeCode            String?
+  rawEmployeeName            String?
+  rawCompany                 String?
+  rawSite                    String?
+  rawContract                String?
+  rawShift                   String?
+  rawPlannedStart            String?
+  rawPlannedEnd              String?
+  rawActualTimeIn            String?
+  rawActualTimeOut           String?
+  rawWorkedHours             String?
+  rawOtHours                 String?
+  rawAttendanceStatus        String?
+  rawLeaveType               String?
+  rawReplacementEmployeeCode String?
+  rawAssignmentType          String?
+  rawRemarks                 String?                @db.Text
+
+  // Normalized Values
+  attendanceDate             DateTime?              @db.Date
+  actualTimeIn               DateTime?
+  actualTimeOut              DateTime?
+  plannedStartTime           String?
+  plannedEndTime             String?
+  workedHours                Float?
+  otHours                    Float?
+  normalizedStatus           String?
+
+  // Resolved Reference IDs
+  employeeId                 String?
+  employee                   Employee?              @relation("AttendanceRowEmployee", fields: [employeeId], references: [id], onDelete: SetNull)
+  companyId                  String?
+  company                    Company?               @relation("AttendanceRowCompany", fields: [companyId], references: [id], onDelete: SetNull)
+  siteId                     String?
+  site                       ManpowerSite?          @relation("AttendanceRowSite", fields: [siteId], references: [id], onDelete: SetNull)
+  contractId                 String?
+  contract                   ManpowerContract?      @relation("AttendanceRowContract", fields: [contractId], references: [id], onDelete: SetNull)
+  rosterRequirementSlotId    String?
+  rosterRequirementSlot      RosterRequirementSlot? @relation("AttendanceRowRosterSlot", fields: [rosterRequirementSlotId], references: [id], onDelete: SetNull)
+  rosterSlotAssignmentId     String?
+  rosterSlotAssignment       RosterSlotAssignment?  @relation("AttendanceRowRosterAssignment", fields: [rosterSlotAssignmentId], references: [id], onDelete: SetNull)
+  existingAttendanceId       String?
+  existingAttendance         AttendanceRecord?      @relation("AttendanceRowExistingAttendance", fields: [existingAttendanceId], references: [id], onDelete: SetNull)
+
+  // Validation Details
+  validationStatus           String                 @default("PENDING") // "PENDING" | "VALID" | "WARNING" | "ERROR" | "DUPLICATE" | "UNMATCHED"
+  validationMessages         Json?
+  isDuplicate                Boolean                @default(false)
+  duplicateReason            String?                @db.Text
+  existingAttendanceSource   String?
+  validationVersion          Int                    @default(1)
+  createdAt                  DateTime               @default(now())
+  updatedAt                  DateTime               @updatedAt
+
+  @@index([batchId, validationStatus], map: "attendance_import_rows_batch_status_idx")
+  @@index([batchId, sourceRowNumber], map: "attendance_import_rows_batch_row_idx")
+  @@index([employeeId, attendanceDate], map: "attendance_import_rows_emp_date_idx")
+  @@index([companyId, attendanceDate], map: "attendance_import_rows_company_date_idx")
+  @@index([rosterSlotAssignmentId], map: "attendance_import_rows_roster_asg_idx")
+  @@index([existingAttendanceId], map: "attendance_import_rows_existing_att_idx")
+  @@index([rowFingerprint], map: "attendance_import_rows_fingerprint_idx")
+  @@map("attendance_import_rows")
+}
+
 
 

@@ -25,6 +25,7 @@ const navItems: NavItem[] = [
   { label: "Facility Management", path: "/manpower/facility-management/dashboard", icon: "business" },
   { label: "Commercial & Contracts", path: "/commercial/dashboard", icon: "handshake" },
   { label: "Attendance Monitor", path: "/attendance", icon: "fact_check" },
+  { label: "Attendance Intake", path: "/attendance/import", icon: "upload_file" },
   { label: "Leave Management", path: "/leave", icon: "event_busy" },
   { label: "Clearance Management", path: "/clearance", icon: "task" },
   { label: "Reports Hub", path: "/reports", icon: "analytics" },

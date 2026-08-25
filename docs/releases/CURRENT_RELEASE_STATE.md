@@ -1,6 +1,6 @@
 # AHH WFM — Current Release State
 
-Last updated: August 11, 2026
+Last updated: August 25, 2026
 
 Timezone: Asia/Qatar
 
@@ -24,24 +24,17 @@ Do not store passwords, API keys, tokens, connection strings, `.env` values or s
 
 Current programme phases:
 
+* Unified Attendance Intake Foundation Phase AT-1 — Intake & Reconciliation Foundation (LOCAL IMPLEMENTATION COMPLETED AND VERIFIED — PENDING SERVER DEPLOYMENT)
 * SECFAC Phase 6B — Security Post Orders, Shift Briefings, Incident/Occurrence Management & Supervisor Field Inspections (LOCAL IMPLEMENTATION COMPLETED AND VERIFIED — PENDING SERVER DEPLOYMENT)
-* SECFAC Phase 6A.2 — Patrol Assurance, Offline Emergency Sync & Welfare Checks (DEPLOYED AND VERIFIED)
 * Commercial Lifecycle Phase CL-5 through CL-8 — Operations Handover, Addendums, Renewals (DEPLOYED AND CLOSED)
 
 Current release objective:
 
-`SECFAC Phase 6B — Security Post Orders, Shift Briefings, Incident/Occurrence Management & Supervisor Field Inspections — FULLY IMPLEMENTED AND VERIFIED LOCALLY.`
-
-Current Git commit candidate:
-
-`faa3a1a361ef53d4ebf2ffecaa3c34ebfe4ff5cd`
-
-
-
+`Phase AT-1: Unified Attendance Intake Foundation — Controlled Staging, RFC-4180 Parsing, Reference Resolution, Cross-Source Duplicate Protection & Non-Authoritative Review Console.`
 
 Authoritative starting baseline:
 
-`458cff1149fd55ba7d06c51ecaf8f36ba2aba4a3`
+`cf459226991539d45d981ab418d51bdaba989f0e`
 
 
 ---
@@ -196,12 +189,15 @@ The following Commercial Lifecycle functionality is visible and working in the L
 
 | Migration name | Status | Notes |
 |---|---|---|
+| `20260825120000_add_at1_attendance_import_staging` | Applied (LOCAL) | Adds `attendance_import_batches`, `attendance_import_rows` tables; pure additive non-authoritative staging |
 | `20260811120000_add_cl1_activities_and_tasks` | Applied (LOCAL) | Adds `CommercialActivity`, `CommercialTask` tables; `UNIQUE (externalProvider, externalItemId)` |
 | `20260810200000_add_cl8_contract_renewal` | Applied (LOCAL) | Adds `ManpowerContractRenewalCase`; `@@unique([contractId])` |
 | `20260810100000_add_cl5_client_acceptance_contract_conversion` | Applied (LOCAL & SERVER) | Adds `PreContractClientResponse`; 6 audit fields on `ManpowerContract` |
 | `20260809153000_add_cl4_precontract_proposals` | Applied (LOCAL & SERVER) | Deployed in release `14fb15a` |
 | `20260809130000_add_cl3_precontract_costing` | Applied (LOCAL & SERVER) | Deployed on SERVER |
 | (All prior migrations) | Applied (LOCAL & SERVER) | Unchanged |
+
+Server migration status for `20260825120000_add_at1_attendance_import_staging`: **NOT YET APPLIED** (deployment pending CIO authorization).
 
 Server migration status for `20260811120000_add_cl1_activities_and_tasks`: **NOT YET APPLIED** (deployment pending CIO authorization).
 
