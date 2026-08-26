@@ -398,6 +398,44 @@ export async function validateAttendanceImportBatch(
             });
           }
         }
+
+        // Check Employee Name Discrepancy against Master
+        if (row.rawEmployeeName) {
+          const cleanRaw = row.rawEmployeeName.trim().toLowerCase();
+          const cleanDb = matchedEmp.name.trim().toLowerCase();
+          if (cleanRaw && cleanDb && !cleanDb.includes(cleanRaw) && !cleanRaw.includes(cleanDb)) {
+            messages.push({
+              code: "EMPLOYEE_NAME_MISMATCH",
+              severity: "WARNING",
+              field: "rawEmployeeName",
+              message: `Uploaded name '${row.rawEmployeeName}' differs from employee master name '${matchedEmp.name}'. Master name will be preserved.`
+            });
+          }
+        }
+      }
+    }
+
+    // 2.1 Matrix Attendance Code & Status Validation
+    const rawStatus = (row.rawAttendanceStatus || "").trim().toUpperCase();
+    if (rawStatus === "UNKNOWN" || rawStatus.startsWith("UNKNOWN_")) {
+      messages.push({
+        code: "UNKNOWN_ATTENDANCE_CODE",
+        severity: "WARNING",
+        field: "rawAttendanceStatus",
+        message: `Unknown or unmapped attendance status code '${row.rawRemarks || row.rawAttendanceStatus}'.`
+      });
+    }
+
+    // 2.2 OT Without Base Attendance Validation
+    if (otHours && otHours > 0) {
+      const isNonWorking = rawStatus === "WEEKLY_OFF" || rawStatus === "OFF" || rawStatus === "ABSENT" || rawStatus === "AB" || rawStatus === "SICK_LEAVE" || rawStatus === "SL" || rawStatus === "ANNUAL_LEAVE" || rawStatus === "AL" || (workedHours === 0 && rawStatus !== "PRESENT" && rawStatus !== "PRESENT_MOBILIZED");
+      if (isNonWorking) {
+        messages.push({
+          code: "OT_WITHOUT_BASE_ATTENDANCE",
+          severity: "WARNING",
+          field: "rawOtHours",
+          message: `Overtime hours (${otHours}h) reported on a non-working or absent day (${rawStatus}).`
+        });
       }
     }
 
@@ -519,13 +557,48 @@ export async function validateAttendanceImportBatch(
       if (rosterAssignment) {
         resolvedRosterAssignmentId = rosterAssignment.id;
         resolvedRosterSlotId = rosterAssignment.slotId;
+        const isWorkingStatus = (workedHours && workedHours > 0) || rawStatus === "PRESENT" || rawStatus === "PRESENT_MOBILIZED" || rawStatus === "OJT" || rawStatus === "IDLE";
+        if (isWorkingStatus) {
+          messages.push({
+            code: "ROSTER_MATCH",
+            severity: "INFO",
+            field: "rawShift",
+            message: `Matched published roster slot assignment.`
+          });
+        } else if (rawStatus === "ABSENT" || rawStatus === "ABSENT_NOT_MOBILIZED" || rawStatus === "AB") {
+          messages.push({
+            code: "PLANNED_NOT_MOBILIZED",
+            severity: "WARNING",
+            field: "rawAttendanceStatus",
+            message: `Employee was scheduled in published roster but source indicates absent / not mobilized.`
+          });
+        }
+
+        if (resolvedSiteId && rosterAssignment.slot.siteId && rosterAssignment.slot.siteId !== resolvedSiteId) {
+          messages.push({
+            code: "ROSTER_SITE_MISMATCH",
+            severity: "WARNING",
+            field: "rawSite",
+            message: `Matrix site differs from roster scheduled site.`
+          });
+        }
       } else {
-        messages.push({
-          code: "ROSTER_NOT_FOUND",
-          severity: "INFO",
-          field: "rawShift",
-          message: "No scheduled roster slot assignment found for employee on this duty date."
-        });
+        const isWorkingStatus = (workedHours && workedHours > 0) || rawStatus === "PRESENT" || rawStatus === "PRESENT_MOBILIZED" || rawStatus === "OJT" || rawStatus === "IDLE";
+        if (isWorkingStatus) {
+          messages.push({
+            code: "UNROSTERED_MOBILIZATION",
+            severity: "INFO",
+            field: "rawShift",
+            message: `Employee mobilized for duty without a published roster slot assignment.`
+          });
+        } else {
+          messages.push({
+            code: "ROSTER_NOT_FOUND",
+            severity: "INFO",
+            field: "rawShift",
+            message: "No scheduled roster slot assignment found for employee on this duty date."
+          });
+        }
       }
     }
 
@@ -700,6 +773,27 @@ export async function validateAttendanceImportBatch(
 
   const validationCompletedAt = new Date();
 
+  // Compute Matrix KPIs for Batch Metadata
+  const existingMeta = (batch.metadata || {}) as Record<string, any>;
+  const employeeSet = new Set(rowResults.map((r) => r.employeeId || r.rowId));
+  const normalDutyEntries = rowResults.filter((r) => (r.workedHours && r.workedHours > 0) || r.normalizedStatus === "PRESENT" || r.normalizedStatus === "PRESENT_MOBILIZED").length;
+  const otEntries = rowResults.filter((r) => (r.otHours && r.otHours > 0)).length;
+  const leaveEntries = rowResults.filter((r) => r.normalizedStatus?.includes("LEAVE") || r.normalizedStatus === "SICK_LEAVE" || r.normalizedStatus === "ANNUAL_LEAVE" || r.normalizedStatus === "PUBLIC_HOLIDAY").length;
+  const rosterMatches = rowResults.filter((r) => r.validationMessages.some((m) => m.code === "ROSTER_MATCH")).length;
+  const attendanceConflicts = rowResults.filter((r) => r.validationMessages.some((m) => m.code === "EXISTING_ATTENDANCE_FOUND")).length;
+
+  const updatedMetadata = {
+    ...existingMeta,
+    totalEmployees: employeeSet.size,
+    normalDutyEntries,
+    otEntries,
+    leaveEntries,
+    rosterMatches,
+    attendanceConflicts,
+    unmatchedEmployees: unmatchedCount,
+    lastValidatedAt: validationCompletedAt.toISOString()
+  };
+
   // Update Batch Aggregations and Transition State to VALIDATED
   await prisma.attendanceImportBatch.update({
     where: { id: batchId },
@@ -711,7 +805,8 @@ export async function validateAttendanceImportBatch(
       errorCount,
       duplicateCount,
       unmatchedCount,
-      validationCompletedAt
+      validationCompletedAt,
+      metadata: updatedMetadata as any
     }
   });
 

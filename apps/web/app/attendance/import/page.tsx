@@ -34,11 +34,14 @@ export default function AttendanceImportPage() {
 
   // Upload Modal State
   const [isUploadOpen, setIsUploadOpen] = useState(false);
+  const [importProfile, setImportProfile] = useState<"NORMALIZED_ROW_UPLOAD" | "MONTHLY_MUSTER_MATRIX">("NORMALIZED_ROW_UPLOAD");
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [selectedCompanyId, setSelectedCompanyId] = useState("");
   const [selectedScope, setSelectedScope] = useState("SECURITY_GUARDING");
   const [periodFrom, setPeriodFrom] = useState("");
   const [periodTo, setPeriodTo] = useState("");
+  const [matrixMonth, setMatrixMonth] = useState("8");
+  const [matrixYear, setMatrixYear] = useState("2026");
   const [autoValidate, setAutoValidate] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
@@ -83,7 +86,7 @@ export default function AttendanceImportPage() {
   const handleUploadSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!uploadFile) {
-      setUploadError("Please select an attendance CSV file to upload.");
+      setUploadError("Please select an attendance file (CSV or XLSX) to upload.");
       return;
     }
 
@@ -93,10 +96,16 @@ export default function AttendanceImportPage() {
     try {
       const formData = new FormData();
       formData.append("file", uploadFile);
+      formData.append("importProfile", importProfile);
       if (selectedCompanyId) formData.append("companyId", selectedCompanyId);
       formData.append("operationType", selectedScope);
-      if (periodFrom) formData.append("attendancePeriodFrom", periodFrom);
-      if (periodTo) formData.append("attendancePeriodTo", periodTo);
+      if (importProfile === "MONTHLY_MUSTER_MATRIX") {
+        formData.append("month", matrixMonth);
+        formData.append("year", matrixYear);
+      } else {
+        if (periodFrom) formData.append("attendancePeriodFrom", periodFrom);
+        if (periodTo) formData.append("attendancePeriodTo", periodTo);
+      }
       formData.append("autoValidate", String(autoValidate));
 
       const res = await fetch("/api/v1/attendance-import/batches", {
@@ -156,23 +165,31 @@ export default function AttendanceImportPage() {
         <div>
           <div className="flex items-center gap-2">
             <span className="text-xs font-semibold uppercase tracking-wider text-primary bg-primary/10 px-2 py-0.5 rounded">
-              Phase AT-1 Intake Foundation
+              Phase AT-1 / AT-1A Intake & Output
             </span>
             <span className="text-xs text-on-surface-variant">Non-Authoritative Staging</span>
           </div>
           <h1 className="text-2xl font-bold text-on-surface mt-1">Attendance Intake & Staging Console</h1>
           <p className="text-sm text-on-surface-variant mt-0.5">
-            Stage, parse, resolve reference entities, and validate operational attendance files with cross-source duplicate protection.
+            Stage, parse monthly muster matrices, resolve reference entities, and generate DRAFT detailed timesheets and client mobilization sheets.
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
-          <a href="/api/v1/attendance-import/template" download>
-            <Button variant="secondary" size="sm" type="button">
-              <span className="material-symbols-outlined text-sm mr-1.5">download</span>
-              Download Template
-            </Button>
-          </a>
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2">
+            <a href="/api/v1/attendance-import/template" download title="Download standard CSV row-by-row template">
+              <Button variant="secondary" size="sm" type="button">
+                <span className="material-symbols-outlined text-sm mr-1.5">description</span>
+                CSV Template
+              </Button>
+            </a>
+            <a href="/api/v1/attendance-import/template?profile=MONTHLY_MUSTER_MATRIX" download title="Download approved Monthly Muster Matrix XLSX template">
+              <Button variant="secondary" size="sm" type="button">
+                <span className="material-symbols-outlined text-sm mr-1.5">table_view</span>
+                Matrix Template (XLSX)
+              </Button>
+            </a>
+          </div>
           <Button variant="primary" size="sm" onClick={() => setIsUploadOpen(true)}>
             <span className="material-symbols-outlined text-sm mr-1.5">upload_file</span>
             Upload Attendance File
@@ -318,6 +335,48 @@ export default function AttendanceImportPage() {
             </div>
           )}
 
+          {/* Import Profile Selection */}
+          <div>
+            <label className="block font-bold text-on-surface-variant uppercase mb-1">Import Profile / Layout</label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setImportProfile("NORMALIZED_ROW_UPLOAD")}
+                className={`p-2.5 rounded-lg border text-left transition-all ${
+                  importProfile === "NORMALIZED_ROW_UPLOAD"
+                    ? "border-primary bg-primary/10 text-primary font-bold shadow-sm"
+                    : "border-outline-variant bg-surface-container-low text-on-surface hover:bg-surface-container"
+                }`}
+              >
+                <div className="flex items-center gap-1.5 mb-0.5">
+                  <span className="material-symbols-outlined text-sm">view_list</span>
+                  <span>Row-by-Row Upload</span>
+                </div>
+                <div className="text-[10px] text-on-surface-variant font-normal">
+                  Standard tabular CSV (1 row = 1 employee duty)
+                </div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setImportProfile("MONTHLY_MUSTER_MATRIX")}
+                className={`p-2.5 rounded-lg border text-left transition-all ${
+                  importProfile === "MONTHLY_MUSTER_MATRIX"
+                    ? "border-primary bg-primary/10 text-primary font-bold shadow-sm"
+                    : "border-outline-variant bg-surface-container-low text-on-surface hover:bg-surface-container"
+                }`}
+              >
+                <div className="flex items-center gap-1.5 mb-0.5">
+                  <span className="material-symbols-outlined text-sm">grid_view</span>
+                  <span>Monthly Muster Matrix</span>
+                </div>
+                <div className="text-[10px] text-on-surface-variant font-normal">
+                  Employee × Days 1..31 horizontal matrix (XLSX)
+                </div>
+              </button>
+            </div>
+          </div>
+
           <div>
             <label className="block font-bold text-on-surface-variant uppercase mb-1">Target Company</label>
             <select
@@ -347,33 +406,65 @@ export default function AttendanceImportPage() {
             </select>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block font-bold text-on-surface-variant uppercase mb-1">Period From</label>
-              <input
-                type="date"
-                value={periodFrom}
-                onChange={(e) => setPeriodFrom(e.target.value)}
-                className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-xs text-on-surface"
-              />
+          {importProfile === "MONTHLY_MUSTER_MATRIX" ? (
+            <div className="grid grid-cols-2 gap-3 bg-blue-50/50 p-3 rounded-lg border border-blue-100">
+              <div>
+                <label className="block font-bold text-on-surface-variant uppercase mb-1">Matrix Month</label>
+                <select
+                  value={matrixMonth}
+                  onChange={(e) => setMatrixMonth(e.target.value)}
+                  className="w-full bg-white border border-outline-variant rounded-lg px-3 py-2 text-xs text-on-surface"
+                >
+                  {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+                    <option key={m} value={m}>
+                      {new Date(2026, m - 1, 1).toLocaleString("en-US", { month: "long" })} (Month {m})
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block font-bold text-on-surface-variant uppercase mb-1">Matrix Year</label>
+                <input
+                  type="number"
+                  min="2024"
+                  max="2030"
+                  value={matrixYear}
+                  onChange={(e) => setMatrixYear(e.target.value)}
+                  className="w-full bg-white border border-outline-variant rounded-lg px-3 py-2 text-xs text-on-surface"
+                />
+              </div>
             </div>
-            <div>
-              <label className="block font-bold text-on-surface-variant uppercase mb-1">Period To</label>
-              <input
-                type="date"
-                value={periodTo}
-                onChange={(e) => setPeriodTo(e.target.value)}
-                className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-xs text-on-surface"
-              />
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block font-bold text-on-surface-variant uppercase mb-1">Period From</label>
+                <input
+                  type="date"
+                  value={periodFrom}
+                  onChange={(e) => setPeriodFrom(e.target.value)}
+                  className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-xs text-on-surface"
+                />
+              </div>
+              <div>
+                <label className="block font-bold text-on-surface-variant uppercase mb-1">Period To</label>
+                <input
+                  type="date"
+                  value={periodTo}
+                  onChange={(e) => setPeriodTo(e.target.value)}
+                  className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-xs text-on-surface"
+                />
+              </div>
             </div>
-          </div>
+          )}
 
           <div>
-            <label className="block font-bold text-on-surface-variant uppercase mb-1">Attendance File (CSV format, max 10MB)</label>
+            <label className="block font-bold text-on-surface-variant uppercase mb-1">
+              {importProfile === "MONTHLY_MUSTER_MATRIX" ? "Matrix Spreadsheet (.xlsx, .xls, .csv, max 10MB)" : "Attendance File (.csv, max 10MB)"}
+            </label>
             <div className="border-2 border-dashed border-outline-variant rounded-xl p-4 text-center hover:border-primary transition-colors cursor-pointer bg-surface-container-lowest">
               <input
                 type="file"
-                accept=".csv,text/csv"
+                accept=".csv,text/csv,.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,.xls"
                 onChange={(e) => {
                   if (e.target.files && e.target.files[0]) {
                     setUploadFile(e.target.files[0]);

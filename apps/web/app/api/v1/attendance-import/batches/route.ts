@@ -119,7 +119,10 @@ export async function POST(request: Request) {
     let attendancePeriodFrom: Date | null = null;
     let attendancePeriodTo: Date | null = null;
     let autoValidate = true;
-    let rawContent = "";
+    let rawContent: string | Buffer = "";
+    let importProfile: "NORMALIZED_ROW_UPLOAD" | "MONTHLY_MUSTER_MATRIX" = "NORMALIZED_ROW_UPLOAD";
+    let periodYear: number | undefined = undefined;
+    let periodMonth: number | undefined = undefined;
 
     const contentType = request.headers.get("content-type") || "";
 
@@ -130,7 +133,14 @@ export async function POST(request: Request) {
       operationType = (formData.get("operationType") as string) || "SECURITY_GUARDING";
       const fromStr = formData.get("attendancePeriodFrom") as string | null;
       const toStr = formData.get("attendancePeriodTo") as string | null;
+      const profStr = formData.get("importProfile") as string | null;
+      const yStr = formData.get("year") as string | null;
+      const mStr = formData.get("month") as string | null;
       autoValidate = formData.get("autoValidate") !== "false";
+
+      if (profStr === "MONTHLY_MUSTER_MATRIX") importProfile = "MONTHLY_MUSTER_MATRIX";
+      if (yStr) periodYear = parseInt(yStr, 10);
+      if (mStr) periodMonth = parseInt(mStr, 10);
 
       if (fromStr) attendancePeriodFrom = new Date(fromStr);
       if (toStr) attendancePeriodTo = new Date(toStr);
@@ -144,7 +154,12 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "File size exceeds the 10MB maximum limit." }, { status: 400 });
       }
 
-      rawContent = await file.text();
+      if (fileName.toLowerCase().endsWith(".xlsx") || fileName.toLowerCase().endsWith(".xls")) {
+        const arrayBuf = await file.arrayBuffer();
+        rawContent = Buffer.from(arrayBuf);
+      } else {
+        rawContent = await file.text();
+      }
     } else {
       const body = await request.json();
       fileName = body.fileName || "attendance_import.csv";
@@ -152,6 +167,9 @@ export async function POST(request: Request) {
       operationType = body.operationType || "SECURITY_GUARDING";
       if (body.attendancePeriodFrom) attendancePeriodFrom = new Date(body.attendancePeriodFrom);
       if (body.attendancePeriodTo) attendancePeriodTo = new Date(body.attendancePeriodTo);
+      if (body.importProfile === "MONTHLY_MUSTER_MATRIX") importProfile = "MONTHLY_MUSTER_MATRIX";
+      if (body.year) periodYear = parseInt(body.year, 10);
+      if (body.month) periodMonth = parseInt(body.month, 10);
       autoValidate = body.autoValidate !== false;
       rawContent = body.fileContent || "";
 
@@ -177,7 +195,13 @@ export async function POST(request: Request) {
     }
 
     // Parse the uploaded content safely
-    const parseResult = parseAttendanceImportContent(rawContent, fileName);
+    const parseResult = parseAttendanceImportContent(rawContent, fileName, {
+      importProfile,
+      year: periodYear,
+      month: periodMonth,
+      companyId: companyId || undefined
+    });
+
     if (!parseResult.success) {
       return NextResponse.json({
         error: parseResult.errors.join("; "),
@@ -195,7 +219,21 @@ export async function POST(request: Request) {
     });
     const batchNumber = `AIB-${yearMonth}-${String(countThisMonth + 1).padStart(4, "0")}`;
 
-    // Transactional Batch & Staging Rows Creation
+    const initialMetadata = {
+      importProfile: parseResult.matrixMetadata?.importProfile || importProfile,
+      clientName: parseResult.matrixMetadata?.clientName,
+      siteName: parseResult.matrixMetadata?.siteName,
+      contractNumber: parseResult.matrixMetadata?.contractNumber,
+      periodYear: parseResult.matrixMetadata?.periodYear || periodYear,
+      periodMonth: parseResult.matrixMetadata?.periodMonth || periodMonth,
+      daysInMonth: parseResult.matrixMetadata?.daysInMonth,
+      totalEmployeesInMatrix: parseResult.matrixMetadata?.totalEmployeesInMatrix,
+      totalExpandedRows: parseResult.rows.length
+    };
+
+    const fileSize = Buffer.isBuffer(rawContent) ? rawContent.length : Buffer.byteLength(rawContent, "utf-8");
+
+    // Transactional Batch & Staging Rows Creation with Chunking
     const createdBatch = await prisma.$transaction(async (tx) => {
       const batch = await tx.attendanceImportBatch.create({
         data: {
@@ -206,12 +244,13 @@ export async function POST(request: Request) {
           attendancePeriodTo,
           sourceType: "FILE_UPLOAD",
           originalFileName: fileName,
-          fileSize: Buffer.byteLength(rawContent, "utf-8"),
+          fileSize,
           fileHash: parseResult.fileHash,
           recordCount: parseResult.rows.length,
           status: "UPLOADED",
           uploadedById: userId,
-          uploadedByName: userName
+          uploadedByName: userName,
+          metadata: initialMetadata as any
         }
       });
 

@@ -24,21 +24,21 @@ Do not store passwords, API keys, tokens, connection strings, `.env` values or s
 
 Current programme phases:
 
-* Unified Attendance Intake Foundation Phase AT-1 — Intake & Reconciliation Foundation (LOCAL IMPLEMENTATION COMPLETED AND VERIFIED — PENDING SERVER DEPLOYMENT)
+* Unified Attendance Intake Foundation Phase AT-1 & AT-1A — Monthly Attendance Matrix & Timesheet Profile (LOCAL IMPLEMENTATION COMPLETED AND VERIFIED — PENDING SERVER DEPLOYMENT)
 * SECFAC Phase 6B — Security Post Orders, Shift Briefings, Incident/Occurrence Management & Supervisor Field Inspections (LOCAL IMPLEMENTATION COMPLETED AND VERIFIED — PENDING SERVER DEPLOYMENT)
 * Commercial Lifecycle Phase CL-5 through CL-8 — Operations Handover, Addendums, Renewals (DEPLOYED AND CLOSED)
 
 Current release objective:
 
-`Phase AT-1: Unified Attendance Intake Foundation — Controlled Staging, RFC-4180 Parsing, Reference Resolution, Cross-Source Duplicate Protection & Non-Authoritative Review Console.`
+`Phase AT-1A: Monthly Attendance Matrix & Timesheet Profile — Horizontal Matrix Parsing, Calendar Bounds, Reference Resolution, DRAFT Detailed Timesheet & Client Muster Workbooks, Zero Authoritative Database Mutation.`
 
 Current LOCAL Commit:
 
-`6d713479dbc475ce0eaeb86072c29393b7996c9e`
+Pending Final Commit for AT-1A release candidate.
 
 Authoritative starting baseline:
 
-`cf459226991539d45d981ab418d51bdaba989f0e`
+`a026d3bfced189235597f8a55c62ba5865a880e2`
 
 
 ---

@@ -301,8 +301,33 @@ export default function BatchDetailPage() {
           </p>
         </div>
 
-        {/* Action Controls */}
+        {/* Action Controls & DRAFT Exports */}
         <div className="flex flex-wrap items-center gap-2">
+          {/* DRAFT Output Exports */}
+          <div className="flex items-center gap-2 border-r border-outline-variant pr-2 mr-1">
+            <a
+              href={`/api/v1/attendance-import/batches/${batchId}/export/detailed-timesheet`}
+              download
+              title="Download Detailed Monthly Attendance Timesheet with 2-Row presentation (DRAFT)"
+            >
+              <Button variant="secondary" size="sm" type="button">
+                <span className="material-symbols-outlined text-sm mr-1">table_view</span>
+                Detailed Timesheet (DRAFT)
+              </Button>
+            </a>
+
+            <a
+              href={`/api/v1/attendance-import/batches/${batchId}/export/client-muster`}
+              download
+              title="Download Client Monthly Mobilization / Muster Sheet (DRAFT)"
+            >
+              <Button variant="secondary" size="sm" type="button">
+                <span className="material-symbols-outlined text-sm mr-1">assignment</span>
+                Client Muster (DRAFT)
+              </Button>
+            </a>
+          </div>
+
           {batch.status !== "CANCELLED" && (
             <>
               <Button
@@ -350,6 +375,19 @@ export default function BatchDetailPage() {
             </>
           )}
         </div>
+      </div>
+
+      {/* DRAFT Output Watermark Alert */}
+      <div className="bg-amber-50/90 border border-amber-300 rounded-xl p-3.5 flex items-center justify-between gap-3 text-xs text-amber-900">
+        <div className="flex items-center gap-2">
+          <span className="material-symbols-outlined text-amber-700 text-base">info</span>
+          <span>
+            <strong>DRAFT Pre-Reconciliation Mode:</strong> Exports generated from this console are marked <strong>DRAFT — NOT APPROVED</strong>. They reflect staged matrix intake data and cause zero mutation to authoritative payroll, billing, or attendance tables.
+          </span>
+        </div>
+        <span className="bg-amber-200 text-amber-900 font-bold px-2 py-0.5 rounded text-[10px] tracking-wider uppercase whitespace-nowrap">
+          Draft Staging
+        </span>
       </div>
 
       {actionMessage && (
