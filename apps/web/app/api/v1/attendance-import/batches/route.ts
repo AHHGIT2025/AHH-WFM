@@ -40,7 +40,7 @@ export async function GET(request: Request) {
       where.status = status;
     }
 
-    // Tenancy and Scope Isolation
+    // Tenancy and Scope Isolation: Attendance Intake is strictly for Security Guarding and Facility Management
     if (!isAdmin) {
       if (operationAccess.allowedCompanyIds && operationAccess.allowedCompanyIds.length > 0) {
         where.companyId = { in: operationAccess.allowedCompanyIds };
@@ -49,22 +49,26 @@ export async function GET(request: Request) {
       const allowedScopes: string[] = [];
       if (operationAccess.allowedSecurityGuarding) allowedScopes.push("SECURITY_GUARDING");
       if (operationAccess.allowedFacilityManagement) allowedScopes.push("FACILITY_MANAGEMENT");
-      if (operationAccess.allowedWhiteCollar !== false) allowedScopes.push("WHITE_COLLAR");
+
+      if (allowedScopes.length === 0) {
+        return NextResponse.json({ error: "Forbidden: Attendance Intake is restricted to Security Guarding and Facility Management users." }, { status: 403 });
+      }
 
       if (operationType && operationType !== "ALL") {
         if (!allowedScopes.includes(operationType)) {
           return NextResponse.json({ error: "Forbidden: Restricted operational scope." }, { status: 403 });
         }
         where.operationType = operationType;
-      } else if (allowedScopes.length > 0) {
-        where.OR = [
-          { operationType: { in: allowedScopes } },
-          { operationType: null },
-          { operationType: "ALL" }
-        ];
+      } else {
+        where.operationType = { in: allowedScopes };
       }
     } else if (operationType && operationType !== "ALL") {
+      if (operationType !== "SECURITY_GUARDING" && operationType !== "FACILITY_MANAGEMENT") {
+        return NextResponse.json({ error: "Invalid operational scope. Must be SECURITY_GUARDING or FACILITY_MANAGEMENT." }, { status: 400 });
+      }
       where.operationType = operationType;
+    } else {
+      where.operationType = { in: ["SECURITY_GUARDING", "FACILITY_MANAGEMENT"] };
     }
 
     const [total, batches] = await Promise.all([
@@ -130,7 +134,7 @@ export async function POST(request: Request) {
       const formData = await request.formData();
       const file = formData.get("file") as File | null;
       companyId = formData.get("companyId") as string | null;
-      operationType = (formData.get("operationType") as string) || "SECURITY_GUARDING";
+      operationType = formData.has("operationType") ? (formData.get("operationType") as string) : "SECURITY_GUARDING";
       const fromStr = formData.get("attendancePeriodFrom") as string | null;
       const toStr = formData.get("attendancePeriodTo") as string | null;
       const profStr = formData.get("importProfile") as string | null;
@@ -164,7 +168,7 @@ export async function POST(request: Request) {
       const body = await request.json();
       fileName = body.fileName || "attendance_import.csv";
       companyId = body.companyId || null;
-      operationType = body.operationType || "SECURITY_GUARDING";
+      operationType = body.operationType !== undefined ? body.operationType : "SECURITY_GUARDING";
       if (body.attendancePeriodFrom) attendancePeriodFrom = new Date(body.attendancePeriodFrom);
       if (body.attendancePeriodTo) attendancePeriodTo = new Date(body.attendancePeriodTo);
       if (body.importProfile === "MONTHLY_MUSTER_MATRIX") importProfile = "MONTHLY_MUSTER_MATRIX";
@@ -179,6 +183,13 @@ export async function POST(request: Request) {
         const dataLines = body.rows.map((r: any) => Object.values(r).join(","));
         rawContent = [headerLine, ...dataLines].join("\n");
       }
+    }
+
+    // Verify Valid Operational Scope (Strictly SECURITY_GUARDING or FACILITY_MANAGEMENT)
+    if (operationType !== "SECURITY_GUARDING" && operationType !== "FACILITY_MANAGEMENT") {
+      return NextResponse.json({
+        error: "Invalid operational scope. Attendance intake is permitted only for SECURITY_GUARDING and FACILITY_MANAGEMENT."
+      }, { status: 400 });
     }
 
     // Verify Scope Access
@@ -217,7 +228,14 @@ export async function POST(request: Request) {
         batchNumber: { startsWith: `AIB-${yearMonth}` }
       }
     });
-    const batchNumber = `AIB-${yearMonth}-${String(countThisMonth + 1).padStart(4, "0")}`;
+    let seq = countThisMonth + 1;
+    let batchNumber = `AIB-${yearMonth}-${String(seq).padStart(4, "0")}`;
+    let exists = await prisma.attendanceImportBatch.findUnique({ where: { batchNumber } });
+    while (exists) {
+      seq++;
+      batchNumber = `AIB-${yearMonth}-${String(seq).padStart(4, "0")}`;
+      exists = await prisma.attendanceImportBatch.findUnique({ where: { batchNumber } });
+    }
 
     const initialMetadata = {
       importProfile: parseResult.matrixMetadata?.importProfile || importProfile,

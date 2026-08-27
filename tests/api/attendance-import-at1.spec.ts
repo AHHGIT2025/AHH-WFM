@@ -18,6 +18,7 @@ import { GET as getBatchRows } from "../../apps/web/app/api/v1/attendance-import
 import { POST as reviewBatchRoute } from "../../apps/web/app/api/v1/attendance-import/batches/[id]/review/route";
 import { POST as cancelBatchRoute } from "../../apps/web/app/api/v1/attendance-import/batches/[id]/cancel/route";
 import { GET as getTemplateRoute } from "../../apps/web/app/api/v1/attendance-import/template/route";
+import { filterNavigationByPermissions } from "../../apps/web/lib/permissions";
 
 jest.mock("next-auth/next", () => ({
   getServerSession: jest.fn()
@@ -539,7 +540,8 @@ describe("Unified Attendance Intake Foundation (Phase AT-1) API & Validation Sui
     let apiBatchId: string;
 
     it("3.1. Template download endpoint returns CSV attachment", async () => {
-      const res = await getTemplateRoute();
+      const tplReq = new NextRequest("http://localhost:3100/api/v1/attendance-import/template");
+      const res = await getTemplateRoute(tplReq);
       expect(res.status).toBe(200);
       expect(res.headers.get("Content-Type")).toContain("text/csv");
       const text = await res.text();
@@ -682,6 +684,194 @@ describe("Unified Attendance Intake Foundation (Phase AT-1) API & Validation Sui
       const data = await res.json();
       expect(data.error).toContain("Restricted operational scope");
     });
+
+    it("4.3. Prevents Security user from creating Facility Management batch", async () => {
+      (getServerSession as jest.Mock).mockResolvedValueOnce({
+        user: {
+          id: "sec-only-user",
+          role: "SECURITY_OPERATIONS_MANAGER",
+          permissions: ["attendance.import.create"],
+          operationAccess: {
+            allowedSecurityGuarding: true,
+            allowedFacilityManagement: false
+          }
+        }
+      });
+
+      const req = new NextRequest("http://localhost:3100/api/v1/attendance-import/batches", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fileName: "sec_forbidden_fm.csv",
+          operationType: "FACILITY_MANAGEMENT",
+          fileContent: "Attendance Date,Employee Code\n2026-08-25,EMP1"
+        })
+      });
+      const res = await createBatch(req);
+      expect(res.status).toBe(403);
+      const data = await res.json();
+      expect(data.error).toContain("No access to Facility Management scope");
+    });
+
+    it("4.4. Prevents FM user from creating Security Guarding batch", async () => {
+      (getServerSession as jest.Mock).mockResolvedValueOnce({
+        user: {
+          id: "fm-only-user",
+          role: "FACILITY_MANAGER",
+          permissions: ["attendance.import.create"],
+          operationAccess: {
+            allowedSecurityGuarding: false,
+            allowedFacilityManagement: true
+          }
+        }
+      });
+
+      const req = new NextRequest("http://localhost:3100/api/v1/attendance-import/batches", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fileName: "fm_forbidden_sec.csv",
+          operationType: "SECURITY_GUARDING",
+          fileContent: "Attendance Date,Employee Code\n2026-08-25,EMP1"
+        })
+      });
+      const res = await createBatch(req);
+      expect(res.status).toBe(403);
+      const data = await res.json();
+      expect(data.error).toContain("No access to Security Guarding scope");
+    });
+
+    it("4.5. Rejects creation with invalid/unsupported operational scopes (WHITE_COLLAR, GENERAL, ALL)", async () => {
+      (getServerSession as jest.Mock).mockResolvedValue({
+        user: {
+          id: testActiveSecEmpId,
+          role: "SUPER_ADMIN",
+          permissions: ["attendance.import.create"]
+        }
+      });
+
+      const invalidScopes = ["WHITE_COLLAR", "GENERAL", "ALL", "UNSCOPED", ""];
+      for (const invalidScope of invalidScopes) {
+        const req = new NextRequest("http://localhost:3100/api/v1/attendance-import/batches", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            fileName: "invalid_scope.csv",
+            operationType: invalidScope,
+            fileContent: "Attendance Date,Employee Code\n2026-08-25,EMP1"
+          })
+        });
+        const res = await createBatch(req);
+        expect(res.status).toBe(400);
+        const data = await res.json();
+        expect(data.error).toContain("Invalid operational scope");
+      }
+    });
+
+    it("4.6. Allows ADMIN/SUPER_ADMIN to create either SECURITY_GUARDING or FACILITY_MANAGEMENT explicitly", async () => {
+      (getServerSession as jest.Mock).mockResolvedValue({
+        user: {
+          id: testActiveSecEmpId,
+          role: "SUPER_ADMIN",
+          permissions: ["attendance.import.create", "attendance.import.view"]
+        }
+      });
+
+      // Security Guarding creation
+      const secReq = new NextRequest("http://localhost:3100/api/v1/attendance-import/batches", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fileName: "admin_sec.csv",
+          operationType: "SECURITY_GUARDING",
+          fileContent: "Attendance Date,Employee Code\n2026-08-25,EMP1"
+        })
+      });
+      const secRes = await createBatch(secReq);
+      expect(secRes.status).toBe(201);
+      const secData = await secRes.json();
+      expect(secData.batch?.operationType || secData.operationType).toBe("SECURITY_GUARDING");
+
+      // Facility Management creation
+      const fmReq = new NextRequest("http://localhost:3100/api/v1/attendance-import/batches", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          fileName: "admin_fm.csv",
+          operationType: "FACILITY_MANAGEMENT",
+          fileContent: "Attendance Date,Employee Code\n2026-08-25,EMP1"
+        })
+      });
+      const fmRes = await createBatch(fmReq);
+      expect(fmRes.status).toBe(201);
+      const fmData = await fmRes.json();
+      expect(fmData.batch?.operationType || fmData.operationType).toBe("FACILITY_MANAGEMENT");
+    });
+
+    it("4.7. Filters Attendance Intake from generic White Collar users in navigation", () => {
+      const items = [
+        { label: "Attendance Monitor", path: "/attendance" },
+        { label: "Attendance Intake", path: "/attendance/import" }
+      ];
+
+      // White collar user without Security/FM operations access
+      const whiteCollarUser = {
+        role: "EMPLOYEE",
+        permissions: ["attendance.view"],
+        operationAccess: { allowedSecurityGuarding: false, allowedFacilityManagement: false }
+      };
+      const filteredWc = filterNavigationByPermissions(whiteCollarUser, items);
+      expect(filteredWc.some((i) => i.path === "/attendance")).toBe(true);
+      expect(filteredWc.some((i) => i.path === "/attendance/import")).toBe(false);
+
+      // Security user
+      const secUser = {
+        role: "SECURITY_OPERATIONS_MANAGER",
+        permissions: ["attendance.view", "attendance.import.view"],
+        operationAccess: { allowedSecurityGuarding: true, allowedFacilityManagement: false }
+      };
+      const filteredSec = filterNavigationByPermissions(secUser, items);
+      expect(filteredSec.some((i) => i.path === "/attendance/import")).toBe(true);
+
+      // FM user
+      const fmUser = {
+        role: "FACILITY_MANAGER",
+        permissions: ["attendance.view", "attendance.import.view"],
+        operationAccess: { allowedSecurityGuarding: false, allowedFacilityManagement: true }
+      };
+      const filteredFm = filterNavigationByPermissions(fmUser, items);
+      expect(filteredFm.some((i) => i.path === "/attendance/import")).toBe(true);
+    });
+
+    it("4.8. Ensures sidebar active route resolver strictly separates /attendance from /attendance/import", () => {
+      // Simulate the LayoutShell isActive resolver logic
+      const resolveIsActive = (path: string, currentPathname: string) => {
+        const cleanPath = path.split("?")[0];
+        if (cleanPath === "/attendance") {
+          return currentPathname === "/attendance" || (currentPathname.startsWith("/attendance/") && !currentPathname.startsWith("/attendance/import"));
+        }
+        if (cleanPath === "/attendance/import") {
+          return currentPathname === "/attendance/import" || currentPathname.startsWith("/attendance/import/");
+        }
+        return currentPathname.startsWith(cleanPath);
+      };
+
+      // 1. When on /attendance (Attendance Monitor active, Intake inactive)
+      expect(resolveIsActive("/attendance", "/attendance")).toBe(true);
+      expect(resolveIsActive("/attendance/import", "/attendance")).toBe(false);
+
+      // 2. When on /attendance/import (Attendance Intake active, Monitor inactive)
+      expect(resolveIsActive("/attendance", "/attendance/import")).toBe(false);
+      expect(resolveIsActive("/attendance/import", "/attendance/import")).toBe(true);
+
+      // 3. When on /attendance/import/AIB-202608-0001 (Attendance Intake active, Monitor inactive)
+      expect(resolveIsActive("/attendance", "/attendance/import/AIB-202608-0001")).toBe(false);
+      expect(resolveIsActive("/attendance/import", "/attendance/import/AIB-202608-0001")).toBe(true);
+
+      // 4. Sub-navigation with query parameter (e.g. /attendance/import?operationType=SECURITY_GUARDING)
+      expect(resolveIsActive("/attendance", "/attendance/import")).toBe(false);
+      expect(resolveIsActive("/attendance/import?operationType=SECURITY_GUARDING", "/attendance/import")).toBe(true);
+    });
   });
 
   describe("5. Feature Flag Certification", () => {
@@ -738,7 +928,8 @@ describe("Unified Attendance Intake Foundation (Phase AT-1) API & Validation Sui
         expect(cancelRes.status).toBe(403);
 
         // 8. Template Download
-        const tplRes = await getTemplateRoute();
+        const tplReq = new NextRequest("http://localhost:3100/api/v1/attendance-import/template");
+        const tplRes = await getTemplateRoute(tplReq);
         expect(tplRes.status).toBe(403);
       } finally {
         process.env.ATTENDANCE_IMPORT_ENABLED = originalFlag || "true";

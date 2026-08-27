@@ -4,6 +4,8 @@ import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { Card, Badge, Button, Input, Modal } from "@ahh-wfm/ui/src";
 
+import { useSession } from "next-auth/react";
+
 interface BatchItem {
   id: string;
   batchNumber: string;
@@ -26,10 +28,17 @@ interface BatchItem {
 }
 
 export default function AttendanceImportPage() {
+  const { data: session } = useSession();
+  const user = session?.user as any;
+  const operationAccess = user?.operationAccess || {};
+  const isAdmin = user?.role === "ADMIN" || user?.role === "SUPER_ADMIN" || user?.permissions?.includes("manpower.admin.full_access");
+  const hasSecurity = operationAccess?.allowedSecurityGuarding || isAdmin || user?.permissions?.includes("manpower.security.view");
+  const hasFm = operationAccess?.allowedFacilityManagement || isAdmin || user?.permissions?.includes("manpower.fm.view");
+
   const [batches, setBatches] = useState<BatchItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState("ALL");
-  const [scopeFilter, setScopeFilter] = useState("ALL");
+  const [scopeFilter, setScopeFilter] = useState(hasFm && !hasSecurity ? "FACILITY_MANAGEMENT" : hasSecurity && !hasFm ? "SECURITY_GUARDING" : "ALL");
   const [search, setSearch] = useState("");
 
   // Upload Modal State
@@ -37,7 +46,9 @@ export default function AttendanceImportPage() {
   const [importProfile, setImportProfile] = useState<"NORMALIZED_ROW_UPLOAD" | "MONTHLY_MUSTER_MATRIX">("NORMALIZED_ROW_UPLOAD");
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [selectedCompanyId, setSelectedCompanyId] = useState("");
-  const [selectedScope, setSelectedScope] = useState("SECURITY_GUARDING");
+  const [selectedScope, setSelectedScope] = useState<"SECURITY_GUARDING" | "FACILITY_MANAGEMENT">(
+    hasFm && !hasSecurity ? "FACILITY_MANAGEMENT" : "SECURITY_GUARDING"
+  );
   const [periodFrom, setPeriodFrom] = useState("");
   const [periodTo, setPeriodTo] = useState("");
   const [matrixMonth, setMatrixMonth] = useState("8");
@@ -46,6 +57,29 @@ export default function AttendanceImportPage() {
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const [companies, setCompanies] = useState<{ id: string; companyCode: string; companyName: string }[]>([]);
+
+  // Initialize from URL search params if present
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const urlParams = new URLSearchParams(window.location.search);
+      const op = urlParams.get("operationType");
+      if (op === "SECURITY_GUARDING" || op === "FACILITY_MANAGEMENT") {
+        setSelectedScope(op);
+        setScopeFilter(op);
+      }
+    }
+  }, []);
+
+  // Update scope defaults when user access is loaded
+  useEffect(() => {
+    if (hasFm && !hasSecurity) {
+      setSelectedScope("FACILITY_MANAGEMENT");
+      setScopeFilter("FACILITY_MANAGEMENT");
+    } else if (hasSecurity && !hasFm) {
+      setSelectedScope("SECURITY_GUARDING");
+      setScopeFilter("SECURITY_GUARDING");
+    }
+  }, [hasSecurity, hasFm]);
 
   const fetchBatches = useCallback(async () => {
     setLoading(true);
@@ -227,16 +261,15 @@ export default function AttendanceImportPage() {
             </div>
 
             <div>
-              <label className="block text-[11px] font-bold text-on-surface-variant uppercase mb-1">Scope</label>
+              <label className="block text-[11px] font-bold text-on-surface-variant uppercase mb-1">Operational Scope</label>
               <select
                 value={scopeFilter}
                 onChange={(e) => setScopeFilter(e.target.value)}
                 className="bg-surface-container-low border border-outline-variant rounded-lg px-3 py-1.5 text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20"
               >
-                <option value="ALL">All Scopes</option>
-                <option value="SECURITY_GUARDING">Security Guarding</option>
-                <option value="FACILITY_MANAGEMENT">Facility Management</option>
-                <option value="WHITE_COLLAR">White Collar</option>
+                {hasSecurity && hasFm && <option value="ALL">All Scopes (Security & FM)</option>}
+                {hasSecurity && <option value="SECURITY_GUARDING">Security Guarding</option>}
+                {hasFm && <option value="FACILITY_MANAGEMENT">Facility Management</option>}
               </select>
             </div>
           </div>
@@ -397,13 +430,16 @@ export default function AttendanceImportPage() {
             <label className="block font-bold text-on-surface-variant uppercase mb-1">Operational Scope</label>
             <select
               value={selectedScope}
-              onChange={(e) => setSelectedScope(e.target.value)}
-              className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-xs text-on-surface focus:ring-2 focus:ring-primary/20"
+              onChange={(e) => setSelectedScope(e.target.value as "SECURITY_GUARDING" | "FACILITY_MANAGEMENT")}
+              disabled={!isAdmin && ((hasSecurity && !hasFm) || (hasFm && !hasSecurity))}
+              className="w-full bg-surface-container-low border border-outline-variant rounded-lg px-3 py-2 text-xs text-on-surface focus:ring-2 focus:ring-primary/20 disabled:opacity-75 disabled:cursor-not-allowed"
             >
-              <option value="SECURITY_GUARDING">Security Guarding</option>
-              <option value="FACILITY_MANAGEMENT">Facility Management</option>
-              <option value="WHITE_COLLAR">White Collar</option>
+              {hasSecurity && <option value="SECURITY_GUARDING">Security Guarding</option>}
+              {hasFm && <option value="FACILITY_MANAGEMENT">Facility Management</option>}
             </select>
+            {!isAdmin && ((hasSecurity && !hasFm) || (hasFm && !hasSecurity)) && (
+              <p className="text-[10px] text-on-surface-variant mt-1">Scope locked to your assigned operational domain.</p>
+            )}
           </div>
 
           {importProfile === "MONTHLY_MUSTER_MATRIX" ? (

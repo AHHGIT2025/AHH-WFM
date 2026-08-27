@@ -416,7 +416,17 @@ export function filterNavigationByPermissions(user: { role?: string; permissions
     }
 
     if (item.path.startsWith("/workforce")) return hasPermission(user, "employees.view");
-    if (item.path.startsWith("/attendance/import")) return hasPermission(user, "attendance.import.view") || hasPermission(user, "attendance.view") || hasPermission(user, "manpower.admin.full_access");
+    if (item.path.startsWith("/attendance/import")) {
+      const opAccess = (user as any)?.operationAccess;
+      const isAdmin = user?.role === "SUPER_ADMIN" || user?.role === "ADMIN" || hasPermission(user, "manpower.admin.full_access");
+      const hasSecurity = opAccess?.allowedSecurityGuarding || hasPermission(user, "manpower.security.view");
+      const hasFm = opAccess?.allowedFacilityManagement || hasPermission(user, "manpower.fm.view");
+
+      if (!isAdmin && !hasSecurity && !hasFm) {
+        return false;
+      }
+      return hasPermission(user, "attendance.import.view") || hasPermission(user, "attendance.view") || isAdmin;
+    }
     if (item.path.startsWith("/attendance")) return hasPermission(user, "attendance.view");
     if (item.path.startsWith("/leave")) return hasPermission(user, "leaves.view");
     if (item.path.startsWith("/sap")) return hasPermission(user, "sap.view");

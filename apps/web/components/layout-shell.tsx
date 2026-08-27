@@ -59,6 +59,7 @@ export const LayoutShell: React.FC<{ children: React.ReactNode }> = ({ children 
       { label: "Gates / Posts / Zones", path: "/manpower/security-guarding/zones", icon: "door_sliding" },
       { label: "Manpower Directory", path: "/manpower/security-guarding/manpower", icon: "badge" },
       { label: "Shift Planner", path: "/manpower/security-guarding/deployment-calendar", icon: "calendar_month" },
+      { label: "Attendance Intake", path: "/attendance/import?operationType=SECURITY_GUARDING", icon: "upload_file" },
       { label: "Reliever Pools", path: "/manpower/security-guarding/reliever-pools", icon: "groups" },
       { label: "Project Coordinators", path: "/manpower/security-guarding/coordinators", icon: "assignment_turned_in" },
       { label: "Material Master", path: "/manpower/security-guarding/materials", icon: "inventory_2" },
@@ -78,6 +79,7 @@ export const LayoutShell: React.FC<{ children: React.ReactNode }> = ({ children 
       { label: "Facility Areas", path: "/manpower/facility-management/areas", icon: "location_city" },
       { label: "Manpower Directory", path: "/manpower/facility-management/manpower", icon: "badge" },
       { label: "Shift Planner", path: "/manpower/facility-management/deployment-calendar", icon: "calendar_month" },
+      { label: "Attendance Intake", path: "/attendance/import?operationType=FACILITY_MANAGEMENT", icon: "upload_file" },
       { label: "Material Master", path: "/manpower/facility-management/materials", icon: "inventory_2" },
       { label: "SECFAC Center", path: "/secfac?operationType=FACILITY_MANAGEMENT", icon: "terminal" }
     ];
@@ -184,19 +186,26 @@ export const LayoutShell: React.FC<{ children: React.ReactNode }> = ({ children 
     : "/manpower/security-guarding/alerts";
 
   const isActive = (path: string) => {
-    if (path === "/commercial/dashboard") {
+    const cleanPath = path.split("?")[0];
+    if (cleanPath === "/commercial/dashboard") {
       return pathname.startsWith("/commercial");
     }
-    if (path === "/") {
+    if (cleanPath === "/") {
       return pathname === "/" || pathname === "/dashboard";
     }
-    if (path === "/manpower") {
+    if (cleanPath === "/manpower") {
       return pathname === "/manpower";
     }
-    if (path === "/settings/masters") {
+    if (cleanPath === "/attendance") {
+      return pathname === "/attendance" || (pathname.startsWith("/attendance/") && !pathname.startsWith("/attendance/import"));
+    }
+    if (cleanPath === "/attendance/import") {
+      return pathname === "/attendance/import" || pathname.startsWith("/attendance/import/");
+    }
+    if (cleanPath === "/settings/masters") {
       return pathname === "/settings/masters" || pathname === "/admin/masters";
     }
-    if (path === "/settings") {
+    if (cleanPath === "/settings") {
       if (pathname === "/settings/masters" || pathname === "/admin/masters") {
         return false;
       }
@@ -206,7 +215,7 @@ export const LayoutShell: React.FC<{ children: React.ReactNode }> = ({ children 
              pathname.startsWith("/admin/production") || 
              pathname.startsWith("/reports/audit");
     }
-    return pathname.startsWith(path);
+    return pathname.startsWith(cleanPath);
   };
 
   const isAuthPage = pathname === "/login" || pathname.startsWith("/login");
