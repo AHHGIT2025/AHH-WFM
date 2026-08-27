@@ -24,21 +24,21 @@ Do not store passwords, API keys, tokens, connection strings, `.env` values or s
 
 Current programme phases:
 
-* Unified Attendance Intake Foundation Phase AT-1 & AT-1A — Monthly Attendance Matrix & Timesheet Profile (LOCAL IMPLEMENTATION COMPLETED AND VERIFIED — PENDING SERVER DEPLOYMENT)
+* Unified Attendance Intake Foundation Phase AT-1 & AT-1A — Monthly Attendance Matrix & Timesheet Profile + Attendance Navigation & Scope Isolation Correction (DEPLOYED TO SERVER AND VERIFIED)
 * SECFAC Phase 6B — Security Post Orders, Shift Briefings, Incident/Occurrence Management & Supervisor Field Inspections (LOCAL IMPLEMENTATION COMPLETED AND VERIFIED — PENDING SERVER DEPLOYMENT)
 * Commercial Lifecycle Phase CL-5 through CL-8 — Operations Handover, Addendums, Renewals (DEPLOYED AND CLOSED)
 
 Current release objective:
 
-`Phase AT-1A: Monthly Attendance Matrix & Timesheet Profile — Horizontal Matrix Parsing, Calendar Bounds, Reference Resolution, DRAFT Detailed Timesheet & Client Muster Workbooks, Zero Authoritative Database Mutation.`
+`Attendance Navigation Active-State, Generic Top-Level Removal, and Security Guarding / Facility Management Operational Scope Isolation Post-Recovery Verification.`
 
-Current LOCAL Commit:
+Current Certified Release Commit:
 
-`deba061ef3f40f0907cae8ceb3fe3ca8fa4cb786`
+`ce704809f80230929614def1c9d6b7ac17240d99`
 
-Authoritative starting baseline:
+Authoritative SERVER Deployed Baseline:
 
-`a026d3bfced189235597f8a55c62ba5865a880e2`
+`ce704809f80230929614def1c9d6b7ac17240d99`
 
 
 ---
@@ -227,13 +227,13 @@ SECFAC remains **PAUSED BY CIO**. All SECFAC workers and code untouched.
 
 Current state:
 
-`DEPLOYMENT APPROVED — AT-1A SERVER DEPLOYMENT AUTHORIZED BY CIO`
+`DEPLOYED TO SERVER — POST-RECOVERY VERIFIED & CERTIFIED`
 
 Approved SERVER Release Commit:
 
-`e83b62e4369e7f53efe1827361370757a8110f1f`
+`ce704809f80230929614def1c9d6b7ac17240d99`
 
 Server Migration Status:
 
 `20260825120000_add_at1_attendance_import_staging` (ALREADY APPLIED)
-Phase AT-1A: 0 NEW DATABASE MIGRATIONS
+Phase AT-1 / AT-1A / Scope Correction: 0 NEW DATABASE MIGRATIONS
