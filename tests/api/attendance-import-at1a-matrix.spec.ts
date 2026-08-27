@@ -282,10 +282,35 @@ describe("Unified Attendance Intake & Output Profile (Phase AT-1A) Matrix & Time
         "DUTY",
         ...new Array(30).fill("12")
       ]);
-
       const res = parseMonthlyMusterMatrix([...headerRows, ...empRows], "large_matrix.xlsx", { year: 2026, month: 4 });
       expect(res.success).toBe(false);
       expect(res.errors[0]).toContain("exceeds maximum source employee limit");
+    });
+
+    it("1.6. Successfully parses and expands a realistic large monthly matrix exceeding 5,000 staging records (200 employees × 31 days = 6,200 records)", () => {
+      const days = Array.from({ length: 31 }, (_, i) => String(i + 1).padStart(2, "0"));
+      const headerRows = [
+        ["Month:", "8", "Year:", "2026"],
+        [""],
+        ["S/N", "Employee Code", "Employee Name", "Designation", "Shift Hours", "Row Type", ...days]
+      ];
+      const empRows = Array.from({ length: 200 }, (_, i) => [
+        i + 1,
+        `EMP-L-${i + 1}`,
+        `Officer ${i + 1}`,
+        "Security Guard",
+        12,
+        "DUTY",
+        ...new Array(31).fill("12")
+      ]);
+
+      const res = parseMonthlyMusterMatrix([...headerRows, ...empRows], "large_6200_matrix.xlsx", { year: 2026, month: 8 });
+      expect(res.success).toBe(true);
+      expect(res.recordCount).toBe(6200);
+      expect(res.recordCount).toBeGreaterThan(5000);
+      expect(res.matrixMetadata?.totalEmployeesInMatrix).toBe(200);
+      expect(res.matrixMetadata?.totalExpandedRows).toBe(6200);
+      expect(res.matrixMetadata?.daysInMonth).toBe(31);
     });
   });
 
