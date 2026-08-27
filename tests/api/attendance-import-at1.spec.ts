@@ -540,6 +540,9 @@ describe("Unified Attendance Intake Foundation (Phase AT-1) API & Validation Sui
     let apiBatchId: string;
 
     it("3.1. Template download endpoint returns CSV attachment", async () => {
+      (getServerSession as jest.Mock).mockResolvedValueOnce({
+        user: { id: testActiveSecEmpId, role: "SUPER_ADMIN", permissions: ["attendance.import.view"] }
+      });
       const tplReq = new NextRequest("http://localhost:3100/api/v1/attendance-import/template");
       const res = await getTemplateRoute(tplReq);
       expect(res.status).toBe(200);
@@ -895,6 +898,65 @@ describe("Unified Attendance Intake Foundation (Phase AT-1) API & Validation Sui
       // 4. When on /attendance/import/AIB-202608-0001 (Batch detail: Monitor inactive)
       expect(resolveIsActive("/attendance", "/attendance/import/AIB-202608-0001")).toBe(false);
       expect(resolveIsActive("/attendance/import?operationType=SECURITY_GUARDING", "/attendance/import/AIB-202608-0001", "SECURITY_GUARDING")).toBe(true);
+    });
+
+    it("4.9. Enforces authentication, feature flag and operational scope on template endpoint", async () => {
+      // 1. Unauthenticated request -> 401
+      (getServerSession as jest.Mock).mockResolvedValueOnce(null);
+      const unauthReq = new NextRequest("http://localhost:3100/api/v1/attendance-import/template");
+      const unauthRes = await getTemplateRoute(unauthReq);
+      expect(unauthRes.status).toBe(401);
+
+      // 2. White Collar only / non-operational user -> 403
+      (getServerSession as jest.Mock).mockResolvedValueOnce({
+        user: {
+          id: "wc-user-1",
+          role: "EMPLOYEE",
+          permissions: ["attendance.view"],
+          operationAccess: { allowedWhiteCollar: true, allowedSecurityGuarding: false, allowedFacilityManagement: false }
+        }
+      });
+      const wcReq = new NextRequest("http://localhost:3100/api/v1/attendance-import/template");
+      const wcRes = await getTemplateRoute(wcReq);
+      expect(wcRes.status).toBe(403);
+      const wcData = await wcRes.json();
+      expect(wcData.error).toContain("Restricted operation scope");
+
+      // 3. Security Guarding user -> 200 (CSV & Matrix XLSX)
+      (getServerSession as jest.Mock).mockResolvedValue({
+        user: {
+          id: "sec-user-1",
+          role: "SECURITY_OPERATIONS_MANAGER",
+          permissions: ["attendance.view", "attendance.import.view"],
+          operationAccess: { allowedSecurityGuarding: true, allowedFacilityManagement: false }
+        }
+      });
+      const secCsvReq = new NextRequest("http://localhost:3100/api/v1/attendance-import/template");
+      const secCsvRes = await getTemplateRoute(secCsvReq);
+      expect(secCsvRes.status).toBe(200);
+      expect(secCsvRes.headers.get("Content-Type")).toContain("text/csv");
+
+      const secMatrixReq = new NextRequest("http://localhost:3100/api/v1/attendance-import/template?profile=MONTHLY_MUSTER_MATRIX");
+      const secMatrixRes = await getTemplateRoute(secMatrixReq);
+      expect(secMatrixRes.status).toBe(200);
+      expect(secMatrixRes.headers.get("Content-Type")).toContain("spreadsheetml.sheet");
+
+      // 4. Facility Management user -> 200 (CSV & Matrix XLSX)
+      (getServerSession as jest.Mock).mockResolvedValue({
+        user: {
+          id: "fm-user-1",
+          role: "FACILITY_MANAGER",
+          permissions: ["attendance.view", "attendance.import.view"],
+          operationAccess: { allowedSecurityGuarding: false, allowedFacilityManagement: true }
+        }
+      });
+      const fmCsvReq = new NextRequest("http://localhost:3100/api/v1/attendance-import/template");
+      const fmCsvRes = await getTemplateRoute(fmCsvReq);
+      expect(fmCsvRes.status).toBe(200);
+
+      const fmMatrixReq = new NextRequest("http://localhost:3100/api/v1/attendance-import/template?profile=MONTHLY_MUSTER_MATRIX");
+      const fmMatrixRes = await getTemplateRoute(fmMatrixReq);
+      expect(fmMatrixRes.status).toBe(200);
     });
   });
 

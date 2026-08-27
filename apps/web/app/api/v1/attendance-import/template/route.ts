@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { checkApiAuth } from "@/lib/api-guards";
+import { hasPermission, isAdminUser } from "@/lib/permissions";
 import {
   isAttendanceImportEnabled,
   getStandardAttendanceTemplateCsv,
@@ -8,6 +10,26 @@ import {
 export async function GET(request: Request) {
   if (!isAttendanceImportEnabled()) {
     return NextResponse.json({ error: "Attendance Import module is disabled by feature flag." }, { status: 403 });
+  }
+
+  const auth = await checkApiAuth(undefined, {
+    requiredOperation: ["SECURITY_GUARDING", "FACILITY_MANAGEMENT"]
+  });
+  if (auth.error) return auth.error;
+
+  const session = auth.session;
+  const user = session?.user as any;
+  const isAdmin = isAdminUser(user);
+
+  if (!isAdmin) {
+    const hasPerm = hasPermission(user, "attendance.import.view") || 
+                    hasPermission(user, "attendance.import.create") || 
+                    hasPermission(user, "attendance.view") ||
+                    hasPermission(user, "manpower.security.view") ||
+                    hasPermission(user, "manpower.fm.view");
+    if (!hasPerm) {
+      return NextResponse.json({ error: "Forbidden: Requires attendance import permissions." }, { status: 403 });
+    }
   }
 
   const url = request?.url ? new URL(request.url) : null;
