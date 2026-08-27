@@ -25,7 +25,6 @@ const navItems: NavItem[] = [
   { label: "Facility Management", path: "/manpower/facility-management/dashboard", icon: "business" },
   { label: "Commercial & Contracts", path: "/commercial/dashboard", icon: "handshake" },
   { label: "Attendance Monitor", path: "/attendance", icon: "fact_check" },
-  { label: "Attendance Intake", path: "/attendance/import", icon: "upload_file" },
   { label: "Leave Management", path: "/leave", icon: "event_busy" },
   { label: "Clearance Management", path: "/clearance", icon: "task" },
   { label: "Reports Hub", path: "/reports", icon: "analytics" },
@@ -36,10 +35,23 @@ const navItems: NavItem[] = [
 
 export const LayoutShell: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const pathname = usePathname();
+  const [opType, setOpType] = useState<string | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const { data: session, status } = useSession();
-  const isSecurityGuarding = pathname.startsWith("/manpower/security-guarding");
-  const isFacilityManagement = pathname.startsWith("/manpower/facility-management");
+  const user = session?.user as any;
+  const opAccess = user?.operationAccess || {};
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      setOpType(params.get("operationType"));
+    }
+  }, [pathname]);
+
+  const isSecurityGuarding = pathname.startsWith("/manpower/security-guarding") || 
+    (pathname.startsWith("/attendance/import") && (opType === "SECURITY_GUARDING" || (opAccess?.allowedSecurityGuarding && !opAccess?.allowedFacilityManagement)));
+  const isFacilityManagement = pathname.startsWith("/manpower/facility-management") || 
+    (pathname.startsWith("/attendance/import") && (opType === "FACILITY_MANAGEMENT" || (opAccess?.allowedFacilityManagement && !opAccess?.allowedSecurityGuarding)));
   const isSecfac = pathname.startsWith("/secfac");
   const isCommercial = pathname.startsWith("/commercial");
 
@@ -186,6 +198,12 @@ export const LayoutShell: React.FC<{ children: React.ReactNode }> = ({ children 
     : "/manpower/security-guarding/alerts";
 
   const isActive = (path: string) => {
+    if (path === "/attendance/import?operationType=SECURITY_GUARDING") {
+      return Boolean(pathname.startsWith("/attendance/import") && (opType === "SECURITY_GUARDING" || (opAccess?.allowedSecurityGuarding && !opAccess?.allowedFacilityManagement)));
+    }
+    if (path === "/attendance/import?operationType=FACILITY_MANAGEMENT") {
+      return Boolean(pathname.startsWith("/attendance/import") && (opType === "FACILITY_MANAGEMENT" || (opAccess?.allowedFacilityManagement && !opAccess?.allowedSecurityGuarding)));
+    }
     const cleanPath = path.split("?")[0];
     if (cleanPath === "/commercial/dashboard") {
       return pathname.startsWith("/commercial");

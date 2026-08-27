@@ -808,10 +808,23 @@ describe("Unified Attendance Intake Foundation (Phase AT-1) API & Validation Sui
       expect(fmData.batch?.operationType || fmData.operationType).toBe("FACILITY_MANAGEMENT");
     });
 
-    it("4.7. Filters Attendance Intake from generic White Collar users in navigation", () => {
-      const items = [
+    it("4.7. Filters contextual Attendance Intake from generic White Collar users and ensures generic top-level is absent", () => {
+      // Main menu items (no generic Attendance Intake)
+      const mainMenu = [
+        { label: "Dashboard", path: "/" },
         { label: "Attendance Monitor", path: "/attendance" },
-        { label: "Attendance Intake", path: "/attendance/import" }
+        { label: "Workforce Directory", path: "/workforce" }
+      ];
+      expect(mainMenu.some((i) => i.path === "/attendance/import")).toBe(false);
+
+      // Contextual sub-menus
+      const secSubMenu = [
+        { label: "Security Dashboard", path: "/manpower/security-guarding/dashboard" },
+        { label: "Attendance Intake", path: "/attendance/import?operationType=SECURITY_GUARDING" }
+      ];
+      const fmSubMenu = [
+        { label: "FM Dashboard", path: "/manpower/facility-management/dashboard" },
+        { label: "Attendance Intake", path: "/attendance/import?operationType=FACILITY_MANAGEMENT" }
       ];
 
       // White collar user without Security/FM operations access
@@ -820,9 +833,11 @@ describe("Unified Attendance Intake Foundation (Phase AT-1) API & Validation Sui
         permissions: ["attendance.view"],
         operationAccess: { allowedSecurityGuarding: false, allowedFacilityManagement: false }
       };
-      const filteredWc = filterNavigationByPermissions(whiteCollarUser, items);
-      expect(filteredWc.some((i) => i.path === "/attendance")).toBe(true);
-      expect(filteredWc.some((i) => i.path === "/attendance/import")).toBe(false);
+      const filteredSecWc = filterNavigationByPermissions(whiteCollarUser, secSubMenu);
+      expect(filteredSecWc.some((i) => i.path.startsWith("/attendance/import"))).toBe(false);
+
+      const filteredFmWc = filterNavigationByPermissions(whiteCollarUser, fmSubMenu);
+      expect(filteredFmWc.some((i) => i.path.startsWith("/attendance/import"))).toBe(false);
 
       // Security user
       const secUser = {
@@ -830,8 +845,8 @@ describe("Unified Attendance Intake Foundation (Phase AT-1) API & Validation Sui
         permissions: ["attendance.view", "attendance.import.view"],
         operationAccess: { allowedSecurityGuarding: true, allowedFacilityManagement: false }
       };
-      const filteredSec = filterNavigationByPermissions(secUser, items);
-      expect(filteredSec.some((i) => i.path === "/attendance/import")).toBe(true);
+      const filteredSec = filterNavigationByPermissions(secUser, secSubMenu);
+      expect(filteredSec.some((i) => i.path.startsWith("/attendance/import"))).toBe(true);
 
       // FM user
       const fmUser = {
@@ -839,13 +854,19 @@ describe("Unified Attendance Intake Foundation (Phase AT-1) API & Validation Sui
         permissions: ["attendance.view", "attendance.import.view"],
         operationAccess: { allowedSecurityGuarding: false, allowedFacilityManagement: true }
       };
-      const filteredFm = filterNavigationByPermissions(fmUser, items);
-      expect(filteredFm.some((i) => i.path === "/attendance/import")).toBe(true);
+      const filteredFm = filterNavigationByPermissions(fmUser, fmSubMenu);
+      expect(filteredFm.some((i) => i.path.startsWith("/attendance/import"))).toBe(true);
     });
 
-    it("4.8. Ensures sidebar active route resolver strictly separates /attendance from /attendance/import", () => {
+    it("4.8. Ensures sidebar active route resolver strictly separates /attendance from contextual /attendance/import", () => {
       // Simulate the LayoutShell isActive resolver logic
-      const resolveIsActive = (path: string, currentPathname: string) => {
+      const resolveIsActive = (path: string, currentPathname: string, opTypeParam?: string, opAccess?: any) => {
+        if (path === "/attendance/import?operationType=SECURITY_GUARDING") {
+          return Boolean(currentPathname.startsWith("/attendance/import") && (opTypeParam === "SECURITY_GUARDING" || (opAccess?.allowedSecurityGuarding && !opAccess?.allowedFacilityManagement)));
+        }
+        if (path === "/attendance/import?operationType=FACILITY_MANAGEMENT") {
+          return Boolean(currentPathname.startsWith("/attendance/import") && (opTypeParam === "FACILITY_MANAGEMENT" || (opAccess?.allowedFacilityManagement && !opAccess?.allowedSecurityGuarding)));
+        }
         const cleanPath = path.split("?")[0];
         if (cleanPath === "/attendance") {
           return currentPathname === "/attendance" || (currentPathname.startsWith("/attendance/") && !currentPathname.startsWith("/attendance/import"));
@@ -856,21 +877,24 @@ describe("Unified Attendance Intake Foundation (Phase AT-1) API & Validation Sui
         return currentPathname.startsWith(cleanPath);
       };
 
-      // 1. When on /attendance (Attendance Monitor active, Intake inactive)
+      // 1. When on /attendance (Attendance Monitor active, Contextual Intakes inactive)
       expect(resolveIsActive("/attendance", "/attendance")).toBe(true);
-      expect(resolveIsActive("/attendance/import", "/attendance")).toBe(false);
+      expect(resolveIsActive("/attendance/import?operationType=SECURITY_GUARDING", "/attendance")).toBe(false);
+      expect(resolveIsActive("/attendance/import?operationType=FACILITY_MANAGEMENT", "/attendance")).toBe(false);
 
-      // 2. When on /attendance/import (Attendance Intake active, Monitor inactive)
-      expect(resolveIsActive("/attendance", "/attendance/import")).toBe(false);
-      expect(resolveIsActive("/attendance/import", "/attendance/import")).toBe(true);
+      // 2. When on /attendance/import?operationType=SECURITY_GUARDING (Security Intake active, Monitor inactive, FM inactive)
+      expect(resolveIsActive("/attendance", "/attendance/import", "SECURITY_GUARDING")).toBe(false);
+      expect(resolveIsActive("/attendance/import?operationType=SECURITY_GUARDING", "/attendance/import", "SECURITY_GUARDING")).toBe(true);
+      expect(resolveIsActive("/attendance/import?operationType=FACILITY_MANAGEMENT", "/attendance/import", "SECURITY_GUARDING")).toBe(false);
 
-      // 3. When on /attendance/import/AIB-202608-0001 (Attendance Intake active, Monitor inactive)
+      // 3. When on /attendance/import?operationType=FACILITY_MANAGEMENT (FM Intake active, Monitor inactive, Security inactive)
+      expect(resolveIsActive("/attendance", "/attendance/import", "FACILITY_MANAGEMENT")).toBe(false);
+      expect(resolveIsActive("/attendance/import?operationType=FACILITY_MANAGEMENT", "/attendance/import", "FACILITY_MANAGEMENT")).toBe(true);
+      expect(resolveIsActive("/attendance/import?operationType=SECURITY_GUARDING", "/attendance/import", "FACILITY_MANAGEMENT")).toBe(false);
+
+      // 4. When on /attendance/import/AIB-202608-0001 (Batch detail: Monitor inactive)
       expect(resolveIsActive("/attendance", "/attendance/import/AIB-202608-0001")).toBe(false);
-      expect(resolveIsActive("/attendance/import", "/attendance/import/AIB-202608-0001")).toBe(true);
-
-      // 4. Sub-navigation with query parameter (e.g. /attendance/import?operationType=SECURITY_GUARDING)
-      expect(resolveIsActive("/attendance", "/attendance/import")).toBe(false);
-      expect(resolveIsActive("/attendance/import?operationType=SECURITY_GUARDING", "/attendance/import")).toBe(true);
+      expect(resolveIsActive("/attendance/import?operationType=SECURITY_GUARDING", "/attendance/import/AIB-202608-0001", "SECURITY_GUARDING")).toBe(true);
     });
   });
 
