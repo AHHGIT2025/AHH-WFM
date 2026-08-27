@@ -24,7 +24,7 @@ Do not store passwords, API keys, tokens, connection strings, `.env` values or s
 
 Current programme phases:
 
-* Unified Attendance Intake Foundation Phase AT-1 & AT-1A — Monthly Attendance Matrix & Timesheet Profile + Attendance Navigation & Scope Isolation + Template Security Correction (CERTIFIED AND PENDING SERVER DEPLOYMENT)
+* Unified Attendance Intake Foundation Phase AT-1 & AT-1A — Monthly Attendance Matrix & Timesheet Profile + Attendance Navigation & Scope Isolation + Template Security Correction (DEPLOYED TO SERVER, SECURITY VERIFIED AND CLOSED)
 * SECFAC Phase 6B — Security Post Orders, Shift Briefings, Incident/Occurrence Management & Supervisor Field Inspections (LOCAL IMPLEMENTATION COMPLETED AND VERIFIED — PENDING SERVER DEPLOYMENT)
 * Commercial Lifecycle Phase CL-5 through CL-8 — Operations Handover, Addendums, Renewals (DEPLOYED AND CLOSED)
 
@@ -38,7 +38,7 @@ Current Certified Release Commit:
 
 Authoritative SERVER Deployed Baseline:
 
-`ce704809f80230929614def1c9d6b7ac17240d99`
+`cceca671a14687423e98ac93aacc43c61377f203` (Functional code: `9e2318fa92a05a6ab065399a90bc18a9c740fa8c`)
 
 
 ---
@@ -227,11 +227,11 @@ SECFAC remains **PAUSED BY CIO**. All SECFAC workers and code untouched.
 
 Current state:
 
-`READY FOR SERVER DEPLOYMENT — TEMPLATE SECURITY CORRECTION CERTIFIED`
+`CLOSED / DEPLOYED / CERTIFIED — ATTENDANCE NAVIGATION, SCOPE & TEMPLATE SECURITY`
 
-Approved SERVER Release Commit:
+Authoritative SERVER Deployed Commit:
 
-`9e2318fa92a05a6ab065399a90bc18a9c740fa8c`
+`cceca671a14687423e98ac93aacc43c61377f203` (Functional code: `9e2318fa92a05a6ab065399a90bc18a9c740fa8c`)
 
 Server Migration Status:
 
