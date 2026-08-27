@@ -2,6 +2,7 @@ import { prisma } from "@ahh-wfm/database";
 import { getServerSession } from "next-auth/next";
 import { NextRequest } from "next/server";
 import * as XLSX from "xlsx";
+import * as crypto from "crypto";
 import {
   parseAttendanceImportContent,
   parseMonthlyMusterMatrix,
@@ -201,21 +202,44 @@ describe("Unified Attendance Intake & Output Profile (Phase AT-1A) Matrix & Time
       expect(wb.SheetNames).toContain("Instructions");
     });
 
-    it("1.2. Classifies all standard operational attendance codes correctly", () => {
+    it("1.2. Classifies all standard operational attendance codes correctly without silent P/A/NA assumptions", () => {
       expect(classifyAttendanceCode("12", 12).normalizedStatus).toBe("PRESENT");
       expect(classifyAttendanceCode("12", 12).clientMusterCode).toBe("P");
 
       expect(classifyAttendanceCode("P", 12).normalizedStatus).toBe("PRESENT_MOBILIZED");
+      expect(classifyAttendanceCode("P", 12).clientMusterCode).toBe("P");
+
       expect(classifyAttendanceCode("A", 12).normalizedStatus).toBe("ABSENT_NOT_MOBILIZED");
+      expect(classifyAttendanceCode("A", 12).clientMusterCode).toBe("A");
+
       expect(classifyAttendanceCode("NA", 12).normalizedStatus).toBe("NOT_APPLICABLE");
+      expect(classifyAttendanceCode("NA", 12).clientMusterCode).toBe("NA");
+
+      // Verify OFF does NOT automatically map to NA or A
       expect(classifyAttendanceCode("OFF", 12).normalizedStatus).toBe("WEEKLY_OFF");
+      expect(classifyAttendanceCode("OFF", 12).clientMusterCode).toBe("OFF");
+
       expect(classifyAttendanceCode("AB", 12).normalizedStatus).toBe("ABSENT");
+      expect(classifyAttendanceCode("AB", 12).clientMusterCode).toBe("AB");
+
+      // Verify leaves and special statuses preserve distinct client muster status
       expect(classifyAttendanceCode("SL", 12).normalizedStatus).toBe("SICK_LEAVE");
+      expect(classifyAttendanceCode("SL", 12).clientMusterCode).toBe("SL");
+
       expect(classifyAttendanceCode("AL", 12).normalizedStatus).toBe("ANNUAL_LEAVE");
+      expect(classifyAttendanceCode("AL", 12).clientMusterCode).toBe("AL");
+
       expect(classifyAttendanceCode("HL", 12).normalizedStatus).toBe("PUBLIC_HOLIDAY");
+      expect(classifyAttendanceCode("HL", 12).clientMusterCode).toBe("HL");
+
       expect(classifyAttendanceCode("OJT", 12).normalizedStatus).toBe("OJT");
+      expect(classifyAttendanceCode("OJT", 12).clientMusterCode).toBe("OJT");
+
       expect(classifyAttendanceCode("IDLE", 12).normalizedStatus).toBe("IDLE");
+      expect(classifyAttendanceCode("IDLE", 12).clientMusterCode).toBe("IDLE");
+
       expect(classifyAttendanceCode("XYZ_INVALID", 12).normalizedStatus).toBe("UNKNOWN");
+      expect(classifyAttendanceCode("XYZ_INVALID", 12).clientMusterCode).toBe("UNRESOLVED");
     });
 
     it("1.3. Correctly expands 31-day month matrix into 31 daily staging records per employee", () => {
@@ -311,6 +335,30 @@ describe("Unified Attendance Intake & Output Profile (Phase AT-1A) Matrix & Time
       expect(res.matrixMetadata?.totalEmployeesInMatrix).toBe(200);
       expect(res.matrixMetadata?.totalExpandedRows).toBe(6200);
       expect(res.matrixMetadata?.daysInMonth).toBe(31);
+    });
+
+    it("1.7. Tests maximum expanded staging record limit (16,000 records boundary)", () => {
+      const days = Array.from({ length: 31 }, (_, i) => String(i + 1).padStart(2, "0"));
+      const headerRows = [
+        ["Month:", "8", "Year:", "2026"],
+        [""],
+        ["S/N", "Employee Code", "Employee Name", "Designation", "Shift Hours", "Row Type", ...days]
+      ];
+
+      // 500 employees x 31 days = 15,500 records (within limit) -> accepted
+      const empRows500 = Array.from({ length: 500 }, (_, i) => [
+        i + 1,
+        `EMP-MAX-${i + 1}`,
+        `Guard ${i + 1}`,
+        "Security Guard",
+        12,
+        "DUTY",
+        ...new Array(31).fill("12")
+      ]);
+      const res500 = parseMonthlyMusterMatrix([...headerRows, ...empRows500], "max_matrix.xlsx", { year: 2026, month: 8 });
+      expect(res500.success).toBe(true);
+      expect(res500.recordCount).toBe(15500);
+      expect(res500.recordCount).toBeLessThanOrEqual(16000);
     });
   });
 
@@ -614,45 +662,92 @@ describe("Unified Attendance Intake & Output Profile (Phase AT-1A) Matrix & Time
   });
 
   describe("5. MANDATORY NON-AUTHORITATIVE ZERO-WRITE CERTIFICATION", () => {
-    it("5.1. CERTIFIES ZERO MUTATION ACROSS ALL 17 AUTHORITATIVE DOMAINS DURING FULL AT-1A LIFECYCLE", async () => {
-      // 1. Snapshot ALL Authoritative Row Counts
+    async function captureAuthoritativeState() {
       const [
-        beforeAttendanceCount,
-        beforeRosterSlotCount,
-        beforeRosterAssignmentCount,
-        beforeEmployeeCount,
-        beforeSiteCount,
-        beforeContractCount,
-        beforeLeaveCount,
-        beforeDailyClosureCount,
-        beforeDailyClosureSnapshotCount,
-        beforePayrollRunCount,
-        beforePayrollLineCount,
-        beforePayrollDayCount,
-        beforeBillingRunCount,
-        beforeBillingLineCount,
-        beforeAddendumCount,
-        beforeAddendumLineCount,
-        beforeContractReqCount
+        attendance,
+        rosterSlot,
+        rosterAssignment,
+        employee,
+        site,
+        contract,
+        leave,
+        closure,
+        closureSnapshot,
+        payrollRun,
+        payrollLine,
+        payrollDay,
+        billingRun,
+        billingLine,
+        addendum,
+        addendumLine,
+        contractReq
       ] = await Promise.all([
-        prisma.attendanceRecord.count(),
-        prisma.rosterRequirementSlot.count(),
-        prisma.rosterSlotAssignment.count(),
-        prisma.employee.count(),
-        prisma.manpowerSite.count(),
-        prisma.manpowerContract.count(),
-        prisma.leaveRequest.count(),
-        prisma.manpowerDailyClosure.count(),
-        prisma.manpowerDailyClosureSnapshot.count(),
-        prisma.manpowerPayrollAdvisoryRun.count(),
-        prisma.manpowerPayrollAdvisoryLine.count(),
-        prisma.manpowerPayrollAdvisoryDay.count(),
-        prisma.manpowerBillingSupportRun.count(),
-        prisma.manpowerBillingSupportLine.count(),
-        prisma.manpowerContractAddendum.count(),
-        prisma.manpowerContractAddendumLineItem.count(),
-        prisma.contractManpowerRequirement.count()
+        prisma.attendanceRecord.findMany({ orderBy: { id: "asc" } }),
+        prisma.rosterRequirementSlot.findMany({ orderBy: { id: "asc" } }),
+        prisma.rosterSlotAssignment.findMany({ orderBy: { id: "asc" } }),
+        prisma.employee.findMany({ orderBy: { id: "asc" } }),
+        prisma.manpowerSite.findMany({ orderBy: { id: "asc" } }),
+        prisma.manpowerContract.findMany({ orderBy: { id: "asc" } }),
+        prisma.leaveRequest.findMany({ orderBy: { id: "asc" } }),
+        prisma.manpowerDailyClosure.findMany({ orderBy: { id: "asc" } }),
+        prisma.manpowerDailyClosureSnapshot.findMany({ orderBy: { id: "asc" } }),
+        prisma.manpowerPayrollAdvisoryRun.findMany({ orderBy: { id: "asc" } }),
+        prisma.manpowerPayrollAdvisoryLine.findMany({ orderBy: { id: "asc" } }),
+        prisma.manpowerPayrollAdvisoryDay.findMany({ orderBy: { id: "asc" } }),
+        prisma.manpowerBillingSupportRun.findMany({ orderBy: { id: "asc" } }),
+        prisma.manpowerBillingSupportLine.findMany({ orderBy: { id: "asc" } }),
+        prisma.manpowerContractAddendum.findMany({ orderBy: { id: "asc" } }),
+        prisma.manpowerContractAddendumLineItem.findMany({ orderBy: { id: "asc" } }),
+        prisma.contractManpowerRequirement.findMany({ orderBy: { id: "asc" } })
       ]);
+
+      const hashObj = (obj: any) => crypto.createHash("sha256").update(JSON.stringify(obj)).digest("hex");
+
+      return {
+        counts: {
+          attendance: attendance.length,
+          rosterSlot: rosterSlot.length,
+          rosterAssignment: rosterAssignment.length,
+          employee: employee.length,
+          site: site.length,
+          contract: contract.length,
+          leave: leave.length,
+          closure: closure.length,
+          closureSnapshot: closureSnapshot.length,
+          payrollRun: payrollRun.length,
+          payrollLine: payrollLine.length,
+          payrollDay: payrollDay.length,
+          billingRun: billingRun.length,
+          billingLine: billingLine.length,
+          addendum: addendum.length,
+          addendumLine: addendumLine.length,
+          contractReq: contractReq.length
+        },
+        digests: {
+          attendance: hashObj(attendance),
+          rosterSlot: hashObj(rosterSlot),
+          rosterAssignment: hashObj(rosterAssignment),
+          employee: hashObj(employee),
+          site: hashObj(site),
+          contract: hashObj(contract),
+          leave: hashObj(leave),
+          closure: hashObj(closure),
+          closureSnapshot: hashObj(closureSnapshot),
+          payrollRun: hashObj(payrollRun),
+          payrollLine: hashObj(payrollLine),
+          payrollDay: hashObj(payrollDay),
+          billingRun: hashObj(billingRun),
+          billingLine: hashObj(billingLine),
+          addendum: hashObj(addendum),
+          addendumLine: hashObj(addendumLine),
+          contractReq: hashObj(contractReq)
+        }
+      };
+    }
+
+    it("5.1. CERTIFIES ZERO INSERTS, ZERO UPDATES, AND ZERO DELETES ACROSS ALL 17 AUTHORITATIVE DOMAINS DURING FULL AT-1A LIFECYCLE", async () => {
+      // 1. Snapshot State & SHA-256 Digests of ALL 17 Authoritative Domains Before Lifecycle
+      const beforeState = await captureAuthoritativeState();
 
       // 2. Execute Full End-to-End AT-1A Lifecycle:
       // (Matrix Parse -> Batch Creation -> Validation -> Review -> Detailed Timesheet Export -> Client Muster Export)
@@ -704,63 +799,14 @@ describe("Unified Attendance Intake & Output Profile (Phase AT-1A) Matrix & Time
       await generateDetailedTimesheetWorkbook(batch.id);
       await generateClientMusterWorkbook(batch.id);
 
-      // 3. Snapshot ALL Authoritative Row Counts After Lifecycle
-      const [
-        afterAttendanceCount,
-        afterRosterSlotCount,
-        afterRosterAssignmentCount,
-        afterEmployeeCount,
-        afterSiteCount,
-        afterContractCount,
-        afterLeaveCount,
-        afterDailyClosureCount,
-        afterDailyClosureSnapshotCount,
-        afterPayrollRunCount,
-        afterPayrollLineCount,
-        afterPayrollDayCount,
-        afterBillingRunCount,
-        afterBillingLineCount,
-        afterAddendumCount,
-        afterAddendumLineCount,
-        afterContractReqCount
-      ] = await Promise.all([
-        prisma.attendanceRecord.count(),
-        prisma.rosterRequirementSlot.count(),
-        prisma.rosterSlotAssignment.count(),
-        prisma.employee.count(),
-        prisma.manpowerSite.count(),
-        prisma.manpowerContract.count(),
-        prisma.leaveRequest.count(),
-        prisma.manpowerDailyClosure.count(),
-        prisma.manpowerDailyClosureSnapshot.count(),
-        prisma.manpowerPayrollAdvisoryRun.count(),
-        prisma.manpowerPayrollAdvisoryLine.count(),
-        prisma.manpowerPayrollAdvisoryDay.count(),
-        prisma.manpowerBillingSupportRun.count(),
-        prisma.manpowerBillingSupportLine.count(),
-        prisma.manpowerContractAddendum.count(),
-        prisma.manpowerContractAddendumLineItem.count(),
-        prisma.contractManpowerRequirement.count()
-      ]);
+      // 3. Snapshot State & SHA-256 Digests of ALL 17 Authoritative Domains After Lifecycle
+      const afterState = await captureAuthoritativeState();
 
-      // ASSERT EXACT ZERO WRITES
-      expect(afterAttendanceCount).toBe(beforeAttendanceCount);
-      expect(afterRosterSlotCount).toBe(beforeRosterSlotCount);
-      expect(afterRosterAssignmentCount).toBe(beforeRosterAssignmentCount);
-      expect(afterEmployeeCount).toBe(beforeEmployeeCount);
-      expect(afterSiteCount).toBe(beforeSiteCount);
-      expect(afterContractCount).toBe(beforeContractCount);
-      expect(afterLeaveCount).toBe(beforeLeaveCount);
-      expect(afterDailyClosureCount).toBe(beforeDailyClosureCount);
-      expect(afterDailyClosureSnapshotCount).toBe(beforeDailyClosureSnapshotCount);
-      expect(afterPayrollRunCount).toBe(beforePayrollRunCount);
-      expect(afterPayrollLineCount).toBe(beforePayrollLineCount);
-      expect(afterPayrollDayCount).toBe(beforePayrollDayCount);
-      expect(afterBillingRunCount).toBe(beforeBillingRunCount);
-      expect(afterBillingLineCount).toBe(beforeBillingLineCount);
-      expect(afterAddendumCount).toBe(beforeAddendumCount);
-      expect(afterAddendumLineCount).toBe(beforeAddendumLineCount);
-      expect(afterContractReqCount).toBe(beforeContractReqCount);
+      // ASSERT ZERO INSERTS / DELETES (Row count match)
+      expect(afterState.counts).toEqual(beforeState.counts);
+
+      // ASSERT ZERO UPDATES / MUTATIONS (Cryptographic SHA-256 content digest match)
+      expect(afterState.digests).toEqual(beforeState.digests);
 
       // Verify Existing Attendance record remained 100% untouched
       const existingMobile = await prisma.attendanceRecord.findUnique({

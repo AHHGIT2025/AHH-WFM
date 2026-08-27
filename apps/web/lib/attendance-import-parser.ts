@@ -359,7 +359,7 @@ export function parseCsvString(csvText: string): string[][] {
 export interface AttendanceCodeDetail {
   code: string;
   normalizedStatus: string;
-  clientMusterCode: "P" | "A" | "NA";
+  clientMusterCode: string;
   isWorking: boolean;
   defaultWorkedHours?: number;
   leaveType?: string;
@@ -393,25 +393,25 @@ export function classifyAttendanceCode(rawCode: string, defaultShiftHours: numbe
     case "OFF":
     case "WO":
     case "WEEKLY_OFF":
-      return { code: "OFF", normalizedStatus: "WEEKLY_OFF", clientMusterCode: "NA", isWorking: false, defaultWorkedHours: 0 };
+      return { code: "OFF", normalizedStatus: "WEEKLY_OFF", clientMusterCode: "OFF", isWorking: false, defaultWorkedHours: 0 };
     case "AB":
-      return { code: "AB", normalizedStatus: "ABSENT", clientMusterCode: "A", isWorking: false, defaultWorkedHours: 0 };
+      return { code: "AB", normalizedStatus: "ABSENT", clientMusterCode: "AB", isWorking: false, defaultWorkedHours: 0 };
     case "SL":
     case "SICK":
-      return { code: "SL", normalizedStatus: "SICK_LEAVE", clientMusterCode: "A", isWorking: false, defaultWorkedHours: 0, leaveType: "SICK_LEAVE" };
+      return { code: "SL", normalizedStatus: "SICK_LEAVE", clientMusterCode: "SL", isWorking: false, defaultWorkedHours: 0, leaveType: "SICK_LEAVE" };
     case "AL":
     case "ANNUAL":
-      return { code: "AL", normalizedStatus: "ANNUAL_LEAVE", clientMusterCode: "A", isWorking: false, defaultWorkedHours: 0, leaveType: "ANNUAL_LEAVE" };
+      return { code: "AL", normalizedStatus: "ANNUAL_LEAVE", clientMusterCode: "AL", isWorking: false, defaultWorkedHours: 0, leaveType: "ANNUAL_LEAVE" };
     case "HL":
     case "HOLIDAY":
-      return { code: "HL", normalizedStatus: "PUBLIC_HOLIDAY", clientMusterCode: "NA", isWorking: false, defaultWorkedHours: 0, leaveType: "PUBLIC_HOLIDAY" };
+      return { code: "HL", normalizedStatus: "PUBLIC_HOLIDAY", clientMusterCode: "HL", isWorking: false, defaultWorkedHours: 0, leaveType: "PUBLIC_HOLIDAY" };
     case "OJT":
-      return { code: "OJT", normalizedStatus: "OJT", clientMusterCode: "P", isWorking: true, defaultWorkedHours: defaultShiftHours };
+      return { code: "OJT", normalizedStatus: "OJT", clientMusterCode: "OJT", isWorking: true, defaultWorkedHours: defaultShiftHours };
     case "IDLE":
     case "STANDBY":
-      return { code: "IDLE", normalizedStatus: "IDLE", clientMusterCode: "P", isWorking: true, defaultWorkedHours: defaultShiftHours };
+      return { code: "IDLE", normalizedStatus: "IDLE", clientMusterCode: "IDLE", isWorking: true, defaultWorkedHours: defaultShiftHours };
     default:
-      return { code, normalizedStatus: "UNKNOWN", clientMusterCode: "NA", isWorking: false, defaultWorkedHours: 0 };
+      return { code, normalizedStatus: "UNKNOWN", clientMusterCode: "UNRESOLVED", isWorking: false, defaultWorkedHours: 0 };
   }
 }
 

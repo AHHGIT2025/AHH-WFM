@@ -193,7 +193,7 @@ The following Commercial Lifecycle functionality is visible and working in the L
 
 | Migration name | Status | Notes |
 |---|---|---|
-| `20260825120000_add_at1_attendance_import_staging` | Applied (LOCAL) | Adds `attendance_import_batches`, `attendance_import_rows` tables; pure additive non-authoritative staging |
+| `20260825120000_add_at1_attendance_import_staging` | Applied (LOCAL & SERVER) | Adds `attendance_import_batches`, `attendance_import_rows` tables; deployed with AT-1 baseline |
 | `20260811120000_add_cl1_activities_and_tasks` | Applied (LOCAL) | Adds `CommercialActivity`, `CommercialTask` tables; `UNIQUE (externalProvider, externalItemId)` |
 | `20260810200000_add_cl8_contract_renewal` | Applied (LOCAL) | Adds `ManpowerContractRenewalCase`; `@@unique([contractId])` |
 | `20260810100000_add_cl5_client_acceptance_contract_conversion` | Applied (LOCAL & SERVER) | Adds `PreContractClientResponse`; 6 audit fields on `ManpowerContract` |
@@ -201,7 +201,9 @@ The following Commercial Lifecycle functionality is visible and working in the L
 | `20260809130000_add_cl3_precontract_costing` | Applied (LOCAL & SERVER) | Deployed on SERVER |
 | (All prior migrations) | Applied (LOCAL & SERVER) | Unchanged |
 
-Server migration status for `20260825120000_add_at1_attendance_import_staging`: **NOT YET APPLIED** (deployment pending CIO authorization).
+Server migration status for AT-1 (`20260825120000_add_at1_attendance_import_staging`): **ALREADY APPLIED** (deployed with certified AT-1 baseline `a026d3bfced189235597f8a55c62ba5865a880e2`).
+
+Phase AT-1A migration status: **ZERO NEW DATABASE MIGRATIONS** (reuses existing staging schema without modifications).
 
 Server migration status for `20260811120000_add_cl1_activities_and_tasks`: **NOT YET APPLIED** (deployment pending CIO authorization).
 

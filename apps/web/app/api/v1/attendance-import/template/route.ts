@@ -5,7 +5,7 @@ import {
   getStandardMonthlyMatrixTemplateXlsx
 } from "@/lib/attendance-import-parser";
 
-export async function GET(request?: Request) {
+export async function GET(request: Request) {
   if (!isAttendanceImportEnabled()) {
     return NextResponse.json({ error: "Attendance Import module is disabled by feature flag." }, { status: 403 });
   }

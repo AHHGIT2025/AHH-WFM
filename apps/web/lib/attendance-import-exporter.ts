@@ -1,4 +1,4 @@
-﻿import * as XLSX from "xlsx";
+import * as XLSX from "xlsx";
 import { prisma } from "@ahh-wfm/database";
 import { sanitizeSpreadsheetFormula } from "./attendance-import-parser";
 
@@ -391,28 +391,30 @@ export async function generateClientMusterWorkbook(
         ? Number(dayRecord.workedHours)
         : parseFloat(dayRecord?.rawWorkedHours || "0") || 0;
 
-      // Controlled Mapping: P / A / NA
-      let musterCode: "P" | "A" | "NA" = "NA";
+      // Controlled Mapping: Preserve approved codes (P / A / NA / OFF / SL / AL / HL / OJT / IDLE)
+      let musterCode: string = "UNRESOLVED";
       if (rawP.clientMusterCode) {
         musterCode = rawP.clientMusterCode;
-      } else if (workedH > 0 || statusUpper === "P" || statusUpper === "PRESENT" || statusUpper === "OJT" || statusUpper === "IDLE" || /^\d+$/.test(statusUpper)) {
+      } else if (workedH > 0 || statusUpper === "P" || statusUpper === "PRESENT" || /^\d+$/.test(statusUpper)) {
         musterCode = "P";
-      } else if (statusUpper === "A" || statusUpper === "ABSENT" || statusUpper === "AB" || statusUpper === "SL" || statusUpper === "AL") {
+      } else if (statusUpper === "A" || statusUpper === "ABSENT") {
         musterCode = "A";
-      } else {
+      } else if (statusUpper === "NA" || statusUpper === "NOT_APPLICABLE") {
         musterCode = "NA";
+      } else if (statusUpper) {
+        musterCode = statusUpper;
       }
 
-      if (musterCode === "P") {
+      if (musterCode === "P" || (workedH > 0 && musterCode !== "OFF" && musterCode !== "NA")) {
         presentDays++;
         const h = workedH > 0 ? workedH : empData.shiftHours;
         totalMobilizedHours += h;
         dailyMobilizedCount[d - 1]++;
-      } else if (musterCode === "A") {
+      } else if (musterCode === "A" || musterCode === "AB") {
         absentDays++;
       }
 
-      rowCells.push(musterCode);
+      rowCells.push(sanitizeSpreadsheetFormula(musterCode));
     }
 
     rowCells.push(presentDays, absentDays, totalMobilizedHours);
