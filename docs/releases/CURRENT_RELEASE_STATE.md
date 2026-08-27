@@ -24,17 +24,17 @@ Do not store passwords, API keys, tokens, connection strings, `.env` values or s
 
 Current programme phases:
 
-* Unified Attendance Intake Foundation Phase AT-1 & AT-1A — Monthly Attendance Matrix & Timesheet Profile + Attendance Navigation & Scope Isolation Correction (DEPLOYED TO SERVER AND VERIFIED)
+* Unified Attendance Intake Foundation Phase AT-1 & AT-1A — Monthly Attendance Matrix & Timesheet Profile + Attendance Navigation & Scope Isolation + Template Security Correction (CERTIFIED AND PENDING SERVER DEPLOYMENT)
 * SECFAC Phase 6B — Security Post Orders, Shift Briefings, Incident/Occurrence Management & Supervisor Field Inspections (LOCAL IMPLEMENTATION COMPLETED AND VERIFIED — PENDING SERVER DEPLOYMENT)
 * Commercial Lifecycle Phase CL-5 through CL-8 — Operations Handover, Addendums, Renewals (DEPLOYED AND CLOSED)
 
 Current release objective:
 
-`Attendance Navigation Active-State, Generic Top-Level Removal, and Security Guarding / Facility Management Operational Scope Isolation Post-Recovery Verification.`
+`Attendance Intake Template Endpoint Authentication and Operational Scope Hardening (AT-1 / AT-1A).`
 
 Current Certified Release Commit:
 
-`ce704809f80230929614def1c9d6b7ac17240d99`
+`9e2318fa92a05a6ab065399a90bc18a9c740fa8c`
 
 Authoritative SERVER Deployed Baseline:
 
@@ -227,11 +227,11 @@ SECFAC remains **PAUSED BY CIO**. All SECFAC workers and code untouched.
 
 Current state:
 
-`DEPLOYED TO SERVER — POST-RECOVERY VERIFIED & CERTIFIED`
+`READY FOR SERVER DEPLOYMENT — TEMPLATE SECURITY CORRECTION CERTIFIED`
 
 Approved SERVER Release Commit:
 
-`ce704809f80230929614def1c9d6b7ac17240d99`
+`9e2318fa92a05a6ab065399a90bc18a9c740fa8c`
 
 Server Migration Status:
 
