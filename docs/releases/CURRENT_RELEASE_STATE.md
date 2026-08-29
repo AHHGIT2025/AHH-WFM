@@ -39,7 +39,7 @@ Starting SERVER Baseline:
 
 Current Certified AT-2 Release Commit:
 
-`e9a1f33344884376c1f38d8b59c44ae5f11ae4b1`
+`f2d17664f3d2fbc62580436d4f61f77d3aa050b1`
 
 Authoritative Phase AT-2 Migration:
 
