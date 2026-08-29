@@ -37,6 +37,10 @@ Starting SERVER Baseline:
 
 `4ea0f03f67d70526b3e6de7bfbd266541109b3e7` (Certified functional baseline: `9e2318fa92a05a6ab065399a90bc18a9c740fa8c`)
 
+Current Certified AT-2 Release Commit:
+
+`e9a1f33344884376c1f38d8b59c44ae5f11ae4b1`
+
 Authoritative Phase AT-2 Migration:
 
 `20260829094000_add_at2_attendance_reconciliation_approval` (Applied LOCAL, Pending SERVER)
