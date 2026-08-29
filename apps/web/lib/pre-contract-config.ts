@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import type { PrismaClient } from '@ahh-wfm/database';
 
 export class PreContractConfigService {
   constructor(private prisma: PrismaClient) {}

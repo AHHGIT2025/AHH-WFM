@@ -1,10 +1,12 @@
-import { prisma } from "@ahh-wfm/database";
+import { prisma, Prisma } from "@ahh-wfm/database";
 import { GET as getCosting, POST as postCosting } from "../../apps/web/app/api/v1/commercial/costing/route";
 import { GET as getCostingDetail, PATCH as patchCostingDetail } from "../../apps/web/app/api/v1/commercial/costing/[id]/route";
 import { POST as postCostingWorkflow } from "../../apps/web/app/api/v1/commercial/costing/[id]/workflow/route";
 import { calculateCostingEstimate, generateCostingSnapshot } from "../../apps/web/lib/precontract-costing";
-import { Decimal } from "@prisma/client/runtime/library";
 import { getServerSession } from "next-auth/next";
+
+type Decimal = Prisma.Decimal;
+const Decimal = Prisma.Decimal;
 
 jest.mock("next-auth/next", () => ({
   getServerSession: jest.fn()

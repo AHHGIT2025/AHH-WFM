@@ -1,6 +1,8 @@
-import { prisma } from "@ahh-wfm/database";
+import { prisma, Prisma } from "@ahh-wfm/database";
 import crypto from "crypto";
-import { Decimal } from "@prisma/client/runtime/library";
+
+type Decimal = Prisma.Decimal;
+const Decimal = Prisma.Decimal;
 
 export interface CalculateCostingParams {
   caseId: string;
