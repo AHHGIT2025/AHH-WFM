@@ -24,26 +24,22 @@ Do not store passwords, API keys, tokens, connection strings, `.env` values or s
 
 Current programme phases:
 
-* Phase AT-2 — Attendance Reconciliation & Approval (LOCAL IMPLEMENTATION COMPLETED AND VERIFIED — PENDING CIO SERVER DEPLOYMENT APPROVAL)
+* Phase AT-2 — Attendance Reconciliation & Approval (DEPLOYED TO SERVER, FUNCTIONALLY & SECURITY CERTIFIED AND CLOSED)
 * Unified Attendance Intake Foundation Phase AT-1 & AT-1A — Monthly Attendance Matrix & Timesheet Profile + Attendance Navigation & Scope Isolation + Template Security Correction (DEPLOYED TO SERVER, SECURITY VERIFIED AND CLOSED)
 * SECFAC Phase 6B — Security Post Orders, Shift Briefings, Incident/Occurrence Management & Supervisor Field Inspections (LOCAL IMPLEMENTATION COMPLETED AND VERIFIED — PENDING SERVER DEPLOYMENT)
 * Commercial Lifecycle Phase CL-5 through CL-8 — Operations Handover, Addendums, Renewals (DEPLOYED AND CLOSED)
 
 Current release objective:
 
-`Phase AT-2: Attendance Reconciliation & Approval Implementation (Engine, API Routes, Workspaces, Immutable Approved Snapshotting, Restrictive Migration & 24-Table Zero-Write Certification).`
+`Phase AT-2: Attendance Reconciliation & Approval (Engine, API Routes, Workspaces, Immutable Approved Snapshotting, Restrictive Migration & 24-Table Zero-Write Certification) — SERVER DEPLOYMENT CERTIFIED AND CLOSED.`
 
-Starting SERVER Baseline:
+Authoritative SERVER Deployed Baseline:
 
-`4ea0f03f67d70526b3e6de7bfbd266541109b3e7` (Certified functional baseline: `9e2318fa92a05a6ab065399a90bc18a9c740fa8c`)
-
-Current Certified AT-2 Release Commit:
-
-`f2d17664f3d2fbc62580436d4f61f77d3aa050b1`
+`76e598936d3632e1153a31ab7376bafc0b006c42`
 
 Authoritative Phase AT-2 Migration:
 
-`20260829094000_add_at2_attendance_reconciliation_approval` (Applied LOCAL, Pending SERVER)
+`20260829094000_add_at2_attendance_reconciliation_approval` (Applied LOCAL & SERVER)
 
 
 ---
@@ -196,7 +192,7 @@ The following Commercial Lifecycle functionality is visible and working in the L
 
 | Migration name | Status | Notes |
 |---|---|---|
-| `20260829094000_add_at2_attendance_reconciliation_approval` | Applied (LOCAL), Pending SERVER | Adds 6 AT-2 models: `attendance_reconciliation_batches`, `attendance_reconciliation_candidates`, `attendance_reconciliation_candidate_sources`, `attendance_reconciliation_decisions`, `attendance_reconciliation_events`, `attendance_approved_snapshots`, `attendance_approved_snapshot_rows` |
+| `20260829094000_add_at2_attendance_reconciliation_approval` | Applied (LOCAL & SERVER) | Adds 6 AT-2 models: `attendance_reconciliation_batches`, `attendance_reconciliation_candidates`, `attendance_reconciliation_candidate_sources`, `attendance_reconciliation_decisions`, `attendance_reconciliation_events`, `attendance_approved_snapshots`, `attendance_approved_snapshot_rows` |
 | `20260825120000_add_at1_attendance_import_staging` | Applied (LOCAL & SERVER) | Adds `attendance_import_batches`, `attendance_import_rows` tables; deployed with AT-1 baseline |
 | `20260811120000_add_cl1_activities_and_tasks` | Applied (LOCAL) | Adds `CommercialActivity`, `CommercialTask` tables; `UNIQUE (externalProvider, externalItemId)` |
 | `20260810200000_add_cl8_contract_renewal` | Applied (LOCAL) | Adds `ManpowerContractRenewalCase`; `@@unique([contractId])` |
