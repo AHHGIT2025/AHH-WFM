@@ -330,8 +330,15 @@ export default function BatchDetailPage() {
 
           {batch.status !== "CANCELLED" && (
             <>
+              <Link href={`/attendance/import/${batchId}/reconcile`}>
+                <Button variant="primary" size="sm" type="button" className="bg-indigo-600 hover:bg-indigo-500 text-white font-medium">
+                  <span className="material-symbols-outlined text-sm mr-1">sync_alt</span>
+                  Reconciliation & Approval
+                </Button>
+              </Link>
+
               <Button
-                variant="primary"
+                variant="secondary"
                 size="sm"
                 onClick={handleValidate}
                 disabled={actionLoading || batch.status === "VALIDATING"}

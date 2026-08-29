@@ -178,6 +178,7 @@ model Employee {
   uploadedAttendanceBatches       AttendanceImportBatch[]                @relation("AttendanceBatchUploadedBy")
   reviewedAttendanceBatches       AttendanceImportBatch[]                @relation("AttendanceBatchReviewedBy")
   attendanceImportRows            AttendanceImportRow[]                  @relation("AttendanceRowEmployee")
+  attendanceReconciliationCandidates AttendanceReconciliationCandidate[] @relation("EmployeeReconciliationCandidates")
 }
 
 model Department {
@@ -1019,6 +1020,8 @@ model Company {
   ManpowerPayrollAdvisoryRun ManpowerPayrollAdvisoryRun[]
   attendanceImportBatches    AttendanceImportBatch[]
   attendanceImportRows       AttendanceImportRow[]           @relation("AttendanceRowCompany")
+  attendanceReconciliationBatches AttendanceReconciliationBatch[]      @relation("CompanyAttendanceReconciliations")
+  attendanceApprovedSnapshots     AttendanceApprovedSnapshot[]         @relation("CompanyAttendanceSnapshots")
   CostCategoryMaster         CostCategoryMaster[]
   CostElementMaster          CostElementMaster[]
   CostDriverMaster           CostDriverMaster[]
@@ -1358,6 +1361,7 @@ model ManpowerContract {
   workflows            ContractApprovalWorkflow[]
   documents            ManpowerClientDocument[]
   attendanceImportRows AttendanceImportRow[]      @relation("AttendanceRowContract")
+  reconciliationCandidates AttendanceReconciliationCandidate[]
 
   // CL-5 Provenance fields
   sourceClientResponseId  String?                    @unique
@@ -1627,6 +1631,7 @@ model ManpowerSite {
   reconciliationConfigs     ReconciliationGracePeriodConfig[]
   reconciliationRuns        ManpowerReconciliationRun[]
   attendanceImportRows      AttendanceImportRow[]                  @relation("AttendanceRowSite")
+  reconciliationCandidates  AttendanceReconciliationCandidate[]
 }
 
 model SecuritySiteManpowerAllocation {
@@ -5792,7 +5797,6 @@ model ContractHandoverLog {
 // ---------------------------------------------------------------------------------
 // UNIFIED ATTENDANCE INTAKE & RECONCILIATION PHASE AT-1: STAGING & VALIDATION MODELS
 // ---------------------------------------------------------------------------------
-
 model AttendanceImportBatch {
   id                    String                @id @default(uuid())
   batchNumber           String                @unique // e.g. "AIB-202608-0001"
@@ -5829,6 +5833,7 @@ model AttendanceImportBatch {
   updatedAt             DateTime              @updatedAt
 
   rows                  AttendanceImportRow[]
+  reconciliationBatch   AttendanceReconciliationBatch? @relation("ImportBatchReconciliation")
 
   @@index([companyId, status], map: "attendance_import_batches_companyId_status_idx")
   @@index([companyId, attendancePeriodFrom, attendancePeriodTo], map: "attendance_import_batches_company_period_idx")
@@ -5902,6 +5907,9 @@ model AttendanceImportRow {
   createdAt                  DateTime               @default(now())
   updatedAt                  DateTime               @updatedAt
 
+  candidateSources           AttendanceReconciliationCandidateSource[]
+  approvedSnapshotRows       AttendanceApprovedSnapshotRow[]        @relation("RowApprovedSnapshots")
+
   @@index([batchId, validationStatus], map: "attendance_import_rows_batch_status_idx")
   @@index([batchId, sourceRowNumber], map: "attendance_import_rows_batch_row_idx")
   @@index([employeeId, attendanceDate], map: "attendance_import_rows_emp_date_idx")
@@ -5912,5 +5920,266 @@ model AttendanceImportRow {
   @@map("attendance_import_rows")
 }
 
+// ---------------------------------------------------------------------------------
+// UNIFIED ATTENDANCE RECONCILIATION & APPROVAL PHASE AT-2: AUDIT & SNAPSHOT MODELS
+// ---------------------------------------------------------------------------------
 
+model AttendanceReconciliationBatch {
+  id                     String                              @id @default(uuid())
+  batchNumber            String                              @unique // e.g. "ARB-202608-0001"
+  importBatchId          String                              @unique
+  importBatch            AttendanceImportBatch               @relation("ImportBatchReconciliation", fields: [importBatchId], references: [id], onDelete: Restrict)
+  companyId              String
+  company                Company                             @relation("CompanyAttendanceReconciliations", fields: [companyId], references: [id], onDelete: Restrict)
+  operationType          String                              // "SECURITY_GUARDING" | "FACILITY_MANAGEMENT"
+  periodYear             Int
+  periodMonth            Int
+  periodFrom             DateTime?                           @db.Date
+  periodTo               DateTime?                           @db.Date
+  status                 String                              @default("NOT_STARTED") // "NOT_STARTED" | "IN_REVIEW" | "REVIEW_COMPLETE" | "PENDING_APPROVAL" | "RETURNED" | "REJECTED" | "APPROVED"
+  reconciliationVersion  Int                                 @default(1)
+  currentApprovalVersion Int                                 @default(0)
+  
+  sourceEvidenceHash     String?                             // SHA-256 of canonical staging rows at evaluation time
+  systemEvidenceHash     String?                             // SHA-256 of evaluated authoritative evidence
 
+  // Summary Metrics (Cached Counters - Verified server-side on submit/approval)
+  totalCandidates        Int                                 @default(0)
+  matchedCandidates      Int                                 @default(0)
+  warningCandidates      Int                                 @default(0)
+  conflictCandidates     Int                                 @default(0)
+  blockingCandidates     Int                                 @default(0)
+  resolvedCandidates     Int                                 @default(0)
+  excludedCandidates     Int                                 @default(0)
+
+  // Actor & Workflow Provenance (Authenticated Principal IDs)
+  reviewerId             String?
+  reviewerName           String?
+  reviewedAt             DateTime?
+  submittedById          String?
+  submittedByName        String?
+  submittedAt            DateTime?
+  approverId             String?
+  approverName           String?
+  approvedAt             DateTime?
+  returnReason           String?                             @db.Text
+  rejectionReason        String?                             @db.Text
+  
+  rowVersion             Int                                 @default(1)
+  metadata               Json?
+  createdAt              DateTime                            @default(now())
+  updatedAt              DateTime                            @updatedAt
+
+  candidates             AttendanceReconciliationCandidate[]
+  decisions              AttendanceReconciliationDecision[]
+  events                 AttendanceReconciliationEvent[]
+  snapshots              AttendanceApprovedSnapshot[]
+
+  @@index([companyId, operationType, status], map: "attendance_reconciliation_batches_company_op_status_idx")
+  @@index([importBatchId], map: "attendance_reconciliation_batches_import_batch_idx")
+  @@index([periodYear, periodMonth], map: "attendance_reconciliation_batches_period_idx")
+  @@map("attendance_reconciliation_batches")
+}
+
+model AttendanceReconciliationCandidate {
+  id                         String                                  @id @default(uuid())
+  reconciliationBatchId      String
+  reconciliationBatch        AttendanceReconciliationBatch           @relation(fields: [reconciliationBatchId], references: [id], onDelete: Restrict)
+  
+  operationalCandidateKey    String                                  // company:opType:emp:dutyDate:site:slot (or shift:timeWindow)
+  evidenceOrigin             String                                  // "IMPORT_ONLY" | "IMPORT_AND_SYSTEM" | "SYSTEM_ONLY"
+  evidenceSubtype            String?                                 // "ATTENDANCE_AND_ROSTER" | "ATTENDANCE_ONLY" | "UNCONFIRMED_IMPORT" | "SYSTEM_ONLY_ATTENDANCE" | "SYSTEM_ONLY_ROSTER"
+  
+  employeeId                 String?
+  employee                   Employee?                               @relation("EmployeeReconciliationCandidates", fields: [employeeId], references: [id], onDelete: Restrict)
+  dutyDate                   DateTime?                               @db.Date
+  siteId                     String?
+  site                       ManpowerSite?                           @relation(fields: [siteId], references: [id], onDelete: Restrict)
+  contractId                 String?
+  contract                   ManpowerContract?                       @relation(fields: [contractId], references: [id], onDelete: Restrict)
+  shiftCode                  String?
+  rosterSlotAssignmentId     String?
+  
+  matchClassification        String                                  // "MATCHED" | "WARNING" | "CONFLICT" | "BLOCKING"
+  conflictDetails            Json?                                   // Array of detected issues
+  importedEvidence           Json?                                   // Staged row evidence
+  systemEvidence             Json?                                   // Authoritative punches, roster assignments, leaves
+  systemEvidenceFingerprint  String?                                 // SHA-256 fingerprint of candidate's evidence
+  
+  currentDecisionId          String?                                 @unique
+  currentDecision            AttendanceReconciliationDecision?       @relation("CandidateCurrentDecision", fields: [currentDecisionId], references: [id], onDelete: Restrict)
+  
+  isResolved                 Boolean                                 @default(false)
+  createdAt                  DateTime                                @default(now())
+  updatedAt                  DateTime                                @updatedAt
+
+  sources                    AttendanceReconciliationCandidateSource[]
+  decisions                  AttendanceReconciliationDecision[]      @relation("CandidateAllDecisions")
+
+  @@unique([reconciliationBatchId, operationalCandidateKey], map: "attendance_rec_candidates_batch_op_key_uniq")
+  @@index([reconciliationBatchId, isResolved], map: "attendance_rec_candidates_batch_resolved_idx")
+  @@index([employeeId, dutyDate], map: "attendance_rec_candidates_emp_date_idx")
+  @@map("attendance_reconciliation_candidates")
+}
+
+model AttendanceReconciliationCandidateSource {
+  id                   String                            @id @default(uuid())
+  candidateId          String
+  candidate            AttendanceReconciliationCandidate @relation(fields: [candidateId], references: [id], onDelete: Restrict)
+  importRowId          String
+  importRow            AttendanceImportRow               @relation(fields: [importRowId], references: [id], onDelete: Restrict)
+  sourceRowNumber      Int
+  sourceSheetName      String?
+  sourceCellProvenance String?
+  rawPayload           Json?
+  createdAt            DateTime                          @default(now())
+
+  @@unique([candidateId, importRowId], map: "attendance_rec_cand_sources_cand_row_uniq")
+  @@index([candidateId], map: "attendance_rec_cand_sources_candidate_idx")
+  @@index([importRowId], map: "attendance_rec_cand_sources_import_row_idx")
+  @@map("attendance_reconciliation_candidate_sources")
+}
+
+model AttendanceReconciliationDecision {
+  id                         String                              @id @default(uuid())
+  reconciliationBatchId      String
+  reconciliationBatch        AttendanceReconciliationBatch       @relation(fields: [reconciliationBatchId], references: [id], onDelete: Restrict)
+  candidateId                String
+  candidate                  AttendanceReconciliationCandidate   @relation("CandidateAllDecisions", fields: [candidateId], references: [id], onDelete: Restrict)
+  
+  reconciliationVersion      Int                                 @default(1)
+  decisionVersion            Int                                 @default(1)
+  supersedesDecisionId       String?
+  supersedesDecision         AttendanceReconciliationDecision?   @relation("DecisionRevisions", fields: [supersedesDecisionId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  subsequentDecisions        AttendanceReconciliationDecision[]  @relation("DecisionRevisions")
+  
+  decisionType               String                              // "MATCHED_NO_ACTION" | "KEEP_EXISTING_ATTENDANCE" | "USE_IMPORTED_ATTENDANCE" | "USE_APPROVED_LEAVE" | "ADJUST_PROPOSED_HOURS" | "RESOLVE_STATUS" | "RESOLVE_ASSIGNMENT" | "EXCLUDE_DUPLICATE" | "EXCLUDE_ROW"
+  reasonCode                 String?                             // "CLIENT_TIMESHEET_VERIFIED" | "SUPERVISOR_CONFIRMED" | "MOBILE_DEVICE_OFFLINE" | "APPROVED_LEAVE_APPLIED" | "ROSTER_CHANGE_EXECUTED" | "MANUAL_AUDIT_ADJUSTMENT"
+  reasonNotes                String?                             @db.Text
+  
+  resolvedStatus             String                              // "PRESENT" | "ABSENT" | "OFF" | "LEAVE" | "HOLIDAY"
+  resolvedTimeIn             DateTime?
+  resolvedTimeOut            DateTime?
+  resolvedWorkedMinutes      Int                                 @default(0) // Integer minutes
+  resolvedOtMinutes          Int                                 @default(0) // Integer minutes
+  resolvedLeaveType          String?
+  resolvedAssignmentType     String?
+  resolvedSiteId             String?
+  resolvedRemarks            String?                             @db.Text
+  
+  decidedById                String
+  decidedByName              String
+  decidedAt                  DateTime                            @default(now())
+
+  activeCandidateOverlay     AttendanceReconciliationCandidate?  @relation("CandidateCurrentDecision")
+  snapshotRows               AttendanceApprovedSnapshotRow[]     @relation("DecisionSnapshotRows")
+
+  @@unique([candidateId, reconciliationVersion, decisionVersion], map: "attendance_rec_decisions_cand_ver_uniq")
+  @@index([reconciliationBatchId, reconciliationVersion], map: "attendance_rec_decisions_batch_ver_idx")
+  @@index([candidateId], map: "attendance_rec_decisions_candidate_idx")
+  @@map("attendance_reconciliation_decisions")
+}
+
+model AttendanceReconciliationEvent {
+  id                    String                         @id @default(uuid())
+  reconciliationBatchId String
+  reconciliationBatch   AttendanceReconciliationBatch  @relation(fields: [reconciliationBatchId], references: [id], onDelete: Restrict)
+  reconciliationVersion Int                            @default(1)
+  actorId               String
+  actorName             String
+  actorRole             String
+  eventType             String                         // "STARTED" | "DECISION_APPLIED" | "REVIEW_COMPLETED" | "SUBMITTED" | "RETURNED" | "REVIEW_RESUMED" | "EVIDENCE_REFRESHED" | "REJECTED" | "APPROVED" | "REOPENED"
+  eventPayload          Json?
+  createdAt             DateTime                       @default(now())
+
+  @@index([reconciliationBatchId, eventType], map: "attendance_reconciliation_events_batch_type_idx")
+  @@map("attendance_reconciliation_events")
+}
+
+model AttendanceApprovedSnapshot {
+  id                          String                          @id @default(uuid())
+  reconciliationBatchId       String
+  reconciliationBatch         AttendanceReconciliationBatch   @relation(fields: [reconciliationBatchId], references: [id], onDelete: Restrict)
+  approvalVersion             Int
+  reconciliationVersion       Int
+  sourceImportBatchId         String
+  sourceImportBatchNumber     String
+  companyId                   String
+  company                     Company                         @relation("CompanyAttendanceSnapshots", fields: [companyId], references: [id], onDelete: Restrict)
+  operationType               String
+  periodFrom                  DateTime?                       @db.Date
+  periodTo                    DateTime?                       @db.Date
+  
+  sourceEvidenceHash          String
+  systemEvidenceHash          String
+  snapshotHash                String                          // SHA-256 of canonical snapshot header + sorted row checksums
+  totalRows                   Int
+  approvedRegularMinutesTotal Int                             @default(0)
+  approvedOtMinutesTotal      Int                             @default(0)
+
+  approvedById                String
+  approvedByName              String?
+  approvedByRole              String?
+  approvedAt                  DateTime                        @default(now())
+  metadata                    Json?
+  createdAt                   DateTime                        @default(now())
+
+  snapshotRows                AttendanceApprovedSnapshotRow[]
+
+  @@unique([reconciliationBatchId, approvalVersion], map: "attendance_approved_snapshots_batch_ver_uniq")
+  @@index([sourceImportBatchId], map: "attendance_approved_snapshots_import_batch_idx")
+  @@index([companyId], map: "attendance_approved_snapshots_company_idx")
+  @@map("attendance_approved_snapshots")
+}
+
+model AttendanceApprovedSnapshotRow {
+  id                         String                            @id @default(uuid())
+  snapshotId                 String
+  snapshot                   AttendanceApprovedSnapshot        @relation(fields: [snapshotId], references: [id], onDelete: Restrict)
+  reconciliationBatchId      String
+  importBatchId              String
+  importRowId                String?
+  importRow                  AttendanceImportRow?              @relation("RowApprovedSnapshots", fields: [importRowId], references: [id], onDelete: Restrict)
+  approvalVersion            Int
+  sourceRowNumber            Int?
+  operationalCandidateKey    String
+  
+  employeeId                 String
+  employeeCode               String
+  employeeName               String
+  companyId                  String
+  operationType              String
+  siteId                     String?
+  siteName                   String?
+  contractId                 String?
+  contractNumber             String?
+  rosterSlotAssignmentId     String?
+  shiftCode                  String?
+  dutyDate                   DateTime                          @db.Date
+  plannedStart               String?
+  plannedEnd                 String?
+  actualTimeIn               DateTime?
+  actualTimeOut              DateTime?
+  
+  approvedStatus             String
+  approvedRegularMinutes     Int                               @default(0)
+  approvedOtMinutes          Int                               @default(0)
+  approvedLeaveType          String?
+  approvedAssignmentType     String?
+  
+  reconciliationDecisionId   String
+  reconciliationDecision     AttendanceReconciliationDecision  @relation("DecisionSnapshotRows", fields: [reconciliationDecisionId], references: [id], onDelete: Restrict)
+  decisionType               String
+  reasonCode                 String?
+  reasonNotes                String?                           @db.Text
+  
+  rowChecksum                String                            // SHA-256 of canonical row content
+  createdAt                  DateTime                          @default(now())
+
+  @@unique([snapshotId, operationalCandidateKey], map: "attendance_approved_snapshot_rows_snap_opkey_uniq")
+  @@index([snapshotId, sourceRowNumber], map: "attendance_approved_snapshot_rows_snap_row_idx")
+  @@index([employeeId, dutyDate], map: "attendance_approved_snapshot_rows_emp_date_idx")
+  @@index([reconciliationBatchId, approvalVersion], map: "attendance_approved_snapshot_rows_batch_ver_idx")
+  @@index([reconciliationDecisionId], map: "attendance_approved_snapshot_rows_decision_idx")
+  @@map("attendance_approved_snapshot_rows")
+}
