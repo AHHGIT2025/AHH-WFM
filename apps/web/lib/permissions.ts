@@ -43,16 +43,21 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "precontract.case.view", "precontract.case.manage", "precontract.prospectClient.view", "precontract.prospectClient.manage",
     "precontract.prospectiveSite.view", "precontract.prospectiveSite.manage", "precontract.surveyConfig.view", "precontract.surveyConfig.manage",
     "precontract.siteConditionConfig.view", "precontract.siteConditionConfig.manage", "precontract.costConfig.view", "precontract.costConfig.manage",
-    "precontract.formulaRuleConfig.view", "precontract.formulaRuleConfig.manage", "precontract.config.activate", "precontract.config.retire",
-    "precontract.workflow.submit", "precontract.workflow.review", "precontract.workflow.approve",
+    "precontract.formulaRuleConfig.view", "precontract.formulaRuleConfig.manage", "precontract.config.view", "precontract.config.manage",
+    "precontract.config.activate", "precontract.config.retire",
+    "precontract.workflow.submit", "precontract.workflow.review", "precontract.workflow.approve", "precontract.workflow.reject",
     "precontract.costing.view", "precontract.costing.manage", "precontract.costing.override", "precontract.costing.crossCompany",
     "precontract.proposal.view", "precontract.proposal.manage", "precontract.proposal.issue", "precontract.proposal.crossCompany",
-    "precontract.acceptance.manage", "precontract.contractConversion.execute",
+    "precontract.acceptance.view", "precontract.acceptance.manage", "precontract.contractConversion.execute",
     "commercial.commandCenter.view", "commercial.commandCenter.crossCompany", "commercial.commandCenter.contractHealth", "commercial.commandCenter.exceptions",
     "commercial.commandCenter.rosterCoverage", "commercial.commandCenter.relieverReadiness",
+    "commercial.surveys.view", "commercial.surveys.manage",
+    "commercial.opportunities.view", "commercial.opportunities.manage",
+    "commercial.crm.view", "commercial.crm.manage",
     "commercial.handover.view", "commercial.handover.manage", "commercial.reports.view",
-    "commercial.addendum.view", "commercial.addendum.manage", "commercial.contract.terminate",
-    "commercial.renewal.view", "commercial.renewal.manage",
+    "commercial.addendum.view", "commercial.addendum.create", "commercial.addendum.update", "commercial.addendum.submit",
+    "commercial.addendum.approve", "commercial.addendum.reject", "commercial.contract.terminate",
+    "commercial.renewal.view", "commercial.renewal.manage", "commercial.renewal.approve",
     "commercial.activity.view", "commercial.activity.manage", "commercial.task.view", "commercial.task.manage",
     "attendance.import.view", "attendance.import.create", "attendance.import.validate", "attendance.import.review"
   ],
@@ -66,9 +71,13 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "overtime.view", "overtime.approve", "reports.view", "reports.export", "reports.manage",
     "reports.executive.view", "reports.attendance.view", "reports.leave.view", "reports.overtime.view", "reports.shiftRoster.view", "reports.sapSync.view", "reports.audit.view", "reports.backup.view", "reports.productionReadiness.view",
     "reports.security.view", "reports.facility.view", "reports.patrol.view", "reports.deployment.view",
+    "commercial.surveys.view", "commercial.surveys.manage",
+    "commercial.opportunities.view", "commercial.opportunities.manage",
+    "commercial.crm.view", "commercial.crm.manage",
     "commercial.handover.view", "commercial.handover.manage", "commercial.reports.view",
-    "commercial.addendum.view", "commercial.addendum.manage", "commercial.contract.terminate",
-    "commercial.renewal.view", "commercial.renewal.manage",
+    "commercial.addendum.view", "commercial.addendum.create", "commercial.addendum.update", "commercial.addendum.submit",
+    "commercial.addendum.approve", "commercial.addendum.reject", "commercial.contract.terminate",
+    "commercial.renewal.view", "commercial.renewal.manage", "commercial.renewal.approve",
     "commercial.activity.view", "commercial.activity.manage", "commercial.task.view", "commercial.task.manage",
     "sap.view", "sap.sync", "sap.mapping",
     "backup.view", "backup.create", "backup.download",
@@ -105,14 +114,17 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "precontract.case.view", "precontract.case.manage", "precontract.prospectClient.view", "precontract.prospectClient.manage",
     "precontract.prospectiveSite.view", "precontract.prospectiveSite.manage", "precontract.surveyConfig.view", "precontract.surveyConfig.manage",
     "precontract.siteConditionConfig.view", "precontract.siteConditionConfig.manage", "precontract.costConfig.view", "precontract.costConfig.manage",
-    "precontract.formulaRuleConfig.view", "precontract.formulaRuleConfig.manage", "precontract.config.activate", "precontract.config.retire",
-    "precontract.workflow.submit", "precontract.workflow.review", "precontract.workflow.approve",
+    "precontract.formulaRuleConfig.view", "precontract.formulaRuleConfig.manage", "precontract.config.view", "precontract.config.manage",
+    "precontract.config.activate", "precontract.config.retire",
+    "precontract.workflow.submit", "precontract.workflow.review", "precontract.workflow.approve", "precontract.workflow.reject",
     "precontract.costing.view", "precontract.costing.manage", "precontract.costing.override", "precontract.costing.crossCompany",
     "precontract.proposal.view", "precontract.proposal.manage", "precontract.proposal.issue", "precontract.proposal.crossCompany",
+    "precontract.acceptance.view", "precontract.acceptance.manage", "precontract.contractConversion.execute",
     "commercial.commandCenter.view", "commercial.commandCenter.crossCompany", "commercial.commandCenter.contractHealth", "commercial.commandCenter.exceptions",
     "commercial.commandCenter.rosterCoverage", "commercial.commandCenter.relieverReadiness",
     "commercial.handover.view", "commercial.handover.manage", "commercial.reports.view",
-    "commercial.addendum.view", "commercial.addendum.manage", "commercial.contract.terminate"
+    "commercial.addendum.view", "commercial.addendum.create", "commercial.addendum.update", "commercial.addendum.submit",
+    "commercial.addendum.approve", "commercial.addendum.reject", "commercial.contract.terminate"
   ],
   SYSTEM_ADMIN: [
     "settings.view", "settings.manage", "users.view", "users.manage", "roles.view", "roles.manage",
@@ -343,12 +355,164 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "security.view", "security.manage", "security.coordinators.view", "security.coordinators.manage",
     "security.patrols.view", "security.patrols.create", "security.patrols.manage",
     "self.profile.view", "self.attendance.view", "self.leave.view", "self.password.change"
+  ],
+
+  // Commercial & Pre-Contract Canonical Default Roles
+  COMMERCIAL_VIEWER: [
+    "dashboard.view",
+    "precontract.case.view", "precontract.prospectClient.view", "precontract.prospectiveSite.view",
+    "precontract.surveyConfig.view", "precontract.siteConditionConfig.view", "precontract.costConfig.view", "precontract.formulaRuleConfig.view", "precontract.config.view",
+    "precontract.costing.view", "precontract.proposal.view", "precontract.acceptance.view",
+    "commercial.commandCenter.view", "commercial.commandCenter.contractHealth", "commercial.commandCenter.exceptions",
+    "commercial.commandCenter.rosterCoverage", "commercial.commandCenter.relieverReadiness",
+    "commercial.surveys.view", "commercial.opportunities.view", "commercial.crm.view",
+    "commercial.handover.view", "commercial.reports.view",
+    "commercial.addendum.view", "commercial.renewal.view",
+    "commercial.activity.view", "commercial.task.view",
+    "self.profile.view", "self.attendance.view", "self.attendance.punch", "self.leave.view", "self.leave.apply", "self.announcements.view", "self.password.change"
+  ],
+  COMMERCIAL_MAKER: [
+    "dashboard.view",
+    "precontract.case.view", "precontract.case.manage",
+    "precontract.prospectClient.view", "precontract.prospectClient.manage",
+    "precontract.prospectiveSite.view", "precontract.prospectiveSite.manage",
+    "precontract.surveyConfig.view", "precontract.siteConditionConfig.view", "precontract.costConfig.view", "precontract.formulaRuleConfig.view", "precontract.config.view",
+    "precontract.workflow.submit",
+    "precontract.costing.view", "precontract.costing.manage",
+    "precontract.proposal.view", "precontract.proposal.manage", "precontract.proposal.issue",
+    "precontract.acceptance.view", "precontract.acceptance.manage",
+    "precontract.contractConversion.execute",
+    "commercial.commandCenter.view", "commercial.commandCenter.contractHealth", "commercial.commandCenter.exceptions",
+    "commercial.commandCenter.rosterCoverage", "commercial.commandCenter.relieverReadiness",
+    "commercial.surveys.view", "commercial.surveys.manage",
+    "commercial.opportunities.view", "commercial.opportunities.manage",
+    "commercial.crm.view", "commercial.crm.manage",
+    "commercial.handover.view", "commercial.handover.manage", "commercial.reports.view",
+    "commercial.addendum.view", "commercial.addendum.create", "commercial.addendum.update", "commercial.addendum.submit",
+    "commercial.renewal.view", "commercial.renewal.manage",
+    "commercial.activity.view", "commercial.activity.manage", "commercial.task.view", "commercial.task.manage",
+    "self.profile.view", "self.attendance.view", "self.attendance.punch", "self.leave.view", "self.leave.apply", "self.announcements.view", "self.password.change"
+  ],
+  COMMERCIAL_CHECKER: [
+    "dashboard.view",
+    "precontract.case.view", "precontract.prospectClient.view", "precontract.prospectiveSite.view",
+    "precontract.surveyConfig.view", "precontract.siteConditionConfig.view", "precontract.costConfig.view", "precontract.formulaRuleConfig.view", "precontract.config.view",
+    "precontract.workflow.review", "precontract.workflow.approve", "precontract.workflow.reject",
+    "precontract.costing.view", "precontract.proposal.view", "precontract.acceptance.view",
+    "commercial.commandCenter.view", "commercial.commandCenter.contractHealth", "commercial.commandCenter.exceptions",
+    "commercial.commandCenter.rosterCoverage", "commercial.commandCenter.relieverReadiness",
+    "commercial.surveys.view", "commercial.opportunities.view", "commercial.crm.view",
+    "commercial.handover.view", "commercial.reports.view",
+    "commercial.addendum.view", "commercial.addendum.approve", "commercial.addendum.reject",
+    "commercial.renewal.view", "commercial.renewal.approve",
+    "commercial.activity.view", "commercial.task.view",
+    "self.profile.view", "self.attendance.view", "self.attendance.punch", "self.leave.view", "self.leave.apply", "self.announcements.view", "self.password.change"
+  ],
+  COMMERCIAL_ADMIN: [
+    "dashboard.view", "settings.view",
+    "precontract.case.view", "precontract.prospectClient.view", "precontract.prospectiveSite.view",
+    "precontract.surveyConfig.view", "precontract.surveyConfig.manage",
+    "precontract.siteConditionConfig.view", "precontract.siteConditionConfig.manage",
+    "precontract.costConfig.view", "precontract.costConfig.manage",
+    "precontract.formulaRuleConfig.view", "precontract.formulaRuleConfig.manage",
+    "precontract.config.view", "precontract.config.manage", "precontract.config.activate", "precontract.config.retire",
+    "precontract.costing.view", "precontract.costing.override", "precontract.costing.crossCompany",
+    "precontract.proposal.view", "precontract.proposal.crossCompany", "precontract.acceptance.view",
+    "commercial.commandCenter.view", "commercial.commandCenter.crossCompany", "commercial.commandCenter.contractHealth", "commercial.commandCenter.exceptions",
+    "commercial.commandCenter.rosterCoverage", "commercial.commandCenter.relieverReadiness",
+    "commercial.surveys.view", "commercial.opportunities.view", "commercial.crm.view",
+    "commercial.handover.view", "commercial.handover.manage", "commercial.reports.view",
+    "commercial.addendum.view", "commercial.renewal.view",
+    "commercial.activity.view", "commercial.task.view",
+    "self.profile.view", "self.attendance.view", "self.attendance.punch", "self.leave.view", "self.leave.apply", "self.announcements.view", "self.password.change"
+  ],
+
+  // Commercial & Pre-Contract Existing UAT Functional Roles (Preserved for Backward Compatibility)
+  COMMERCIAL_CREATOR: [
+    "dashboard.view",
+    "precontract.case.view", "precontract.case.manage",
+    "precontract.prospectClient.view", "precontract.prospectClient.manage",
+    "precontract.prospectiveSite.view", "precontract.prospectiveSite.manage",
+    "precontract.surveyConfig.view", "precontract.siteConditionConfig.view", "precontract.costConfig.view", "precontract.formulaRuleConfig.view", "precontract.config.view",
+    "precontract.workflow.submit",
+    "precontract.costing.view", "precontract.costing.manage",
+    "precontract.proposal.view", "precontract.proposal.manage", "precontract.proposal.issue",
+    "precontract.acceptance.view", "precontract.acceptance.manage",
+    "precontract.contractConversion.execute",
+    "commercial.commandCenter.view", "commercial.commandCenter.contractHealth", "commercial.commandCenter.exceptions",
+    "commercial.commandCenter.rosterCoverage", "commercial.commandCenter.relieverReadiness",
+    "commercial.surveys.view", "commercial.surveys.manage",
+    "commercial.opportunities.view", "commercial.opportunities.manage",
+    "commercial.crm.view", "commercial.crm.manage",
+    "commercial.handover.view", "commercial.handover.manage", "commercial.reports.view",
+    "commercial.addendum.view", "commercial.addendum.create", "commercial.addendum.update", "commercial.addendum.submit",
+    "commercial.renewal.view", "commercial.renewal.manage",
+    "commercial.activity.view", "commercial.activity.manage", "commercial.task.view", "commercial.task.manage",
+    "self.profile.view", "self.attendance.view", "self.attendance.punch", "self.leave.view", "self.leave.apply", "self.announcements.view", "self.password.change"
+  ],
+  COMMERCIAL_APPROVER: [
+    "dashboard.view",
+    "precontract.case.view", "precontract.prospectClient.view", "precontract.prospectiveSite.view",
+    "precontract.surveyConfig.view", "precontract.siteConditionConfig.view", "precontract.costConfig.view", "precontract.formulaRuleConfig.view", "precontract.config.view",
+    "precontract.workflow.review", "precontract.workflow.approve", "precontract.workflow.reject",
+    "precontract.costing.view", "precontract.proposal.view", "precontract.acceptance.view",
+    "commercial.commandCenter.view", "commercial.commandCenter.contractHealth", "commercial.commandCenter.exceptions",
+    "commercial.commandCenter.rosterCoverage", "commercial.commandCenter.relieverReadiness",
+    "commercial.surveys.view", "commercial.opportunities.view", "commercial.crm.view",
+    "commercial.handover.view", "commercial.reports.view",
+    "commercial.addendum.view", "commercial.addendum.approve", "commercial.addendum.reject",
+    "commercial.renewal.view", "commercial.renewal.approve",
+    "commercial.activity.view", "commercial.task.view",
+    "self.profile.view", "self.attendance.view", "self.attendance.punch", "self.leave.view", "self.leave.apply", "self.announcements.view", "self.password.change"
+  ],
+  COMMERCIAL_OPERATIONS: [
+    "dashboard.view",
+    "precontract.case.view", "precontract.prospectClient.view", "precontract.prospectiveSite.view",
+    "precontract.surveyConfig.view", "precontract.siteConditionConfig.view", "precontract.costConfig.view", "precontract.formulaRuleConfig.view", "precontract.config.view",
+    "precontract.costing.view", "precontract.proposal.view", "precontract.acceptance.view",
+    "commercial.commandCenter.view", "commercial.commandCenter.contractHealth", "commercial.commandCenter.exceptions",
+    "commercial.commandCenter.rosterCoverage", "commercial.commandCenter.relieverReadiness",
+    "commercial.surveys.view", "commercial.opportunities.view", "commercial.crm.view",
+    "commercial.handover.view", "commercial.handover.manage", "commercial.reports.view",
+    "commercial.addendum.view", "commercial.renewal.view",
+    "commercial.activity.view", "commercial.task.view",
+    "manpower.view",
+    "manpower.security.view", "manpower.security.contracts.view", "manpower.security.projects.view", "manpower.security.sites.view", "manpower.security.deployments.view",
+    "manpower.fm.view", "manpower.fm.contracts.view", "manpower.fm.projects.view", "manpower.fm.sites.view", "manpower.fm.deployments.view",
+    "self.profile.view", "self.attendance.view", "self.attendance.punch", "self.leave.view", "self.leave.apply", "self.announcements.view", "self.password.change"
+  ],
+  COMMERCIAL_HR: [
+    "dashboard.view", "employees.view", "shifts.view", "reports.view",
+    "precontract.case.view", "precontract.prospectClient.view", "precontract.prospectiveSite.view",
+    "precontract.surveyConfig.view", "precontract.siteConditionConfig.view", "precontract.costConfig.view", "precontract.formulaRuleConfig.view", "precontract.config.view",
+    "precontract.costing.view", "precontract.proposal.view", "precontract.acceptance.view",
+    "commercial.commandCenter.view", "commercial.commandCenter.contractHealth", "commercial.commandCenter.exceptions",
+    "commercial.commandCenter.rosterCoverage", "commercial.commandCenter.relieverReadiness",
+    "commercial.surveys.view", "commercial.opportunities.view", "commercial.crm.view",
+    "commercial.handover.view", "commercial.reports.view",
+    "commercial.addendum.view", "commercial.renewal.view",
+    "commercial.activity.view", "commercial.task.view",
+    "self.profile.view", "self.attendance.view", "self.attendance.punch", "self.leave.view", "self.leave.apply", "self.announcements.view", "self.password.change"
+  ],
+  COMMERCIAL_FINANCE: [
+    "dashboard.view", "reports.view", "reports.export", "sap.view",
+    "precontract.case.view", "precontract.prospectClient.view", "precontract.prospectiveSite.view",
+    "precontract.surveyConfig.view", "precontract.siteConditionConfig.view", "precontract.costConfig.view", "precontract.formulaRuleConfig.view", "precontract.config.view",
+    "precontract.costing.view", "precontract.proposal.view", "precontract.acceptance.view",
+    "commercial.commandCenter.view", "commercial.commandCenter.contractHealth", "commercial.commandCenter.exceptions",
+    "commercial.commandCenter.rosterCoverage", "commercial.commandCenter.relieverReadiness",
+    "commercial.surveys.view", "commercial.opportunities.view", "commercial.crm.view",
+    "commercial.handover.view", "commercial.reports.view",
+    "commercial.addendum.view",
+    "commercial.renewal.view",
+    "commercial.activity.view", "commercial.task.view",
+    "self.profile.view", "self.attendance.view", "self.attendance.punch", "self.leave.view", "self.leave.apply", "self.announcements.view", "self.password.change"
   ]
 };
 
 export function isAdminUser(user: { role?: string } | null | undefined): boolean {
   if (!user || !user.role) return false;
-  const role = user.role.toUpperCase().replace(/\s+/g, "_");
+  const role = user.role.trim().toUpperCase().replace(/\s+/g, "_");
   return role === "ADMIN" || role === "SUPER_ADMIN";
 }
 
@@ -362,13 +526,19 @@ export function hasPermission(user: { role?: string; permissions?: string[] } | 
 
   // Check database-driven combined permissions in session if loaded
   if (user.permissions && Array.isArray(user.permissions)) {
-    if (user.permissions.includes("manpower.admin.full_access")) return true;
+    if (
+      user.permissions.includes("manpower.admin.full_access") &&
+      !permissionKey.startsWith("precontract.") &&
+      (!permissionKey.startsWith("commercial.") || permissionKey.startsWith("commercial.commandCenter."))
+    ) {
+      return true;
+    }
     return user.permissions.includes(permissionKey);
   }
 
   // Fallback to hardcoded roles in code if not loaded in session
   if (!user.role) return false;
-  const role = user.role.toUpperCase().replace(/\s+/g, "_");
+  const role = user.role.trim().toUpperCase().replace(/\s+/g, "_");
   const permissions = DEFAULT_ROLE_PERMISSIONS[role] || [];
   return permissions.includes(permissionKey);
 }
@@ -377,7 +547,7 @@ export function getUserPermissions(user: { role?: string; permissions?: string[]
   if (!user) return [];
 
   if (isAdminUser(user)) {
-    const role = user.role!.toUpperCase().replace(/\s+/g, "_");
+    const role = user.role!.trim().toUpperCase().replace(/\s+/g, "_");
     return DEFAULT_ROLE_PERMISSIONS[role] || [];
   }
 
@@ -386,7 +556,7 @@ export function getUserPermissions(user: { role?: string; permissions?: string[]
   }
 
   if (!user.role) return [];
-  const role = user.role.toUpperCase().replace(/\s+/g, "_");
+  const role = user.role.trim().toUpperCase().replace(/\s+/g, "_");
   return DEFAULT_ROLE_PERMISSIONS[role] || [];
 }
 
@@ -394,14 +564,24 @@ export function getEffectiveUserPermissions(user: { id?: string; role?: string; 
   return getUserPermissions(user);
 }
 
+export function hasCommercialAccess(user: { role?: string; permissions?: string[] } | null | undefined): boolean {
+  if (!user) return false;
+  if (isAdminUser(user)) return true;
+  const perms = getUserPermissions(user);
+  return perms.some(p => p.startsWith("precontract.") || p.startsWith("commercial."));
+}
+
+export function canViewSecfacAlerts(user: { role?: string; permissions?: string[] } | null | undefined): boolean {
+  if (!user) return false;
+  return isAdminUser(user) || hasPermission(user, "secfac.alerts.view");
+}
+
 export function filterNavigationByPermissions(user: { role?: string; permissions?: string[] } | null | undefined, navItems: any[]): any[] {
   if (!user) return [];
   return navItems.filter(item => {
     // Map paths to permissions
     if (item.path.startsWith("/commercial")) {
-      return hasPermission(user, "manpower.admin.full_access") || 
-             hasPermission(user, "manpower.security.view") || 
-             hasPermission(user, "manpower.fm.view");
+      return hasCommercialAccess(user);
     }
     if (item.path === "/" || item.path === "/dashboard") return hasPermission(user, "dashboard.view");
     if (item.path === "/secfac/post-orders") return hasPermission(user, "secfac.postOrders.view") || hasPermission(user, "manpower.security.view") || hasPermission(user, "manpower.admin.full_access");
@@ -453,6 +633,7 @@ export function filterNavigationByPermissions(user: { role?: string; permissions
     if (item.path === "/manpower/security-guarding/deployment-calendar") return hasPermission(user, "security.deployment.view") || hasPermission(user, "manpower.security.deployments.view") || hasPermission(user, "manpower.admin.full_access");
     if (item.path === "/manpower/security-guarding/reliever-pools") return hasPermission(user, "manpower.security.relievers.view") || hasPermission(user, "manpower.admin.full_access");
     if (item.path === "/manpower/security-guarding/coordinators") return hasPermission(user, "security.coordinators.view") || hasPermission(user, "manpower.admin.full_access");
+    if (item.path === "/manpower/security-guarding/alerts") return canViewSecfacAlerts(user);
 
     // Facility Management sub-menu items
     if (item.path === "/manpower/facility-management/clients") return hasPermission(user, "manpower.fm.clients.view") || hasPermission(user, "manpower.admin.full_access");
@@ -462,6 +643,7 @@ export function filterNavigationByPermissions(user: { role?: string; permissions
     if (item.path === "/manpower/facility-management/areas") return hasPermission(user, "manpower.fm.areas.view") || hasPermission(user, "manpower.admin.full_access");
     if (item.path === "/manpower/facility-management/manpower") return hasPermission(user, "facility.manpower.view") || hasPermission(user, "manpower.fm.manpower.view") || hasPermission(user, "manpower.admin.full_access");
     if (item.path === "/manpower/facility-management/deployment-calendar") return hasPermission(user, "facility.deployment.view") || hasPermission(user, "manpower.fm.deployments.view") || hasPermission(user, "manpower.admin.full_access");
+    if (item.path === "/manpower/facility-management/alerts") return canViewSecfacAlerts(user);
 
     if (item.path.startsWith("/manpower/security-guarding")) {
       return hasPermission(user, "manpower.admin.full_access") || hasPermission(user, "manpower.security.view");
@@ -494,3 +676,186 @@ export function getDutyStatusLabel(employee: any): string {
 export function canAssignShift(employee: any): boolean {
   return isEmployeeActive(employee);
 }
+
+export type SurveyWorkflowAction = "SUBMIT" | "APPROVE" | "RETURN" | "REJECT";
+
+export interface SurveyWorkflowLevelApproverInput {
+  approverType: string;
+  employeeId?: string | null;
+  roleName?: string | null;
+}
+
+export interface SurveyWorkflowLevelInput {
+  levelNumber: number;
+  levelName?: string | null;
+  approvers?: SurveyWorkflowLevelApproverInput[];
+}
+
+export interface SurveyWorkflowAuthContext {
+  lifecycle: string;
+  conductedBy?: string | null;
+  companyId?: string | null;
+  operationType?: string | null;
+}
+
+export function canUserPerformSurveyWorkflowAction(
+  user: any,
+  action: SurveyWorkflowAction
+): boolean {
+  if (!user) return false;
+  if (isAdminUser(user) || hasPermission(user, "manpower.admin.full_access")) {
+    return true;
+  }
+  if (action === "SUBMIT") {
+    return (
+      hasPermission(user, "precontract.workflow.submit") ||
+      hasPermission(user, "precontract.case.manage") ||
+      hasPermission(user, "commercial.surveys.manage")
+    );
+  }
+  if (action === "APPROVE") {
+    return hasPermission(user, "precontract.workflow.approve");
+  }
+  if (action === "REJECT") {
+    return (
+      hasPermission(user, "precontract.workflow.reject") ||
+      hasPermission(user, "precontract.workflow.approve")
+    );
+  }
+  if (action === "RETURN") {
+    return (
+      hasPermission(user, "precontract.workflow.review") ||
+      hasPermission(user, "precontract.workflow.approve") ||
+      hasPermission(user, "precontract.workflow.reject")
+    );
+  }
+  return false;
+}
+
+export function isUserEligibleSurveyLevelApprover(
+  user: any,
+  currentLevel: SurveyWorkflowLevelInput | null | undefined,
+  action: SurveyWorkflowAction
+): boolean {
+  if (!user) return false;
+  if (!currentLevel || !currentLevel.approvers || currentLevel.approvers.length === 0) {
+    return (
+      isAdminUser(user) ||
+      hasPermission(user, "precontract.workflow.approve") ||
+      (action === "REJECT" && hasPermission(user, "precontract.workflow.reject")) ||
+      (action === "RETURN" &&
+        (hasPermission(user, "precontract.workflow.review") ||
+          hasPermission(user, "precontract.workflow.reject"))) ||
+      hasPermission(user, "manpower.admin.full_access")
+    );
+  }
+
+  let isLevelApprover = currentLevel.approvers.some((ap) => {
+    if (ap.approverType === "SPECIFIC_EMPLOYEE" && ap.employeeId) {
+      return user.id === ap.employeeId;
+    }
+    if (ap.approverType === "ROLE_BASED" && ap.roleName) {
+      const normUserRole = (user.role || "").trim().toUpperCase().replace(/\s+/g, "_");
+      const normTargetRole = ap.roleName.trim().toUpperCase().replace(/\s+/g, "_");
+      return (
+        normUserRole === normTargetRole ||
+        ((normTargetRole === "COMMERCIAL_CHECKER" || normTargetRole === "COMMERCIAL_APPROVER") &&
+          (hasPermission(user, "precontract.workflow.approve") ||
+            hasPermission(user, "precontract.workflow.reject") ||
+            hasPermission(user, "precontract.workflow.review")))
+      );
+    }
+    if (ap.approverType === "DEPT_HEAD" || ap.approverType === "CONTRACT_ADMIN") {
+      return isAdminUser(user) || hasPermission(user, "manpower.admin.full_access");
+    }
+    return false;
+  });
+
+  if (
+    !isLevelApprover &&
+    (user.role === "SUPER_ADMIN" || hasPermission(user, "manpower.admin.full_access"))
+  ) {
+    isLevelApprover = true;
+  }
+
+  return isLevelApprover;
+}
+
+export function getAuthorizedSurveyWorkflowActions(
+  user: any,
+  survey: SurveyWorkflowAuthContext | null | undefined,
+  currentLevel?: SurveyWorkflowLevelInput | null
+): SurveyWorkflowAction[] {
+  if (!user || !survey) return [];
+
+  // Company Boundary Check
+  if (
+    user.companyId &&
+    !isAdminUser(user) &&
+    survey.companyId &&
+    survey.companyId !== user.companyId
+  ) {
+    return [];
+  }
+
+  // SG / FM Scope Isolation Check
+  if (!isAdminUser(user) && !hasPermission(user, "manpower.admin.full_access")) {
+    const userAllowedSG = user?.operationAccess?.allowedSecurityGuarding ?? true;
+    const userAllowedFM = user?.operationAccess?.allowedFacilityManagement ?? true;
+
+    if (survey.operationType === "SECURITY_GUARDING" && !userAllowedSG) {
+      return [];
+    }
+    if (survey.operationType === "FACILITY_MANAGEMENT" && !userAllowedFM) {
+      return [];
+    }
+  }
+
+  if (survey.lifecycle === "DRAFT") {
+    return canUserPerformSurveyWorkflowAction(user, "SUBMIT") ? ["SUBMIT"] : [];
+  }
+
+  if (survey.lifecycle === "IN_WORKFLOW") {
+    const candidateActions: SurveyWorkflowAction[] = ["APPROVE", "RETURN", "REJECT"];
+    const isSurveyCreator = Boolean(
+      survey.conductedBy &&
+        (survey.conductedBy === user.id || survey.conductedBy === user.name)
+    );
+    const isExplicitSelfApprover = Boolean(
+      currentLevel?.approvers?.some(
+        (ap) => ap.approverType === "SPECIFIC_EMPLOYEE" && ap.employeeId === user.id
+      )
+    );
+
+    return candidateActions.filter((action) => {
+      if (!canUserPerformSurveyWorkflowAction(user, action)) {
+        return false;
+      }
+      if (!isUserEligibleSurveyLevelApprover(user, currentLevel, action)) {
+        return false;
+      }
+      // Maker/Checker Segregation of Duties (SoD): creator cannot self-approve unless SUPER_ADMIN or explicit SPECIFIC_EMPLOYEE approver
+      if (
+        action === "APPROVE" &&
+        isSurveyCreator &&
+        user.role !== "SUPER_ADMIN" &&
+        !isExplicitSelfApprover
+      ) {
+        return false;
+      }
+      return true;
+    });
+  }
+
+  return [];
+}
+
+export function resolveInitialSurveyWorkflowAction(
+  authorizedActions: SurveyWorkflowAction[]
+): SurveyWorkflowAction | "" {
+  if (authorizedActions.length === 1) {
+    return authorizedActions[0];
+  }
+  return "";
+}
+

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@ahh-wfm/database";
 import { checkApiAuth } from "@/lib/api-guards";
 import { hasPermission, isAdminUser } from "@/lib/permissions";
-import { calculateCostingEstimate } from "@/lib/precontract-costing";
+import { calculateCostingEstimate, serializeCostingEstimate } from "@/lib/precontract-costing";
 
 export async function GET(request: Request) {
   const auth = await checkApiAuth();
@@ -28,9 +28,13 @@ export async function GET(request: Request) {
   const search = searchParams.get("search") || "";
   const statusFilter = searchParams.get("status") || "ALL";
   const operationTypeFilter = searchParams.get("operationType") || "ALL";
+  const caseIdFilter = searchParams.get("caseId") || "";
 
   try {
     const whereClause: any = {};
+    if (caseIdFilter) {
+      whereClause.caseId = caseIdFilter;
+    }
 
     // Company isolation
     if (user?.companyId && !isAdminUser(user) && !hasPermission(user, "precontract.costing.crossCompany")) {
@@ -89,7 +93,9 @@ export async function GET(request: Request) {
       orderBy: { updatedAt: "desc" }
     });
 
-    return NextResponse.json({ estimates });
+    return NextResponse.json({
+      estimates: estimates.map((est) => serializeCostingEstimate(est))
+    });
   } catch (err: any) {
     return NextResponse.json(
       { error: err.message || "Failed to fetch pre-contract costing estimates." },
@@ -224,7 +230,7 @@ export async function POST(request: Request) {
       }
     });
 
-    return NextResponse.json({ estimate }, { status: 201 });
+    return NextResponse.json({ estimate: serializeCostingEstimate(estimate) }, { status: 201 });
   } catch (err: any) {
     return NextResponse.json(
       { error: err.message || "Failed to create pre-contract costing estimate." },

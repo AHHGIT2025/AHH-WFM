@@ -159,7 +159,71 @@ const DEFAULT_PERMISSIONS = [
   { key: "self.leave.view", label: "View Own Leave Requests", module: "Self Service" },
   { key: "self.leave.apply", label: "Submit Leave Applications", module: "Self Service" },
   { key: "self.announcements.view", label: "View Company Announcements", module: "Self Service" },
-  { key: "self.password.change", label: "Change Own Password", module: "Self Service" }
+  { key: "self.password.change", label: "Change Own Password", module: "Self Service" },
+
+  // Commercial & Pre-Contract specific permissions
+  { key: "precontract.case.view", label: "View Pre-Contract Cases", module: "Commercial & Pre-Contract" },
+  { key: "precontract.case.manage", label: "Create & Manage Pre-Contract Cases", module: "Commercial & Pre-Contract" },
+  { key: "precontract.prospectClient.view", label: "View Prospect Clients", module: "Commercial & Pre-Contract" },
+  { key: "precontract.prospectClient.manage", label: "Create & Manage Prospect Clients", module: "Commercial & Pre-Contract" },
+  { key: "precontract.prospectiveSite.view", label: "View Prospective Sites", module: "Commercial & Pre-Contract" },
+  { key: "precontract.prospectiveSite.manage", label: "Create & Manage Prospective Sites", module: "Commercial & Pre-Contract" },
+  { key: "precontract.surveyConfig.view", label: "View Site Survey Configuration", module: "Commercial & Pre-Contract" },
+  { key: "precontract.surveyConfig.manage", label: "Manage Site Survey Configuration", module: "Commercial & Pre-Contract" },
+  { key: "precontract.siteConditionConfig.view", label: "View Site Condition Rules", module: "Commercial & Pre-Contract" },
+  { key: "precontract.siteConditionConfig.manage", label: "Manage Site Condition Rules", module: "Commercial & Pre-Contract" },
+  { key: "precontract.costConfig.view", label: "View Cost Configuration", module: "Commercial & Pre-Contract" },
+  { key: "precontract.costConfig.manage", label: "Manage Cost Configuration", module: "Commercial & Pre-Contract" },
+  { key: "precontract.formulaRuleConfig.view", label: "View Pricing Formula Rules", module: "Commercial & Pre-Contract" },
+  { key: "precontract.formulaRuleConfig.manage", label: "Manage Pricing Formula Rules", module: "Commercial & Pre-Contract" },
+  { key: "precontract.config.view", label: "View Pre-Contract Configuration", module: "Commercial & Pre-Contract" },
+  { key: "precontract.config.manage", label: "Manage Pre-Contract Configuration", module: "Commercial & Pre-Contract" },
+  { key: "precontract.config.activate", label: "Activate Pre-Contract Config Versions", module: "Commercial & Pre-Contract" },
+  { key: "precontract.config.retire", label: "Retire Pre-Contract Config Versions", module: "Commercial & Pre-Contract" },
+  { key: "precontract.workflow.submit", label: "Submit Pre-Contract & Survey Workflows", module: "Commercial & Pre-Contract" },
+  { key: "precontract.workflow.review", label: "Review Pre-Contract & Survey Workflows", module: "Commercial & Pre-Contract" },
+  { key: "precontract.workflow.approve", label: "Approve Pre-Contract & Survey Workflows", module: "Commercial & Pre-Contract" },
+  { key: "precontract.workflow.reject", label: "Reject Pre-Contract & Survey Workflows", module: "Commercial & Pre-Contract" },
+  { key: "precontract.costing.view", label: "View Costing Sheets", module: "Commercial & Pre-Contract" },
+  { key: "precontract.costing.manage", label: "Create & Edit Costing Sheets", module: "Commercial & Pre-Contract" },
+  { key: "precontract.costing.override", label: "Override Costing Margin Thresholds", module: "Commercial & Pre-Contract" },
+  { key: "precontract.costing.crossCompany", label: "Cross-Company Costing Access", module: "Commercial & Pre-Contract" },
+  { key: "precontract.proposal.view", label: "View Quotations & Proposals", module: "Commercial & Pre-Contract" },
+  { key: "precontract.proposal.manage", label: "Prepare Quotations & Proposals", module: "Commercial & Pre-Contract" },
+  { key: "precontract.proposal.issue", label: "Issue Quotations to Clients", module: "Commercial & Pre-Contract" },
+  { key: "precontract.proposal.crossCompany", label: "Cross-Company Proposal Access", module: "Commercial & Pre-Contract" },
+  { key: "precontract.acceptance.view", label: "View Client Acceptances", module: "Commercial & Pre-Contract" },
+  { key: "precontract.acceptance.manage", label: "Record & Manage Client Acceptances", module: "Commercial & Pre-Contract" },
+  { key: "precontract.contractConversion.execute", label: "Execute Pre-Contract to Contract Conversion", module: "Commercial & Pre-Contract" },
+  { key: "commercial.commandCenter.view", label: "View Commercial Command Center", module: "Commercial & Pre-Contract" },
+  { key: "commercial.commandCenter.crossCompany", label: "Cross-Company Command Center Access", module: "Commercial & Pre-Contract" },
+  { key: "commercial.commandCenter.contractHealth", label: "View Contract Health Metrics", module: "Commercial & Pre-Contract" },
+  { key: "commercial.commandCenter.exceptions", label: "View Commercial Exceptions", module: "Commercial & Pre-Contract" },
+  { key: "commercial.commandCenter.rosterCoverage", label: "View Roster Coverage Console", module: "Commercial & Pre-Contract" },
+  { key: "commercial.commandCenter.relieverReadiness", label: "View Reliever Readiness Metrics", module: "Commercial & Pre-Contract" },
+  { key: "commercial.surveys.view", label: "View Site Surveys", module: "Commercial & Pre-Contract" },
+  { key: "commercial.surveys.manage", label: "Create & Update Site Surveys", module: "Commercial & Pre-Contract" },
+  { key: "commercial.opportunities.view", label: "View Commercial Opportunities", module: "Commercial & Pre-Contract" },
+  { key: "commercial.opportunities.manage", label: "Create & Update Commercial Opportunities", module: "Commercial & Pre-Contract" },
+  { key: "commercial.crm.view", label: "View CRM & Enquiries", module: "Commercial & Pre-Contract" },
+  { key: "commercial.crm.manage", label: "Create & Manage CRM Enquiries", module: "Commercial & Pre-Contract" },
+  { key: "commercial.handover.view", label: "View Contract Handovers", module: "Commercial & Pre-Contract" },
+  { key: "commercial.handover.manage", label: "Manage Contract Handovers", module: "Commercial & Pre-Contract" },
+  { key: "commercial.reports.view", label: "View Commercial Reports", module: "Commercial & Pre-Contract" },
+  { key: "commercial.addendum.view", label: "View Contract Addendums", module: "Commercial & Pre-Contract" },
+  { key: "commercial.addendum.create", label: "Create Contract Addendums (Maker)", module: "Commercial & Pre-Contract" },
+  { key: "commercial.addendum.update", label: "Update Draft Contract Addendums (Maker)", module: "Commercial & Pre-Contract" },
+  { key: "commercial.addendum.submit", label: "Submit Contract Addendums for Approval (Maker)", module: "Commercial & Pre-Contract" },
+  { key: "commercial.addendum.approve", label: "Approve Contract Addendums (Checker)", module: "Commercial & Pre-Contract" },
+  { key: "commercial.addendum.reject", label: "Reject Contract Addendums (Checker)", module: "Commercial & Pre-Contract" },
+  { key: "commercial.contract.terminate", label: "Terminate Active Contracts", module: "Commercial & Pre-Contract" },
+  { key: "commercial.renewal.view", label: "View Contract Renewals", module: "Commercial & Pre-Contract" },
+  { key: "commercial.renewal.manage", label: "Prepare & Manage Contract Renewals", module: "Commercial & Pre-Contract" },
+  { key: "commercial.renewal.approve", label: "Approve Contract Renewals (Checker)", module: "Commercial & Pre-Contract" },
+  { key: "commercial.activity.view", label: "View Commercial Activities", module: "Commercial & Pre-Contract" },
+  { key: "commercial.activity.manage", label: "Log & Manage Commercial Activities", module: "Commercial & Pre-Contract" },
+  { key: "commercial.task.view", label: "View Commercial Tasks", module: "Commercial & Pre-Contract" },
+  { key: "commercial.task.manage", label: "Create & Manage Commercial Tasks", module: "Commercial & Pre-Contract" }
 ];
 
 const DEFAULT_SYSTEM_ROLES = [
@@ -195,6 +259,17 @@ const DEFAULT_SYSTEM_ROLES = [
   { name: "FM_PROJECT_MANAGER", description: "Manage FM projects, sites, and deploy cleaners.", isSystemDefault: true, isActive: true, isEditable: false, scope: "Facility Management", roleType: "Facility Management Operations" },
   { name: "FM_SUPERVISOR", description: "FM supervisor to track cleaning attendance.", isSystemDefault: true, isActive: true, isEditable: false, scope: "Facility Management", roleType: "Facility Management Operations" },
 
+  // Commercial & Pre-Contract Canonical & UAT Functional Roles
+  { name: "COMMERCIAL_VIEWER", description: "Read-only access to Commercial and Pre-Contract information without preparation or approval rights.", isSystemDefault: true, isActive: true, isEditable: false, scope: "Commercial & Pre-Contract", roleType: "Commercial & Pre-Contract" },
+  { name: "COMMERCIAL_MAKER", description: "Operational Commercial Maker for opportunities, pre-contract cases, site surveys, quotations, and contract/addendum preparation & submission.", isSystemDefault: true, isActive: true, isEditable: false, scope: "Commercial & Pre-Contract", roleType: "Commercial & Pre-Contract" },
+  { name: "COMMERCIAL_CHECKER", description: "Commercial Checker authorized to review, approve, and reject Commercial workflows and contract addendums under Maker/Checker SoD.", isSystemDefault: true, isActive: true, isEditable: false, scope: "Commercial & Pre-Contract", roleType: "Commercial & Pre-Contract" },
+  { name: "COMMERCIAL_ADMIN", description: "Administrative role for authorized Commercial and Pre-Contract configuration and governance, separated from Maker/Checker approval execution.", isSystemDefault: true, isActive: true, isEditable: false, scope: "Commercial & Pre-Contract", roleType: "Commercial & Pre-Contract" },
+  { name: "COMMERCIAL_CREATOR", description: "Commercial Creator (UAT functional role compatible with COMMERCIAL_MAKER) for opportunities, pre-contract cases, site surveys, quotations, and contract/addendum preparation & submission.", isSystemDefault: true, isActive: true, isEditable: false, scope: "Commercial & Pre-Contract", roleType: "Commercial & Pre-Contract" },
+  { name: "COMMERCIAL_APPROVER", description: "Commercial Approver (UAT functional role compatible with COMMERCIAL_CHECKER) authorized to review, approve, and reject Commercial workflows and contract addendums under Maker/Checker SoD.", isSystemDefault: true, isActive: true, isEditable: false, scope: "Commercial & Pre-Contract", roleType: "Commercial & Pre-Contract" },
+  { name: "COMMERCIAL_OPERATIONS", description: "Commercial Operations functional role for Commercial read access, contract handovers, and operational readiness context.", isSystemDefault: true, isActive: true, isEditable: false, scope: "Commercial & Pre-Contract", roleType: "Commercial & Pre-Contract" },
+  { name: "COMMERCIAL_HR", description: "Commercial HR functional role for workforce directory read access and Commercial/Pre-Contract read visibility.", isSystemDefault: true, isActive: true, isEditable: false, scope: "Commercial & Pre-Contract", roleType: "Commercial & Pre-Contract" },
+  { name: "COMMERCIAL_FINANCE", description: "Commercial Finance functional role for Commercial/Pre-Contract read access, costing/proposal/addendum visibility, and financial reporting.", isSystemDefault: true, isActive: true, isEditable: false, scope: "Commercial & Pre-Contract", roleType: "Commercial & Pre-Contract" },
+
   // Finance / Reports Roles
   { name: "FINANCE_VIEWER", description: "Read only access to SuccessFactors mappings and overtime reports.", isSystemDefault: true, isActive: true, isEditable: false, scope: "Global", roleType: "Finance / Reports" },
   { name: "SECURITY_HR_PAYROLL_VIEWER", description: "HR viewer for guards profiles and shift reports.", isSystemDefault: true, isActive: true, isEditable: false, scope: "Security Guarding", roleType: "Finance / Reports" },
@@ -208,20 +283,24 @@ const DEFAULT_SYSTEM_ROLES = [
   { name: "FM_READ_ONLY", description: "Read only viewer for FM planning calendars.", isSystemDefault: true, isActive: true, isEditable: false, scope: "Facility Management", roleType: "Read Only" }
 ];
 
-async function seedPermissionsIfEmpty() {
+async function ensurePermissionCatalogue() {
   const perm = await mockDb.getSystemPermissions();
   if (perm.length === 0) {
     for (const def of DEFAULT_PERMISSIONS) {
       await mockDb.createSystemPermission(def);
     }
   } else {
-    // Sync new permissions
+    // Sync only newly introduced permission catalogue definitions without modifying SystemRole or RolePermission grants
     for (const def of DEFAULT_PERMISSIONS) {
       if (!perm.some(p => p.key === def.key)) {
         await mockDb.createSystemPermission(def);
       }
     }
   }
+}
+
+async function seedPermissionsIfEmpty(options?: { reconcileMissingDefaultRoles?: boolean }) {
+  await ensurePermissionCatalogue();
 
   const roles = await mockDb.getSystemRoles();
   if (roles.length === 0) {
@@ -246,12 +325,16 @@ async function seedPermissionsIfEmpty() {
       });
       await mockDb.saveRolePermissions(createdRole.id, rolePerms);
     }
-  } else {
-    // Sync new default system roles
+  } else if (options?.reconcileMissingDefaultRoles) {
+    // Explicit controlled reconciliation only: sync newly introduced default system roles that do not yet exist in SystemRole.
+    // Existing SystemRole and RolePermission rows are left untouched to prevent unexpected widening of live role grants.
+    const allPerms = await mockDb.getSystemPermissions();
     for (const roleDef of DEFAULT_SYSTEM_ROLES) {
-      if (!roles.some(r => r.name === roleDef.name)) {
+      const existingRole = roles.find(
+        r => r.name.trim().toUpperCase().replace(/\s+/g, "_") === roleDef.name
+      );
+      if (!existingRole) {
         const createdRole = await mockDb.createSystemRole(roleDef);
-        const allPerms = await mockDb.getSystemPermissions();
         const roleNameNormalized = roleDef.name.toUpperCase().replace(/\s+/g, "_");
         const defaultRolePermKeys = DEFAULT_ROLE_PERMISSIONS[roleNameNormalized] || [];
 

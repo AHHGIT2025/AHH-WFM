@@ -5,7 +5,7 @@ import { mockDb } from "@ahh-wfm/mock-data";
 import * as bcrypt from "bcryptjs";
 import { DEFAULT_ROLE_PERMISSIONS } from "./permissions";
 
-async function fetchUserRBAC(userId: string, defaultRole: string) {
+export async function fetchUserRBAC(userId: string, defaultRole: string) {
   try {
     // 1. Fetch user role assignments
     const assignments = await mockDb.getUserRoleAssignments();
@@ -37,37 +37,74 @@ async function fetchUserRBAC(userId: string, defaultRole: string) {
       const allPermissions = await mockDb.getSystemPermissions();
 
       const grantedPermIds = new Set<string>();
+      const grantedPermKeys = new Set<string>();
 
-      // 1. Union direct default/base role permissions
-      const baseRolePermKeys = DEFAULT_ROLE_PERMISSIONS[defaultRole.toUpperCase().replace(/\s+/g, "_")] || [];
-      for (const pKey of baseRolePermKeys) {
-        const pObj = allPermissions.find(x => x.key === pKey);
-        if (pObj) {
-          grantedPermIds.add(pObj.id);
+      // 1. Resolve direct default/base role permissions (use explicit DB RolePermission rows if the base role has RolePermission rows in DB; otherwise fall back to DEFAULT_ROLE_PERMISSIONS)
+      const normalizedDefaultRole = defaultRole.trim().toUpperCase().replace(/\s+/g, "_");
+      const baseSystemRole = roles.find(
+        r => r.isActive && r.name.trim().toUpperCase().replace(/\s+/g, "_") === normalizedDefaultRole
+      );
+      const hasConfiguredBaseRolePerms = baseSystemRole
+        ? allRolePermissions.some(rp => rp.roleId === baseSystemRole.id)
+        : false;
+      const baseRoleGrantedPerms = baseSystemRole
+        ? allRolePermissions.filter(
+            rp =>
+              rp.roleId === baseSystemRole.id &&
+              (rp.canView || rp.canCreate || rp.canEdit || rp.canDelete || rp.canApprove || rp.canExport)
+          )
+        : [];
+
+      if (hasConfiguredBaseRolePerms) {
+        for (const rp of baseRoleGrantedPerms) {
+          grantedPermIds.add(rp.permissionId);
         }
-      }
-
-      // 2. Union permissions from all assigned roles
-      for (const asg of userAssignments) {
-        const role = roles.find(r => r.id === asg.roleId);
-        if (!role || !role.isActive) continue; // Inactive roles do not contribute permissions
-
-        const rolePerms = allRolePermissions.filter(rp => rp.roleId === asg.roleId);
-        for (const rp of rolePerms) {
-          if (rp.canView || rp.canCreate || rp.canEdit || rp.canDelete || rp.canApprove || rp.canExport) {
-            grantedPermIds.add(rp.permissionId);
+      } else {
+        const baseRolePermKeys = DEFAULT_ROLE_PERMISSIONS[normalizedDefaultRole] || [];
+        for (const pKey of baseRolePermKeys) {
+          grantedPermKeys.add(pKey);
+          const pObj = allPermissions.find(x => x.key === pKey);
+          if (pObj) {
+            grantedPermIds.add(pObj.id);
           }
         }
       }
 
-      // Map permission IDs to keys
-      permissions = allPermissions
-        .filter(p => grantedPermIds.has(p.id))
-        .map(p => p.key);
+      // 2. Union permissions from all assigned roles (use explicit DB RolePermission rows when configured for that role; fall back to DEFAULT_ROLE_PERMISSIONS only when zero DB RolePermission rows exist for that role)
+      for (const asg of userAssignments) {
+        const role = roles.find(r => r.id === asg.roleId);
+        if (!role || !role.isActive) continue; // Inactive roles do not contribute permissions
+
+        const hasConfiguredRolePerms = allRolePermissions.some(rp => rp.roleId === asg.roleId);
+        const rolePerms = allRolePermissions.filter(
+          rp =>
+            rp.roleId === asg.roleId &&
+            (rp.canView || rp.canCreate || rp.canEdit || rp.canDelete || rp.canApprove || rp.canExport)
+        );
+        if (hasConfiguredRolePerms) {
+          for (const rp of rolePerms) {
+            grantedPermIds.add(rp.permissionId);
+          }
+        } else {
+          const normalizedRoleName = role.name.trim().toUpperCase().replace(/\s+/g, "_");
+          const defaultRolePerms = DEFAULT_ROLE_PERMISSIONS[normalizedRoleName] || [];
+          for (const pKey of defaultRolePerms) {
+            grantedPermKeys.add(pKey);
+          }
+        }
+      }
+
+      // Map permission IDs to keys and union with direct keys
+      for (const p of allPermissions) {
+        if (grantedPermIds.has(p.id)) {
+          grantedPermKeys.add(p.key);
+        }
+      }
+      permissions = Array.from(grantedPermKeys);
 
       // If the user has no custom permissions mapped, fall back to the default role's hardcoded permissions!
       if (permissions.length === 0) {
-        permissions = [...(DEFAULT_ROLE_PERMISSIONS[defaultRole.toUpperCase().replace(/\s+/g, "_")] || [])];
+        permissions = [...(DEFAULT_ROLE_PERMISSIONS[defaultRole.trim().toUpperCase().replace(/\s+/g, "_")] || [])];
       }
     }
 

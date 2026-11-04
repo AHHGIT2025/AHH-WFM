@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@ahh-wfm/database";
 import { checkApiAuth } from "@/lib/api-guards";
-import { hasPermission, isAdminUser } from "@/lib/permissions";
+import { hasPermission, isAdminUser, getAuthorizedSurveyWorkflowActions } from "@/lib/permissions";
 
 export async function GET(
   request: Request,
@@ -82,7 +82,7 @@ export async function GET(
     const workflowInstance = await prisma.workflowInstance.findFirst({
       where: {
         referenceId: surveyId,
-        moduleType: "PRE_CONTRACT_SURVEY"
+        moduleType: { in: ["SITE_SURVEY", "PRE_CONTRACT_SURVEY", "PRE_CONTRACT_CASE"] }
       },
       include: {
         history: {
@@ -90,6 +90,27 @@ export async function GET(
         }
       }
     });
+
+    let currentWorkflowLevel: any = null;
+    if (workflowInstance?.templateId) {
+      const template = await prisma.workflowTemplate.findUnique({
+        where: { id: workflowInstance.templateId },
+        include: {
+          levels: {
+            orderBy: { levelNumber: "asc" },
+            include: { approvers: true }
+          }
+        }
+      });
+      currentWorkflowLevel =
+        template?.levels?.find((l) => l.levelNumber === workflowInstance.currentLevelNumber) || null;
+    }
+
+    const allowedWorkflowActions = getAuthorizedSurveyWorkflowActions(
+      user,
+      survey,
+      currentWorkflowLevel
+    );
 
     // Parse Snapshot JSON safely if present
     let parsedSnapshot = null;
@@ -102,7 +123,9 @@ export async function GET(
     return NextResponse.json({
       survey,
       parsedSnapshot,
-      workflowInstance
+      workflowInstance,
+      currentWorkflowLevel,
+      allowedWorkflowActions
     });
   } catch (error: any) {
     console.error("COMMERCIAL SITE SURVEY GET BY ID ERROR:", error);

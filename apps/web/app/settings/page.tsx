@@ -7,7 +7,7 @@ import { Employee } from "@ahh-wfm/types";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { WorkflowManagementTab } from "./components/WorkflowManagementTab";
 import { WorkflowDelegationsTab } from "./components/WorkflowDelegationsTab";
-import { hasPermission, isAdminUser } from "@/lib/permissions";
+import { hasPermission, isAdminUser, DEFAULT_ROLE_PERMISSIONS } from "@/lib/permissions";
 import Link from "next/link";
 
 interface SystemRole {
@@ -67,6 +67,7 @@ const ACCORDION_GROUPS = [
       { label: "Clearance Management", capabilities: { view: "clearance.view", create: "clearance.create", edit: "clearance.edit", approve: "clearance.approve", manage: "clearance.manage" } },
       { label: "Security Guarding", capabilities: { view: "manpower.security.view", manage: "manpower.security.manage" } },
       { label: "Facility Management", capabilities: { view: "manpower.fm.view", manage: "manpower.fm.manage" } },
+      { label: "Commercial & Pre-Contract", capabilities: { view: "commercial.commandCenter.view", create: "precontract.case.manage", approve: "precontract.workflow.approve", manage: "precontract.config.manage" } },
       { label: "Reports Hub", capabilities: { view: "reports.view", export: "reports.export", manage: "reports.manage" } },
       { label: "Master Data Hub", capabilities: { view: "masterdata.view", manage: "masterdata.manage" } },
       { label: "Settings", capabilities: { view: "settings.view", manage: "settings.manage" } }
@@ -136,6 +137,29 @@ const ACCORDION_GROUPS = [
       { label: "Coordinator Workspace", capabilities: { view: "manpower.fm.view", manage: "manpower.fm.manage" } },
       { label: "Work Reports", capabilities: { view: "manpower.fm.reports.view", export: "manpower.fm.reports.export" } },
       { label: "Client Notes", capabilities: { view: "manpower.fm.clients.view", manage: "manpower.fm.clients.manage" } }
+    ]
+  },
+  {
+    title: "Commercial & Pre-Contract",
+    icon: "handshake",
+    modules: [
+      { label: "Commercial Command Center", capabilities: { view: "commercial.commandCenter.view", manage: "commercial.commandCenter.crossCompany" } },
+      { label: "CRM & Enquiries", capabilities: { view: "commercial.crm.view", create: "commercial.crm.manage", edit: "commercial.crm.manage" } },
+      { label: "Commercial Opportunities", capabilities: { view: "commercial.opportunities.view", create: "commercial.opportunities.manage", edit: "commercial.opportunities.manage" } },
+      { label: "Pre-Contract Cases", capabilities: { view: "precontract.case.view", create: "precontract.case.manage", edit: "precontract.case.manage" } },
+      { label: "Prospect Clients & Sites", capabilities: { view: "precontract.prospectClient.view", create: "precontract.prospectClient.manage", edit: "precontract.prospectiveSite.manage" } },
+      { label: "Site Surveys", capabilities: { view: "commercial.surveys.view", create: "commercial.surveys.manage", edit: "commercial.surveys.manage" } },
+      { label: "Survey & Pre-Contract Workflows", capabilities: { view: "precontract.workflow.review", create: "precontract.workflow.submit", approve: "precontract.workflow.approve", delete: "precontract.workflow.reject" } },
+      { label: "Costing Sheets", capabilities: { view: "precontract.costing.view", create: "precontract.costing.manage", edit: "precontract.costing.manage", manage: "precontract.costing.override" } },
+      { label: "Quotations & Proposals", capabilities: { view: "precontract.proposal.view", create: "precontract.proposal.manage", edit: "precontract.proposal.issue", manage: "precontract.proposal.crossCompany" } },
+      { label: "Client Acceptance & Conversion", capabilities: { view: "precontract.acceptance.view", create: "precontract.acceptance.manage", manage: "precontract.contractConversion.execute" } },
+      { label: "Contract Handover", capabilities: { view: "commercial.handover.view", create: "commercial.handover.manage", edit: "commercial.handover.manage" } },
+      { label: "Contract Addendums (Maker)", capabilities: { view: "commercial.addendum.view", create: "commercial.addendum.create", edit: "commercial.addendum.update", manage: "commercial.addendum.submit" } },
+      { label: "Contract Addendums (Checker)", capabilities: { view: "commercial.addendum.view", approve: "commercial.addendum.approve", delete: "commercial.addendum.reject" } },
+      { label: "Contract Renewals", capabilities: { view: "commercial.renewal.view", create: "commercial.renewal.manage", edit: "commercial.renewal.manage", approve: "commercial.renewal.approve" } },
+      { label: "Commercial Activities & Tasks", capabilities: { view: "commercial.activity.view", create: "commercial.activity.manage", edit: "commercial.task.manage" } },
+      { label: "Commercial Reports", capabilities: { view: "commercial.reports.view" } },
+      { label: "Pre-Contract Config & Pricing Rules", capabilities: { view: "precontract.config.view", create: "precontract.costConfig.manage", edit: "precontract.formulaRuleConfig.manage", approve: "precontract.config.activate", delete: "precontract.config.retire", manage: "precontract.config.manage" } }
     ]
   },
   {
@@ -358,6 +382,9 @@ function SettingsContent() {
     }
     if (["FM_ADMIN", "FM_OPERATIONS_MANAGER", "FM_PROJECT_MANAGER", "FM_SUPERVISOR", "FM_HR_PAYROLL_VIEWER", "FM_FINANCE_VIEWER", "FM_READ_ONLY"].includes(name)) {
       return "Facility Management Operations";
+    }
+    if (["COMMERCIAL_VIEWER", "COMMERCIAL_MAKER", "COMMERCIAL_CHECKER", "COMMERCIAL_ADMIN", "COMMERCIAL_CREATOR", "COMMERCIAL_APPROVER", "COMMERCIAL_OPERATIONS", "COMMERCIAL_HR", "COMMERCIAL_FINANCE"].includes(name.trim().replace(/\s+/g, "_"))) {
+      return "Commercial & Pre-Contract";
     }
     if (["FINANCE_VIEWER", "FINANCE_MANAGER"].includes(name)) {
       return "Finance / Reports";
@@ -828,15 +855,43 @@ function SettingsContent() {
     const activeRoleIds = assignedRoles.filter(r => r.isActive).map(r => r.id);
     const permKeys = new Set<string>();
 
-    // 1. Add base role permissions
-    const defaultRolePermKeys = (global as any).DEFAULT_ROLE_PERMISSIONS?.[baseRoleName] || [];
-    defaultRolePermKeys.forEach((k: string) => permKeys.add(k));
+    // 1. Add base role permissions (use explicit DB RolePermission rows if the base role exists in SystemRole with explicit grants; otherwise fall back to DEFAULT_ROLE_PERMISSIONS)
+    const baseSystemRole = roles.find(
+      r => r.isActive && r.name.trim().toUpperCase().replace(/\s+/g, "_") === baseRoleName
+    );
+    const baseRoleGrantedPerms = baseSystemRole
+      ? rolePermissions.filter(
+          rp =>
+            rp.roleId === baseSystemRole.id &&
+            (rp.canView || rp.canCreate || rp.canEdit || rp.canDelete || rp.canApprove || rp.canExport)
+        )
+      : [];
 
-    // 2. Add custom roles permissions
-    rolePermissions.filter(rp => activeRoleIds.includes(rp.roleId)).forEach(rp => {
-      if (rp.canView || rp.canCreate || rp.canEdit || rp.canDelete || rp.canApprove || rp.canExport) {
+    if (baseRoleGrantedPerms.length > 0) {
+      baseRoleGrantedPerms.forEach(rp => {
         const pObj = permissions.find(p => p.id === rp.permissionId);
         if (pObj) permKeys.add(pObj.key);
+      });
+    } else {
+      const defaultRolePermKeys = DEFAULT_ROLE_PERMISSIONS?.[baseRoleName] || [];
+      defaultRolePermKeys.forEach((k: string) => permKeys.add(k));
+    }
+
+    // 2. Add assigned roles permissions (use explicit DB RolePermission rows when present; fall back to DEFAULT_ROLE_PERMISSIONS only when no DB RolePermission grants exist for that role)
+    assignedRoles.filter(r => r.isActive).forEach(r => {
+      const grantedForRole = rolePermissions.filter(
+        rp =>
+          rp.roleId === r.id &&
+          (rp.canView || rp.canCreate || rp.canEdit || rp.canDelete || rp.canApprove || rp.canExport)
+      );
+      if (grantedForRole.length > 0) {
+        grantedForRole.forEach(rp => {
+          const pObj = permissions.find(p => p.id === rp.permissionId);
+          if (pObj) permKeys.add(pObj.key);
+        });
+      } else {
+        const normName = r.name.trim().toUpperCase().replace(/\s+/g, "_");
+        (DEFAULT_ROLE_PERMISSIONS?.[normName] || []).forEach((k: string) => permKeys.add(k));
       }
     });
 
@@ -1289,6 +1344,7 @@ function SettingsContent() {
                               <option value="HR">HR</option>
                               <option value="Security Guarding">Security Guarding</option>
                               <option value="Facility Management">Facility Management</option>
+                              <option value="Commercial & Pre-Contract">Commercial & Pre-Contract</option>
                               <option value="Reports">Reports</option>
                               <option value="Settings">Settings</option>
                             </select>
@@ -1308,6 +1364,7 @@ function SettingsContent() {
                               <option value="White Collar Operations">White Collar Operations</option>
                               <option value="Security Guarding Operations">Security Guarding Operations</option>
                               <option value="Facility Management Operations">Facility Management Operations</option>
+                              <option value="Commercial & Pre-Contract">Commercial & Pre-Contract</option>
                               <option value="IT / System Administration">IT / System Administration</option>
                               <option value="Finance / Reports">Finance / Reports</option>
                               <option value="Read Only">Read Only</option>
@@ -1467,13 +1524,14 @@ function SettingsContent() {
                                         <th className="py-2 px-2 text-center">Create</th>
                                         <th className="py-2 px-2 text-center">Edit</th>
                                         <th className="py-2 px-2 text-center">Delete</th>
+                                        <th className="py-2 px-2 text-center">Approve</th>
                                         <th className="py-2 px-2 text-center">Manage / Admin</th>
                                         <th className="py-2 px-2 text-center">Export</th>
                                       </tr>
                                     </thead>
                                     <tbody className="divide-y divide-outline-variant/40">
                                       {filteredModules.map((row) => {
-                                        const getCheckbox = (capName: "view" | "create" | "edit" | "delete" | "manage" | "export") => {
+                                        const getCheckbox = (capName: "view" | "create" | "edit" | "delete" | "approve" | "manage" | "export") => {
                                           const key = (row.capabilities as any)[capName];
                                           if (!key) return <span className="text-outline-variant/60 font-normal">-</span>;
 
@@ -1504,6 +1562,7 @@ function SettingsContent() {
                                             <td className="py-1.5 px-2 text-center">{getCheckbox("create")}</td>
                                             <td className="py-1.5 px-2 text-center">{getCheckbox("edit")}</td>
                                             <td className="py-1.5 px-2 text-center">{getCheckbox("delete")}</td>
+                                            <td className="py-1.5 px-2 text-center">{getCheckbox("approve")}</td>
                                             <td className="py-1.5 px-2 text-center">{getCheckbox("manage")}</td>
                                             <td className="py-1.5 px-2 text-center">{getCheckbox("export")}</td>
                                           </tr>
@@ -2183,6 +2242,7 @@ function SettingsContent() {
                 <option value="HR">HR</option>
                 <option value="Security Guarding">Security Guarding</option>
                 <option value="Facility Management">Facility Management</option>
+                <option value="Commercial & Pre-Contract">Commercial & Pre-Contract</option>
                 <option value="Reports">Reports</option>
                 <option value="Settings">Settings</option>
               </select>
@@ -2198,6 +2258,7 @@ function SettingsContent() {
                 <option value="White Collar Operations">White Collar Operations</option>
                 <option value="Security Guarding Operations">Security Guarding Operations</option>
                 <option value="Facility Management Operations">Facility Management Operations</option>
+                <option value="Commercial & Pre-Contract">Commercial & Pre-Contract</option>
                 <option value="IT / System Administration">IT / System Administration</option>
                 <option value="Finance / Reports">Finance / Reports</option>
                 <option value="Read Only">Read Only</option>

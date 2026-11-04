@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@ahh-wfm/database";
 import { checkApiAuth } from "@/lib/api-guards";
 import { hasPermission, isAdminUser } from "@/lib/permissions";
-import { calculateCostingEstimate } from "@/lib/precontract-costing";
+import { calculateCostingEstimate, serializeCostingEstimate, serializeCostingVersion } from "@/lib/precontract-costing";
 
 export async function GET(
   request: Request,
@@ -52,7 +52,7 @@ export async function GET(
       return NextResponse.json({ error: "Forbidden: Company boundary violation." }, { status: 403 });
     }
 
-    return NextResponse.json({ estimate });
+    return NextResponse.json({ estimate: serializeCostingEstimate(estimate) });
   } catch (err: any) {
     return NextResponse.json(
       { error: err.message || "Failed to fetch costing estimate detail." },
@@ -198,7 +198,10 @@ export async function PATCH(
         }
       });
 
-      return NextResponse.json({ estimate: updatedEstimate, version: newVersion });
+      return NextResponse.json({
+        estimate: serializeCostingEstimate(updatedEstimate),
+        version: serializeCostingVersion(newVersion)
+      });
     } else {
       // Update existing DRAFT version
       await prisma.preContractCostEstimateItem.deleteMany({
@@ -259,7 +262,10 @@ export async function PATCH(
         }
       });
 
-      return NextResponse.json({ estimate: updatedEstimate, version: updatedVersion });
+      return NextResponse.json({
+        estimate: serializeCostingEstimate(updatedEstimate),
+        version: serializeCostingVersion(updatedVersion)
+      });
     }
   } catch (err: any) {
     return NextResponse.json(

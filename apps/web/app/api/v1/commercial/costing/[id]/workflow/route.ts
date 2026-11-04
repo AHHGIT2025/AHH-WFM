@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@ahh-wfm/database";
 import { checkApiAuth } from "@/lib/api-guards";
 import { hasPermission, isAdminUser } from "@/lib/permissions";
-import { generateCostingSnapshot } from "@/lib/precontract-costing";
+import { generateCostingSnapshot, serializeCostingEstimate } from "@/lib/precontract-costing";
 
 export async function POST(
   request: Request,
@@ -178,7 +178,7 @@ export async function POST(
       });
 
       return NextResponse.json({
-        estimate: updatedEstimate,
+        estimate: serializeCostingEstimate(updatedEstimate),
         workflow: {
           instanceId: workflowInstance.id,
           action: "SUBMIT",
@@ -333,7 +333,7 @@ export async function POST(
     });
 
     return NextResponse.json({
-      estimate: updatedEstimate,
+      estimate: serializeCostingEstimate(updatedEstimate),
       workflow: {
         instanceId: workflowInstance.id,
         action,

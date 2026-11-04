@@ -389,3 +389,91 @@ export function generateCostingSnapshot(
 
   return { snapshotJson, checksum };
 }
+
+/**
+ * Safely converts a Prisma Decimal, numeric string, or number into a finite JavaScript number.
+ */
+export function toSafeCostingNumber(value: unknown, fallback: number = 0): number {
+  if (value === null || value === undefined || value === "") {
+    return fallback;
+  }
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : fallback;
+  }
+  if (typeof value === "object" && value !== null && "toNumber" in value && typeof (value as any).toNumber === "function") {
+    const converted = (value as any).toNumber();
+    return Number.isFinite(converted) ? converted : fallback;
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+/**
+ * Normalizes a nullable Prisma Decimal / string / number into `number | null`.
+ */
+export function toSafeNullableCostingNumber(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+  return toSafeCostingNumber(value, 0);
+}
+
+/**
+ * Formats a numeric/Decimal/string percentage value safely to fixed decimal places.
+ */
+export function formatMarginPercentage(value: unknown, decimals: number = 2): string {
+  return `${toSafeCostingNumber(value, 0).toFixed(decimals)}%`;
+}
+
+/**
+ * Formats a numeric/Decimal/string currency value safely with currency code.
+ */
+export function formatCostingCurrency(value: unknown, curr: string = "QAR"): string {
+  const num = toSafeCostingNumber(value, 0);
+  return `${num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${curr}`;
+}
+
+/**
+ * Normalizes a PreContractCostEstimateItem record so all Decimal fields serialize as JSON numbers.
+ */
+export function serializeCostingItem<T extends Record<string, any> | null | undefined>(item: T): any {
+  if (!item) return item;
+  return {
+    ...item,
+    quantity: toSafeCostingNumber(item.quantity, 0),
+    unitRate: toSafeCostingNumber(item.unitRate, 0),
+    totalAmount: toSafeCostingNumber(item.totalAmount, 0)
+  };
+}
+
+/**
+ * Normalizes a PreContractCostEstimateVersion record so all Decimal fields serialize as JSON numbers.
+ */
+export function serializeCostingVersion<T extends Record<string, any> | null | undefined>(version: T): any {
+  if (!version) return version;
+  return {
+    ...version,
+    totalDirectCost: toSafeCostingNumber(version.totalDirectCost, 0),
+    totalIndirectCost: toSafeCostingNumber(version.totalIndirectCost, 0),
+    totalCost: toSafeCostingNumber(version.totalCost, 0),
+    targetMarginPercentage: toSafeNullableCostingNumber(version.targetMarginPercentage),
+    targetMarkupPercentage: toSafeNullableCostingNumber(version.targetMarkupPercentage),
+    sellingPrice: toSafeCostingNumber(version.sellingPrice, 0),
+    ...(Array.isArray(version.items)
+      ? { items: version.items.map((item: any) => serializeCostingItem(item)) }
+      : {})
+  };
+}
+
+/**
+ * Normalizes a PreContractCostEstimate record (and its nested versions/items) for API responses.
+ */
+export function serializeCostingEstimate<T extends Record<string, any> | null | undefined>(estimate: T): any {
+  if (!estimate) return estimate;
+  return {
+    ...estimate,
+    ...(Array.isArray(estimate.versions)
+      ? { versions: estimate.versions.map((ver: any) => serializeCostingVersion(ver)) }
+      : {})
+  };
+}

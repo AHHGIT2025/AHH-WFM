@@ -2,7 +2,14 @@ import { prisma, Prisma } from "@ahh-wfm/database";
 import { GET as getCosting, POST as postCosting } from "../../apps/web/app/api/v1/commercial/costing/route";
 import { GET as getCostingDetail, PATCH as patchCostingDetail } from "../../apps/web/app/api/v1/commercial/costing/[id]/route";
 import { POST as postCostingWorkflow } from "../../apps/web/app/api/v1/commercial/costing/[id]/workflow/route";
-import { calculateCostingEstimate, generateCostingSnapshot } from "../../apps/web/lib/precontract-costing";
+import {
+  calculateCostingEstimate,
+  generateCostingSnapshot,
+  serializeCostingEstimate,
+  toSafeCostingNumber as toSafeNumber,
+  formatMarginPercentage,
+  formatCostingCurrency
+} from "../../apps/web/lib/precontract-costing";
 import { getServerSession } from "next-auth/next";
 
 type Decimal = Prisma.Decimal;
@@ -991,6 +998,104 @@ describe("Commercial Lifecycle — Phase CL-3 Comprehensive Test Suite (Pre-Cont
       // Cleanup
       await prisma.preContractSurvey.delete({ where: { id: cancelledSurvey.id } });
       await prisma.preContractCase.delete({ where: { id: cancelledCase.id } });
+    });
+  });
+
+  // -------------------------------------------------------------
+  // SECTION 14: T1-DEF-026 REGRESSION — NUMERIC SERIALIZATION & UI RENDERING
+  // -------------------------------------------------------------
+  describe("14. T1-DEF-026 Regression — Numeric Serialization & UI Rendering", () => {
+    it("should serialize all Prisma Decimal fields as JavaScript numbers across POST, GET list, GET detail, PATCH, and workflow APIs", async () => {
+      (getServerSession as jest.Mock).mockResolvedValue({ user: mockSgUserCompA });
+
+      // 1. Create Draft Costing with targetMarginPercentage = 15.5
+      const createRes = await postCosting(
+        new Request("http://localhost:3100/api/v1/commercial/costing", {
+          method: "POST",
+          body: JSON.stringify({
+            caseId: testCaseCompA_SG.id,
+            surveyId: testCompletedSurveyCompA_SG.id,
+            pricingBasis: "MARGIN",
+            targetMarginPercentage: 15.5
+          })
+        })
+      );
+      expect(createRes.status).toBe(201);
+      const createData = await createRes.json();
+      const createdVer = createData.estimate.versions[0];
+
+      expect(typeof createdVer.targetMarginPercentage).toBe("number");
+      expect(createdVer.targetMarginPercentage).toBe(15.5);
+      expect(typeof createdVer.totalDirectCost).toBe("number");
+      expect(typeof createdVer.totalIndirectCost).toBe("number");
+      expect(typeof createdVer.totalCost).toBe("number");
+      expect(typeof createdVer.sellingPrice).toBe("number");
+      expect(createdVer.targetMarginPercentage.toFixed(2)).toBe("15.50");
+
+      for (const item of createdVer.items) {
+        expect(typeof item.quantity).toBe("number");
+        expect(typeof item.unitRate).toBe("number");
+        expect(typeof item.totalAmount).toBe("number");
+      }
+
+      // 2. GET /api/v1/commercial/costing list response
+      const listRes = await getCosting(new Request("http://localhost:3100/api/v1/commercial/costing"));
+      expect(listRes.status).toBe(200);
+      const listData = await listRes.json();
+      const listedEst = listData.estimates.find((e: any) => e.id === createData.estimate.id);
+      expect(listedEst).toBeDefined();
+      const listedVer = listedEst.versions[0];
+      expect(typeof listedVer.targetMarginPercentage).toBe("number");
+      expect(typeof listedVer.totalCost).toBe("number");
+      expect(typeof listedVer.sellingPrice).toBe("number");
+      expect(() => listedVer.targetMarginPercentage.toFixed(2)).not.toThrow();
+      expect(formatMarginPercentage(listedVer.targetMarginPercentage)).toBe("15.50%");
+
+      // 3. GET /api/v1/commercial/costing/[id] detail response
+      const detailRes = await getCostingDetail(
+        new Request(`http://localhost:3100/api/v1/commercial/costing/${createData.estimate.id}`),
+        { params: { id: createData.estimate.id } }
+      );
+      expect(detailRes.status).toBe(200);
+      const detailData = await detailRes.json();
+      const detailVer = detailData.estimate.versions[0];
+      expect(typeof detailVer.targetMarginPercentage).toBe("number");
+      expect(detailVer.targetMarginPercentage.toFixed(2)).toBe("15.50");
+
+      // 4. Safely render stringified / Decimal / null values via UI transformation helpers
+      expect(formatMarginPercentage("15")).toBe("15.00%");
+      expect(formatMarginPercentage("18.756")).toBe("18.76%");
+      expect(formatMarginPercentage(new Decimal("22.5"))).toBe("22.50%");
+      expect(formatMarginPercentage(null)).toBe("0.00%");
+      expect(formatMarginPercentage(undefined)).toBe("0.00%");
+      expect(toSafeNumber("15.00")).toBe(15);
+      expect(formatCostingCurrency("4500.5", "QAR")).toContain("QAR");
+
+      const serializedRaw = serializeCostingEstimate({
+        id: "est-raw-decimal",
+        versions: [
+          {
+            id: "ver-raw-decimal",
+            totalDirectCost: "3500.00",
+            totalIndirectCost: "350.00",
+            totalCost: "3850.00",
+            targetMarginPercentage: "15.00",
+            targetMarkupPercentage: "17.65",
+            sellingPrice: "4529.41",
+            items: [
+              {
+                elementCode: "BASIC_PAY",
+                quantity: "5.0000",
+                unitRate: "2500.00",
+                totalAmount: "12500.00"
+              }
+            ]
+          }
+        ]
+      });
+      expect(typeof serializedRaw.versions[0].targetMarginPercentage).toBe("number");
+      expect(serializedRaw.versions[0].targetMarginPercentage?.toFixed(2)).toBe("15.00");
+      expect(typeof serializedRaw.versions[0].items[0].unitRate).toBe("number");
     });
   });
 });

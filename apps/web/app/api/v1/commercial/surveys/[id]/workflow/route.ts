@@ -28,7 +28,7 @@ export async function POST(
     const isAuthorized =
       isAdminUser(user) ||
       (action === "SUBMIT" && (hasPermission(user, "precontract.workflow.submit") || hasPermission(user, "precontract.case.manage") || hasPermission(user, "commercial.surveys.manage"))) ||
-      (action !== "SUBMIT" && (hasPermission(user, "precontract.workflow.approve") || hasPermission(user, "precontract.workflow.review"))) ||
+      (action === "APPROVE" && hasPermission(user, "precontract.workflow.approve")) || (action === "REJECT" && (hasPermission(user, "precontract.workflow.reject") || hasPermission(user, "precontract.workflow.approve"))) || (action === "RETURN" && (hasPermission(user, "precontract.workflow.review") || hasPermission(user, "precontract.workflow.approve") || hasPermission(user, "precontract.workflow.reject"))) ||
       hasPermission(user, "manpower.admin.full_access");
 
     if (!isAuthorized) {
@@ -74,7 +74,7 @@ export async function POST(
     let workflowInstance = await prisma.workflowInstance.findFirst({
       where: {
         referenceId: surveyId,
-        moduleType: "PRE_CONTRACT_SURVEY"
+        moduleType: { in: ["SITE_SURVEY", "PRE_CONTRACT_SURVEY", "PRE_CONTRACT_CASE"] }
       },
       include: { history: true }
     });
@@ -88,27 +88,33 @@ export async function POST(
       }
 
       // Mandatory Centralized Workflow Resolution from Settings > Workflow Setup
-      const template = await prisma.workflowTemplate.findFirst({
-        where: {
-          isActive: true,
-          OR: [
-            { moduleType: "PRE_CONTRACT_SURVEY" },
-            { moduleType: "PRE_CONTRACT_CASE" },
-            { moduleType: "COMMERCIAL_OPPORTUNITY" }
-          ],
-          levels: { some: {} }
-        },
-        include: {
-          levels: {
-            orderBy: { levelNumber: "asc" },
-            include: { approvers: true }
-          }
-        },
-        orderBy: [
-          { isDefault: "desc" },
-          { createdAt: "desc" }
-        ]
-      });
+      // Deterministic compatibility priority: 1. SITE_SURVEY (canonical) -> 2. PRE_CONTRACT_SURVEY (legacy) -> 3. PRE_CONTRACT_CASE (temporary UAT workaround compatibility)
+      const templateInclude = {
+        levels: {
+          orderBy: { levelNumber: "asc" as const },
+          include: { approvers: true }
+        }
+      };
+      const templateOrderBy = [
+        { isDefault: "desc" as const },
+        { createdAt: "desc" as const }
+      ];
+      const template =
+        (await prisma.workflowTemplate.findFirst({
+          where: { isActive: true, moduleType: "SITE_SURVEY", levels: { some: {} } },
+          include: templateInclude,
+          orderBy: templateOrderBy
+        })) ||
+        (await prisma.workflowTemplate.findFirst({
+          where: { isActive: true, moduleType: "PRE_CONTRACT_SURVEY", levels: { some: {} } },
+          include: templateInclude,
+          orderBy: templateOrderBy
+        })) ||
+        (await prisma.workflowTemplate.findFirst({
+          where: { isActive: true, moduleType: "PRE_CONTRACT_CASE", levels: { some: {} } },
+          include: templateInclude,
+          orderBy: templateOrderBy
+        }));
 
       // Reject submission if no active workflow template is configured
       if (!template || !template.levels || template.levels.length === 0) {
@@ -123,6 +129,7 @@ export async function POST(
           where: { id: workflowInstance.id },
           data: {
             templateId: template.id,
+            moduleType: "SITE_SURVEY",
             status: "IN_PROGRESS",
             currentLevelNumber: 1,
             updatedAt: new Date()
@@ -133,7 +140,7 @@ export async function POST(
         workflowInstance = await prisma.workflowInstance.create({
           data: {
             templateId: template.id,
-            moduleType: "PRE_CONTRACT_SURVEY",
+            moduleType: "SITE_SURVEY",
             referenceId: surveyId,
             status: "IN_PROGRESS",
             currentLevelNumber: 1,
@@ -202,14 +209,16 @@ export async function POST(
     let isLevelApprover = false;
 
     if (!currentLevel || currentLevel.approvers.length === 0) {
-      isLevelApprover = user.role === "SUPER_ADMIN" || user.role === "ADMIN" || hasPermission(user, "manpower.admin.full_access");
+      isLevelApprover = user.role === "SUPER_ADMIN" || user.role === "ADMIN" || hasPermission(user, "precontract.workflow.approve") || (action === "REJECT" && hasPermission(user, "precontract.workflow.reject")) || hasPermission(user, "manpower.admin.full_access");
     } else {
       isLevelApprover = currentLevel.approvers.some((ap) => {
         if (ap.approverType === "SPECIFIC_EMPLOYEE" && ap.employeeId) {
           return user.id === ap.employeeId;
         }
         if (ap.approverType === "ROLE_BASED" && ap.roleName) {
-          return user.role === ap.roleName;
+          const normUserRole = (user.role || "").trim().toUpperCase().replace(/\s+/g, "_");
+          const normTargetRole = ap.roleName.trim().toUpperCase().replace(/\s+/g, "_");
+          return normUserRole === normTargetRole || ((normTargetRole === "COMMERCIAL_CHECKER" || normTargetRole === "COMMERCIAL_APPROVER") && (hasPermission(user, "precontract.workflow.approve") || hasPermission(user, "precontract.workflow.reject")));
         }
         if (ap.approverType === "DEPT_HEAD" || ap.approverType === "CONTRACT_ADMIN") {
           return user.role === "SUPER_ADMIN" || user.role === "ADMIN" || hasPermission(user, "manpower.admin.full_access");

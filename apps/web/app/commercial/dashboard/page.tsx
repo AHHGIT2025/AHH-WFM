@@ -90,7 +90,7 @@ export default function CommercialDashboard() {
         </div>
         <div className="flex items-center gap-2">
           <Link
-            href="/settings/pre-contract-config"
+            href="/settings/commercial-contract/cost-configuration"
             className="px-4 py-2 border border-[#c5c6cd] hover:bg-gray-50 text-xs font-bold rounded-lg text-[#091426] transition-colors inline-flex items-center gap-2"
           >
             <span className="material-symbols-outlined text-[16px]">settings</span>

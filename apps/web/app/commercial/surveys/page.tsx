@@ -4,6 +4,14 @@ import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { Card, Badge, Button, Input } from "@ahh-wfm/ui/src";
+import {
+  getAuthorizedSurveyWorkflowActions,
+  resolveInitialSurveyWorkflowAction,
+  SurveyWorkflowAction,
+  SurveyWorkflowLevelInput,
+  hasPermission,
+  isAdminUser
+} from "@/lib/permissions";
 
 interface ProspectClient {
   id: string;
@@ -85,6 +93,13 @@ interface PreContractSurvey {
   siteConditions?: SiteCondition[];
 }
 
+const WORKFLOW_ACTION_LABELS: Record<SurveyWorkflowAction, string> = {
+  SUBMIT: "Submit for Approval",
+  APPROVE: "Approve",
+  RETURN: "Return for Clarification",
+  REJECT: "Reject Survey"
+};
+
 export default function SiteSurveysPage() {
   const { data: session } = useSession();
   const user = session?.user as any;
@@ -93,6 +108,7 @@ export default function SiteSurveysPage() {
   const [opportunities, setOpportunities] = useState<OpportunityCase[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [feedbackBanner, setFeedbackBanner] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   // Filters
   const [search, setSearch] = useState<string>("");
@@ -109,21 +125,32 @@ export default function SiteSurveysPage() {
   const [approximateArea, setApproximateArea] = useState<string>("");
   const [conductedBy, setConductedBy] = useState<string>("");
   const [submitting, setSubmitting] = useState<boolean>(false);
+  const [createError, setCreateError] = useState<string | null>(null);
 
-  // Workspace Modal State
+  // Workspace Drawer State
   const [selectedSurvey, setSelectedSurvey] = useState<PreContractSurvey | null>(null);
+  const [showWorkspaceDrawer, setShowWorkspaceDrawer] = useState<boolean>(false);
   const [workspaceTab, setWorkspaceTab] = useState<"CONTEXT" | "FORM" | "CONDITIONS" | "EVIDENCE" | "WORKFLOW">("CONTEXT");
   const [surveyDetail, setSurveyDetail] = useState<any>(null);
   const [workflowDetail, setWorkflowDetail] = useState<WorkflowInstance | null>(null);
+  const [currentWorkflowLevel, setCurrentWorkflowLevel] = useState<SurveyWorkflowLevelInput | null>(null);
   const [editingResponses, setEditingResponses] = useState<Record<string, any>>({});
   const [editingConditions, setEditingConditions] = useState<SiteCondition[]>([]);
   const [savingWorkspace, setSavingWorkspace] = useState<boolean>(false);
+  const [workspaceFeedback, setWorkspaceFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   // Workflow Action Modal State
   const [showWorkflowModal, setShowWorkflowModal] = useState<boolean>(false);
-  const [workflowAction, setWorkflowAction] = useState<"SUBMIT" | "APPROVE" | "REJECT" | "RETURN">("SUBMIT");
+  const [workflowAction, setWorkflowAction] = useState<SurveyWorkflowAction | "">("");
   const [workflowRemarks, setWorkflowRemarks] = useState<string>("");
   const [workflowExecuting, setWorkflowExecuting] = useState<boolean>(false);
+  const [workflowError, setWorkflowError] = useState<string | null>(null);
+
+  const canManageSurveys =
+    isAdminUser(user) ||
+    hasPermission(user, "precontract.case.manage") ||
+    hasPermission(user, "commercial.surveys.manage") ||
+    hasPermission(user, "manpower.admin.full_access");
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -145,7 +172,6 @@ export default function SiteSurveysPage() {
 
       if (resOpps.ok) {
         const dataOpps = await resOpps.json();
-        // Filter eligible opportunities (active: DRAFT, IN_WORKFLOW, COMPLETED)
         const eligible = (dataOpps.cases || []).filter(
           (c: OpportunityCase) => c.lifecycle !== "CANCELLED" && c.lifecycle !== "SUPERSEDED"
         );
@@ -162,37 +188,73 @@ export default function SiteSurveysPage() {
     fetchData();
   }, [fetchData]);
 
-  // Open Workspace Drawer
-  const openWorkspace = async (srv: PreContractSurvey) => {
-    setSelectedSurvey(srv);
-    setWorkspaceTab("CONTEXT");
+  // Fetch & Refresh Survey Detail + Workflow Audit History
+  const loadSurveyDetail = useCallback(async (surveyId: string) => {
     try {
-      const res = await fetch(`/api/v1/commercial/surveys/${srv.id}`);
+      const res = await fetch(`/api/v1/commercial/surveys/${surveyId}`);
       if (res.ok) {
         const data = await res.json();
-        setSurveyDetail(data.survey);
-        setWorkflowDetail(data.workflowInstance);
+        if (data.survey) {
+          setSelectedSurvey(data.survey);
+          setSurveyDetail(data.survey);
+        }
+        setWorkflowDetail(data.workflowInstance || null);
+        setCurrentWorkflowLevel(data.currentWorkflowLevel || null);
 
-        // Pre-fill response states
         const respMap: Record<string, any> = {};
         if (data.survey?.responses) {
           data.survey.responses.forEach((r: SurveyResponse) => {
-            respMap[r.elementCode] = r.textValue || r.numericValue || r.booleanValue || r.jsonValue || "";
+            respMap[r.elementCode] = r.textValue ?? r.numericValue ?? r.booleanValue ?? r.jsonValue ?? "";
           });
         }
         setEditingResponses(respMap);
         setEditingConditions(data.survey?.siteConditions || []);
+        return data;
       }
     } catch (e) {
       console.error("Error loading survey workspace:", e);
     }
+    return null;
+  }, []);
+
+  // Open Workspace Drawer
+  const openWorkspace = async (srv: PreContractSurvey, preserveTab: boolean = false) => {
+    setSelectedSurvey(srv);
+    setShowWorkspaceDrawer(true);
+    if (!preserveTab) {
+      setWorkspaceTab("CONTEXT");
+      setWorkspaceFeedback(null);
+    }
+    await loadSurveyDetail(srv.id);
+  };
+
+  // Open Workflow Action Popup with Authorized Actions & Safe Initial Selection
+  const openWorkflowPopup = async (srv: PreContractSurvey) => {
+    setSelectedSurvey(srv);
+    setWorkflowError(null);
+    setWorkflowRemarks("");
+
+    let levelToUse: SurveyWorkflowLevelInput | null =
+      selectedSurvey?.id === srv.id ? currentWorkflowLevel : null;
+    let surveyToUse: PreContractSurvey = srv;
+
+    if (srv.lifecycle === "IN_WORKFLOW" && (!levelToUse || selectedSurvey?.id !== srv.id)) {
+      const detail = await loadSurveyDetail(srv.id);
+      if (detail?.survey) surveyToUse = detail.survey;
+      if (detail?.currentWorkflowLevel !== undefined) levelToUse = detail.currentWorkflowLevel;
+    }
+
+    const authorizedActions = getAuthorizedSurveyWorkflowActions(user, surveyToUse, levelToUse);
+    setWorkflowAction(resolveInitialSurveyWorkflowAction(authorizedActions));
+    setShowWorkflowModal(true);
   };
 
   // Handle Create Survey Submission
   const handleCreateSurvey = async (e: React.FormEvent) => {
     e.preventDefault();
+    setCreateError(null);
     if (!selectedCaseId) {
-      alert("Please select an eligible opportunity case.");
+      setCreateError("Please select an eligible opportunity case.");
       return;
     }
     setSubmitting(true);
@@ -213,7 +275,7 @@ export default function SiteSurveysPage() {
         })
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "Failed to create site survey");
 
       setShowCreateModal(false);
@@ -224,9 +286,10 @@ export default function SiteSurveysPage() {
       setLongitude("");
       setApproximateArea("");
       setConductedBy("");
-      fetchData();
+      setFeedbackBanner({ type: "success", text: "Pre-contract site survey created successfully." });
+      await fetchData();
     } catch (err: any) {
-      alert(err.message);
+      setCreateError(err.message || "Failed to create site survey.");
     } finally {
       setSubmitting(false);
     }
@@ -236,9 +299,10 @@ export default function SiteSurveysPage() {
   const handleSaveWorkspace = async () => {
     if (!selectedSurvey) return;
     setSavingWorkspace(true);
+    setWorkspaceFeedback(null);
     try {
       const formattedResponses = Object.entries(editingResponses).map(([elementCode, val]) => {
-        const isNum = typeof val === "number" || (!isNaN(val) && val !== "" && typeof val === "string" && !isNaN(Number(val)));
+        const isNum = typeof val === "number" || (!isNaN(val as any) && val !== "" && typeof val === "string" && !isNaN(Number(val)));
         return {
           elementCode,
           ...(typeof val === "boolean" ? { booleanValue: val } : isNum ? { numericValue: Number(val) } : { textValue: String(val) })
@@ -254,14 +318,13 @@ export default function SiteSurveysPage() {
         })
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "Failed to save survey changes");
 
-      alert("Site survey updated successfully.");
-      openWorkspace(selectedSurvey);
-      fetchData();
+      setWorkspaceFeedback({ type: "success", text: "Site survey workspace saved successfully." });
+      await Promise.all([loadSurveyDetail(selectedSurvey.id), fetchData()]);
     } catch (err: any) {
-      alert(err.message);
+      setWorkspaceFeedback({ type: "error", text: err.message || "Failed to save survey changes." });
     } finally {
       setSavingWorkspace(false);
     }
@@ -283,9 +346,23 @@ export default function SiteSurveysPage() {
     ]);
   };
 
+  // Authorized actions for currently selected survey in modal/workspace
+  const modalAuthorizedActions = getAuthorizedSurveyWorkflowActions(
+    user,
+    selectedSurvey,
+    currentWorkflowLevel
+  );
+
   // Execute Workflow Action
   const handleExecuteWorkflow = async () => {
     if (!selectedSurvey) return;
+    setWorkflowError(null);
+
+    if (!workflowAction || !modalAuthorizedActions.includes(workflowAction)) {
+      setWorkflowError("Please select an authorized workflow action before confirming.");
+      return;
+    }
+
     setWorkflowExecuting(true);
     try {
       const res = await fetch(`/api/v1/commercial/surveys/${selectedSurvey.id}/workflow`, {
@@ -297,16 +374,37 @@ export default function SiteSurveysPage() {
         })
       });
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Workflow action failed");
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.error || "Workflow action failed.");
+      }
 
-      alert(`Workflow action ${workflowAction} completed successfully.`);
+      const completedAction = workflowAction;
+      const updatedSurveyRecord = data.survey
+        ? { ...selectedSurvey, ...data.survey }
+        : selectedSurvey;
+
+      // Immediately update local survey state so open workspace status is never stale
+      setSelectedSurvey(updatedSurveyRecord);
       setShowWorkflowModal(false);
       setWorkflowRemarks("");
-      openWorkspace(selectedSurvey);
-      fetchData();
+      setWorkflowAction("");
+      setWorkflowError(null);
+
+      const successText = `Workflow action ${completedAction} completed successfully. Survey status is now ${
+        updatedSurveyRecord.lifecycle === "COMPLETED" ? "APPROVED" : updatedSurveyRecord.lifecycle
+      }.`;
+      setFeedbackBanner({ type: "success", text: successText });
+      if (showWorkspaceDrawer) {
+        setWorkspaceFeedback({ type: "success", text: successText });
+      }
+
+      await Promise.all([
+        loadSurveyDetail(selectedSurvey.id),
+        fetchData()
+      ]);
     } catch (err: any) {
-      alert(err.message);
+      setWorkflowError(err.message || "Failed to execute workflow action.");
     } finally {
       setWorkflowExecuting(false);
     }
@@ -345,17 +443,22 @@ export default function SiteSurveysPage() {
         </div>
 
         <div className="flex items-center gap-2">
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={() => setShowCreateModal(true)}
-            className="inline-flex items-center gap-1.5"
-          >
-            <span className="material-symbols-outlined text-[16px]">add_circle</span>
-            New Site Survey
-          </Button>
+          {canManageSurveys && (
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => {
+                setCreateError(null);
+                setShowCreateModal(true);
+              }}
+              className="inline-flex items-center gap-1.5"
+            >
+              <span className="material-symbols-outlined text-[16px]">add_circle</span>
+              New Site Survey
+            </Button>
+          )}
 
-          <Link href="/settings/workflow-setup">
+          <Link href="/settings?tab=workflowManagement">
             <Button variant="ghost" size="sm" className="inline-flex items-center gap-1 text-xs">
               <span className="material-symbols-outlined text-[16px]">settings_suggest</span>
               Workflow Setup
@@ -363,6 +466,30 @@ export default function SiteSurveysPage() {
           </Link>
         </div>
       </div>
+
+      {feedbackBanner && (
+        <Card
+          className={`p-3 text-xs flex items-center justify-between ${
+            feedbackBanner.type === "success"
+              ? "bg-status-success/10 border-status-success text-status-success"
+              : "bg-status-error/10 border-status-error text-status-error"
+          }`}
+        >
+          <div className="flex items-center gap-2 font-semibold">
+            <span className="material-symbols-outlined text-[16px]">
+              {feedbackBanner.type === "success" ? "check_circle" : "error"}
+            </span>
+            <span>{feedbackBanner.text}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setFeedbackBanner(null)}
+            className="text-xs font-bold hover:opacity-80 px-2"
+          >
+            ×
+          </button>
+        </Card>
+      )}
 
       {error && (
         <Card className="p-4 bg-status-error/10 border-status-error text-status-error text-xs">
@@ -468,61 +595,61 @@ export default function SiteSurveysPage() {
                   <td colSpan={7} className="text-center py-6 text-on-surface-variant">No commercial site surveys found.</td>
                 </tr>
               ) : (
-                surveys.map((srv) => (
-                  <tr key={srv.id} className="hover:bg-surface-container-lowest/50 transition-colors">
-                    <td className="py-2.5 px-3">
-                      <div className="font-bold text-on-surface">{srv.prospectiveSite?.name || `Survey ${srv.id.substring(0, 8)}`}</div>
-                      <div className="text-[10px] text-on-surface-variant">{srv.prospectiveSite?.address || "Address pending"}</div>
-                    </td>
-                    <td className="py-2.5 px-3">
-                      <div className="font-semibold text-on-surface">{srv.case?.title}</div>
-                      <div className="text-[10px] text-on-surface-variant">{srv.case?.prospectClient?.name || "Existing Client"}</div>
-                    </td>
-                    <td className="py-2.5 px-3">
-                      <Badge variant="secondary">{srv.operationType || "SECURITY_GUARDING"}</Badge>
-                    </td>
-                    <td className="py-2.5 px-3 font-medium">{srv.conductedBy || "SURVEYOR"}</td>
-                    <td className="py-2.5 px-3">{getLifecycleBadge(srv.lifecycle)}</td>
-                    <td className="py-2.5 px-3 text-on-surface-variant">
-                      {srv.conductedAt ? new Date(srv.conductedAt).toLocaleDateString() : new Date(srv.createdAt).toLocaleDateString()}
-                    </td>
-                    <td className="py-2.5 px-3 text-right space-x-1">
-                      <Button variant="secondary" size="sm" onClick={() => openWorkspace(srv)} className="text-xs">
-                        Workspace
-                      </Button>
+                surveys.map((srv) => {
+                  const rowActions = getAuthorizedSurveyWorkflowActions(user, srv);
+                  const canSubmitRow = srv.lifecycle === "DRAFT" && rowActions.includes("SUBMIT");
+                  const canReviewRow =
+                    srv.lifecycle === "IN_WORKFLOW" &&
+                    rowActions.some((a) => a === "APPROVE" || a === "RETURN" || a === "REJECT");
 
-                      {srv.lifecycle === "DRAFT" && (
-                        <Button
-                          variant="primary"
-                          size="sm"
-                          onClick={() => {
-                            setSelectedSurvey(srv);
-                            setWorkflowAction("SUBMIT");
-                            setShowWorkflowModal(true);
-                          }}
-                          className="text-xs bg-secondary text-white"
-                        >
-                          Submit
+                  return (
+                    <tr key={srv.id} className="hover:bg-surface-container-lowest/50 transition-colors">
+                      <td className="py-2.5 px-3">
+                        <div className="font-bold text-on-surface">{srv.prospectiveSite?.name || `Survey ${srv.id.substring(0, 8)}`}</div>
+                        <div className="text-[10px] text-on-surface-variant">{srv.prospectiveSite?.address || "Address pending"}</div>
+                      </td>
+                      <td className="py-2.5 px-3">
+                        <div className="font-semibold text-on-surface">{srv.case?.title}</div>
+                        <div className="text-[10px] text-on-surface-variant">{srv.case?.prospectClient?.name || "Existing Client"}</div>
+                      </td>
+                      <td className="py-2.5 px-3">
+                        <Badge variant="secondary">{srv.operationType || "SECURITY_GUARDING"}</Badge>
+                      </td>
+                      <td className="py-2.5 px-3 font-medium">{srv.conductedBy || "SURVEYOR"}</td>
+                      <td className="py-2.5 px-3">{getLifecycleBadge(srv.lifecycle)}</td>
+                      <td className="py-2.5 px-3 text-on-surface-variant">
+                        {srv.conductedAt ? new Date(srv.conductedAt).toLocaleDateString() : new Date(srv.createdAt).toLocaleDateString()}
+                      </td>
+                      <td className="py-2.5 px-3 text-right space-x-1">
+                        <Button variant="secondary" size="sm" onClick={() => openWorkspace(srv)} className="text-xs">
+                          Workspace
                         </Button>
-                      )}
 
-                      {srv.lifecycle === "IN_WORKFLOW" && (
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => {
-                            setSelectedSurvey(srv);
-                            setWorkflowAction("APPROVE");
-                            setShowWorkflowModal(true);
-                          }}
-                          className="text-xs bg-status-success text-white"
-                        >
-                          Review
-                        </Button>
-                      )}
-                    </td>
-                  </tr>
-                ))
+                        {canSubmitRow && (
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            onClick={() => openWorkflowPopup(srv)}
+                            className="text-xs"
+                          >
+                            Submit
+                          </Button>
+                        )}
+
+                        {canReviewRow && (
+                          <Button
+                            variant="success"
+                            size="sm"
+                            onClick={() => openWorkflowPopup(srv)}
+                            className="text-xs"
+                          >
+                            Review
+                          </Button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -537,6 +664,12 @@ export default function SiteSurveysPage() {
               <h3 className="text-base font-bold text-on-surface">Initiate Pre-Contract Site Survey</h3>
               <button onClick={() => setShowCreateModal(false)} className="text-on-surface-variant hover:text-on-surface text-lg">×</button>
             </div>
+
+            {createError && (
+              <div className="p-3 rounded-lg bg-status-error/10 border border-status-error text-status-error text-xs font-medium">
+                {createError}
+              </div>
+            )}
 
             <form onSubmit={handleCreateSurvey} className="space-y-3">
               <div>
@@ -639,8 +772,8 @@ export default function SiteSurveysPage() {
       )}
 
       {/* Survey Workspace Drawer */}
-      {selectedSurvey && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-end p-2 sm:p-4">
+      {showWorkspaceDrawer && selectedSurvey && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 flex items-center justify-end p-2 sm:p-4">
           <Card className="w-full max-w-4xl h-[92vh] overflow-hidden bg-surface-container-low flex flex-col p-0">
             {/* Drawer Header */}
             <div className="p-4 border-b border-outline-variant/40 flex items-center justify-between bg-surface-container-high">
@@ -657,14 +790,52 @@ export default function SiteSurveysPage() {
               </div>
 
               <div className="flex items-center gap-2">
-                {selectedSurvey.lifecycle === "DRAFT" && (
-                  <Button variant="primary" size="sm" onClick={handleSaveWorkspace} disabled={savingWorkspace} className="text-xs">
+                {selectedSurvey.lifecycle === "DRAFT" && canManageSurveys && (
+                  <Button variant="secondary" size="sm" onClick={handleSaveWorkspace} disabled={savingWorkspace} className="text-xs">
                     {savingWorkspace ? "Saving..." : "Save Workspace"}
                   </Button>
                 )}
-                <button onClick={() => setSelectedSurvey(null)} className="text-on-surface-variant hover:text-on-surface text-xl px-2">×</button>
+                {modalAuthorizedActions.includes("SUBMIT") && selectedSurvey.lifecycle === "DRAFT" && (
+                  <Button variant="primary" size="sm" onClick={() => openWorkflowPopup(selectedSurvey)} className="text-xs">
+                    Submit
+                  </Button>
+                )}
+                {modalAuthorizedActions.some((a) => a === "APPROVE" || a === "RETURN" || a === "REJECT") &&
+                  selectedSurvey.lifecycle === "IN_WORKFLOW" && (
+                    <Button variant="success" size="sm" onClick={() => openWorkflowPopup(selectedSurvey)} className="text-xs">
+                      Review
+                    </Button>
+                  )}
+                <button
+                  onClick={() => {
+                    setShowWorkspaceDrawer(false);
+                    setWorkspaceFeedback(null);
+                  }}
+                  className="text-on-surface-variant hover:text-on-surface text-xl px-2"
+                >
+                  ×
+                </button>
               </div>
             </div>
+
+            {workspaceFeedback && (
+              <div
+                className={`mx-4 mt-3 p-3 rounded-lg border text-xs flex items-center justify-between ${
+                  workspaceFeedback.type === "success"
+                    ? "bg-status-success/10 border-status-success text-status-success"
+                    : "bg-status-error/10 border-status-error text-status-error"
+                }`}
+              >
+                <span className="font-semibold">{workspaceFeedback.text}</span>
+                <button
+                  type="button"
+                  onClick={() => setWorkspaceFeedback(null)}
+                  className="text-xs font-bold px-2"
+                >
+                  ×
+                </button>
+              </div>
+            )}
 
             {/* Workspace Tabs Navigation */}
             <div className="flex border-b border-outline-variant/40 bg-surface-container px-4 text-xs font-bold gap-4">
@@ -736,7 +907,7 @@ export default function SiteSurveysPage() {
                           type="number"
                           value={editingResponses["ELEM_POST_COUNT"] || ""}
                           onChange={(e) => setEditingResponses({ ...editingResponses, ELEM_POST_COUNT: e.target.value })}
-                          disabled={selectedSurvey.lifecycle === "COMPLETED"}
+                          disabled={selectedSurvey.lifecycle === "COMPLETED" || selectedSurvey.lifecycle === "CANCELLED"}
                           className="text-xs"
                           placeholder="e.g., 6 continuous 24/7 posts"
                         />
@@ -748,7 +919,7 @@ export default function SiteSurveysPage() {
                           type="text"
                           value={editingResponses["ELEM_SHIFT_PATTERN"] || ""}
                           onChange={(e) => setEditingResponses({ ...editingResponses, ELEM_SHIFT_PATTERN: e.target.value })}
-                          disabled={selectedSurvey.lifecycle === "COMPLETED"}
+                          disabled={selectedSurvey.lifecycle === "COMPLETED" || selectedSurvey.lifecycle === "CANCELLED"}
                           className="text-xs"
                           placeholder="e.g., 2 shifts x 12 hours"
                         />
@@ -760,7 +931,7 @@ export default function SiteSurveysPage() {
                           type="text"
                           value={editingResponses["ELEM_UNIFORM_PPE"] || ""}
                           onChange={(e) => setEditingResponses({ ...editingResponses, ELEM_UNIFORM_PPE: e.target.value })}
-                          disabled={selectedSurvey.lifecycle === "COMPLETED"}
+                          disabled={selectedSurvey.lifecycle === "COMPLETED" || selectedSurvey.lifecycle === "CANCELLED"}
                           className="text-xs"
                           placeholder="Steel toe boots, high-vis vest, client safety badge"
                         />
@@ -774,7 +945,7 @@ export default function SiteSurveysPage() {
                 <div className="space-y-4 text-xs">
                   <div className="flex items-center justify-between">
                     <h4 className="font-bold text-on-surface text-sm">Site Risk & Condition Register</h4>
-                    {selectedSurvey.lifecycle === "DRAFT" && (
+                    {selectedSurvey.lifecycle === "DRAFT" && canManageSurveys && (
                       <Button variant="secondary" size="sm" onClick={addConditionRow} className="text-xs">
                         + Add Risk Condition
                       </Button>
@@ -798,7 +969,7 @@ export default function SiteSurveysPage() {
                                   copy[idx].definitionCode = e.target.value;
                                   setEditingConditions(copy);
                                 }}
-                                disabled={selectedSurvey.lifecycle === "COMPLETED"}
+                                disabled={selectedSurvey.lifecycle === "COMPLETED" || selectedSurvey.lifecycle === "CANCELLED"}
                                 className="text-xs"
                               />
                             </div>
@@ -812,7 +983,7 @@ export default function SiteSurveysPage() {
                                   copy[idx].assessedSeverity = e.target.value as any;
                                   setEditingConditions(copy);
                                 }}
-                                disabled={selectedSurvey.lifecycle === "COMPLETED"}
+                                disabled={selectedSurvey.lifecycle === "COMPLETED" || selectedSurvey.lifecycle === "CANCELLED"}
                                 className="w-full bg-surface-container-lowest border border-outline-variant rounded px-2 py-1 text-xs"
                               >
                                 <option value="LOW">LOW</option>
@@ -830,7 +1001,7 @@ export default function SiteSurveysPage() {
                                   copy[idx].clientResponsibility = e.target.checked;
                                   setEditingConditions(copy);
                                 }}
-                                disabled={selectedSurvey.lifecycle === "COMPLETED"}
+                                disabled={selectedSurvey.lifecycle === "COMPLETED" || selectedSurvey.lifecycle === "CANCELLED"}
                               />
                               <span className="text-[11px]">Client Responsible</span>
                             </div>
@@ -844,7 +1015,7 @@ export default function SiteSurveysPage() {
                                   copy[idx].ahhResponsibility = e.target.checked;
                                   setEditingConditions(copy);
                                 }}
-                                disabled={selectedSurvey.lifecycle === "COMPLETED"}
+                                disabled={selectedSurvey.lifecycle === "COMPLETED" || selectedSurvey.lifecycle === "CANCELLED"}
                               />
                               <span className="text-[11px]">AHH Responsible</span>
                             </div>
@@ -859,7 +1030,19 @@ export default function SiteSurveysPage() {
               {workspaceTab === "WORKFLOW" && (
                 <div className="space-y-4 text-xs">
                   <Card className="p-4 bg-surface-container-lowest space-y-2">
-                    <h4 className="font-bold text-on-surface text-sm border-b border-outline-variant pb-1">Governance Approval Status</h4>
+                    <div className="flex items-center justify-between border-b border-outline-variant pb-2">
+                      <h4 className="font-bold text-on-surface text-sm">Governance Approval Status</h4>
+                      {modalAuthorizedActions.length > 0 && (
+                        <Button
+                          variant={selectedSurvey.lifecycle === "DRAFT" ? "primary" : "success"}
+                          size="sm"
+                          onClick={() => openWorkflowPopup(selectedSurvey)}
+                          className="text-xs"
+                        >
+                          {selectedSurvey.lifecycle === "DRAFT" ? "Submit for Approval" : "Review Workflow"}
+                        </Button>
+                      )}
+                    </div>
                     <div className="flex items-center justify-between pt-1">
                       <div>Current Workflow Stage: <span className="font-bold text-on-surface">{workflowDetail?.status || "NOT_STARTED"}</span></div>
                       <div>Active Level: <span className="font-bold text-on-surface">{workflowDetail?.currentLevelNumber || 1}</span></div>
@@ -880,10 +1063,10 @@ export default function SiteSurveysPage() {
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-outline-variant/30">
-                          {workflowDetail?.history?.length === 0 ? (
+                          {!workflowDetail?.history || workflowDetail.history.length === 0 ? (
                             <tr><td colSpan={5} className="py-4 text-center text-on-surface-variant">No workflow actions recorded yet.</td></tr>
                           ) : (
-                            workflowDetail?.history?.map((h) => (
+                            workflowDetail.history.map((h) => (
                               <tr key={h.id}>
                                 <td className="py-1.5 px-2 font-bold">Level {h.levelNumber}</td>
                                 <td className="py-1.5 px-2 font-semibold">{h.action}</td>
@@ -910,41 +1093,92 @@ export default function SiteSurveysPage() {
           <Card className="w-full max-w-md p-6 bg-surface-container-low space-y-4">
             <div className="flex items-center justify-between border-b border-outline-variant/40 pb-2">
               <h3 className="text-base font-bold text-on-surface">Survey Governance Workflow</h3>
-              <button onClick={() => setShowWorkflowModal(false)} className="text-on-surface-variant hover:text-on-surface text-lg">×</button>
+              <button
+                type="button"
+                disabled={workflowExecuting}
+                onClick={() => {
+                  setShowWorkflowModal(false);
+                  setWorkflowError(null);
+                }}
+                className="text-on-surface-variant hover:text-on-surface text-lg disabled:opacity-50"
+              >
+                ×
+              </button>
             </div>
 
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs font-bold text-on-surface-variant mb-1">Action</label>
-                <select
-                  value={workflowAction}
-                  onChange={(e) => setWorkflowAction(e.target.value as any)}
-                  className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-1.5 text-xs text-on-surface"
+            {workflowError && (
+              <div className="p-3 rounded-lg bg-status-error/10 border border-status-error text-status-error text-xs font-medium flex items-start gap-2">
+                <span className="material-symbols-outlined text-[16px] shrink-0">error</span>
+                <span>{workflowError}</span>
+              </div>
+            )}
+
+            {modalAuthorizedActions.length === 0 ? (
+              <div className="p-3 rounded-lg bg-surface-container-lowest border border-outline-variant text-on-surface-variant text-xs">
+                You do not have any authorized workflow actions for this site survey in its current state ({selectedSurvey.lifecycle}).
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs font-bold text-on-surface-variant mb-1">Action *</label>
+                  <select
+                    value={workflowAction}
+                    disabled={workflowExecuting}
+                    onChange={(e) => {
+                      setWorkflowAction(e.target.value as SurveyWorkflowAction | "");
+                      setWorkflowError(null);
+                    }}
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-1.5 text-xs text-on-surface disabled:opacity-50"
+                  >
+                    {modalAuthorizedActions.length > 1 && (
+                      <option value="">-- Select Authorized Action --</option>
+                    )}
+                    {modalAuthorizedActions.map((act) => (
+                      <option key={act} value={act}>
+                        {WORKFLOW_ACTION_LABELS[act]}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-on-surface-variant mb-1">Remarks / Audit Notes</label>
+                  <textarea
+                    rows={3}
+                    value={workflowRemarks}
+                    disabled={workflowExecuting}
+                    onChange={(e) => setWorkflowRemarks(e.target.value)}
+                    placeholder="Enter approval audit comments..."
+                    className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg p-2 text-xs text-on-surface focus:outline-none disabled:opacity-50"
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-outline-variant/40">
+              <Button
+                variant="ghost"
+                size="sm"
+                type="button"
+                disabled={workflowExecuting}
+                onClick={() => {
+                  setShowWorkflowModal(false);
+                  setWorkflowError(null);
+                }}
+              >
+                Cancel
+              </Button>
+              {modalAuthorizedActions.length > 0 && (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  type="button"
+                  onClick={handleExecuteWorkflow}
+                  disabled={workflowExecuting}
                 >
-                  <option value="SUBMIT">Submit for Approval</option>
-                  <option value="APPROVE">Approve</option>
-                  <option value="RETURN">Return for Clarification</option>
-                  <option value="REJECT">Reject Survey</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-on-surface-variant mb-1">Remarks / Audit Notes</label>
-                <textarea
-                  rows={3}
-                  value={workflowRemarks}
-                  onChange={(e) => setWorkflowRemarks(e.target.value)}
-                  placeholder="Enter approval audit comments..."
-                  className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg p-2 text-xs text-on-surface focus:outline-none"
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-3 border-t border-outline-variant/40">
-                <Button variant="ghost" size="sm" onClick={() => setShowWorkflowModal(false)}>Cancel</Button>
-                <Button variant="primary" size="sm" onClick={handleExecuteWorkflow} disabled={workflowExecuting}>
                   {workflowExecuting ? "Executing..." : "Confirm Action"}
                 </Button>
-              </div>
+              )}
             </div>
           </Card>
         </div>

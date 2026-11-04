@@ -2,6 +2,10 @@ import { prisma } from "@ahh-wfm/database";
 import { GET as getSurveys, POST as postSurveys } from "../../apps/web/app/api/v1/commercial/surveys/route";
 import { GET as getSurveyById, PATCH as patchSurveyById } from "../../apps/web/app/api/v1/commercial/surveys/[id]/route";
 import { POST as postSurveyWorkflow } from "../../apps/web/app/api/v1/commercial/surveys/[id]/workflow/route";
+import {
+  getAuthorizedSurveyWorkflowActions,
+  resolveInitialSurveyWorkflowAction
+} from "../../apps/web/lib/permissions";
 import { getServerSession } from "next-auth/next";
 
 jest.mock("next-auth/next", () => ({
@@ -124,9 +128,9 @@ describe("Commercial Lifecycle — Phase CL-2 Suite (Pre-Contract Site Surveys &
       await prisma.$executeRawUnsafe(`DELETE FROM PreContractCase WHERE companyId = 'COMP-CL2-01'`);
       await prisma.$executeRawUnsafe(`DELETE FROM PreContractProspectiveSite WHERE companyId = 'COMP-CL2-01'`);
 
-      await prisma.$executeRawUnsafe(`DELETE FROM WorkflowTemplateApprover WHERE levelId IN (SELECT id FROM WorkflowTemplateLevel WHERE templateId = 'WF-TMPL-CL2-SURVEY')`);
-      await prisma.$executeRawUnsafe(`DELETE FROM WorkflowTemplateLevel WHERE templateId = 'WF-TMPL-CL2-SURVEY'`);
-      await prisma.$executeRawUnsafe(`DELETE FROM WorkflowTemplate WHERE id = 'WF-TMPL-CL2-SURVEY'`);
+      await prisma.$executeRawUnsafe(`DELETE FROM WorkflowTemplateApprover WHERE levelId IN (SELECT id FROM WorkflowTemplateLevel WHERE templateId IN ('WF-TMPL-CL2-SURVEY', 'WF-TMPL-CL2-UAT-CASE-FALLBACK'))`);
+      await prisma.$executeRawUnsafe(`DELETE FROM WorkflowTemplateLevel WHERE templateId IN ('WF-TMPL-CL2-SURVEY', 'WF-TMPL-CL2-UAT-CASE-FALLBACK')`);
+      await prisma.$executeRawUnsafe(`DELETE FROM WorkflowTemplate WHERE id IN ('WF-TMPL-CL2-SURVEY', 'WF-TMPL-CL2-UAT-CASE-FALLBACK')`);
     } catch (e) {}
 
     // 2. Setup Test Company
@@ -169,7 +173,7 @@ describe("Commercial Lifecycle — Phase CL-2 Suite (Pre-Contract Site Surveys &
       data: {
         id: "WF-TMPL-CL2-SURVEY",
         workflowName: "Pre-Contract Site Survey Multi-Level Approval",
-        moduleType: "PRE_CONTRACT_SURVEY",
+        moduleType: "SITE_SURVEY",
         operationType: "SECURITY_GUARDING",
         appliesTo: "ACTIVATION",
         isDefault: true,
@@ -736,5 +740,210 @@ describe("Commercial Lifecycle — Phase CL-2 Suite (Pre-Contract Site Surveys &
     expect(Array.isArray(json.surveys)).toBe(true);
     expect(json.summaryStats).toBeDefined();
     expect(json.summaryStats.totalSurveys).toBeGreaterThanOrEqual(1);
+  });
+
+  it("25. Site Survey workflow template backward compatibility resolves SITE_SURVEY -> PRE_CONTRACT_SURVEY -> PRE_CONTRACT_CASE and always creates SITE_SURVEY WorkflowInstance", async () => {
+    (getServerSession as jest.Mock).mockResolvedValue({
+      user: {
+        id: "EMP-UAT-COMM-CREATOR",
+        name: "UAT Commercial Creator",
+        role: "Commercial Creator",
+        companyId: "COMP-CL2-01",
+        operationAccess: { allowedSecurityGuarding: true, allowedFacilityManagement: true }
+      }
+    });
+
+    // Temporarily deactivate SITE_SURVEY templates and test fallback to PRE_CONTRACT_CASE (SERVER UAT workaround)
+    await prisma.workflowTemplate.updateMany({
+      where: { moduleType: { in: ["SITE_SURVEY", "PRE_CONTRACT_SURVEY"] } },
+      data: { isActive: false }
+    });
+
+    const uatCaseTemplate = await prisma.workflowTemplate.create({
+      data: {
+        id: "WF-TMPL-CL2-UAT-CASE-FALLBACK",
+        workflowName: "UAT Legacy Pre-Contract Case Survey Template",
+        moduleType: "PRE_CONTRACT_CASE",
+        operationType: "SECURITY_GUARDING",
+        appliesTo: "ACTIVATION",
+        isDefault: true,
+        isActive: true,
+        levels: {
+          create: [
+            {
+              levelNumber: 1,
+              levelName: "UAT Commercial Approver Level",
+              approvers: {
+                create: [{ approverType: "ROLE_BASED", roleName: "Commercial Approver" }]
+              }
+            }
+          ]
+        }
+      }
+    });
+
+    try {
+      // Reset survey to DRAFT and clear existing workflowInstance for clean submission test
+      await prisma.workflowActionHistory.deleteMany({
+        where: { instance: { referenceId: testSurvey.id } }
+      });
+      await prisma.workflowInstance.deleteMany({
+        where: { referenceId: testSurvey.id }
+      });
+      await prisma.preContractSurvey.update({
+        where: { id: testSurvey.id },
+        data: { lifecycle: "DRAFT", workflowInstanceId: null, workflowTemplateId: null }
+      });
+
+      const submitReq = new Request(`http://localhost/api/v1/commercial/surveys/${testSurvey.id}/workflow`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "SUBMIT",
+          remarks: "Testing PRE_CONTRACT_CASE template fallback on UAT"
+        })
+      });
+
+      const submitRes = await postSurveyWorkflow(submitReq, { params: { id: testSurvey.id } });
+      expect(submitRes.status).toBe(200);
+      const submitData = await submitRes.json();
+      expect(submitData.survey.workflowTemplateId).toBe(uatCaseTemplate.id);
+
+      // Verify new WorkflowInstance MUST still use canonical moduleType = "SITE_SURVEY"
+      const createdInstance = await prisma.workflowInstance.findUnique({
+        where: { id: submitData.workflow.instanceId }
+      });
+      expect(createdInstance).toBeDefined();
+      expect(createdInstance?.moduleType).toBe("SITE_SURVEY");
+
+      // Also verify that "Commercial Approver" (UAT functional role) can approve Level 1
+      (getServerSession as jest.Mock).mockResolvedValue({
+        user: {
+          id: "EMP-UAT-COMM-APPROVER",
+          name: "UAT Commercial Approver",
+          role: "Commercial Approver",
+          companyId: "COMP-CL2-01",
+          operationAccess: { allowedSecurityGuarding: true, allowedFacilityManagement: true }
+        }
+      });
+
+      const approveReq = new Request(`http://localhost/api/v1/commercial/surveys/${testSurvey.id}/workflow`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "APPROVE",
+          remarks: "Approved by UAT Commercial Approver"
+        })
+      });
+      const approveRes = await postSurveyWorkflow(approveReq, { params: { id: testSurvey.id } });
+      expect(approveRes.status).toBe(200);
+      const approveData = await approveRes.json();
+      expect(approveData.survey.lifecycle).toBe("COMPLETED");
+      expect(approveData.workflow.status).toBe("APPROVED");
+    } finally {
+      await prisma.workflowInstance.updateMany({
+        where: { templateId: "WF-TMPL-CL2-UAT-CASE-FALLBACK" },
+        data: { templateId: "WF-TMPL-CL2-SURVEY" }
+      });
+      await prisma.preContractSurvey.updateMany({
+        where: { workflowTemplateId: "WF-TMPL-CL2-UAT-CASE-FALLBACK" },
+        data: { workflowTemplateId: "WF-TMPL-CL2-SURVEY" }
+      });
+      await prisma.$executeRawUnsafe(`DELETE FROM WorkflowTemplateApprover WHERE levelId IN (SELECT id FROM WorkflowTemplateLevel WHERE templateId = 'WF-TMPL-CL2-UAT-CASE-FALLBACK')`);
+      await prisma.$executeRawUnsafe(`DELETE FROM WorkflowTemplateLevel WHERE templateId = 'WF-TMPL-CL2-UAT-CASE-FALLBACK'`);
+      await prisma.$executeRawUnsafe(`DELETE FROM WorkflowTemplate WHERE id = 'WF-TMPL-CL2-UAT-CASE-FALLBACK'`);
+      await prisma.workflowTemplate.updateMany({
+        where: { id: "WF-TMPL-CL2-SURVEY" },
+        data: { isActive: true }
+      });
+    }
+  });
+
+  it("26. T1-DEF-021, T1-DEF-022 & T1-DEF-023 — Workflow popup authorization filters actions by role/state/SoD, never defaults Approver to Submit, and GET by ID returns allowedWorkflowActions", async () => {
+    const uatCreator = {
+      id: "EMP-UAT-COMM-CREATOR",
+      name: "UAT Commercial Creator",
+      role: "Commercial Creator",
+      companyId: "COMP-CL2-01",
+      operationAccess: { allowedSecurityGuarding: true, allowedFacilityManagement: true }
+    };
+
+    const uatApprover = {
+      id: "EMP-UAT-COMM-APPROVER",
+      name: "UAT Commercial Approver",
+      role: "Commercial Approver",
+      companyId: "COMP-CL2-01",
+      operationAccess: { allowedSecurityGuarding: true, allowedFacilityManagement: true }
+    };
+
+    const draftSurveyContext = {
+      lifecycle: "DRAFT",
+      conductedBy: uatCreator.name,
+      companyId: "COMP-CL2-01",
+      operationType: "SECURITY_GUARDING"
+    };
+
+    // 1. DRAFT state: Creator sees ONLY SUBMIT (and auto-selects SUBMIT since 1 valid action); Approver sees NO actions
+    const creatorDraftActions = getAuthorizedSurveyWorkflowActions(uatCreator, draftSurveyContext);
+    expect(creatorDraftActions).toEqual(["SUBMIT"]);
+    expect(resolveInitialSurveyWorkflowAction(creatorDraftActions)).toBe("SUBMIT");
+
+    const approverDraftActions = getAuthorizedSurveyWorkflowActions(uatApprover, draftSurveyContext);
+    expect(approverDraftActions).toEqual([]);
+    expect(resolveInitialSurveyWorkflowAction(approverDraftActions)).toBe("");
+
+    // 2. IN_WORKFLOW state: Creator sees NO actions (never Approve/Reject/Return); Approver sees APPROVE, RETURN, REJECT (never Submit)
+    const inWorkflowSurveyContext = {
+      lifecycle: "IN_WORKFLOW",
+      conductedBy: uatCreator.name,
+      companyId: "COMP-CL2-01",
+      operationType: "SECURITY_GUARDING"
+    };
+    const level1Config = {
+      levelNumber: 1,
+      levelName: "Commercial Review",
+      approvers: [{ approverType: "ROLE_BASED", roleName: "COMMERCIAL_CHECKER" }]
+    };
+
+    const creatorInWorkflowActions = getAuthorizedSurveyWorkflowActions(
+      uatCreator,
+      inWorkflowSurveyContext,
+      level1Config
+    );
+    expect(creatorInWorkflowActions).toEqual([]);
+
+    const approverInWorkflowActions = getAuthorizedSurveyWorkflowActions(
+      uatApprover,
+      inWorkflowSurveyContext,
+      level1Config
+    );
+    expect(approverInWorkflowActions).toEqual(["APPROVE", "RETURN", "REJECT"]);
+    expect(approverInWorkflowActions).not.toContain("SUBMIT");
+    // Multiple valid actions -> requires intentional selection (""), never defaults to SUBMIT
+    expect(resolveInitialSurveyWorkflowAction(approverInWorkflowActions)).toBe("");
+
+    // 3. Maker/Checker SoD: if Approver was also the survey creator, APPROVE is excluded
+    const selfCreatedInWorkflowContext = {
+      ...inWorkflowSurveyContext,
+      conductedBy: uatApprover.name
+    };
+    const selfApproverActions = getAuthorizedSurveyWorkflowActions(
+      uatApprover,
+      selfCreatedInWorkflowContext,
+      level1Config
+    );
+    expect(selfApproverActions).not.toContain("APPROVE");
+    expect(selfApproverActions).toEqual(["RETURN", "REJECT"]);
+
+    // 4. Verify GET /api/v1/commercial/surveys/[id] returns updated lifecycle and allowedWorkflowActions
+    (getServerSession as jest.Mock).mockResolvedValue({ user: uatApprover });
+    const detailRes = await getSurveyById(
+      new Request(`http://localhost/api/v1/commercial/surveys/${testSurvey.id}`),
+      { params: { id: testSurvey.id } }
+    );
+    expect(detailRes.status).toBe(200);
+    const detailData = await detailRes.json();
+    expect(detailData.survey.lifecycle).toBe("COMPLETED");
+    expect(detailData.allowedWorkflowActions).toEqual([]);
   });
 });

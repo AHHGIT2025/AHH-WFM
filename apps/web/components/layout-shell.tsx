@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession, signOut } from "next-auth/react";
-import { filterNavigationByPermissions } from "@/lib/permissions";
+import { filterNavigationByPermissions, canViewSecfacAlerts } from "@/lib/permissions";
 import { BRANDING } from "@/lib/branding";
 
 
@@ -141,6 +141,7 @@ export const LayoutShell: React.FC<{ children: React.ReactNode }> = ({ children 
   }
 
   const activeNavItems = filterNavigationByPermissions(session?.user as any, currentNavItems);
+  const canAccessSecfacAlerts = canViewSecfacAlerts(session?.user as any);
   const [profile, setProfile] = useState<any>(null);
   const [alertSummary, setAlertSummary] = useState<{ open: number; critical: number } | null>(null);
 
@@ -157,6 +158,10 @@ export const LayoutShell: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const fetchAlertCount = useCallback(async () => {
+    if (!canAccessSecfacAlerts) {
+      setAlertSummary(null);
+      return;
+    }
     try {
       const opAccess = (session?.user as any)?.operationAccess;
       let targetOp = "SECURITY_GUARDING";
@@ -174,14 +179,18 @@ export const LayoutShell: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch (e) {
       // Quiet fail for header indicator
     }
-  }, [session, isSecurityGuarding, isFacilityManagement]);
+  }, [session, canAccessSecfacAlerts, isSecurityGuarding, isFacilityManagement]);
 
   useEffect(() => {
     if (session) {
       fetchProfile();
-      fetchAlertCount();
+      if (canAccessSecfacAlerts) {
+        fetchAlertCount();
+      } else {
+        setAlertSummary(null);
+      }
     }
-  }, [session, fetchAlertCount]);
+  }, [session, canAccessSecfacAlerts, fetchAlertCount]);
 
   useEffect(() => {
     const handleProfileUpdate = () => {
@@ -282,22 +291,26 @@ export const LayoutShell: React.FC<{ children: React.ReactNode }> = ({ children 
           </nav>
         </div>
         <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2 text-slate-600">
-            <Link
-              href={alertConsoleTarget}
-              title="Operational Alerts Console"
-              className="p-2 hover:bg-slate-100 rounded-full transition-colors relative flex items-center justify-center"
-            >
-              <span className="material-symbols-outlined text-[22px]">notifications</span>
-              {(alertSummary && alertSummary.open > 0) ? (
-                <span className="absolute top-1 right-1 px-1.5 py-0.2 min-w-[18px] text-[10px] font-extrabold bg-[#DC2626] text-white rounded-full border border-white flex items-center justify-center leading-none">
-                  {alertSummary.open > 99 ? "99+" : alertSummary.open}
-                </span>
-              ) : null}
-            </Link>
-          </div>
+          {canAccessSecfacAlerts && (
+            <>
+              <div className="flex items-center gap-2 text-slate-600">
+                <Link
+                  href={alertConsoleTarget}
+                  title="Operational Alerts Console"
+                  className="p-2 hover:bg-slate-100 rounded-full transition-colors relative flex items-center justify-center"
+                >
+                  <span className="material-symbols-outlined text-[22px]">notifications</span>
+                  {(alertSummary && alertSummary.open > 0) ? (
+                    <span className="absolute top-1 right-1 px-1.5 py-0.2 min-w-[18px] text-[10px] font-extrabold bg-[#DC2626] text-white rounded-full border border-white flex items-center justify-center leading-none">
+                      {alertSummary.open > 99 ? "99+" : alertSummary.open}
+                    </span>
+                  ) : null}
+                </Link>
+              </div>
 
-          <div className="h-8 w-px bg-slate-200 hidden sm:block"></div>
+              <div className="h-8 w-px bg-slate-200 hidden sm:block"></div>
+            </>
+          )}
           <div className="flex items-center gap-3">
             <div className="h-9 w-9 rounded-full bg-[#093FA6]/10 overflow-hidden border border-slate-200 hidden sm:flex items-center justify-center shrink-0">
               {(profile?.profilePhotoUrl || session?.user?.image) ? (
