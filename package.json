@@ -12,7 +12,7 @@
     "build:web": "npm run build:database && npm run build --workspace=apps/web",
     "build:mobile": "npm run build:database && npm run build --workspace=apps/mobile",
     "build:database": "npm run build --workspace=packages/database",
-    "copy:workers-db": "node -e \"const fs=require('fs');const path=require('path');const src=path.join('packages','database','src','generated','client');const dst=path.join('dist','workers','packages','database','src','generated','client');fs.cpSync(src,dst,{recursive:true,force:true});console.log('[copy:workers-db] Generated client copied to',dst);\"",
+    "copy:workers-db": "node packages/database/scripts/copy-generated-client.js packages/database/src/generated/client dist/workers/packages/database/src/generated/client --label=copy:workers-db",
     "build:workers": "npm run build:database && tsc -p tsconfig.workers.json && npm run copy:workers-db",
     "start:secfac-notification-worker": "ts-node -T -P scripts/tsconfig.json apps/web/workers/secfac-notification-worker.ts",
     "start:secfac-evaluation-worker": "ts-node -T -P scripts/tsconfig.json apps/web/workers/secfac-evaluation-worker.ts",
