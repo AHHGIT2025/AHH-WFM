@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { mockDb, isDbConnected, readDb, writeDb } from "@ahh-wfm/mock-data";
-import { checkApiAuth } from "@/lib/api-guards";
+import { checkApiAuth, canAccessCompany } from "@/lib/api-guards";
 import { hasPermission, isAdminUser } from "@/lib/permissions";
 import { prisma } from "@ahh-wfm/database";
 
@@ -124,8 +124,14 @@ function resolveEmployee(paramsId: string, authSession: any, employees: any[]) {
 }
 
 export async function GET(request: Request, { params }: RouteParams) {
-  const auth = await checkApiAuth(["ADMIN", "SUPERVISOR"]);
+  const auth = await checkApiAuth();
   if (auth.error) return auth.error;
+
+  const user = auth.session?.user as any;
+  const isSelfLookup = params.id === "me" || params.id === user.id;
+  if (!isSelfLookup && !isAdminUser(user) && user.role !== "SUPERVISOR" && !hasPermission(user, "employees.view")) {
+    return NextResponse.json({ error: "Forbidden: Role restricted" }, { status: 403 });
+  }
 
   try {
     const employees = await mockDb.getEmployees();
@@ -134,6 +140,10 @@ export async function GET(request: Request, { params }: RouteParams) {
       return NextResponse.json({ error: resolution.error }, { status: resolution.status });
     }
     const { employee } = resolution;
+
+    if (!isSelfLookup && !isAdminUser(user) && employee.companyId && !canAccessCompany(user, employee.companyId)) {
+      return NextResponse.json({ error: "Forbidden: Cross-company access denied" }, { status: 403 });
+    }
 
     const normalized = normalizeEmployee(employee);
     delete (normalized as any).passwordHash;
@@ -149,8 +159,13 @@ export async function GET(request: Request, { params }: RouteParams) {
 }
 
 export async function PATCH(request: Request, { params }: RouteParams) {
-  const auth = await checkApiAuth(["ADMIN", "SUPERVISOR"]);
+  const auth = await checkApiAuth();
   if (auth.error) return auth.error;
+
+  const user = auth.session?.user as any;
+  if (!isAdminUser(user) && !hasPermission(user, "employees.edit")) {
+    return NextResponse.json({ error: "Forbidden: Requires employees.edit permission" }, { status: 403 });
+  }
 
   try {
     const payload = await request.json();
@@ -181,6 +196,83 @@ export async function PATCH(request: Request, { params }: RouteParams) {
     }
     const { employee: currentEmp, targetId } = resolution;
 
+    if (!isAdminUser(user) && currentEmp.companyId && !canAccessCompany(user, currentEmp.companyId)) {
+      return NextResponse.json({ error: "Forbidden: Cross-company access denied" }, { status: 403 });
+    }
+
+    const callerRole = (user.role || "").trim().toUpperCase().replace(/\s+/g, "_");
+    const targetRole = (currentEmp.role || "").trim().toUpperCase().replace(/\s+/g, "_");
+    const nextRole = role !== undefined ? String(role).trim().toUpperCase().replace(/\s+/g, "_") : targetRole;
+    const isRoleChanged = role !== undefined && nextRole !== targetRole;
+    const isPasswordProvided =
+      (defaultPassword !== undefined && String(defaultPassword).trim() !== "") ||
+      (confirmDefaultPassword !== undefined && String(confirmDefaultPassword).trim() !== "");
+    const isAuthChanged =
+      (authMode !== undefined && authMode !== (currentEmp.authMode || "LOCAL")) ||
+      (ssoProvider !== undefined && (ssoProvider || null) !== (currentEmp.ssoProvider || null)) ||
+      (ssoSubject !== undefined && (ssoSubject || null) !== (currentEmp.ssoSubject || null)) ||
+      (isLoginEnabled !== undefined && Boolean(isLoginEnabled) !== Boolean(currentEmp.isLoginEnabled ?? true)) ||
+      (isLocked !== undefined && Boolean(isLocked) !== Boolean(currentEmp.isLocked ?? false)) ||
+      (mustChangePassword !== undefined && Boolean(mustChangePassword) !== Boolean(currentEmp.mustChangePassword ?? false)) ||
+      (mustChangePasswordOnFirstLogin !== undefined &&
+        Boolean(mustChangePasswordOnFirstLogin) !== Boolean((currentEmp as any).mustChangePasswordOnFirstLogin ?? false)) ||
+      (webAccessEnabled !== undefined && Boolean(webAccessEnabled) !== Boolean(currentEmp.webAccessEnabled ?? true)) ||
+      (mobileAccessEnabled !== undefined && Boolean(mobileAccessEnabled) !== Boolean(currentEmp.mobileAccessEnabled ?? true)) ||
+      (username !== undefined && (username || "").trim() !== (currentEmp.username || "").trim());
+
+    // Enforce users.manage and role hierarchy for account/security/role mutations
+    if (isRoleChanged || isPasswordProvided || isAuthChanged) {
+      if (!isAdminUser(user) && !hasPermission(user, "users.manage")) {
+        return NextResponse.json(
+          { error: "Forbidden: Modifying user account credentials, login flags, or roles requires users.manage permission" },
+          { status: 403 }
+        );
+      }
+    }
+
+    if (targetRole === "SUPER_ADMIN" && callerRole !== "SUPER_ADMIN") {
+      return NextResponse.json(
+        { error: "Forbidden: Only SUPER_ADMIN can modify a SUPER_ADMIN account" },
+        { status: 403 }
+      );
+    }
+
+    if (targetRole === "ADMIN" && callerRole !== "SUPER_ADMIN" && callerRole !== "ADMIN") {
+      return NextResponse.json(
+        { error: "Forbidden: Only ADMIN or SUPER_ADMIN can modify an ADMIN account" },
+        { status: 403 }
+      );
+    }
+
+    if (targetId === user.id && isRoleChanged) {
+      return NextResponse.json(
+        { error: "Forbidden: Users cannot modify their own role" },
+        { status: 403 }
+      );
+    }
+
+    if (isRoleChanged && (nextRole === "SUPER_ADMIN" || nextRole === "ADMIN") && callerRole !== "SUPER_ADMIN") {
+      return NextResponse.json(
+        { error: "Forbidden: Only SUPER_ADMIN can assign SUPER_ADMIN or ADMIN role" },
+        { status: 403 }
+      );
+    }
+
+    if (targetRole === "SUPER_ADMIN") {
+      if (
+        (role !== undefined && nextRole !== "SUPER_ADMIN") ||
+        isLoginEnabled === false ||
+        isLocked === true ||
+        employmentStatus === "INACTIVE" ||
+        employmentStatus === "DELETED"
+      ) {
+        return NextResponse.json(
+          { error: "Forbidden: SUPER_ADMIN account cannot be demoted, locked, or deactivated" },
+          { status: 403 }
+        );
+      }
+    }
+
     if (email !== undefined) {
       if (email.trim() === "") {
         return NextResponse.json({ error: "Email is required" }, { status: 400 });
@@ -202,7 +294,7 @@ export async function PATCH(request: Request, { params }: RouteParams) {
         return NextResponse.json({ error: "Username already exists" }, { status: 409 });
       }
     }
-    if (profilePhotoUrl !== undefined && (auth.session?.user as any)?.role !== "ADMIN") {
+    if (profilePhotoUrl !== undefined && !isAdminUser(user)) {
       return NextResponse.json({ error: "Only admins can update profile photo from Web UI" }, { status: 403 });
     }
 
@@ -357,12 +449,14 @@ export async function DELETE(request: Request, { params }: RouteParams) {
   const auth = await checkApiAuth();
   if (auth.error) return auth.error;
 
+  const user = auth.session?.user as any;
+
   // Strict check: Only Admin & Super Admin are allowed to delete employees
-  if (!isAdminUser(auth.session?.user)) {
+  if (!isAdminUser(user)) {
     return NextResponse.json({ error: "Only Admin and Super Admin can delete employees." }, { status: 403 });
   }
 
-  const deletedBy = (auth.session?.user as any)?.id || "admin-system";
+  const deletedBy = user?.id || "admin-system";
 
   try {
     const employees = await mockDb.getEmployees();
@@ -370,7 +464,21 @@ export async function DELETE(request: Request, { params }: RouteParams) {
     if ("error" in resolution) {
       return NextResponse.json({ error: resolution.error }, { status: resolution.status });
     }
-    const { targetId } = resolution;
+    const { employee: targetEmp, targetId } = resolution;
+
+    if (targetId === user.id) {
+      return NextResponse.json({ error: "Forbidden: Cannot delete your own account." }, { status: 403 });
+    }
+
+    const callerRole = (user.role || "").trim().toUpperCase().replace(/\s+/g, "_");
+    const targetRole = (targetEmp.role || "").trim().toUpperCase().replace(/\s+/g, "_");
+
+    if (targetRole === "SUPER_ADMIN") {
+      return NextResponse.json({ error: "Forbidden: SUPER_ADMIN account cannot be deleted." }, { status: 403 });
+    }
+    if (targetRole === "ADMIN" && callerRole !== "SUPER_ADMIN") {
+      return NextResponse.json({ error: "Forbidden: Only SUPER_ADMIN can delete an ADMIN account." }, { status: 403 });
+    }
 
     const deactivatedAt = new Date();
     const deactivatedAtStr = deactivatedAt.toISOString();

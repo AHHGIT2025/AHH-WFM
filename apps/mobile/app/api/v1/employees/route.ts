@@ -1,22 +1,50 @@
 import { NextResponse } from "next/server";
 import { mockDb } from "@ahh-wfm/mock-data";
-import { checkApiAuth } from "@/lib/api-guards";
+import { checkApiAuth, canAccessCompany, hasPermission, isAdminUser } from "../../../../lib/api-guards";
+
+function sanitizeEmployee(emp: any) {
+  if (!emp) return emp;
+  const { passwordHash, ...safe } = emp;
+  return safe;
+}
 
 export async function GET() {
-  const auth = await checkApiAuth(["ADMIN", "SUPERVISOR", "EMPLOYEE"]);
+  const auth = await checkApiAuth(["ADMIN", "SUPER_ADMIN", "SUPERVISOR", "EMPLOYEE", "EMPLOYEE_SELF_SERVICE"]);
   if (auth.error) return auth.error;
+
+  const user = auth.session?.user as any;
 
   try {
     const employees = await mockDb.getEmployees();
-    return NextResponse.json(employees);
+    const isSelfService =
+      user?.isSelfServiceOnly ||
+      user?.role?.toUpperCase() === "EMPLOYEE" ||
+      user?.role?.toUpperCase() === "EMPLOYEE_SELF_SERVICE";
+
+    const filtered = employees.filter((emp: any) => {
+      if (isSelfService) {
+        return emp.id === user.id;
+      }
+      if (!isAdminUser(user) && emp.companyId && !canAccessCompany(user, emp.companyId)) {
+        return false;
+      }
+      return true;
+    });
+
+    return NextResponse.json(filtered.map(sanitizeEmployee));
   } catch (e) {
     return NextResponse.json({ error: "Failed to fetch employees" }, { status: 500 });
   }
 }
 
 export async function POST(request: Request) {
-  const auth = await checkApiAuth(["ADMIN"]);
+  const auth = await checkApiAuth(["ADMIN", "SUPER_ADMIN"]);
   if (auth.error) return auth.error;
+
+  const user = auth.session?.user as any;
+  if (!isAdminUser(user) && !hasPermission(user, "employees.create")) {
+    return NextResponse.json({ error: "Forbidden: Requires employees.create permission" }, { status: 403 });
+  }
 
   try {
     const payload = await request.json();
@@ -38,6 +66,15 @@ export async function POST(request: Request) {
     }
     if (!role || role.trim() === "") {
       return NextResponse.json({ error: "Role is required" }, { status: 400 });
+    }
+
+    const callerRole = (user.role || "").trim().toUpperCase().replace(/\s+/g, "_");
+    const requestedRole = role.trim().toUpperCase().replace(/\s+/g, "_");
+    if ((requestedRole === "SUPER_ADMIN" || requestedRole === "ADMIN") && callerRole !== "SUPER_ADMIN") {
+      return NextResponse.json(
+        { error: "Forbidden: Only SUPER_ADMIN can create SUPER_ADMIN or ADMIN accounts" },
+        { status: 403 }
+      );
     }
 
     const employees = await mockDb.getEmployees();
@@ -63,7 +100,7 @@ export async function POST(request: Request) {
       password: password || undefined
     });
 
-    return NextResponse.json(newEmp);
+    return NextResponse.json(sanitizeEmployee(newEmp));
   } catch (e) {
     return NextResponse.json({ error: "Failed to create employee" }, { status: 500 });
   }

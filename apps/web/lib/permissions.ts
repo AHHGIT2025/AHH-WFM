@@ -203,13 +203,15 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
 
   // Security Guarding Default Roles
   SECURITY_ADMIN: [
-    "dashboard.view", "manpower.view", "manpower.manage", "manpower.admin.full_access",
+    "dashboard.view", "manpower.view", "manpower.manage",
     "manpower.security.view", "manpower.security.manage", "manpower.security.clients.view", "manpower.security.clients.manage",
     "manpower.security.contracts.view", "manpower.security.contracts.manage", "manpower.security.contracts.foc_approve", "manpower.security.projects.view", "manpower.security.projects.manage",
     "manpower.security.sites.view", "manpower.security.sites.manage", "manpower.security.zones.view", "manpower.security.zones.manage",
     "manpower.security.manpower.view", "manpower.security.manpower.manage", "manpower.security.shifts.view", "manpower.security.shifts.manage",
     "manpower.security.deployments.view", "manpower.security.deployments.manage", "manpower.security.relievers.view", "manpower.security.relievers.manage",
     "manpower.security.reports.view", "manpower.security.reports.export",
+    "security.view", "security.manage", "security.projects.view", "security.manpower.view", "security.deployment.view",
+    "security.coordinators.view", "security.coordinators.manage", "security.patrols.view", "security.patrols.create", "security.patrols.manage",
     "attendance.import.view", "attendance.import.create", "attendance.import.validate", "attendance.import.review",
     "secfac.alerts.view", "secfac.alerts.manage", "secfac.alerts.acknowledge", "secfac.alerts.resolve", "secfac.alerts.escalate", "secfac.alert.rules.view", "secfac.alert.rules.manage",
     "secfac.postOrders.view", "secfac.postOrders.manage", "secfac.briefings.view", "secfac.briefings.manage",
@@ -263,13 +265,14 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
 
   // Facility Management Default Roles
   FM_ADMIN: [
-    "dashboard.view", "manpower.view", "manpower.manage", "manpower.admin.full_access",
+    "dashboard.view", "manpower.view", "manpower.manage",
     "manpower.fm.view", "manpower.fm.manage", "manpower.fm.clients.view", "manpower.fm.clients.manage",
     "manpower.fm.contracts.view", "manpower.fm.contracts.manage", "manpower.fm.contracts.foc_approve", "manpower.fm.projects.view", "manpower.fm.projects.manage",
     "manpower.fm.sites.view", "manpower.fm.sites.manage", "manpower.fm.areas.view", "manpower.fm.areas.manage",
     "manpower.fm.manpower.view", "manpower.fm.manpower.manage", "manpower.fm.shifts.view", "manpower.fm.shifts.manage",
     "manpower.fm.deployments.view", "manpower.fm.deployments.manage", "manpower.fm.relievers.view", "manpower.fm.relievers.manage",
     "manpower.fm.reports.view", "manpower.fm.reports.export",
+    "facility.projects.view", "facility.manpower.view", "facility.deployment.view",
     "attendance.import.view", "attendance.import.create", "attendance.import.validate", "attendance.import.review",
     "secfac.alerts.view", "secfac.alerts.manage", "secfac.alerts.acknowledge", "secfac.alerts.resolve", "secfac.alerts.escalate", "secfac.alert.rules.view", "secfac.alert.rules.manage",
     "manpower.reconciliation.view", "manpower.reconciliation.run", "manpower.reconciliation.review", "manpower.reconciliation.excuse",
@@ -516,7 +519,76 @@ export function isAdminUser(user: { role?: string } | null | undefined): boolean
   return role === "ADMIN" || role === "SUPER_ADMIN";
 }
 
-export function hasPermission(user: { role?: string; permissions?: string[] } | null | undefined, permissionKey: string): boolean {
+function isScopeBlockedForPermission(user: any, permissionKey: string): boolean {
+  const roleUpper = (user?.role || "").trim().toUpperCase().replace(/\s+/g, "_");
+  const opAccess = user?.operationAccess;
+  const isOpArray = Array.isArray(opAccess);
+  const arrayHasAll = isOpArray && opAccess.includes("ALL");
+  const arrayAllowsSG = isOpArray ? arrayHasAll || opAccess.includes("SECURITY_GUARDING") : undefined;
+  const arrayAllowsFM = isOpArray ? arrayHasAll || opAccess.includes("FACILITY_MANAGEMENT") : undefined;
+
+  const disallowSG =
+    roleUpper.startsWith("FM_") ||
+    (isOpArray ? !arrayAllowsSG : opAccess?.allowedSecurityGuarding === false);
+  const disallowFM =
+    roleUpper.startsWith("SECURITY_") ||
+    (isOpArray ? !arrayAllowsFM : opAccess?.allowedFacilityManagement === false);
+
+  // Never allow single-scope users (even with legacy DB role assignments) to satisfy direct checks for manpower.admin.full_access
+  if (permissionKey === "manpower.admin.full_access") {
+    if (disallowSG || disallowFM) {
+      return true;
+    }
+  }
+
+  const isSecurityOnlyKey =
+    permissionKey.startsWith("manpower.security.") ||
+    permissionKey.startsWith("security.") ||
+    permissionKey.startsWith("secfac.postOrders.") ||
+    permissionKey.startsWith("secfac.briefings.") ||
+    permissionKey.startsWith("secfac.incidents.") ||
+    permissionKey.startsWith("secfac.inspections.");
+
+  if (isSecurityOnlyKey && disallowSG) {
+    return true;
+  }
+
+  const isFacilityOnlyKey =
+    permissionKey.startsWith("manpower.fm.") ||
+    permissionKey.startsWith("manpower.facility.") ||
+    permissionKey.startsWith("facility.");
+
+  if (isFacilityOnlyKey && disallowFM) {
+    return true;
+  }
+
+  return false;
+}
+
+function isManpowerAdminWildcardAllowed(user: any, permissionKey: string): boolean {
+  if (!permissionKey) return false;
+  // Never grant system, user, role, settings, backup, SAP, employee master, or pre-contract authoring permissions
+  const isManpowerDomain =
+    permissionKey.startsWith("manpower.") ||
+    permissionKey.startsWith("secfac.") ||
+    permissionKey.startsWith("security.") ||
+    permissionKey.startsWith("facility.") ||
+    permissionKey.startsWith("attendance.import.") ||
+    permissionKey.startsWith("commercial.commandCenter.") ||
+    permissionKey === "dashboard.view";
+
+  if (!isManpowerDomain) {
+    return false;
+  }
+
+  if (isScopeBlockedForPermission(user, permissionKey)) {
+    return false;
+  }
+
+  return true;
+}
+
+export function hasPermission(user: { role?: string; permissions?: string[]; operationAccess?: any } | null | undefined, permissionKey: string): boolean {
   if (!user) return false;
 
   // Admin bypass
@@ -524,23 +596,46 @@ export function hasPermission(user: { role?: string; permissions?: string[] } | 
     return true;
   }
 
+  // Enforce Security Guarding vs Facility Management scope separation even when permission is present
+  if (isScopeBlockedForPermission(user, permissionKey)) {
+    return false;
+  }
+
+  const aliasKey =
+    permissionKey === "manpower.facility.view"
+      ? "manpower.fm.view"
+      : permissionKey === "manpower.facility.manage"
+        ? "manpower.fm.manage"
+        : null;
+
   // Check database-driven combined permissions in session if loaded
   if (user.permissions && Array.isArray(user.permissions)) {
+    if (user.permissions.includes(permissionKey) || (aliasKey && user.permissions.includes(aliasKey))) {
+      return true;
+    }
     if (
       user.permissions.includes("manpower.admin.full_access") &&
-      !permissionKey.startsWith("precontract.") &&
-      (!permissionKey.startsWith("commercial.") || permissionKey.startsWith("commercial.commandCenter."))
+      isManpowerAdminWildcardAllowed(user, permissionKey)
     ) {
       return true;
     }
-    return user.permissions.includes(permissionKey);
+    return false;
   }
 
   // Fallback to hardcoded roles in code if not loaded in session
   if (!user.role) return false;
   const role = user.role.trim().toUpperCase().replace(/\s+/g, "_");
   const permissions = DEFAULT_ROLE_PERMISSIONS[role] || [];
-  return permissions.includes(permissionKey);
+  if (permissions.includes(permissionKey) || (aliasKey && permissions.includes(aliasKey))) {
+    return true;
+  }
+  if (
+    permissions.includes("manpower.admin.full_access") &&
+    isManpowerAdminWildcardAllowed(user, permissionKey)
+  ) {
+    return true;
+  }
+  return false;
 }
 
 export function getUserPermissions(user: { role?: string; permissions?: string[] } | null | undefined): string[] {
@@ -703,7 +798,7 @@ export function canUserPerformSurveyWorkflowAction(
   action: SurveyWorkflowAction
 ): boolean {
   if (!user) return false;
-  if (isAdminUser(user) || hasPermission(user, "manpower.admin.full_access")) {
+  if (isAdminUser(user)) {
     return true;
   }
   if (action === "SUBMIT") {
@@ -745,8 +840,7 @@ export function isUserEligibleSurveyLevelApprover(
       (action === "REJECT" && hasPermission(user, "precontract.workflow.reject")) ||
       (action === "RETURN" &&
         (hasPermission(user, "precontract.workflow.review") ||
-          hasPermission(user, "precontract.workflow.reject"))) ||
-      hasPermission(user, "manpower.admin.full_access")
+          hasPermission(user, "precontract.workflow.reject")))
     );
   }
 
@@ -766,14 +860,14 @@ export function isUserEligibleSurveyLevelApprover(
       );
     }
     if (ap.approverType === "DEPT_HEAD" || ap.approverType === "CONTRACT_ADMIN") {
-      return isAdminUser(user) || hasPermission(user, "manpower.admin.full_access");
+      return isAdminUser(user);
     }
     return false;
   });
 
   if (
     !isLevelApprover &&
-    (user.role === "SUPER_ADMIN" || hasPermission(user, "manpower.admin.full_access"))
+    user.role === "SUPER_ADMIN"
   ) {
     isLevelApprover = true;
   }
@@ -799,9 +893,17 @@ export function getAuthorizedSurveyWorkflowActions(
   }
 
   // SG / FM Scope Isolation Check
-  if (!isAdminUser(user) && !hasPermission(user, "manpower.admin.full_access")) {
-    const userAllowedSG = user?.operationAccess?.allowedSecurityGuarding ?? true;
-    const userAllowedFM = user?.operationAccess?.allowedFacilityManagement ?? true;
+  if (!isAdminUser(user)) {
+    const roleUpper = (user?.role || "").trim().toUpperCase().replace(/\s+/g, "_");
+    const opAccess = user?.operationAccess;
+    const isOpArray = Array.isArray(opAccess);
+    const arrayHasAll = isOpArray && opAccess.includes("ALL");
+    const userAllowedSG = isOpArray
+      ? arrayHasAll || opAccess.includes("SECURITY_GUARDING")
+      : (opAccess?.allowedSecurityGuarding ?? !roleUpper.startsWith("FM_")) && !roleUpper.startsWith("FM_");
+    const userAllowedFM = isOpArray
+      ? arrayHasAll || opAccess.includes("FACILITY_MANAGEMENT")
+      : (opAccess?.allowedFacilityManagement ?? !roleUpper.startsWith("SECURITY_")) && !roleUpper.startsWith("SECURITY_");
 
     if (survey.operationType === "SECURITY_GUARDING" && !userAllowedSG) {
       return [];

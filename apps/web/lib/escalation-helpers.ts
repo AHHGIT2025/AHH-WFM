@@ -1,6 +1,7 @@
 import { prisma } from "@ahh-wfm/database";
 import { getQatarDate, getQatarDateString } from "@/lib/roster-engine";
 import { getRelieverEligibilityWhere } from "@/lib/contract-helpers";
+import { hasPermission, isAdminUser } from "@/lib/permissions";
 
 export interface EscalationAggregationsParams {
   companyId?: string;
@@ -96,7 +97,7 @@ export async function getEscalationAggregations(
   const escalations: EscalationItem[] = [];
 
   const isSiteAllowed = (targetSiteId: string | null | undefined, targetProjectId: string | null | undefined) => {
-    if (user?.role === "SUPER_ADMIN" || user?.permissions?.includes("manpower.admin.full_access")) return true;
+    if (isAdminUser(user) || hasPermission(user, "manpower.admin.full_access")) return true;
     if (siteId && targetSiteId && targetSiteId !== siteId) return false;
     if (projectId && targetProjectId && targetProjectId !== projectId) return false;
     if (user?.siteId && targetSiteId && targetSiteId !== user.siteId) return false;

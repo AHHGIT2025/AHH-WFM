@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@ahh-wfm/database";
 import { checkApiAuth } from "@/lib/api-guards";
+import { hasPermission, isAdminUser } from "@/lib/permissions";
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   const auth = await checkApiAuth();
@@ -25,6 +26,32 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const auth = await checkApiAuth();
   if (auth.error) return auth.error;
 
+  const user = auth.session?.user;
+  let body: any = {};
+  try { body = await req.json(); } catch (e) {}
+
+  const { action } = body;
+
+  if (action === "reject" || action === "approve") {
+    if (
+      !isAdminUser(user) &&
+      !hasPermission(user, "manpower.calendars.approve") &&
+      !hasPermission(user, "manpower.calendars.manage")
+    ) {
+      return NextResponse.json(
+        { success: false, error: "Forbidden: Missing permission manpower.calendars.approve" },
+        { status: 403 }
+      );
+    }
+  } else {
+    if (!isAdminUser(user) && !hasPermission(user, "manpower.calendars.manage")) {
+      return NextResponse.json(
+        { success: false, error: "Forbidden: Missing permission manpower.calendars.manage" },
+        { status: 403 }
+      );
+    }
+  }
+
   const period = await prisma.manpowerRamadanPeriod.findUnique({
     where: { id: params.id }
   });
@@ -32,11 +59,6 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if (!period) {
     return NextResponse.json({ success: false, error: "Ramadan period not found" }, { status: 404 });
   }
-
-  let body: any = {};
-  try { body = await req.json(); } catch (e) {}
-
-  const { action } = body;
 
   if (action === "submit") {
     const updated = await prisma.manpowerRamadanPeriod.update({
@@ -99,7 +121,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
-  const auth = await checkApiAuth();
+  const auth = await checkApiAuth(undefined, { requiredPermission: "manpower.calendars.manage" });
   if (auth.error) return auth.error;
 
   const period = await prisma.manpowerRamadanPeriod.findUnique({

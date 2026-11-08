@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { checkApiAuth } from "@/lib/api-guards";
+import { checkApiAuth, canAccessCompany, getAuthorizedCompanyIds } from "@/lib/api-guards";
+import { hasPermission, isAdminUser } from "@/lib/permissions";
 import { prisma } from "@ahh-wfm/database";
 import {
   reportIncident,
@@ -12,10 +13,24 @@ import {
 } from "@/lib/secfac-incident-service";
 
 export async function GET(request: Request) {
-  const auth = await checkApiAuth();
+  const auth = await checkApiAuth(undefined, { requiredOperation: "SECURITY_GUARDING" });
   if (auth.error) return auth.error;
 
   const user = auth.session?.user as any;
+  const canView =
+    isAdminUser(user) ||
+    hasPermission(user, "secfac.incidents.view") ||
+    hasPermission(user, "secfac.incidents.manage") ||
+    hasPermission(user, "manpower.security.view") ||
+    hasPermission(user, "manpower.security.manage");
+
+  if (!canView) {
+    return NextResponse.json(
+      { success: false, error: "Forbidden: Missing permission secfac.incidents.view" },
+      { status: 403 }
+    );
+  }
+
   const { searchParams } = new URL(request.url);
   const id = searchParams.get("id");
 
@@ -24,10 +39,32 @@ export async function GET(request: Request) {
     if (!details) {
       return NextResponse.json({ success: false, error: `Incident '${id}' not found` }, { status: 404 });
     }
+    if ((details as any).companyId && !canAccessCompany(user, (details as any).companyId)) {
+      return NextResponse.json(
+        { success: false, error: "Forbidden: Cross-company access denied" },
+        { status: 403 }
+      );
+    }
     return NextResponse.json({ success: true, data: details });
   }
 
-  const companyId = searchParams.get("companyId") || user.companyId || "COMP001";
+  const requestedCompanyId = searchParams.get("companyId");
+  if (requestedCompanyId && !canAccessCompany(user, requestedCompanyId)) {
+    return NextResponse.json(
+      { success: false, error: "Forbidden: Cross-company access denied" },
+      { status: 403 }
+    );
+  }
+
+  const isAdmin = isAdminUser(user);
+  const authorizedCompanies = getAuthorizedCompanyIds(user);
+  const companyId = requestedCompanyId || user.companyId || authorizedCompanies?.[0] || (isAdmin ? "COMP001" : null);
+  if (!isAdmin && (!companyId || !canAccessCompany(user, companyId))) {
+    return NextResponse.json(
+      { success: false, error: "Forbidden: User account has no assigned company scope" },
+      { status: 403 }
+    );
+  }
   const siteId = searchParams.get("siteId");
   const status = searchParams.get("status");
   const severity = searchParams.get("severity");
@@ -51,20 +88,49 @@ export async function GET(request: Request) {
     orderBy: { incidentDate: "desc" }
   });
 
-
   return NextResponse.json({ success: true, data: incidents });
 }
 
 export async function POST(request: Request) {
-  const auth = await checkApiAuth();
+  const auth = await checkApiAuth(undefined, { requiredOperation: "SECURITY_GUARDING" });
   if (auth.error) return auth.error;
 
   const user = auth.session?.user as any;
+  const canReport =
+    isAdminUser(user) ||
+    hasPermission(user, "secfac.incidents.report") ||
+    hasPermission(user, "secfac.incidents.manage") ||
+    hasPermission(user, "manpower.security.view") ||
+    hasPermission(user, "manpower.security.manage");
+
+  if (!canReport) {
+    return NextResponse.json(
+      { success: false, error: "Forbidden: Missing permission secfac.incidents.report" },
+      { status: 403 }
+    );
+  }
 
   try {
     const body = await request.json();
+    if (body.companyId && !canAccessCompany(user, body.companyId)) {
+      return NextResponse.json(
+        { success: false, error: "Forbidden: Cross-company access denied" },
+        { status: 403 }
+      );
+    }
+
+    const isAdmin = isAdminUser(user);
+    const authorizedCompanies = getAuthorizedCompanyIds(user);
+    const resolvedCompanyId = body.companyId || user.companyId || authorizedCompanies?.[0] || (isAdmin ? "COMP001" : null);
+    if (!isAdmin && (!resolvedCompanyId || !canAccessCompany(user, resolvedCompanyId))) {
+      return NextResponse.json(
+        { success: false, error: "Forbidden: User account has no assigned company scope" },
+        { status: 403 }
+      );
+    }
+
     const incident = await reportIncident({
-      companyId: body.companyId || user.companyId || "COMP001",
+      companyId: resolvedCompanyId,
       siteId: body.siteId,
       checkpointId: body.checkpointId,
       reportedById: user.employeeId || user.id,
@@ -89,14 +155,37 @@ export async function POST(request: Request) {
 }
 
 export async function PUT(request: Request) {
-  const auth = await checkApiAuth();
+  const auth = await checkApiAuth(undefined, { requiredOperation: "SECURITY_GUARDING" });
   if (auth.error) return auth.error;
 
   const user = auth.session?.user as any;
+  const canManage =
+    isAdminUser(user) ||
+    hasPermission(user, "secfac.incidents.manage") ||
+    hasPermission(user, "manpower.security.manage");
+  const canClose =
+    canManage ||
+    hasPermission(user, "secfac.incidents.close");
 
   try {
     const body = await request.json();
     const action = body.action;
+
+    if (action === "promote" || action === "assign" || action === "transition") {
+      if (!canManage) {
+        return NextResponse.json(
+          { success: false, error: "Forbidden: Missing permission secfac.incidents.manage" },
+          { status: 403 }
+        );
+      }
+    } else if (action === "request_closure" || action === "workflow_action") {
+      if (!canClose) {
+        return NextResponse.json(
+          { success: false, error: "Forbidden: Missing permission secfac.incidents.close" },
+          { status: 403 }
+        );
+      }
+    }
 
     if (action === "promote") {
       if (!body.incidentId) {

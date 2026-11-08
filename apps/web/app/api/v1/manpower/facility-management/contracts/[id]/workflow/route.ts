@@ -4,11 +4,11 @@ import { checkApiAuth } from "@/lib/api-guards";
 import { hasPermission } from "@/lib/permissions";
 
 export async function GET(request: Request, { params }: { params: { id: string } }) {
-  const auth = await checkApiAuth();
+  const auth = await checkApiAuth(undefined, { requiredOperation: "FACILITY_MANAGEMENT" });
   if (auth.error) return auth.error;
 
   if (!hasPermission(auth.session?.user, "manpower.admin.full_access") &&
-      !hasPermission(auth.session?.user, "manpower.facility.view")) {
+      !hasPermission(auth.session?.user, "manpower.fm.view")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -16,6 +16,9 @@ export async function GET(request: Request, { params }: { params: { id: string }
     const contract = await mockDb.getManpowerContract(params.id);
     if (!contract) {
       return NextResponse.json({ error: "Contract not found" }, { status: 404 });
+    }
+    if (contract.operationType && contract.operationType !== "FACILITY_MANAGEMENT") {
+      return NextResponse.json({ error: "Forbidden: Contract belongs to a different operation scope" }, { status: 403 });
     }
     return NextResponse.json({
       workflow: contract.workflows?.[0] || null,

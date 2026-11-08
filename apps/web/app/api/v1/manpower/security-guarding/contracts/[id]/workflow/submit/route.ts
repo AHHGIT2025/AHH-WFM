@@ -4,15 +4,23 @@ import { checkApiAuth } from "@/lib/api-guards";
 import { hasPermission } from "@/lib/permissions";
 
 export async function POST(request: Request, { params }: { params: { id: string } }) {
-  const auth = await checkApiAuth();
+  const auth = await checkApiAuth(undefined, { requiredOperation: "SECURITY_GUARDING" });
   if (auth.error) return auth.error;
 
   if (!hasPermission(auth.session?.user, "manpower.admin.full_access") &&
-      !hasPermission(auth.session?.user, "manpower.security.manage")) {
+      !hasPermission(auth.session?.user, "manpower.security.manage") &&
+      !hasPermission(auth.session?.user, "manpower.security.contracts.manage")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   try {
+    const existing = await mockDb.getManpowerContract(params.id);
+    if (!existing) {
+      return NextResponse.json({ error: "Contract not found" }, { status: 404 });
+    }
+    if (existing.operationType && existing.operationType !== "SECURITY_GUARDING") {
+      return NextResponse.json({ error: "Forbidden: Contract belongs to a different operation scope" }, { status: 403 });
+    }
     const submittedBy = auth.session?.user?.name || auth.session?.user?.email || "System";
     const contract = await mockDb.submitContractWorkflow(params.id, submittedBy);
     return NextResponse.json(contract);

@@ -4,7 +4,7 @@ import { checkApiAuth } from "@/lib/api-guards";
 import { hasPermission } from "@/lib/permissions";
 
 export async function GET() {
-  const auth = await checkApiAuth();
+  const auth = await checkApiAuth(undefined, { requiredOperation: "SECURITY_GUARDING" });
   if (auth.error) return auth.error;
 
   if (!hasPermission(auth.session?.user, "manpower.admin.full_access") &&
@@ -21,7 +21,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const auth = await checkApiAuth();
+  const auth = await checkApiAuth(undefined, { requiredOperation: "SECURITY_GUARDING" });
   if (auth.error) return auth.error;
 
   if (!hasPermission(auth.session?.user, "manpower.admin.full_access") &&

@@ -5,8 +5,14 @@ import { hasPermission } from "@/lib/permissions";
 import { prisma } from "@ahh-wfm/database";
 import { computeDisplayDesignation } from "@/lib/scheduling-validator";
 
+function sanitizeEmployee(emp: any) {
+  if (!emp) return emp;
+  const { passwordHash, ...safe } = emp;
+  return safe;
+}
+
 export async function GET(request: Request) {
-  const auth = await checkApiAuth();
+  const auth = await checkApiAuth(undefined, { requiredOperation: "SECURITY_GUARDING" });
   if (auth.error) return auth.error;
 
   if (!hasPermission(auth.session?.user, "manpower.admin.full_access") &&
@@ -130,14 +136,14 @@ export async function GET(request: Request) {
       });
     }
 
-    return NextResponse.json(employees);
+    return NextResponse.json(employees.map(sanitizeEmployee));
   } catch (e) {
     return NextResponse.json({ error: "Failed to fetch security force" }, { status: 500 });
   }
 }
 
 export async function POST(request: Request) {
-  const auth = await checkApiAuth();
+  const auth = await checkApiAuth(undefined, { requiredOperation: "SECURITY_GUARDING" });
   if (auth.error) return auth.error;
 
   if (!hasPermission(auth.session?.user, "manpower.admin.full_access") &&
@@ -211,7 +217,7 @@ export async function POST(request: Request) {
         isActive: true,
         status: "Active"
       });
-      return NextResponse.json(updated);
+      return NextResponse.json(sanitizeEmployee(updated));
     } else {
       // Create a brand new employee in the workforce directory AND create operational copy
       if (!payload.name || !payload.email) {
@@ -258,10 +264,9 @@ export async function POST(request: Request) {
 
       await mockDb.createOrUpdateSecurityOperationalEmployee(operationalData);
 
-      return NextResponse.json(newEmp);
+      return NextResponse.json(sanitizeEmployee(newEmp));
     }
   } catch (e: any) {
     return NextResponse.json({ error: e.message || "Failed to save security employee" }, { status: 500 });
   }
 }
-
