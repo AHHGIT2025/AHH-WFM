@@ -27,6 +27,7 @@ interface ProposalItem {
 export default function ProposalRegisterPage() {
   const [proposals, setProposals] = useState<ProposalItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [proposalsError, setProposalsError] = useState("");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [scopeFilter, setScopeFilter] = useState("ALL");
@@ -34,8 +35,12 @@ export default function ProposalRegisterPage() {
 
   // New Proposal Form State
   const [cases, setCases] = useState<any[]>([]);
+  const [casesLoading, setCasesLoading] = useState(false);
+  const [casesError, setCasesError] = useState("");
   const [selectedCaseId, setSelectedCaseId] = useState("");
   const [costings, setCostings] = useState<any[]>([]);
+  const [costingsLoading, setCostingsLoading] = useState(false);
+  const [costingsError, setCostingsError] = useState("");
   const [selectedCostingVersionId, setSelectedCostingVersionId] = useState("");
   const [proposalTitle, setProposalTitle] = useState("");
   const [proposalCodeInput, setProposalCodeInput] = useState("");
@@ -50,37 +55,93 @@ export default function ProposalRegisterPage() {
 
   const fetchProposals = async () => {
     setLoading(true);
+    setProposalsError("");
     try {
       const res = await fetch("/api/v1/commercial/proposals");
       if (res.ok) {
         const data = await res.json();
         setProposals(data.proposals || []);
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        setProposalsError(errData.error || `Failed to load proposals (HTTP ${res.status}).`);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to fetch proposals", err);
+      setProposalsError(err.message || "Failed to load proposals.");
     } finally {
       setLoading(false);
     }
   };
 
   const fetchEligibleCases = async () => {
+    setCasesLoading(true);
+    setCasesError("");
     try {
-      const res = await fetch("/api/v1/commercial/crm/cases");
+      const res = await fetch("/api/v1/commercial/opportunities?forProposal=true");
       if (res.ok) {
         const data = await res.json();
-        setCases(data.cases || data || []);
+        setCases(Array.isArray(data.cases) ? data.cases : []);
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        if (res.status === 401 || res.status === 403) {
+          setCasesError(
+            errData.error ||
+              "Unauthorized: You do not have Commercial Creator permission (precontract.proposal.manage) to load opportunities for proposal creation."
+          );
+        } else {
+          setCasesError(
+            errData.error || `Failed to load eligible opportunities (HTTP ${res.status}).`
+          );
+        }
+        setCases([]);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to fetch cases", err);
+      setCasesError(err.message || "Network error while loading eligible opportunities.");
+      setCases([]);
+    } finally {
+      setCasesLoading(false);
     }
+  };
+
+  const handleOpenNewModal = () => {
+    setFormError("");
+    setCostingsError("");
+    fetchEligibleCases();
+    setShowNewModal(true);
   };
 
   const handleCaseSelect = async (cId: string) => {
     setSelectedCaseId(cId);
     setSelectedCostingVersionId("");
     setCostings([]);
+    setCostingsError("");
     if (!cId) return;
 
+    const matchedCase = cases.find((c: any) => c.id === cId);
+    if (matchedCase && !proposalTitle) {
+      setProposalTitle(`Proposal for ${matchedCase.title}`);
+    }
+
+    // Immediate pre-population from the embedded approved costEstimates on the opportunity if present
+    const embeddedApprovedVersions: any[] = [];
+    if (matchedCase?.costEstimates && Array.isArray(matchedCase.costEstimates)) {
+      matchedCase.costEstimates.forEach((e: any) => {
+        if (Array.isArray(e.versions)) {
+          e.versions.forEach((v: any) => {
+            if (v.status === "APPROVED") {
+              embeddedApprovedVersions.push({ ...v, estimate: e });
+            }
+          });
+        }
+      });
+    }
+    if (embeddedApprovedVersions.length > 0) {
+      setCostings(embeddedApprovedVersions);
+      setSelectedCostingVersionId(embeddedApprovedVersions[0].id);
+    }
+
+    setCostingsLoading(true);
     try {
       const res = await fetch(`/api/v1/commercial/costing?caseId=${cId}`);
       if (res.ok) {
@@ -97,9 +158,26 @@ export default function ProposalRegisterPage() {
           }
         });
         setCostings(approvedVersions);
+        if (approvedVersions.length > 0) {
+          setSelectedCostingVersionId((prev) =>
+            approvedVersions.some((av) => av.id === prev) ? prev : approvedVersions[0].id
+          );
+        }
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        if (embeddedApprovedVersions.length === 0) {
+          setCostingsError(
+            errData.error || `Failed to load approved costing versions for this opportunity (HTTP ${res.status}).`
+          );
+        }
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to fetch costings for case", err);
+      if (embeddedApprovedVersions.length === 0) {
+        setCostingsError(err.message || "Failed to load approved costing versions.");
+      }
+    } finally {
+      setCostingsLoading(false);
     }
   };
 
@@ -190,13 +268,26 @@ export default function ProposalRegisterPage() {
           </p>
         </div>
         <button
-          onClick={() => setShowNewModal(true)}
+          onClick={handleOpenNewModal}
           className="inline-flex items-center justify-center px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm rounded-lg shadow-sm transition-colors focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
         >
           <span className="material-icons-outlined text-lg mr-2">add</span>
           New Proposal
         </button>
       </div>
+
+      {proposalsError && (
+        <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-sm font-medium text-red-800 flex items-center justify-between">
+          <span>{proposalsError}</span>
+          <button
+            type="button"
+            onClick={fetchProposals}
+            className="px-3 py-1 bg-white border border-red-300 rounded-lg text-xs font-semibold text-red-700 hover:bg-red-100"
+          >
+            Retry
+          </button>
+        </div>
+      )}
 
       {/* Metrics Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -362,40 +453,122 @@ export default function ProposalRegisterPage() {
                 <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
                   1. Select Opportunity Case *
                 </label>
+
+                {casesLoading && (
+                  <div className="p-2.5 mb-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-600">
+                    Loading eligible opportunities with approved costing baselines...
+                  </div>
+                )}
+
+                {casesError && (
+                  <div className="p-3 mb-2 bg-red-50 border border-red-200 rounded-lg text-xs font-medium text-red-700 flex items-center justify-between gap-2">
+                    <span>{casesError}</span>
+                    <button
+                      type="button"
+                      onClick={fetchEligibleCases}
+                      className="px-2.5 py-1 bg-white border border-red-300 rounded text-xs font-semibold text-red-700 hover:bg-red-100 shrink-0"
+                    >
+                      Retry
+                    </button>
+                  </div>
+                )}
+
                 <select
                   value={selectedCaseId}
                   onChange={(e) => handleCaseSelect(e.target.value)}
                   required
-                  className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:bg-white"
+                  disabled={casesLoading || !!casesError}
+                  className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:bg-white disabled:opacity-50"
                 >
                   <option value="">-- Choose Opportunity --</option>
-                  {cases.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.title} ({c.operationType})
-                    </option>
-                  ))}
+                  {cases.map((c) => {
+                    const clientName = c.prospectClient?.name || "Client";
+                    const siteName =
+                      c.costEstimates?.[0]?.survey?.prospectiveSite?.name ||
+                      c.surveys?.[0]?.prospectiveSite?.name ||
+                      null;
+                    return (
+                      <option key={c.id} value={c.id}>
+                        {c.title} — {clientName}{siteName ? ` | Site: ${siteName}` : ""} ({c.operationType})
+                      </option>
+                    );
+                  })}
                 </select>
+
+                {!casesLoading && !casesError && cases.length === 0 && (
+                  <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2.5 mt-2">
+                    No eligible opportunities with an APPROVED costing baseline were found in your operational scope. Ensure the opportunity has an APPROVED Costing Estimate first.
+                  </p>
+                )}
+
+                {selectedCaseId && (() => {
+                  const selectedCase = cases.find((c: any) => c.id === selectedCaseId);
+                  if (!selectedCase) return null;
+                  const selectedCosting = costings.find((cv: any) => cv.id === selectedCostingVersionId);
+                  const siteName =
+                    selectedCosting?.estimate?.survey?.prospectiveSite?.name ||
+                    selectedCase.costEstimates?.[0]?.survey?.prospectiveSite?.name ||
+                    selectedCase.surveys?.[0]?.prospectiveSite?.name ||
+                    "N/A";
+                  return (
+                    <div className="mt-2 p-3 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-700 space-y-1">
+                      <div>
+                        <span className="font-semibold text-slate-900">Opportunity:</span> {selectedCase.title}{" "}
+                        <span className="font-mono text-slate-500">({selectedCase.id.slice(0, 8).toUpperCase()})</span>
+                      </div>
+                      <div>
+                        <span className="font-semibold text-slate-900">Customer:</span>{" "}
+                        {selectedCase.prospectClient?.name || "N/A"} |{" "}
+                        <span className="font-semibold text-slate-900">Site:</span> {siteName}
+                      </div>
+                      {selectedCosting && (
+                        <div>
+                          <span className="font-semibold text-slate-900">Approved Costing Ref:</span>{" "}
+                          {selectedCosting.estimate?.estimateNumber ||
+                            `COST-${(selectedCosting.estimate?.id || selectedCosting.estimateId || "").slice(0, 8).toUpperCase()}`}{" "}
+                          (v{selectedCosting.versionNumber} — {selectedCosting.currency}{" "}
+                          {Number(selectedCosting.sellingPrice).toLocaleString("en-US", { minimumFractionDigits: 2 })})
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
 
               <div>
                 <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
                   2. Select Approved Costing Baseline *
                 </label>
+
+                {costingsError && (
+                  <div className="p-2.5 mb-2 bg-red-50 border border-red-200 rounded-lg text-xs font-medium text-red-700">
+                    {costingsError}
+                  </div>
+                )}
+
                 <select
                   value={selectedCostingVersionId}
                   onChange={(e) => setSelectedCostingVersionId(e.target.value)}
                   required
-                  disabled={!selectedCaseId}
+                  disabled={!selectedCaseId || costingsLoading}
                   className="w-full px-3 py-2 text-sm bg-slate-50 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:bg-white disabled:opacity-50"
                 >
-                  <option value="">-- Choose Approved Costing Version --</option>
-                  {costings.map((cv) => (
-                    <option key={cv.id} value={cv.id}>
-                      Version {cv.versionNumber} — {cv.currency} {Number(cv.sellingPrice).toLocaleString()} (Approved)
-                    </option>
-                  ))}
+                  <option value="">
+                    {costingsLoading ? "Loading approved costing versions..." : "-- Choose Approved Costing Version --"}
+                  </option>
+                  {costings.map((cv) => {
+                    const estRef =
+                      cv.estimate?.estimateNumber ||
+                      `COST-${(cv.estimate?.id || cv.estimateId || cv.id).slice(0, 8).toUpperCase()}`;
+                    return (
+                      <option key={cv.id} value={cv.id}>
+                        {estRef} (v{cv.versionNumber}) — {cv.currency}{" "}
+                        {Number(cv.sellingPrice).toLocaleString("en-US", { minimumFractionDigits: 2 })} (Approved)
+                      </option>
+                    );
+                  })}
                 </select>
-                {selectedCaseId && costings.length === 0 && (
+                {selectedCaseId && !costingsLoading && !costingsError && costings.length === 0 && (
                   <p className="text-xs text-amber-600 mt-1">
                     No APPROVED costing baseline found for this opportunity. Please approve a costing estimate first.
                   </p>

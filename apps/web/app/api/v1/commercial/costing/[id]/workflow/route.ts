@@ -174,6 +174,17 @@ export async function POST(
         data: {
           status: "IN_WORKFLOW",
           updatedAt: new Date()
+        },
+        include: {
+          case: { include: { prospectClient: true } },
+          survey: { include: { prospectiveSite: true } },
+          versions: {
+            orderBy: { versionNumber: "desc" },
+            include: {
+              items: true,
+              overrides: { orderBy: { overriddenAt: "desc" } }
+            }
+          }
         }
       });
 
@@ -325,9 +336,14 @@ export async function POST(
         updatedAt: new Date()
       },
       include: {
+        case: { include: { prospectClient: true } },
+        survey: { include: { prospectiveSite: true } },
         versions: {
           orderBy: { versionNumber: "desc" },
-          include: { items: true, overrides: true }
+          include: {
+            items: true,
+            overrides: { orderBy: { overriddenAt: "desc" } }
+          }
         }
       }
     });

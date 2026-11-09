@@ -280,13 +280,16 @@ Confirm: creator account available (YES/NO), approver account available (YES/NO)
 **EXPECTED:** Reminder notification delivered without page refresh. No duplicates. `T1-SG-CL1-003-REMINDER.png`
 **RESULT:** PASS/FAIL
 
-## TEST STEP T1-004: Create Opportunity
-**USER:** Commercial Creator
-**URL:** `http://10.10.50.24:3200/commercial/crm`
+## TEST STEP T1-004: Create, Submit & Approve Opportunity
+**USER:** Commercial Creator (Creation & Submission) → Opportunity Approver (Approval)
+**URL:** `http://10.10.50.24:3200/commercial/crm` and `http://10.10.50.24:3200/commercial/opportunities`
 **ACTIONS:**
-1. Click **New Enquiry** / **Opportunity**. Opportunity Name: `UAT-SG-T1-20260811-OPP`.
-2. Client: **Qatar Petroleum**. Site: **QP Tower A**. Headcount: 14. Save.
-**EXPECTED:** Opportunity created in OPEN status. `T1-SG-CL1-004-OPP.png`
+1. (**Commercial Creator**) Navigate to `/commercial/crm` or `/commercial/opportunities`. Click **New Commercial Deal** / **New Opportunity**. Opportunity Name: `UAT-SG-T1-20260811-OPP`.
+2. Select Client: **Qatar Petroleum**, Operation Scope: **SECURITY_GUARDING** (Site: **QP Tower A**, Headcount: 14). Click **Create Deal Opportunity** (status starts as `DRAFT`).
+3. (**Opportunity Submission — Commercial Creator**) In `/commercial/opportunities`, locate `UAT-SG-T1-20260811-OPP` in **Intake & Draft Deals** and click **Submit to Workflow** (`SUBMIT`). Confirm status transitions to `IN_WORKFLOW`.
+4. (**Opportunity Approval — LOG OUT / SWITCH USER** to `Opportunity Approver`) In `/commercial/opportunities`, locate `UAT-SG-T1-20260811-OPP` in **Workflow Approval** and click **Approve** (`APPROVE`). Confirm status transitions to `COMPLETED (WON)` (`businessOutcome: WON`).
+5. **LOG OUT / SWITCH USER** back to `Commercial Creator`.
+**EXPECTED:** Opportunity created (`DRAFT`), submitted (`IN_WORKFLOW`), and approved (`COMPLETED (WON)`). `T1-SG-CL1-004-OPP.png`
 **RESULT:** PASS/FAIL
 
 ---
@@ -321,40 +324,51 @@ Confirm: creator account available (YES/NO), approver account available (YES/NO)
 **USER:** **LOG OUT / SWITCH USER** to `Commercial Creator`
 **URL:** `http://10.10.50.24:3200/commercial/costing`
 **ACTIONS:**
-1. Click **New Cost Estimate**. Title: `UAT-SG-T1-20260811-COST`.
-2. Enter manpower and direct costs from Section 3.
-3. Save as Draft. Click **Submit for Approval**.
-**EXPECTED:** Submitted successfully. `T1-SG-CL3-007-COSTING-SUBMIT.png`
+1. Click **New Costing Estimate**. Select Opportunity Case: `UAT-SG-T1-20260811-OPP` and Completed Site Survey: `UAT-SG-T1-20260811-SURVEY` (Title/Ref: `UAT-SG-T1-20260811-COST`).
+2. Verify manpower and direct cost line items from Section 3 are populated in the Draft Costing detail modal, along with Client (**Qatar Petroleum**) and Site (**QP Tower A**).
+3. Click **Submit for Approval**.
+**EXPECTED:** Submitted successfully (`IN_WORKFLOW`). Verified UAT Evidence (2026-11-08): **PASS**. `T1-SG-CL3-007-COSTING-SUBMIT.png`
 **RESULT:** PASS/FAIL
 
 ## TEST STEP T1-008: Approve Costing
 **USER:** **LOG OUT / SWITCH USER** to `Costing Approver`
 **URL:** `http://10.10.50.24:3200/commercial/costing`
 **ACTIONS:**
-1. Open Cost Estimate `UAT-SG-T1-20260811-COST`. Click **Approve**.
-**EXPECTED:** Costing status is APPROVED. `T1-SG-CL3-008-COSTING-APPROVE.png`
+1. Open Cost Estimate `UAT-SG-T1-20260811-COST`. Verify Client (**Qatar Petroleum**), Site (**QP Tower A**), and Costing Line Items Breakdown remain visible.
+2. Click **Approve Costing** and confirm approval.
+3. Verify the Opportunity (`UAT-SG-T1-20260811-OPP`) is in `COMPLETED (WON)` state in `/commercial/opportunities` before proceeding to `T1-009` (if not already submitted and approved in `T1-004`, submit and approve the Opportunity now).
+**EXPECTED:** Costing status is `APPROVED` (with SHA-256 snapshot checksum) and Client/Site remain populated (`Qatar Petroleum` / `QP Tower A`). Verified UAT Evidence (2026-11-08): **PASS** (`T1-007` PASS, `T1-008` PASS, Opportunity `UAT-SG-T1-20260811-OPP` `COMPLETED / WON`). `T1-SG-CL3-008-COSTING-APPROVE.png`
 **RESULT:** PASS/FAIL
 
 ---
 
 # PHASE: CL-4 — Client Quotations / Proposal
 
+### Pre-Proposal Verification Gate (Required Before T1-009)
+| Prerequisite Item | Required UAT Reference | Required Status | Verified UAT Evidence |
+|---|---|---|---|
+| **Approved Opportunity** | `UAT-SG-T1-20260811-OPP` | `COMPLETED (WON)` | Submitted & Approved (`WON`) |
+| **Completed Site Survey** | `UAT-SG-T1-20260811-SURVEY` | `COMPLETED` | Linked to `QP Tower A` |
+| **Approved Costing Baseline** | `UAT-SG-T1-20260811-COST` | `APPROVED` (v1) | `T1-007` PASS & `T1-008` PASS |
+
 ## TEST STEP T1-009: Create & Submit Proposal
 **USER:** **LOG OUT / SWITCH USER** to `Commercial Creator`
-**URL:** `http://10.10.50.24:3200/commercial/proposals`
+**URL:** `http://10.10.50.24:3200/commercial/quotations` (Proposal Register) → `/commercial/proposals/[id]` (Proposal Editor)
 **ACTIONS:**
-1. Click **New Quotation/Proposal**. Title: `UAT-SG-T1-20260811-PROPOSAL`.
-2. Client: **Qatar Petroleum**. Site: **QP Tower A**.
-3. Save as Draft. Click **Submit for Approval**.
-**EXPECTED:** Submitted successfully. `T1-SG-CL4-009-PROP-SUBMIT.png`
+1. Navigate to `http://10.10.50.24:3200/commercial/quotations` and click **New Proposal**.
+2. In **1. Select Opportunity Case**, select `UAT-SG-T1-20260811-OPP` (Client: **Qatar Petroleum**, Site: **QP Tower A**).
+3. Verify **2. Select Approved Costing Baseline** automatically populates the `APPROVED` Costing version (`UAT-SG-T1-20260811-COST`, Version 1) and displays the summary card with Opportunity, Customer (**Qatar Petroleum**), Site (**QP Tower A**), and Approved Costing Ref.
+4. Enter Proposal Title: `UAT-SG-T1-20260811-PROPOSAL` and Reference Code: `UAT-SG-T1-20260811-PROPOSAL`. Click **Create Draft Proposal**.
+5. Click **View / Edit** on the created proposal to open `/commercial/proposals/[id]`, review Commercial Offer / Scope / Terms, open **5. Internal Workflow**, and click **Submit for Approval**.
+**EXPECTED:** Draft Proposal created from approved Opportunity & Costing baseline and submitted (`IN_WORKFLOW`). `T1-SG-CL4-009-PROP-SUBMIT.png`
 **RESULT:** PASS/FAIL
 
 ## TEST STEP T1-010: Approve Proposal
 **USER:** **LOG OUT / SWITCH USER** to `Proposal Approver`
-**URL:** `http://10.10.50.24:3200/commercial/proposals`
+**URL:** `http://10.10.50.24:3200/commercial/quotations` → `/commercial/proposals/[id]`
 **ACTIONS:**
-1. Open Proposal `UAT-SG-T1-20260811-PROPOSAL`. Click **Approve**.
-**EXPECTED:** Proposal status is APPROVED. `T1-SG-CL4-010-PROP-APPROVE.png`
+1. Open Proposal `UAT-SG-T1-20260811-PROPOSAL`, navigate to **5. Internal Workflow**, and click **Approve Proposal**.
+**EXPECTED:** Proposal status is `APPROVED_INTERNAL` (`APPROVED`). `T1-SG-CL4-010-PROP-APPROVE.png`
 **RESULT:** PASS/FAIL
 
 ---

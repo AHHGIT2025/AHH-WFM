@@ -2,6 +2,12 @@ import { prisma, Prisma } from "@ahh-wfm/database";
 import { GET as getCosting, POST as postCosting } from "../../apps/web/app/api/v1/commercial/costing/route";
 import { GET as getCostingDetail, PATCH as patchCostingDetail } from "../../apps/web/app/api/v1/commercial/costing/[id]/route";
 import { POST as postCostingWorkflow } from "../../apps/web/app/api/v1/commercial/costing/[id]/workflow/route";
+import { GET as getOpportunities } from "../../apps/web/app/api/v1/commercial/opportunities/route";
+import { GET as getProposals, POST as postProposals } from "../../apps/web/app/api/v1/commercial/proposals/route";
+import { POST as postProposalWorkflow } from "../../apps/web/app/api/v1/commercial/proposals/[id]/workflow/route";
+import fs from "fs";
+import path from "path";
+import { NextRequest } from "next/server";
 import {
   calculateCostingEstimate,
   generateCostingSnapshot,
@@ -11,6 +17,7 @@ import {
   formatCostingCurrency
 } from "../../apps/web/lib/precontract-costing";
 import { getServerSession } from "next-auth/next";
+import { mockDb } from "@ahh-wfm/mock-data";
 
 type Decimal = Prisma.Decimal;
 const Decimal = Prisma.Decimal;
@@ -109,6 +116,30 @@ describe("Commercial Lifecycle — Phase CL-3 Comprehensive Test Suite (Pre-Cont
   let testCompletedSurveyCompA_FM: any;
   let testDraftSurveyCompA_SG: any;
   let testWorkflowTemplate: any;
+
+  beforeEach(() => {
+    jest.spyOn(mockDb, "getUserRoleAssignments").mockResolvedValue([] as any);
+    jest.spyOn(mockDb, "getEmployees").mockImplementation(async () => {
+      const s = await (getServerSession as jest.Mock)();
+      if (!s || !s.user || !s.user.id) return [];
+      return [
+        {
+          id: s.user.id,
+          name: s.user.name || s.user.id,
+          email: s.user.email || `${s.user.id}@ahh.com`,
+          role: s.user.role || "EMPLOYEE",
+          companyId: s.user.companyId ?? null,
+          departmentId: s.user.departmentId ?? null,
+          isActive: s.user.isActive !== false,
+          employmentStatus: s.user.employmentStatus || "ACTIVE",
+          isLoginEnabled: s.user.isLoginEnabled !== false,
+          isLocked: Boolean(s.user.isLocked),
+          webAccessEnabled: s.user.webAccessEnabled !== false,
+          mobileAccessEnabled: s.user.mobileAccessEnabled !== false
+        }
+      ] as any;
+    });
+  });
 
   beforeAll(async () => {
     // 1. Create Test Prospect Client
@@ -1096,6 +1127,374 @@ describe("Commercial Lifecycle — Phase CL-3 Comprehensive Test Suite (Pre-Cont
       expect(typeof serializedRaw.versions[0].targetMarginPercentage).toBe("number");
       expect(serializedRaw.versions[0].targetMarginPercentage?.toFixed(2)).toBe("15.00");
       expect(typeof serializedRaw.versions[0].items[0].unitRate).toBe("number");
+    });
+  });
+
+  // -------------------------------------------------------------
+  // SECTION 15: VIBE-14 REGRESSION — COSTING CLIENT/SITE, DRAFT ITEMS & PROPOSAL FLOW (T1-009 / T1-010)
+  // -------------------------------------------------------------
+  describe("15. VIBE-14 Regression — Costing Client/Site, Draft Line Items & Proposal UAT Flow", () => {
+    let vibe14Site: any;
+    let vibe14WonCase: any;
+    let vibe14Survey: any;
+    let vibe14Estimate: any;
+    let vibe14ApprovedVersionId: string;
+    let vibe14ProposalId: string;
+
+    const mockCommercialCreator = {
+      id: "EMP-VIBE14-CREATOR",
+      name: "Commercial Creator VIBE14",
+      role: "COMMERCIAL_OFFICER",
+      companyId: "COMP-CL3-A",
+      permissions: [
+        "precontract.case.view",
+        "precontract.costing.view",
+        "precontract.costing.manage",
+        "precontract.costing.override",
+        "precontract.proposal.view",
+        "precontract.proposal.manage",
+        "precontract.workflow.submit"
+      ],
+      operationAccess: { allowedSecurityGuarding: true, allowedFacilityManagement: false }
+    };
+
+    const mockProposalApprover = {
+      id: "EMP-VIBE14-APPROVER",
+      name: "Proposal Approver VIBE14",
+      role: "COMMERCIAL_MANAGER",
+      companyId: "COMP-CL3-A",
+      permissions: [
+        "precontract.costing.view",
+        "precontract.proposal.view",
+        "precontract.workflow.review",
+        "precontract.workflow.approve"
+      ],
+      operationAccess: { allowedSecurityGuarding: true, allowedFacilityManagement: false }
+    };
+
+    beforeAll(async () => {
+      vibe14Site = await prisma.preContractProspectiveSite.create({
+        data: {
+          name: "QP Tower A — VIBE14 Site",
+          address: "West Bay, Doha",
+          companyId: "COMP-CL3-A",
+          operationType: "SECURITY_GUARDING"
+        }
+      });
+
+      vibe14WonCase = await prisma.preContractCase.create({
+        data: {
+          title: "UAT-SG-T1-20260811-OPP",
+          prospectClientId: testClientCompA.id,
+          companyId: "COMP-CL3-A",
+          operationType: "SECURITY_GUARDING",
+          lifecycle: "COMPLETED",
+          businessOutcome: "WON",
+          createdBy: mockCommercialCreator.id
+        }
+      });
+
+      vibe14Survey = await prisma.preContractSurvey.create({
+        data: {
+          caseId: vibe14WonCase.id,
+          prospectiveSiteId: vibe14Site.id,
+          companyId: "COMP-CL3-A",
+          operationType: "SECURITY_GUARDING",
+          lifecycle: "COMPLETED",
+          responses: {
+            create: [
+              { elementCode: "HEADCOUNT", numericValue: 14 },
+              { elementCode: "RELIEVER_REQUIRED", booleanValue: true }
+            ]
+          }
+        }
+      });
+    });
+
+    afterAll(async () => {
+      if (vibe14ProposalId) {
+        await prisma.workflowInstance.deleteMany({
+          where: { referenceId: vibe14ProposalId, moduleType: "PRE_CONTRACT_PROPOSAL" }
+        });
+        await prisma.preContractProposalVersion.deleteMany({
+          where: { proposalId: vibe14ProposalId }
+        });
+        await prisma.preContractProposal.deleteMany({
+          where: { id: vibe14ProposalId }
+        });
+      }
+      if (vibe14Estimate?.id) {
+        await prisma.workflowInstance.deleteMany({
+          where: { referenceId: vibe14Estimate.id, moduleType: "PRE_CONTRACT_COSTING" }
+        });
+        await prisma.preContractCostOverrideLog.deleteMany({
+          where: { estimateVersion: { estimateId: vibe14Estimate.id } }
+        });
+        await prisma.preContractCostEstimateItem.deleteMany({
+          where: { estimateVersion: { estimateId: vibe14Estimate.id } }
+        });
+        await prisma.preContractCostEstimateVersion.deleteMany({
+          where: { estimateId: vibe14Estimate.id }
+        });
+        await prisma.preContractCostEstimate.deleteMany({
+          where: { id: vibe14Estimate.id }
+        });
+      }
+      if (vibe14Survey?.id) {
+        await prisma.surveyResponse.deleteMany({ where: { surveyId: vibe14Survey.id } });
+        await prisma.preContractSurvey.deleteMany({ where: { id: vibe14Survey.id } });
+      }
+      if (vibe14WonCase?.id) {
+        await prisma.preContractCase.deleteMany({ where: { id: vibe14WonCase.id } });
+      }
+      if (vibe14Site?.id) {
+        await prisma.preContractProspectiveSite.deleteMany({ where: { id: vibe14Site.id } });
+      }
+    });
+
+    it("[VIBE14-01] Draft Costing line items save, reload in GET list and GET detail, and preserve Client/Site", async () => {
+      (getServerSession as jest.Mock).mockResolvedValue({ user: mockCommercialCreator });
+
+      // Create draft costing
+      const createRes = await postCosting(
+        new Request("http://localhost:3100/api/v1/commercial/costing", {
+          method: "POST",
+          body: JSON.stringify({
+            caseId: vibe14WonCase.id,
+            surveyId: vibe14Survey.id,
+            pricingBasis: "MARGIN",
+            targetMarginPercentage: 15.0
+          })
+        })
+      );
+      expect(createRes.status).toBe(201);
+      const createData = await createRes.json();
+      vibe14Estimate = createData.estimate;
+
+      expect(vibe14Estimate.case?.prospectClient?.name).toBe("CL3 Test Client Comp A");
+      expect(vibe14Estimate.survey?.prospectiveSite?.name).toBe("QP Tower A — VIBE14 Site");
+      expect(vibe14Estimate.versions[0].items.length).toBeGreaterThan(0);
+
+      // Reload via GET /api/v1/commercial/costing list (used when opening View / Edit from table)
+      const listRes = await getCosting(
+        new Request(`http://localhost:3100/api/v1/commercial/costing?caseId=${vibe14WonCase.id}`)
+      );
+      expect(listRes.status).toBe(200);
+      const listData = await listRes.json();
+      const reloadedFromList = listData.estimates.find((e: any) => e.id === vibe14Estimate.id);
+      expect(reloadedFromList).toBeDefined();
+      expect(reloadedFromList.case?.prospectClient?.name).toBe("CL3 Test Client Comp A");
+      expect(reloadedFromList.survey?.prospectiveSite?.name).toBe("QP Tower A — VIBE14 Site");
+      expect(Array.isArray(reloadedFromList.versions[0].items)).toBe(true);
+      expect(reloadedFromList.versions[0].items.length).toBeGreaterThan(0);
+
+      // Apply override via PATCH and verify Client, Site, and items are preserved
+      const patchRes = await patchCostingDetail(
+        new Request(`http://localhost:3100/api/v1/commercial/costing/${vibe14Estimate.id}`, {
+          method: "PATCH",
+          body: JSON.stringify({
+            overrides: [{ elementCode: "BASIC_PAY", unitRate: 2800, reason: "UAT rate calibration" }]
+          })
+        }),
+        { params: { id: vibe14Estimate.id } }
+      );
+      expect(patchRes.status).toBe(200);
+      const patchData = await patchRes.json();
+      expect(patchData.estimate.case?.prospectClient?.name).toBe("CL3 Test Client Comp A");
+      expect(patchData.estimate.survey?.prospectiveSite?.name).toBe("QP Tower A — VIBE14 Site");
+      expect(patchData.estimate.versions[0].items.length).toBeGreaterThan(0);
+    });
+
+    it("[VIBE14-02] Costing SUBMIT and APPROVE preserve Client, Site, and line items (never turning into N/A)", async () => {
+      // 1. SUBMIT as Creator
+      (getServerSession as jest.Mock).mockResolvedValue({ user: mockCommercialCreator });
+      const submitRes = await postCostingWorkflow(
+        new Request(`http://localhost:3100/api/v1/commercial/costing/${vibe14Estimate.id}/workflow`, {
+          method: "POST",
+          body: JSON.stringify({ action: "SUBMIT", remarks: "T1-007 Submit Costing" })
+        }),
+        { params: { id: vibe14Estimate.id } }
+      );
+      expect(submitRes.status).toBe(200);
+      const submitData = await submitRes.json();
+      expect(submitData.estimate.status).toBe("IN_WORKFLOW");
+      expect(submitData.estimate.case?.prospectClient?.name).toBe("CL3 Test Client Comp A");
+      expect(submitData.estimate.survey?.prospectiveSite?.name).toBe("QP Tower A — VIBE14 Site");
+      expect(submitData.estimate.versions[0].items.length).toBeGreaterThan(0);
+
+      // 2. APPROVE as Approver
+      (getServerSession as jest.Mock).mockResolvedValue({ user: mockProposalApprover });
+      const approveRes = await postCostingWorkflow(
+        new Request(`http://localhost:3100/api/v1/commercial/costing/${vibe14Estimate.id}/workflow`, {
+          method: "POST",
+          body: JSON.stringify({ action: "APPROVE", remarks: "T1-008 Approve Costing" })
+        }),
+        { params: { id: vibe14Estimate.id } }
+      );
+      expect(approveRes.status).toBe(200);
+      const approveData = await approveRes.json();
+      expect(approveData.estimate.status).toBe("APPROVED");
+      expect(approveData.estimate.case?.prospectClient?.name).toBe("CL3 Test Client Comp A");
+      expect(approveData.estimate.survey?.prospectiveSite?.name).toBe("QP Tower A — VIBE14 Site");
+      expect(approveData.estimate.versions[0].status).toBe("APPROVED");
+      expect(approveData.estimate.versions[0].items.length).toBeGreaterThan(0);
+
+      vibe14ApprovedVersionId = approveData.estimate.versions[0].id;
+    });
+
+    it("[VIBE14-03] Proposal screen API (GET /api/v1/commercial/opportunities?forProposal=true) loads eligible WON opportunity with Customer, Site, and Approved Costing details, and enforces permissions & scope", async () => {
+      // 1. Unauthorized user without precontract.proposal.manage is rejected with 403
+      (getServerSession as jest.Mock).mockResolvedValue({ user: mockNoPermUser });
+      const unauthRes = await getOpportunities(
+        new Request("http://localhost:3100/api/v1/commercial/opportunities?forProposal=true")
+      );
+      expect(unauthRes.status).toBe(403);
+
+      // 2. FM-only user cannot see SG opportunity
+      (getServerSession as jest.Mock).mockResolvedValue({
+        user: {
+          ...mockFmUserCompA,
+          permissions: ["precontract.proposal.manage"]
+        }
+      });
+      const fmRes = await getOpportunities(
+        new Request("http://localhost:3100/api/v1/commercial/opportunities?forProposal=true")
+      );
+      expect(fmRes.status).toBe(200);
+      const fmData = await fmRes.json();
+      expect(fmData.cases.find((c: any) => c.id === vibe14WonCase.id)).toBeUndefined();
+
+      // 3. Company B user cannot see Company A opportunity
+      (getServerSession as jest.Mock).mockResolvedValue({
+        user: {
+          ...mockSgUserCompB,
+          permissions: ["precontract.proposal.manage"]
+        }
+      });
+      const compBRes = await getOpportunities(
+        new Request("http://localhost:3100/api/v1/commercial/opportunities?forProposal=true")
+      );
+      expect(compBRes.status).toBe(200);
+      const compBData = await compBRes.json();
+      expect(compBData.cases.find((c: any) => c.id === vibe14WonCase.id)).toBeUndefined();
+
+      // 4. Authorized Commercial Creator loads eligible WON opportunity with Customer, Site, and Approved Costing
+      (getServerSession as jest.Mock).mockResolvedValue({ user: mockCommercialCreator });
+      const creatorRes = await getOpportunities(
+        new Request("http://localhost:3100/api/v1/commercial/opportunities?forProposal=true")
+      );
+      expect(creatorRes.status).toBe(200);
+      const creatorData = await creatorRes.json();
+      const matchedCase = creatorData.cases.find((c: any) => c.id === vibe14WonCase.id);
+      expect(matchedCase).toBeDefined();
+      expect(matchedCase.title).toBe("UAT-SG-T1-20260811-OPP");
+      expect(matchedCase.lifecycle).toBe("COMPLETED");
+      expect(matchedCase.businessOutcome).toBe("WON");
+      expect(matchedCase.prospectClient?.name).toBe("CL3 Test Client Comp A");
+      expect(matchedCase.surveys?.[0]?.prospectiveSite?.name).toBe("QP Tower A — VIBE14 Site");
+      expect(matchedCase.costEstimates?.[0]?.versions?.[0]?.id).toBe(vibe14ApprovedVersionId);
+      expect(matchedCase.costEstimates?.[0]?.versions?.[0]?.status).toBe("APPROVED");
+      expect(typeof matchedCase.costEstimates?.[0]?.versions?.[0]?.sellingPrice).toBe("number");
+    });
+
+    it("[VIBE14-04] Proposal creation (POST /api/v1/commercial/proposals) rejects unauthorized users, ineligible cases, and forged/mismatched costing versions", async () => {
+      // 1. Unauthorized user rejected (403)
+      (getServerSession as jest.Mock).mockResolvedValue({ user: mockNoPermUser });
+      const unauthPost = await postProposals(
+        new NextRequest("http://localhost:3100/api/v1/commercial/proposals", {
+          method: "POST",
+          body: JSON.stringify({
+            caseId: vibe14WonCase.id,
+            costEstimateVersionId: vibe14ApprovedVersionId
+          })
+        })
+      );
+      expect(unauthPost.status).toBe(403);
+
+      // 2. Forged/mismatched caseId + costEstimateVersionId rejected (400)
+      (getServerSession as jest.Mock).mockResolvedValue({ user: mockCommercialCreator });
+      const mismatchPost = await postProposals(
+        new NextRequest("http://localhost:3100/api/v1/commercial/proposals", {
+          method: "POST",
+          body: JSON.stringify({
+            caseId: testCaseCompA_SG.id, // Different case than vibe14WonCase!
+            costEstimateVersionId: vibe14ApprovedVersionId
+          })
+        })
+      );
+      expect(mismatchPost.status).toBe(400);
+      const mismatchData = await mismatchPost.json();
+      expect(mismatchData.error).toContain("does not belong to the specified opportunity case");
+    });
+
+    it("[VIBE14-05] Proposal creation, submission (T1-009), and approval (T1-010) succeed end-to-end", async () => {
+      // 1. Create Proposal as Commercial Creator
+      (getServerSession as jest.Mock).mockResolvedValue({ user: mockCommercialCreator });
+      const createPropRes = await postProposals(
+        new NextRequest("http://localhost:3100/api/v1/commercial/proposals", {
+          method: "POST",
+          body: JSON.stringify({
+            caseId: vibe14WonCase.id,
+            costEstimateVersionId: vibe14ApprovedVersionId,
+            proposalCode: "UAT-SG-T1-20260811-PROPOSAL",
+            title: "UAT-SG-T1-20260811-PROPOSAL",
+            validityDays: 30
+          })
+        })
+      );
+      expect(createPropRes.status).toBe(201);
+      const createPropData = await createPropRes.json();
+      vibe14ProposalId = createPropData.proposal.id;
+      expect(createPropData.proposal.status).toBe("DRAFT");
+      expect(createPropData.dto.client?.name).toBe("CL3 Test Client Comp A");
+      expect(createPropData.dto.opportunity?.title).toBe("UAT-SG-T1-20260811-OPP");
+
+      // 2. Submit Proposal (T1-009)
+      const submitPropRes = await postProposalWorkflow(
+        new NextRequest(`http://localhost:3100/api/v1/commercial/proposals/${vibe14ProposalId}/workflow`, {
+          method: "POST",
+          body: JSON.stringify({ action: "SUBMIT", remarks: "T1-009 Proposal Submit" })
+        }),
+        { params: { id: vibe14ProposalId } }
+      );
+      expect(submitPropRes.status).toBe(200);
+      const submitPropData = await submitPropRes.json();
+      expect(submitPropData.proposal.status).toBe("IN_WORKFLOW");
+
+      // 3. Approve Proposal (T1-010)
+      (getServerSession as jest.Mock).mockResolvedValue({ user: mockProposalApprover });
+      const approvePropRes = await postProposalWorkflow(
+        new NextRequest(`http://localhost:3100/api/v1/commercial/proposals/${vibe14ProposalId}/workflow`, {
+          method: "POST",
+          body: JSON.stringify({ action: "APPROVE", remarks: "T1-010 Proposal Approve" })
+        }),
+        { params: { id: vibe14ProposalId } }
+      );
+      expect(approvePropRes.status).toBe(200);
+      const approvePropData = await approvePropRes.json();
+      expect(approvePropData.proposal.status).toBe("APPROVED_INTERNAL");
+      expect(approvePropData.proposal.versions[0].status).toBe("APPROVED_INTERNAL");
+      expect(approvePropData.proposal.versions[0].snapshotChecksum).toHaveLength(64);
+    });
+
+    it("[VIBE14-06] UI source verification: Quotations uses authoritative Opportunities API and Opportunity buttons do not conflict bg-white with text-white", () => {
+      const quotationsPageSource = fs.readFileSync(
+        path.resolve(__dirname, "../../apps/web/app/commercial/quotations/page.tsx"),
+        "utf8"
+      );
+      expect(quotationsPageSource).toContain("/api/v1/commercial/opportunities?forProposal=true");
+      expect(quotationsPageSource).not.toContain("/api/v1/commercial/crm/cases");
+
+      const opportunitiesPageSource = fs.readFileSync(
+        path.resolve(__dirname, "../../apps/web/app/commercial/opportunities/page.tsx"),
+        "utf8"
+      );
+      // Confirm no Button with variant="secondary" overrides className with text-white
+      expect(opportunitiesPageSource).not.toContain('bg-secondary text-white');
+      expect(opportunitiesPageSource).not.toContain('bg-status-success text-white');
+      expect(opportunitiesPageSource).not.toContain('bg-status-error text-white');
+      expect(opportunitiesPageSource).toContain("Submit to Workflow");
+      expect(opportunitiesPageSource).toContain("Review & Approve");
     });
   });
 });

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@ahh-wfm/database";
 import { checkApiAuth } from "../../../../../lib/api-guards";
-import { hasPermission } from "../../../../../lib/permissions";
+import { hasPermission, isAdminUser } from "../../../../../lib/permissions";
 import { toClientSafeProposalDTO } from "../../../../../lib/precontract-proposal";
 
 export async function GET(req: NextRequest) {
@@ -23,7 +23,10 @@ export async function GET(req: NextRequest) {
 
     const where: any = {};
 
-    const canCrossCompany = hasPermission(user, "precontract.proposal.crossCompany") || user.role === "SUPER_ADMIN" || user.role === "ADMIN" || hasPermission(user, "manpower.admin.full_access");
+    const canCrossCompany =
+      hasPermission(user, "precontract.proposal.crossCompany") ||
+      isAdminUser(user) ||
+      hasPermission(user, "manpower.admin.full_access");
     if (!canCrossCompany) {
       if (user.allowedCompanyIds && user.allowedCompanyIds.length > 0) {
         where.companyId = { in: user.allowedCompanyIds };
@@ -34,15 +37,26 @@ export async function GET(req: NextRequest) {
       where.companyId = companyIdParam;
     }
 
-    if (user.role !== "SUPER_ADMIN" && !hasPermission(user, "manpower.admin.full_access")) {
+    if (!isAdminUser(user) && !hasPermission(user, "manpower.admin.full_access")) {
+      const allowedSG = user?.operationAccess?.allowedSecurityGuarding ?? user?.allowedSecurityGuarding ?? true;
+      const allowedFM = user?.operationAccess?.allowedFacilityManagement ?? user?.allowedFacilityManagement ?? true;
+      if (!allowedSG && !allowedFM) {
+        return NextResponse.json({ proposals: [], raw: [] });
+      }
+      if (operationTypeParam === "SECURITY_GUARDING" && !allowedSG) {
+        return NextResponse.json({ error: "Forbidden: You do not have access to Security Guarding proposals." }, { status: 403 });
+      }
+      if (operationTypeParam === "FACILITY_MANAGEMENT" && !allowedFM) {
+        return NextResponse.json({ error: "Forbidden: You do not have access to Facility Management proposals." }, { status: 403 });
+      }
       const allowedScopes: string[] = [];
-      if (user.allowedSecurityGuarding) allowedScopes.push("SECURITY_GUARDING");
-      if (user.allowedFacilityManagement) allowedScopes.push("FACILITY_MANAGEMENT");
+      if (allowedSG) allowedScopes.push("SECURITY_GUARDING");
+      if (allowedFM) allowedScopes.push("FACILITY_MANAGEMENT");
       if (allowedScopes.length > 0) {
         where.operationType = { in: allowedScopes };
       }
     }
-    if (operationTypeParam) {
+    if (operationTypeParam && operationTypeParam !== "ALL") {
       where.operationType = operationTypeParam;
     }
 
@@ -63,11 +77,23 @@ export async function GET(req: NextRequest) {
       orderBy: { updatedAt: "desc" },
       include: {
         case: {
-          include: { prospectClient: true }
+          include: {
+            prospectClient: true,
+            surveys: {
+              include: { prospectiveSite: true }
+            }
+          }
         },
         versions: {
           orderBy: { versionNumber: "desc" },
-          take: 1
+          take: 1,
+          include: {
+            costEstimate: {
+              include: {
+                survey: { include: { prospectiveSite: true } }
+              }
+            }
+          }
         }
       }
     });
@@ -122,9 +148,36 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Pre-contract case not found." }, { status: 404 });
     }
 
-    const canCrossCompany = hasPermission(user, "precontract.proposal.crossCompany") || user.role === "SUPER_ADMIN" || user.role === "ADMIN" || hasPermission(user, "manpower.admin.full_access");
-    if (!canCrossCompany && pcCase.companyId && user.companyId && pcCase.companyId !== user.companyId) {
-      return NextResponse.json({ error: "Forbidden: You are not authorized to create proposals for this company." }, { status: 403 });
+    const DISALLOWED_CASE_LIFECYCLES = ["CANCELLED", "SUPERSEDED"];
+    if (DISALLOWED_CASE_LIFECYCLES.includes(pcCase.lifecycle as string) || pcCase.businessOutcome === "LOST") {
+      return NextResponse.json(
+        { error: `Invalid Opportunity State: Proposals cannot be created for an opportunity in ${pcCase.lifecycle} (${pcCase.businessOutcome || "CLOSED"}) state.` },
+        { status: 400 }
+      );
+    }
+
+    const canCrossCompany =
+      hasPermission(user, "precontract.proposal.crossCompany") ||
+      isAdminUser(user) ||
+      hasPermission(user, "manpower.admin.full_access");
+    if (!canCrossCompany && pcCase.companyId) {
+      if (user.allowedCompanyIds && user.allowedCompanyIds.length > 0 && !user.allowedCompanyIds.includes(pcCase.companyId)) {
+        return NextResponse.json({ error: "Forbidden: You are not authorized to create proposals for this company." }, { status: 403 });
+      }
+      if (user.companyId && pcCase.companyId !== user.companyId) {
+        return NextResponse.json({ error: "Forbidden: You are not authorized to create proposals for this company." }, { status: 403 });
+      }
+    }
+
+    if (!isAdminUser(user) && !hasPermission(user, "manpower.admin.full_access")) {
+      const allowedSG = user?.operationAccess?.allowedSecurityGuarding ?? user?.allowedSecurityGuarding ?? true;
+      const allowedFM = user?.operationAccess?.allowedFacilityManagement ?? user?.allowedFacilityManagement ?? true;
+      if (pcCase.operationType === "SECURITY_GUARDING" && !allowedSG) {
+        return NextResponse.json({ error: "Forbidden: You do not have access to Security Guarding operational data." }, { status: 403 });
+      }
+      if (pcCase.operationType === "FACILITY_MANAGEMENT" && !allowedFM) {
+        return NextResponse.json({ error: "Forbidden: You do not have access to Facility Management operational data." }, { status: 403 });
+      }
     }
 
     const costingVersion = await prisma.preContractCostEstimateVersion.findUnique({
@@ -134,6 +187,13 @@ export async function POST(req: NextRequest) {
 
     if (!costingVersion) {
       return NextResponse.json({ error: "Costing estimate version not found." }, { status: 404 });
+    }
+
+    if (!costingVersion.estimate || costingVersion.estimate.caseId !== pcCase.id) {
+      return NextResponse.json(
+        { error: "Invalid Costing Baseline: Selected costing version does not belong to the specified opportunity case." },
+        { status: 400 }
+      );
     }
 
     if (costingVersion.status !== "APPROVED") {

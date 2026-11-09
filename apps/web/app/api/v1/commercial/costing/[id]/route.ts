@@ -191,9 +191,11 @@ export async function PATCH(
           updatedAt: new Date()
         },
         include: {
+          case: { include: { prospectClient: true } },
+          survey: { include: { prospectiveSite: true } },
           versions: {
             orderBy: { versionNumber: "desc" },
-            include: { items: true, overrides: true }
+            include: { items: true, overrides: { orderBy: { overriddenAt: "desc" } } }
           }
         }
       });
@@ -255,9 +257,11 @@ export async function PATCH(
       const updatedEstimate = await prisma.preContractCostEstimate.findUnique({
         where: { id: estimateId },
         include: {
+          case: { include: { prospectClient: true } },
+          survey: { include: { prospectiveSite: true } },
           versions: {
             orderBy: { versionNumber: "desc" },
-            include: { items: true, overrides: true }
+            include: { items: true, overrides: { orderBy: { overriddenAt: "desc" } } }
           }
         }
       });

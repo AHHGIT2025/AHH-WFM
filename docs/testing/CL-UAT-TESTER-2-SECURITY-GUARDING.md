@@ -184,16 +184,17 @@
 
 # PHASE: CL-1 & CL-2 — CRM & Enquiry Intake (Create New Project & Site)
 
-## TEST STEP T2-002: Create New Project & Site via Opportunity
-**USER:** Commercial Creator
-**URL:** `http://10.10.50.24:3200/commercial/crm`
+## TEST STEP T2-002: Create, Submit & Approve New Opportunity (with New Project & Site)
+**USER:** Commercial Creator (Creation & Submission) → Opportunity Approver (Approval)
+**URL:** `http://10.10.50.24:3200/commercial/crm` and `http://10.10.50.24:3200/commercial/opportunities`
 **ACTIONS:**
-1. Click **New Enquiry** / **Opportunity**. Opportunity Name: `UAT-SG-T2-20260811-OPP`.
-2. Client: **Qatar Petroleum**.
-3. Create New Project: **QP Ras Laffan Security** (UAT-SG-T2-PROJ).
-4. Create New Site: **QP Ras Laffan Gate 1** (UAT-SG-T2-SITE).
-5. Headcount: 20. Click Save.
-**EXPECTED:** Opportunity created in OPEN status with the new Project and Site. `T2-SG-CL2-002-OPP.png`
+1. (**Commercial Creator**) Click **New Enquiry** / **New Commercial Deal**. Opportunity Name: `UAT-SG-T2-20260811-OPP`.
+2. Client: **Qatar Petroleum**, Operation Scope: **SECURITY_GUARDING**.
+3. Create New Project: **QP Ras Laffan Security** (UAT-SG-T2-PROJ) and New Site: **QP Ras Laffan Gate 1** (UAT-SG-T2-SITE). Headcount: 20. Click Save.
+4. (**Opportunity Submission — Commercial Creator**) In `/commercial/opportunities`, locate `UAT-SG-T2-20260811-OPP` in **Intake & Draft Deals** and click **Submit to Workflow** (`SUBMIT`). Confirm status is `IN_WORKFLOW`.
+5. (**Opportunity Approval — LOG OUT / SWITCH USER** to `Opportunity Approver`) In `/commercial/opportunities`, locate `UAT-SG-T2-20260811-OPP` in **Workflow Approval** and click **Approve** (`APPROVE`). Confirm status is `COMPLETED (WON)`.
+6. **LOG OUT / SWITCH USER** back to `Commercial Creator`.
+**EXPECTED:** Opportunity created (`DRAFT`), submitted (`IN_WORKFLOW`), and approved (`COMPLETED (WON)`) with the new Project and Site. `T2-SG-CL2-002-OPP.png`
 **RESULT:** PASS/FAIL
 
 ---
@@ -244,9 +245,11 @@
 
 ## TEST STEP T2-007: Approve Costing
 **USER:** **LOG OUT / SWITCH USER** to `Costing Approver`
+**URL:** `http://10.10.50.24:3200/commercial/costing`
 **ACTIONS:**
-1. Open Cost Estimate and click **Approve**.
-**EXPECTED:** Costing status is APPROVED. `T2-SG-CL3-007-COST-APPROVE.png`
+1. Open Cost Estimate `UAT-SG-T2-20260811-COST`, verify Client (**Qatar Petroleum**), Site (**QP Ras Laffan Gate 1**), and Costing Line Items are visible, and click **Approve Costing**.
+2. Confirm Opportunity `UAT-SG-T2-20260811-OPP` is in `COMPLETED (WON)` status before starting `T2-008`.
+**EXPECTED:** Costing status is `APPROVED` and Client/Site remain populated. `T2-SG-CL3-007-COST-APPROVE.png`
 **RESULT:** PASS/FAIL
 
 ---
@@ -255,9 +258,9 @@
 
 ## TEST STEP T2-008: Proposal A - Change Requested
 **USER:** **LOG OUT / SWITCH USER** to `Commercial Creator`
-**URL:** `http://10.10.50.24:3200/commercial/proposals`
+**URL:** `http://10.10.50.24:3200/commercial/quotations` (Proposal Register) → `/commercial/proposals/[id]` (Proposal Editor)
 **ACTIONS:**
-1. Create Proposal A: `UAT-SG-T2-20260811-PROP-A`. Submit.
+1. In `/commercial/quotations`, click **New Proposal**, select Opportunity `UAT-SG-T2-20260811-OPP` and Approved Costing `UAT-SG-T2-20260811-COST`, create Proposal A (`UAT-SG-T2-20260811-PROP-A`), open it, and **Submit for Approval**.
 **USER:** **LOG OUT / SWITCH USER** to `Proposal Approver`
 2. Approve Proposal A.
 **USER:** **LOG OUT / SWITCH USER** to `Commercial Creator`

@@ -237,7 +237,7 @@ export default function OpportunitiesPage() {
           </Button>
 
           <Link href="/commercial/surveys">
-            <Button variant="ghost" size="sm" className="inline-flex items-center gap-1 text-xs">
+            <Button variant="secondary" size="sm" className="inline-flex items-center gap-1 text-xs">
               <span>Site Surveys</span>
               <span className="material-symbols-outlined text-[16px]">assignment</span>
             </Button>
@@ -352,29 +352,59 @@ export default function OpportunitiesPage() {
                         {/* Stage Actions */}
                         <div className="pt-2 border-t border-outline-variant/30 flex items-center justify-between gap-1 text-xs">
                           {c.lifecycle === "DRAFT" && (
-                            <Button variant="secondary" size="sm" onClick={() => openWorkflowModal(c, "SUBMIT")} className="w-full text-xs bg-secondary text-white">
+                            <Button
+                              variant="primary"
+                              size="sm"
+                              onClick={() => openWorkflowModal(c, "SUBMIT")}
+                              className="w-full text-xs"
+                            >
                               Submit to Workflow
                             </Button>
                           )}
 
                           {c.lifecycle === "IN_WORKFLOW" && (
                             <div className="grid grid-cols-2 gap-1 w-full">
-                              <Button variant="secondary" size="sm" onClick={() => openWorkflowModal(c, "APPROVE")} className="text-[11px] bg-status-success text-white">
+                              <Button
+                                variant="success"
+                                size="sm"
+                                onClick={() => openWorkflowModal(c, "APPROVE")}
+                                className="text-[11px]"
+                              >
                                 Approve
                               </Button>
-                              <Button variant="secondary" size="sm" onClick={() => openWorkflowModal(c, "REJECT")} className="text-[11px] bg-status-error text-white">
+                              <Button
+                                variant="error"
+                                size="sm"
+                                onClick={() => openWorkflowModal(c, "REJECT")}
+                                className="text-[11px]"
+                              >
                                 Reject
                               </Button>
                             </div>
                           )}
 
                           {c.lifecycle === "COMPLETED" && (
-                            <Link href="/settings/commercial-contract/cost-configuration" className="w-full">
-                              <Button variant="ghost" size="sm" className="w-full text-secondary hover:underline text-xs inline-flex items-center justify-center gap-1">
-                                <span>Proceed to Costing</span>
-                                <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
-                              </Button>
-                            </Link>
+                            <div className="grid grid-cols-2 gap-1 w-full">
+                              <Link href="/commercial/costing" className="w-full">
+                                <Button
+                                  variant="secondary"
+                                  size="sm"
+                                  className="w-full text-[11px] inline-flex items-center justify-center gap-1"
+                                >
+                                  <span>Costing</span>
+                                </Button>
+                              </Link>
+                              <Link href="/commercial/quotations" className="w-full">
+                                <Button
+                                  variant="primary"
+                                  size="sm"
+                                  className="w-full text-[11px] inline-flex items-center justify-center gap-1"
+                                >
+                                  <span>Proposal</span>
+                                  <span className="material-symbols-outlined text-[13px]">arrow_forward</span>
+                                </Button>
+                              </Link>
+                            </div>
                           )}
                         </div>
                       </Card>
@@ -417,14 +447,31 @@ export default function OpportunitiesPage() {
                       <td className="py-2.5 px-3">{c.createdBy}</td>
                       <td className="py-2.5 px-3 text-right">
                         {c.lifecycle === "DRAFT" && (
-                          <Button variant="secondary" size="sm" onClick={() => openWorkflowModal(c, "SUBMIT")} className="text-xs bg-secondary text-white">
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            onClick={() => openWorkflowModal(c, "SUBMIT")}
+                            className="text-xs"
+                          >
                             Submit Workflow
                           </Button>
                         )}
                         {c.lifecycle === "IN_WORKFLOW" && (
-                          <Button variant="secondary" size="sm" onClick={() => openWorkflowModal(c, "APPROVE")} className="text-xs bg-status-success text-white">
+                          <Button
+                            variant="success"
+                            size="sm"
+                            onClick={() => openWorkflowModal(c, "APPROVE")}
+                            className="text-xs"
+                          >
                             Review & Approve
                           </Button>
+                        )}
+                        {c.lifecycle === "COMPLETED" && (
+                          <Link href="/commercial/quotations">
+                            <Button variant="secondary" size="sm" className="text-xs">
+                              Create Proposal
+                            </Button>
+                          </Link>
                         )}
                       </td>
                     </tr>

@@ -21,11 +21,18 @@ export async function GET(
     const proposal = await prisma.preContractProposal.findUnique({
       where: { id: params.id },
       include: {
-        case: { include: { prospectClient: true } },
+        case: {
+          include: {
+            prospectClient: true,
+            surveys: { include: { prospectiveSite: true } }
+          }
+        },
         versions: {
           orderBy: { versionNumber: "desc" },
           include: {
-            costEstimate: true,
+            costEstimate: {
+              include: { survey: { include: { prospectiveSite: true } } }
+            },
             costEstimateVersion: true,
             issuanceLogs: { orderBy: { createdAt: "desc" } }
           }

@@ -266,8 +266,11 @@ export default function ProposalDetailPage() {
               )}
             </div>
             <p className="text-sm text-slate-500 mt-1">
-              Client: <span className="font-semibold text-slate-700">{proposal.case?.prospectClient?.name || "N/A"}</span> | Opportunity:{" "}
-              <span className="font-semibold text-slate-700">{proposal.case?.title || "N/A"}</span>
+              Client: <span className="font-semibold text-slate-700">{proposal.case?.prospectClient?.name || "N/A"}</span> | Site:{" "}
+              <span className="font-semibold text-slate-700">
+                {ver.costEstimate?.survey?.prospectiveSite?.name || proposal.case?.surveys?.[0]?.prospectiveSite?.name || "N/A"}
+              </span>{" "}
+              | Opportunity: <span className="font-semibold text-slate-700">{proposal.case?.title || "N/A"}</span>
             </p>
           </div>
 

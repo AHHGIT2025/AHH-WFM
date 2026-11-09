@@ -261,6 +261,27 @@ export default function CostingPage() {
     }
   };
 
+  const handleOpenDetailModal = async (est: CostingEstimate) => {
+    setSelectedEstimate(est);
+    setShowDetailModal(true);
+    try {
+      const res = await fetch(`/api/v1/commercial/costing/${est.id}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.estimate) {
+          setSelectedEstimate((prev) => ({
+            ...prev,
+            ...data.estimate,
+            case: data.estimate.case ?? prev?.case ?? est.case,
+            survey: data.estimate.survey ?? prev?.survey ?? est.survey
+          }));
+        }
+      }
+    } catch (err) {
+      console.error("Failed to fetch full costing estimate detail", err);
+    }
+  };
+
   const handleWorkflowAction = async () => {
     if (!selectedEstimate) return;
     setWorkflowError(null);
@@ -281,7 +302,20 @@ export default function CostingPage() {
       }
 
       if (data.estimate) {
-        setSelectedEstimate(data.estimate);
+        setSelectedEstimate((prev) =>
+          prev
+            ? {
+                ...prev,
+                ...data.estimate,
+                case: data.estimate.case ?? prev.case,
+                survey: data.estimate.survey ?? prev.survey,
+                versions:
+                  Array.isArray(data.estimate.versions) && data.estimate.versions.length > 0
+                    ? data.estimate.versions
+                    : prev.versions
+              }
+            : data.estimate
+        );
       }
       setShowWorkflowModal(false);
       setWorkflowRemarks("");
@@ -321,7 +355,22 @@ export default function CostingPage() {
         throw new Error(data.error || "Failed to apply override.");
       }
 
-      setSelectedEstimate(data.estimate);
+      if (data.estimate) {
+        setSelectedEstimate((prev) =>
+          prev
+            ? {
+                ...prev,
+                ...data.estimate,
+                case: data.estimate.case ?? prev.case,
+                survey: data.estimate.survey ?? prev.survey,
+                versions:
+                  Array.isArray(data.estimate.versions) && data.estimate.versions.length > 0
+                    ? data.estimate.versions
+                    : prev.versions
+              }
+            : data.estimate
+        );
+      }
       setShowOverrideModal(false);
       setOverrideReason("");
       setFeedbackBanner({ type: "success", text: "Costing line rate override applied and recalculated." });
@@ -520,10 +569,7 @@ export default function CostingPage() {
                         <Button
                           size="sm"
                           variant="secondary"
-                          onClick={() => {
-                            setSelectedEstimate(est);
-                            setShowDetailModal(true);
-                          }}
+                          onClick={() => handleOpenDetailModal(est)}
                           className="text-xs"
                         >
                           View / Edit
@@ -775,27 +821,35 @@ export default function CostingPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-outline-variant/30 text-on-surface">
-                      {(selectedEstimate.versions?.[0]?.items || []).map((item, idx) => (
-                        <tr key={idx} className="hover:bg-surface-container-low/50">
-                          <td className="py-2 px-3 font-mono font-bold text-secondary">{item.elementCode}</td>
-                          <td className="py-2 px-3 font-medium text-on-surface">{item.elementName}</td>
-                          <td className="py-2 px-3">
-                            <Badge variant="neutral">
-                              {item.categoryCode}
-                            </Badge>
-                          </td>
-                          <td className="py-2 px-3 font-mono">{toSafeNumber(item.quantity, 0).toFixed(2)}</td>
-                          <td className="py-2 px-3 font-mono">{formatCostingCurrency(item.unitRate, selectedEstimate.versions?.[0]?.currency)}</td>
-                          <td className="py-2 px-3 font-mono font-bold text-on-surface">
-                            {formatCostingCurrency(item.totalAmount, selectedEstimate.versions?.[0]?.currency)}
-                          </td>
-                          <td className="py-2 px-3">
-                            <Badge variant={item.calculationBasis === "OVERRIDE" ? "warning" : "secondary"}>
-                              {item.calculationBasis}
-                            </Badge>
+                      {(selectedEstimate.versions?.[0]?.items || []).length === 0 ? (
+                        <tr>
+                          <td colSpan={7} className="py-6 px-3 text-center text-on-surface-variant italic">
+                            No line items found for this costing version.
                           </td>
                         </tr>
-                      ))}
+                      ) : (
+                        (selectedEstimate.versions?.[0]?.items || []).map((item, idx) => (
+                          <tr key={item.id || idx} className="hover:bg-surface-container-low/50">
+                            <td className="py-2 px-3 font-mono font-bold text-secondary">{item.elementCode}</td>
+                            <td className="py-2 px-3 font-medium text-on-surface">{item.elementName}</td>
+                            <td className="py-2 px-3">
+                              <Badge variant="neutral">
+                                {item.categoryCode}
+                              </Badge>
+                            </td>
+                            <td className="py-2 px-3 font-mono">{toSafeNumber(item.quantity, 0).toFixed(2)}</td>
+                            <td className="py-2 px-3 font-mono">{formatCostingCurrency(item.unitRate, selectedEstimate.versions?.[0]?.currency)}</td>
+                            <td className="py-2 px-3 font-mono font-bold text-on-surface">
+                              {formatCostingCurrency(item.totalAmount, selectedEstimate.versions?.[0]?.currency)}
+                            </td>
+                            <td className="py-2 px-3">
+                              <Badge variant={item.calculationBasis === "OVERRIDE" ? "warning" : "secondary"}>
+                                {item.calculationBasis}
+                              </Badge>
+                            </td>
+                          </tr>
+                        ))
+                      )}
                     </tbody>
                   </table>
                 </Card>

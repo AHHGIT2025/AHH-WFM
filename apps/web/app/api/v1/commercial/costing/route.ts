@@ -15,6 +15,8 @@ export async function GET(request: Request) {
     isAdminUser(user) ||
     hasPermission(user, "precontract.costing.view") ||
     hasPermission(user, "precontract.costing.manage") ||
+    hasPermission(user, "precontract.proposal.view") ||
+    hasPermission(user, "precontract.proposal.manage") ||
     hasPermission(user, "manpower.admin.full_access");
 
   if (!isAuthorized) {
@@ -87,7 +89,10 @@ export async function GET(request: Request) {
         },
         versions: {
           orderBy: { versionNumber: "desc" },
-          take: 1
+          include: {
+            items: true,
+            overrides: { orderBy: { overriddenAt: "desc" } }
+          }
         }
       },
       orderBy: { updatedAt: "desc" }

@@ -8,21 +8,38 @@ export async function GET(request: Request) {
   if (auth.error) return auth.error;
 
   const user = auth.session?.user as any;
+  const { searchParams } = new URL(request.url);
+  const forProposal = searchParams.get("forProposal") === "true";
 
-  const isAuthorized =
-    isAdminUser(user) ||
-    hasPermission(user, "precontract.case.view") ||
-    hasPermission(user, "commercial.opportunities.view") ||
-    hasPermission(user, "manpower.admin.full_access");
+  if (forProposal) {
+    const canManageProposal =
+      isAdminUser(user) ||
+      hasPermission(user, "precontract.proposal.manage") ||
+      hasPermission(user, "manpower.admin.full_access");
 
-  if (!isAuthorized) {
-    return NextResponse.json(
-      { error: "Forbidden: You do not have permission to view commercial opportunity cases." },
-      { status: 403 }
-    );
+    if (!canManageProposal) {
+      return NextResponse.json(
+        { error: "Forbidden: Commercial proposal creation permission (precontract.proposal.manage) is required." },
+        { status: 403 }
+      );
+    }
+  } else {
+    const isAuthorized =
+      isAdminUser(user) ||
+      hasPermission(user, "precontract.case.view") ||
+      hasPermission(user, "commercial.opportunities.view") ||
+      hasPermission(user, "precontract.proposal.view") ||
+      hasPermission(user, "precontract.proposal.manage") ||
+      hasPermission(user, "manpower.admin.full_access");
+
+    if (!isAuthorized) {
+      return NextResponse.json(
+        { error: "Forbidden: You do not have permission to view commercial opportunity cases." },
+        { status: 403 }
+      );
+    }
   }
 
-  const { searchParams } = new URL(request.url);
   const search = searchParams.get("search")?.trim() || "";
   const lifecycle = searchParams.get("lifecycle") || "ALL";
   const businessOutcome = searchParams.get("businessOutcome") || "ALL";
@@ -31,14 +48,28 @@ export async function GET(request: Request) {
   let operationType = searchParams.get("operationType") || undefined;
 
   // Company Isolation
-  if (user?.companyId && !isAdminUser(user) && !hasPermission(user, "commercial.commandCenter.crossCompany")) {
+  const canCrossCompany =
+    isAdminUser(user) ||
+    hasPermission(user, "manpower.admin.full_access") ||
+    hasPermission(user, "commercial.commandCenter.crossCompany") ||
+    (forProposal && hasPermission(user, "precontract.proposal.crossCompany"));
+
+  if (!canCrossCompany && user?.companyId) {
     companyId = user.companyId;
   }
 
   // SG / FM Scope Isolation
   if (!isAdminUser(user) && !hasPermission(user, "manpower.admin.full_access")) {
-    const userAllowedSG = user?.operationAccess?.allowedSecurityGuarding ?? true;
-    const userAllowedFM = user?.operationAccess?.allowedFacilityManagement ?? true;
+    const userAllowedSG = user?.operationAccess?.allowedSecurityGuarding ?? user?.allowedSecurityGuarding ?? true;
+    const userAllowedFM = user?.operationAccess?.allowedFacilityManagement ?? user?.allowedFacilityManagement ?? true;
+
+    if (!userAllowedSG && !userAllowedFM) {
+      return NextResponse.json({
+        cases: [],
+        pipeline: { DRAFT: [], IN_WORKFLOW: [], COMPLETED: [], CANCELLED: [] },
+        totalCount: 0
+      });
+    }
 
     if (operationType === "SECURITY_GUARDING" && !userAllowedSG) {
       return NextResponse.json(
@@ -65,11 +96,36 @@ export async function GET(request: Request) {
   try {
     const where: any = {};
 
-    if (companyId) where.companyId = companyId;
+    if (!canCrossCompany && user?.allowedCompanyIds && Array.isArray(user.allowedCompanyIds) && user.allowedCompanyIds.length > 0 && !companyId) {
+      where.companyId = { in: user.allowedCompanyIds };
+    } else if (companyId) {
+      where.companyId = companyId;
+    }
     if (operationType && operationType !== "ALL") where.operationType = operationType;
-    if (lifecycle && lifecycle !== "ALL") where.lifecycle = lifecycle;
-    if (businessOutcome && businessOutcome !== "ALL") where.businessOutcome = businessOutcome;
+    if (lifecycle && lifecycle !== "ALL") {
+      where.lifecycle = lifecycle;
+    } else if (forProposal) {
+      where.lifecycle = { notIn: ["CANCELLED", "SUPERSEDED"] };
+    }
+    if (businessOutcome && businessOutcome !== "ALL") {
+      where.businessOutcome = businessOutcome;
+    } else if (forProposal) {
+      where.AND = [
+        ...(where.AND || []),
+        { OR: [{ businessOutcome: null }, { businessOutcome: { not: "LOST" } }] }
+      ];
+    }
     if (prospectClientId) where.prospectClientId = prospectClientId;
+
+    if (forProposal) {
+      where.costEstimates = {
+        some: {
+          versions: {
+            some: { status: "APPROVED" }
+          }
+        }
+      };
+    }
 
     if (search) {
       where.OR = [
@@ -78,7 +134,7 @@ export async function GET(request: Request) {
       ];
     }
 
-    const cases = await prisma.preContractCase.findMany({
+    const rawCases = await prisma.preContractCase.findMany({
       where,
       include: {
         prospectClient: {
@@ -97,12 +153,57 @@ export async function GET(request: Request) {
             lifecycle: true,
             conductedBy: true,
             conductedAt: true,
+            prospectiveSite: {
+              select: { id: true, name: true, address: true }
+            },
             siteConditions: { select: { id: true, definitionCode: true } }
+          }
+        },
+        costEstimates: {
+          orderBy: { updatedAt: "desc" },
+          select: {
+            id: true,
+            estimateNumber: true,
+            status: true,
+            currentVersionNumber: true,
+            survey: {
+              select: {
+                id: true,
+                prospectiveSite: { select: { id: true, name: true, address: true } }
+              }
+            },
+            versions: {
+              where: { status: "APPROVED" },
+              orderBy: { versionNumber: "desc" },
+              select: {
+                id: true,
+                versionNumber: true,
+                status: true,
+                currency: true,
+                sellingPrice: true,
+                totalCost: true,
+                targetMarginPercentage: true,
+                checksum: true
+              }
+            }
           }
         }
       },
       orderBy: { createdAt: "desc" }
     });
+
+    const cases = rawCases.map((c: any) => ({
+      ...c,
+      costEstimates: (c.costEstimates || []).map((est: any) => ({
+        ...est,
+        versions: (est.versions || []).map((v: any) => ({
+          ...v,
+          sellingPrice: Number(v.sellingPrice ?? 0),
+          totalCost: Number(v.totalCost ?? 0),
+          targetMarginPercentage: v.targetMarginPercentage !== null && v.targetMarginPercentage !== undefined ? Number(v.targetMarginPercentage) : null
+        }))
+      }))
+    }));
 
     // Group by pipeline lifecycle stage for Kanban view
     const pipeline = {
