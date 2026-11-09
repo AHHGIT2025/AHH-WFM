@@ -1,5 +1,5 @@
 # RUN ON SERVER
-# AHH WFM — VIBE-14 V3 Guarded Recovery Script (PowerShell 5.1 Compatible)
+# AHH WFM -- VIBE-14 V3 Guarded Recovery Script (PowerShell 5.1 Compatible)
 # Restores apps/web/.next and Git HEAD back to VIBE-13 baseline (4967e95fa779b81f8fa1ce5ce1c419412ff8f1ef)
 # Preserves branch 'manpower-operations-scope' without forced checkout.
 # Retains displaced build artifacts until post-recovery health checks pass.
@@ -183,19 +183,28 @@ param(
     $baselineWorkerPid     = @{}
     $baselineWorkerRestart = @{}
     foreach ($wName in $protectedWorkers) {
-        $proc = $pm2Procs | Where-Object { $_.name -eq $wName }
-        $state   = if ($null -ne $proc) { [string]$proc.status } else { "absent" }
-        $wPid    = if ($null -ne $proc) { [int]$proc.pid } else { 0 }
-        $restart = if ($null -ne $proc) { [int]$proc.restart_time } else { 0 }
-        $baselineWorkerState[$wName]   = $state
-        $baselineWorkerPid[$wName]     = $wPid
-        $baselineWorkerRestart[$wName] = $restart
+        if ($null -ne $manifest.baselineWorkers -and $null -ne $manifest.baselineWorkers.$wName) {
+            $baselineWorkerState[$wName]   = [string]$manifest.baselineWorkers.$wName.status
+            $baselineWorkerPid[$wName]     = [int]$manifest.baselineWorkers.$wName.pid
+            $baselineWorkerRestart[$wName] = [int]$manifest.baselineWorkers.$wName.restart_time
+        } else {
+            $proc = $pm2Procs | Where-Object { $_.name -eq $wName }
+            $baselineWorkerState[$wName]   = if ($null -ne $proc) { [string]$proc.status } else { "absent" }
+            $baselineWorkerPid[$wName]     = if ($null -ne $proc) { [int]$proc.pid } else { 0 }
+            $baselineWorkerRestart[$wName] = if ($null -ne $proc) { [int]$proc.restart_time } else { 0 }
+        }
     }
 
-    $mobileProc = $pm2Procs | Where-Object { $_.name -eq "ahh-wfm-mobile-dev" }
-    $baselineMobileState   = if ($null -ne $mobileProc) { [string]$mobileProc.status } else { "absent" }
-    $baselineMobilePid     = if ($null -ne $mobileProc) { [int]$mobileProc.pid } else { 0 }
-    $baselineMobileRestart = if ($null -ne $mobileProc) { [int]$mobileProc.restart_time } else { 0 }
+    if ($null -ne $manifest.baselineMobile) {
+        $baselineMobileState   = [string]$manifest.baselineMobile.status
+        $baselineMobilePid     = [int]$manifest.baselineMobile.pid
+        $baselineMobileRestart = [int]$manifest.baselineMobile.restart_time
+    } else {
+        $mobileProc = $pm2Procs | Where-Object { $_.name -eq "ahh-wfm-mobile-dev" }
+        $baselineMobileState   = if ($null -ne $mobileProc) { [string]$mobileProc.status } else { "absent" }
+        $baselineMobilePid     = if ($null -ne $mobileProc) { [int]$mobileProc.pid } else { 0 }
+        $baselineMobileRestart = if ($null -ne $mobileProc) { [int]$mobileProc.restart_time } else { 0 }
+    }
 
     Write-Host "`n=================================================================" -ForegroundColor Yellow
     Write-Host " PHASE 2: RESTORE SOURCE CODE TO VIBE-13 BASELINE COMMIT         " -ForegroundColor Yellow
@@ -341,19 +350,20 @@ param(
     }
     Write-Host "Commercial Reminder Worker : $reminderAfterState (Verified Stopped/Absent)" -ForegroundColor Green
 
-    # 5. Web health check
-    $resp = Invoke-WebRequest -Uri "http://127.0.0.1:3200/api/v1/health" -UseBasicParsing -TimeoutSec 15
-    if ([int]$resp.StatusCode -ne 200) {
-        throw "RECOVERY ABORT: Health check failed (HTTP $($resp.StatusCode)). Displaced artifacts retained at '$displacedDir'."
+    # 5. Web & Mobile login checks (localhost and LAN)
+    $loginEndpoints = @(
+        "http://127.0.0.1:3200/login",
+        "http://10.10.50.24:3200/login",
+        "http://127.0.0.1:3201/login",
+        "http://10.10.50.24:3201/login"
+    )
+    foreach ($u in $loginEndpoints) {
+        $resp = Invoke-WebRequest -Uri $u -UseBasicParsing -TimeoutSec 15
+        if ([int]$resp.StatusCode -ne 200) {
+            throw "RECOVERY ABORT: Login smoke test failed for $u (HTTP $($resp.StatusCode)). Displaced artifacts retained at '$displacedDir'."
+        }
+        Write-Host ("Login Smoke Test {0} -> HTTP {1} (Verified)" -f $u, $resp.StatusCode) -ForegroundColor Green
     }
-    Write-Host "Health Check -> HTTP 200 (Verified)" -ForegroundColor Green
-
-    # 6. Web login check
-    $respLogin = Invoke-WebRequest -Uri "http://127.0.0.1:3200/login" -UseBasicParsing -TimeoutSec 15
-    if ([int]$respLogin.StatusCode -ne 200) {
-        throw "RECOVERY ABORT: Login page check failed (HTTP $($respLogin.StatusCode)). Displaced artifacts retained at '$displacedDir'."
-    }
-    Write-Host "Login Page Check -> HTTP 200 (Verified)" -ForegroundColor Green
 
     # 7. ALL HEALTH CHECKS PASSED: Safely archive displaced build directory
     if (Test-Path -LiteralPath $displacedDir) {

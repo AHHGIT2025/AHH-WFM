@@ -1,5 +1,5 @@
 # RUN ON SERVER
-# AHH WFM — VIBE-14 V3 Pinned SERVER Deployment Script (PowerShell 5.1 Compatible)
+# AHH WFM -- VIBE-14 V3 Pinned SERVER Deployment Script (PowerShell 5.1 Compatible)
 # Baseline SHA : 4967e95fa779b81f8fa1ce5ce1c419412ff8f1ef (VIBE-13 Deployed Baseline)
 # Target SHA   : c44104ceb6f9a917454805f72c449e6fdbd808c3 (Pinned VIBE-14 Isolated Hotfix)
 # Forbidden P0 : cb35ce886b17b43d20da164171373f706214dddd (Undeployed P0; must NEVER be deployed)
@@ -264,6 +264,20 @@ param(
     Write-Host ("100% file integrity verified across all {0} backup files." -f $srcCatalog.Count) -ForegroundColor Green
 
     $manifestFile = Join-Path $BackupRoot "backup-manifest.json"
+    $baselineWorkersRecord = [ordered]@{}
+    foreach ($wName in $protectedWorkers) {
+        $baselineWorkersRecord[$wName] = [ordered]@{
+            status       = $baselineWorkerState[$wName]
+            pid          = $baselineWorkerPid[$wName]
+            restart_time = $baselineWorkerRestart[$wName]
+        }
+    }
+    $baselineMobileRecord = [ordered]@{
+        status       = $baselineMobileState
+        pid          = $baselineMobilePid
+        restart_time = $baselineMobileRestart
+    }
+
     $manifestObj = [ordered]@{
         deploymentId          = $DeploymentId
         createdAt             = (Get-Date).ToString("o")
@@ -274,6 +288,8 @@ param(
         preWebBuildId         = $preWebBuildId
         preWebBuildTimeUtc    = $preWebBuildTimeUtc.ToString("o")
         isRollbackReady       = $true
+        baselineWorkers       = $baselineWorkersRecord
+        baselineMobile        = $baselineMobileRecord
         webNextFileCount      = $srcCatalog.Count
         webNextFileCatalog    = $srcCatalog
     }
@@ -290,6 +306,8 @@ param(
         branch                = $ExpectedBranch
         backupRoot            = $BackupRoot
         manifestPath          = $manifestFile
+        baselineWorkers       = $baselineWorkersRecord
+        baselineMobile        = $baselineMobileRecord
         webNextFileCount      = $srcCatalog.Count
     }
     ($pointerObj | ConvertTo-Json -Depth 4) | Set-Content -LiteralPath $AttemptPointerPath -Encoding UTF8
@@ -468,11 +486,12 @@ param(
     }
     Write-Host "Commercial Reminder Worker : $reminderAfterState (Verified Stopped/Absent)" -ForegroundColor Green
 
-    # 5. HTTP Health & Login smoke tests
+    # 5. HTTP Login smoke tests (Web and Mobile on localhost & LAN)
     $webEndpoints = @(
         "http://127.0.0.1:3200/login",
         "http://10.10.50.24:3200/login",
-        "http://127.0.0.1:3200/api/v1/health"
+        "http://127.0.0.1:3201/login",
+        "http://10.10.50.24:3201/login"
     )
     foreach ($u in $webEndpoints) {
         $resp = Invoke-WebRequest -Uri $u -UseBasicParsing -TimeoutSec 15
