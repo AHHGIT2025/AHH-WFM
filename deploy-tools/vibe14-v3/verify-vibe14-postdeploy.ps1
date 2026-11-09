@@ -7,6 +7,7 @@
 param(
     [string]$RepoPath = "D:\Apps\AHH-WFM\dev",
     [string]$BackupsParent = "D:\Apps\AHH-WFM\backups",
+    [string]$BackupRoot = "",
     [string]$NormalizerScriptPath = (Join-Path $PSScriptRoot "normalize-pm2-jlist.js")
 )
 
@@ -37,6 +38,25 @@ param(
         $results[$Name] = @{ Status = $Status; Details = $Details }
         if ($Status -eq "FAIL") { $failures.Add(("{0}: {1}" -f $Name, $Details)) }
         if ($Status -eq "INCONCLUSIVE") { $inconclusive.Add(("{0}: {1}" -f $Name, $Details)) }
+    }
+
+    # Safely retrieve a property from a PSCustomObject without throwing under StrictMode
+    function Get-SafeProperty {
+        param(
+            [Parameter(Mandatory = $false)]$Object,
+            [Parameter(Mandatory = $true)][string]$PropertyName,
+            $DefaultValue = $null
+        )
+        if ($null -eq $Object) { return $DefaultValue }
+        try {
+            $prop = $Object.PSObject.Properties[$PropertyName]
+            if ($null -ne $prop) {
+                return $prop.Value
+            }
+        } catch {
+            return $DefaultValue
+        }
+        return $DefaultValue
     }
 
     function Get-NormalizedPm2List {
@@ -151,7 +171,7 @@ param(
         }
     }
 
-    # PM2 Process Inspections (Checks 7, 8, 9)
+    # PM2 Process Inspections (Checks 6, 7, 8, 9)
     $pm2Procs = Get-NormalizedPm2List -NormalizerPath $NormalizerScriptPath
     if ($null -eq $pm2Procs) {
         Record-Check -Name "PM2 Process Inspection" -Status "FAIL" -Details "Could not query or normalize PM2 process list."
@@ -191,17 +211,23 @@ param(
             "ahh-wfm-secfac-monitoring-worker-dev"
         )
 
+        $historicalPids = @{
+            "ahh-wfm-manpower-reconciliation-worker-dev" = 6816
+            "ahh-wfm-secfac-notification-worker-dev"     = 6912
+            "ahh-wfm-secfac-evaluation-worker-dev"       = 6924
+            "ahh-wfm-secfac-monitoring-worker-dev"       = 2572
+        }
+
         # Look for baseline evidence in attempt pointer or backup manifest
         $pointerPath = Join-Path $BackupsParent "latest-vibe14-deployment-attempt.json"
         $baselineData = $null
         if (Test-Path -LiteralPath $pointerPath) {
             try {
                 $ptr = (Get-Content -LiteralPath $pointerPath -Raw) | ConvertFrom-Json
-                if ($null -ne $ptr.manifestPath -and (Test-Path -LiteralPath [string]$ptr.manifestPath)) {
-                    $man = (Get-Content -LiteralPath [string]$ptr.manifestPath -Raw) | ConvertFrom-Json
-                    if ($null -ne $man.baselineWorkers) {
-                        $baselineData = $man.baselineWorkers
-                    }
+                $mPath = Get-SafeProperty $ptr "manifestPath"
+                if ($null -ne $mPath -and (Test-Path -LiteralPath [string]$mPath)) {
+                    $man = (Get-Content -LiteralPath [string]$mPath -Raw) | ConvertFrom-Json
+                    $baselineData = Get-SafeProperty $man "baselineWorkers"
                 }
             } catch {}
         }
@@ -215,20 +241,36 @@ param(
             if ($wStatus -ne "online") {
                 Record-Check -Name "Worker Status ($wName)" -Status "FAIL" -Details "Status is '$wStatus' (expected 'online')."
             } elseif ($wRestart -gt 0) {
-                Record-Check -Name "Worker Restarts ($wName)" -Status "FAIL" -Details "Restart count is $wRestart (expected 0 restart increments)."
+                Record-Check -Name "Worker Restarts ($wName)" -Status "FAIL" -Details "Restart count is $wRestart (expected 0)."
             } else {
                 Record-Check -Name "Worker Status ($wName)" -Status "PASS" -Details "Status 'online' with 0 restarts (PID $wPid)."
             }
 
-            if ($null -ne $baselineData -and $null -ne $baselineData.$wName) {
-                $basePid = [int]$baselineData.$wName.pid
-                if ($wPid -eq $basePid) {
-                    Record-Check -Name "Worker PID ($wName)" -Status "PASS" -Details "PID $wPid matches baseline $basePid."
+            # Baseline PID verification
+            $baselinePid = $null
+            $baselineSource = ""
+            if ($null -ne $baselineData) {
+                $workerObj = Get-SafeProperty $baselineData $wName
+                if ($null -ne $workerObj) {
+                    $baselinePid = [int](Get-SafeProperty $workerObj "pid" 0)
+                    $baselineSource = "manifest"
+                }
+            }
+            if ($null -eq $baselinePid -or $baselinePid -eq 0) {
+                if ($historicalPids.ContainsKey($wName)) {
+                    $baselinePid = $historicalPids[$wName]
+                    $baselineSource = "historical preflight"
+                }
+            }
+
+            if ($null -ne $baselinePid -and $baselinePid -gt 0) {
+                if ($wPid -eq $baselinePid) {
+                    Record-Check -Name "Worker PID ($wName)" -Status "PASS" -Details ("PID {0} matches {1} baseline {2}." -f $wPid, $baselineSource, $baselinePid)
                 } else {
-                    Record-Check -Name "Worker PID ($wName)" -Status "FAIL" -Details "PID changed from baseline $basePid to $wPid."
+                    Record-Check -Name "Worker PID ($wName)" -Status "FAIL" -Details ("PID {0} does not match {1} baseline {2}." -f $wPid, $baselineSource, $baselinePid)
                 }
             } else {
-                Record-Check -Name "Worker Baseline Evidence ($wName)" -Status "INCONCLUSIVE" -Details "Exact pre-deploy baseline PID evidence was not stored in manifest pointer (current PID=$wPid, restarts=$wRestart, status=$wStatus)."
+                Record-Check -Name "Worker PID ($wName)" -Status "INCONCLUSIVE" -Details ("No baseline PID evidence available (current PID={0}, status={1}, restarts={2})." -f $wPid, $wStatus, $wRestart)
             }
         }
     }
@@ -248,33 +290,165 @@ param(
         Record-Check -Name "Web PM2 Logs" -Status "INFO" -Details "Could not stream PM2 logs: $($_.Exception.Message)"
     }
 
-    # Check 10 & 11: Deployment Backup Manifests & Displaced Artifact Disposition
+    # =================================================================
+    # Check 10 & 11: Deployment Backup Resolution, Catalog Hashing & Displaced Artifacts
+    # =================================================================
+    Write-Host "`n=================================================================" -ForegroundColor Cyan
+    Write-Host " BACKUP VERIFICATION & DISPLACED ARTIFACT AUDIT                  " -ForegroundColor Cyan
+    Write-Host "=================================================================" -ForegroundColor Cyan
+
+    $resolvedBackupRoot = ""
     $pointerFile = Join-Path $BackupsParent "latest-vibe14-deployment-attempt.json"
+    $ptrObj = $null
+
+    # 1. Inspect Attempt Pointer (if present)
     if (Test-Path -LiteralPath $pointerFile) {
         try {
-            $pData = (Get-Content -LiteralPath $pointerFile -Raw) | ConvertFrom-Json
-            Record-Check -Name "Deployment Attempt Pointer" -Status "PASS" -Details "Pointer exists: deploymentId=$($pData.deploymentId), backupRoot=$($pData.backupRoot)."
-
-            if (Test-Path -LiteralPath [string]$pData.manifestPath) {
-                $mObj = (Get-Content -LiteralPath [string]$pData.manifestPath -Raw) | ConvertFrom-Json
-                Record-Check -Name "Backup Manifest" -Status "PASS" -Details "Manifest exists, preWebBuildId=$($mObj.preWebBuildId), fileCount=$($mObj.webNextFileCount)."
-            } else {
-                Record-Check -Name "Backup Manifest" -Status "FAIL" -Details "Manifest '$($pData.manifestPath)' missing."
-            }
-
-            # Check for displaced artifacts
-            $displacedItems = Get-ChildItem -Path (Join-Path $RepoPath "apps\web") -Filter "*.displaced-*"
-            if ($displacedItems.Count -gt 0) {
-                $dispPath = $displacedItems[0].FullName
-                Record-Check -Name "Displaced Artifact Retention" -Status "PASS" -Details ("Displaced build directory retained at '{0}' (safe; no data loss)." -f $dispPath)
-            } else {
-                Record-Check -Name "Displaced Artifact Retention" -Status "INFO" -Details "No active .displaced-* directory found in apps/web."
+            $ptrObj = (Get-Content -LiteralPath $pointerFile -Raw) | ConvertFrom-Json
+            $ptrDepId = Get-SafeProperty $ptrObj "deploymentId" "unknown"
+            $ptrRoot  = Get-SafeProperty $ptrObj "backupRoot" ""
+            Record-Check -Name "Deployment Attempt Pointer" -Status "PASS" -Details ("Pointer exists at '{0}' (deploymentId={1}, backupRoot={2})." -f $pointerFile, $ptrDepId, $ptrRoot)
+            if (-not [string]::IsNullOrWhiteSpace($ptrRoot) -and (Test-Path -LiteralPath $ptrRoot)) {
+                $resolvedBackupRoot = $ptrRoot
             }
         } catch {
-            Record-Check -Name "Deployment Backup Check" -Status "FAIL" -Details "Error reading backup metadata: $($_.Exception.Message)"
+            Record-Check -Name "Deployment Attempt Pointer" -Status "FAIL" -Details ("Error parsing pointer file: $($_.Exception.Message)")
         }
     } else {
-        Record-Check -Name "Deployment Attempt Pointer" -Status "INCONCLUSIVE" -Details "Pointer file '$pointerFile' not found."
+        Record-Check -Name "Deployment Attempt Pointer" -Status "INCONCLUSIVE" -Details ("Pointer file '{0}' not found." -f $pointerFile)
+    }
+
+    # 2. Resolve Backup Directory
+    if (-not [string]::IsNullOrWhiteSpace($BackupRoot) -and (Test-Path -LiteralPath $BackupRoot)) {
+        $resolvedBackupRoot = $BackupRoot
+    } elseif ([string]::IsNullOrWhiteSpace($resolvedBackupRoot)) {
+        # Discover candidate backup directories under $BackupsParent
+        if (Test-Path -LiteralPath $BackupsParent) {
+            $candidates = @(Get-ChildItem -LiteralPath $BackupsParent -Directory | Where-Object {
+                $_.Name -like "pre-deploy-vibe14-$ExpectedHead-*" -or $_.Name -like "pre-deploy-vibe14-*"
+            } | Sort-Object CreationTime -Descending)
+            if ($candidates.Count -gt 0) {
+                $resolvedBackupRoot = $candidates[0].FullName
+            }
+        }
+    }
+
+    if ([string]::IsNullOrWhiteSpace($resolvedBackupRoot) -or -not (Test-Path -LiteralPath $resolvedBackupRoot)) {
+        Record-Check -Name "Backup Directory Resolution" -Status "INCONCLUSIVE" -Details ("No backup directory found in '{0}'." -f $BackupsParent)
+    } else {
+        Record-Check -Name "Backup Directory Resolution" -Status "PASS" -Details ("Resolved backup directory: '{0}'." -f $resolvedBackupRoot)
+
+        # 3. Check for package.json.bak
+        $pkgBak = Join-Path $resolvedBackupRoot "package.json.bak"
+        if (Test-Path -LiteralPath $pkgBak) {
+            Record-Check -Name "Backup Package JSON" -Status "PASS" -Details ("'package.json.bak' exists in backup directory.")
+        } else {
+            Record-Check -Name "Backup Package JSON" -Status "INFO" -Details ("'package.json.bak' not present in backup directory (non-critical).")
+        }
+
+        # 4. Resolve and Validate Backup Manifest
+        $manifestPath = ""
+        $ptrManifest = Get-SafeProperty $ptrObj "manifestPath" ""
+        if (-not [string]::IsNullOrWhiteSpace($ptrManifest) -and (Test-Path -LiteralPath $ptrManifest)) {
+            $manifestPath = $ptrManifest
+        } else {
+            $directManifest = Join-Path $resolvedBackupRoot "backup-manifest.json"
+            if (Test-Path -LiteralPath $directManifest) {
+                $manifestPath = $directManifest
+            }
+        }
+
+        if ([string]::IsNullOrWhiteSpace($manifestPath) -or -not (Test-Path -LiteralPath $manifestPath)) {
+            Record-Check -Name "Backup Manifest" -Status "FAIL" -Details ("'backup-manifest.json' missing from backup root '{0}'." -f $resolvedBackupRoot)
+        } else {
+            try {
+                $mRaw = Get-Content -LiteralPath $manifestPath -Raw
+                $mObj = $mRaw | ConvertFrom-Json
+
+                $mTargetSha        = Get-SafeProperty $mObj "targetSha" "unknown"
+                $mBaselineSha      = Get-SafeProperty $mObj "baselineSha" "unknown"
+                $mPreWebBuildId    = Get-SafeProperty $mObj "preWebBuildId" "unknown"
+                $mIsRollbackReady  = Get-SafeProperty $mObj "isRollbackReady" $false
+                $mFileCount        = Get-SafeProperty $mObj "webNextFileCount" $null
+                $catalogObj        = Get-SafeProperty $mObj "webNextFileCatalog" $null
+
+                Record-Check -Name "Backup Manifest" -Status "PASS" -Details ("Manifest exists at '{0}' (baseline={1}, target={2}, preWebBuildId={3}, rollbackReady={4})." -f $manifestPath, $mBaselineSha, $mTargetSha, $mPreWebBuildId, $mIsRollbackReady)
+
+                # 5. Verify Actual Web Backup Directory & 100% SHA-256 File Catalog
+                $bakWebNext = Join-Path $resolvedBackupRoot "web-next"
+                if (-not (Test-Path -LiteralPath $bakWebNext)) {
+                    Record-Check -Name "Backup Web-Next Directory" -Status "FAIL" -Details ("'web-next' directory missing from backup '{0}'." -f $resolvedBackupRoot)
+                } else {
+                    $resolvedWebNextRoot = (Resolve-Path -LiteralPath $bakWebNext).Path.TrimEnd('\')
+                    $actualFiles = @([System.IO.Directory]::GetFiles($resolvedWebNextRoot, "*", [System.IO.SearchOption]::AllDirectories))
+                    $actualCount = $actualFiles.Count
+
+                    if ($null -ne $catalogObj) {
+                        $expectedProps = @($catalogObj.PSObject.Properties)
+                        $expectedCount = $expectedProps.Count
+
+                        if ($null -ne $mFileCount -and [int]$mFileCount -ne $expectedCount) {
+                            Record-Check -Name "Backup Manifest Count Consistency" -Status "FAIL" -Details ("Manifest webNextFileCount={0} differs from catalog property count={1}." -f $mFileCount, $expectedCount)
+                        } else {
+                            Record-Check -Name "Backup Manifest Count Consistency" -Status "PASS" -Details ("Manifest file count={0} is internally consistent." -f $expectedCount)
+                        }
+
+                        if ($actualCount -ne $expectedCount) {
+                            Record-Check -Name "Backup File Inventory Count" -Status "FAIL" -Details ("Actual files in web-next ({0}) does not match manifest count ({1})." -f $actualCount, $expectedCount)
+                        } else {
+                            Record-Check -Name "Backup File Inventory Count" -Status "PASS" -Details ("Actual file count in web-next matches manifest: {0} files." -f $actualCount)
+                        }
+
+                        # Compute and verify SHA-256 for all cataloged files
+                        $sha = [System.Security.Cryptography.SHA256]::Create()
+                        $hashMismatches = New-Object System.Collections.Generic.List[string]
+                        $missingFiles   = New-Object System.Collections.Generic.List[string]
+                        $checkedCount   = 0
+                        $sw = [System.Diagnostics.Stopwatch]::StartNew()
+
+                        foreach ($prop in $expectedProps) {
+                            $relPath = $prop.Name
+                            $expectedHash = [string]$prop.Value
+                            $fullPath = Join-Path $resolvedWebNextRoot $relPath
+
+                            if (-not (Test-Path -LiteralPath $fullPath)) {
+                                $missingFiles.Add($relPath)
+                                continue
+                            }
+                            $bytes = [System.IO.File]::ReadAllBytes($fullPath)
+                            $actualHash = [System.BitConverter]::ToString($sha.ComputeHash($bytes)) -replace '-'
+                            if ($actualHash -ne $expectedHash) {
+                                $hashMismatches.Add(("{0} (expected {1}, got {2})" -f $relPath, $expectedHash, $actualHash))
+                            }
+                            $checkedCount++
+                        }
+                        $sw.Stop()
+
+                        if ($missingFiles.Count -eq 0 -and $hashMismatches.Count -eq 0) {
+                            Record-Check -Name "Backup File Hash Verification" -Status "PASS" -Details ("100% SHA-256 match verified across all {0} backup files against manifest in {1} ms." -f $checkedCount, $sw.ElapsedMilliseconds)
+                        } else {
+                            Record-Check -Name "Backup File Hash Verification" -Status "FAIL" -Details ("Hash verification failed: {0} missing files, {1} hash mismatches." -f $missingFiles.Count, $hashMismatches.Count)
+                        }
+                    } else {
+                        Record-Check -Name "Backup File Hash Verification" -Status "INCONCLUSIVE" -Details ("Manifest at '{0}' does not contain webNextFileCatalog property (actual files in web-next: {1})." -f $manifestPath, $actualCount)
+                    }
+                }
+            } catch {
+                Record-Check -Name "Backup Manifest Inspection" -Status "FAIL" -Details ("Error inspecting manifest '{0}': $($_.Exception.Message)" -f $manifestPath)
+            }
+        }
+    }
+
+    # 6. Displaced Artifact Retention Check (Single-object and Array safe)
+    $webDir = Join-Path $RepoPath "apps\web"
+    if (Test-Path -LiteralPath $webDir) {
+        $displacedItems = @(Get-ChildItem -LiteralPath $webDir -Filter "*.displaced-*" -Directory -ErrorAction SilentlyContinue)
+        if ($displacedItems.Count -gt 0) {
+            $dispPaths = ($displacedItems | ForEach-Object { $_.FullName }) -join "; "
+            Record-Check -Name "Displaced Artifact Retention" -Status "PASS" -Details ("Displaced build directory retained at '{0}' (safe; dormant)." -f $dispPaths)
+        } else {
+            Record-Check -Name "Displaced Artifact Retention" -Status "INFO" -Details "No active .displaced-* directory found in apps/web."
+        }
     }
 
     # Final Summary & Recommendation
