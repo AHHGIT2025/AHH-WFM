@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 
@@ -22,6 +22,7 @@ export default function ProposalDetailPage() {
   const [exclusions, setExclusions] = useState("");
   const [termsAndConditions, setTermsAndConditions] = useState("");
   const [saving, setSaving] = useState(false);
+  const revisionLockRef = useRef(false);
   const [msg, setMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   // Workflow Action State
@@ -138,7 +139,9 @@ export default function ProposalDetailPage() {
   };
 
   const handleCreateRevision = async () => {
+    if (revisionLockRef.current || saving) return;
     if (!confirm("Create a new proposal revision? The current approved version will remain intact.")) return;
+    revisionLockRef.current = true;
     setSaving(true);
     setMsg(null);
     try {
@@ -158,6 +161,7 @@ export default function ProposalDetailPage() {
     } catch (err: any) {
       setMsg({ type: "error", text: err.message || "Revision creation error." });
     } finally {
+      revisionLockRef.current = false;
       setSaving(false);
     }
   };
@@ -315,8 +319,10 @@ export default function ProposalDetailPage() {
 
             {(isApproved || isIssued) && (
               <button
+                type="button"
+                disabled={saving}
                 onClick={handleCreateRevision}
-                className="inline-flex items-center px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium rounded-lg transition-colors"
+                className="inline-flex items-center px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50 disabled:bg-slate-200 disabled:text-slate-500"
               >
                 <span className="material-icons-outlined text-lg mr-1.5">content_copy</span>
                 Create Revision

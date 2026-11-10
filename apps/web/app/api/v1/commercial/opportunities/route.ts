@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@ahh-wfm/database";
 import { checkApiAuth } from "@/lib/api-guards";
 import { hasPermission, isAdminUser } from "@/lib/permissions";
+import { findActiveProposalsByCostingVersionIds } from "@/lib/precontract-proposal";
 
 export async function GET(request: Request) {
   const auth = await checkApiAuth();
@@ -192,6 +193,21 @@ export async function GET(request: Request) {
       orderBy: { createdAt: "desc" }
     });
 
+    const approvedVersionIds: string[] = [];
+    if (forProposal) {
+      rawCases.forEach((c: any) => {
+        (c.costEstimates || []).forEach((est: any) => {
+          (est.versions || []).forEach((v: any) => {
+            if (v?.id) approvedVersionIds.push(v.id);
+          });
+        });
+      });
+    }
+
+    const activeProposalByVersionId = forProposal
+      ? await findActiveProposalsByCostingVersionIds(prisma, approvedVersionIds)
+      : new Map();
+
     const cases = rawCases.map((c: any) => ({
       ...c,
       costEstimates: (c.costEstimates || []).map((est: any) => ({
@@ -200,7 +216,8 @@ export async function GET(request: Request) {
           ...v,
           sellingPrice: Number(v.sellingPrice ?? 0),
           totalCost: Number(v.totalCost ?? 0),
-          targetMarginPercentage: v.targetMarginPercentage !== null && v.targetMarginPercentage !== undefined ? Number(v.targetMarginPercentage) : null
+          targetMarginPercentage: v.targetMarginPercentage !== null && v.targetMarginPercentage !== undefined ? Number(v.targetMarginPercentage) : null,
+          ...(forProposal ? { activeProposal: activeProposalByVersionId.get(v.id) || null } : {})
         }))
       }))
     }));

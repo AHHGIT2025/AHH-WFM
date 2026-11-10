@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@ahh-wfm/database";
 import { checkApiAuth } from "../../../../../lib/api-guards";
 import { hasPermission, isAdminUser } from "../../../../../lib/permissions";
-import { toClientSafeProposalDTO } from "../../../../../lib/precontract-proposal";
+import {
+  buildDuplicateQuotationConflictPayload,
+  findActiveProposalForBaseline,
+  toClientSafeProposalDTO
+} from "../../../../../lib/precontract-proposal";
 
 export async function GET(req: NextRequest) {
   const { session, error } = await checkApiAuth(undefined, {
@@ -140,8 +144,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    const normalizedCaseId = String(caseId).trim();
+    const normalizedCostEstimateVersionId = String(costEstimateVersionId).trim();
+
     const pcCase = await prisma.preContractCase.findUnique({
-      where: { id: caseId }
+      where: { id: normalizedCaseId }
     });
 
     if (!pcCase) {
@@ -180,75 +187,150 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const costingVersion = await prisma.preContractCostEstimateVersion.findUnique({
-      where: { id: costEstimateVersionId },
-      include: { estimate: true }
-    });
-
-    if (!costingVersion) {
-      return NextResponse.json({ error: "Costing estimate version not found." }, { status: 404 });
-    }
-
-    if (!costingVersion.estimate || costingVersion.estimate.caseId !== pcCase.id) {
-      return NextResponse.json(
-        { error: "Invalid Costing Baseline: Selected costing version does not belong to the specified opportunity case." },
-        { status: 400 }
-      );
-    }
-
-    if (costingVersion.status !== "APPROVED") {
-      return NextResponse.json(
-        { error: "Invalid Costing Baseline: Proposals can only be created from an APPROVED costing version." },
-        { status: 400 }
-      );
-    }
-
     let validUntil: Date | null = null;
     const vDays = validityDays !== undefined && validityDays !== null ? Number(validityDays) : null;
     if (vDays && vDays > 0) {
       validUntil = new Date(Date.now() + vDays * 24 * 60 * 60 * 1000);
     }
 
-    const proposal = await prisma.preContractProposal.create({
-      data: {
-        proposalCode: proposalCode?.trim() || null,
-        caseId: pcCase.id,
-        companyId: pcCase.companyId,
-        operationType: pcCase.operationType,
-        status: "DRAFT",
-        currentVersionNumber: 1,
-        createdBy: user.name || user.email || user.id,
-        versions: {
-          create: [
-            {
-              versionNumber: 1,
-              costEstimateId: costingVersion.estimateId,
-              costEstimateVersionId: costingVersion.id,
-              costEstimateChecksum: costingVersion.checksum || null,
-              status: "DRAFT",
-              title: title?.trim() || `Proposal for ${pcCase.title}`,
-              sellingPrice: costingVersion.sellingPrice,
-              currency: costingVersion.currency,
-              validityDays: vDays,
-              validUntil,
-              scopeSummary: scopeSummary?.trim() || null,
-              assumptions: assumptions?.trim() || null,
-              exclusions: exclusions?.trim() || null,
-              termsAndConditions: termsAndConditions?.trim() || null,
-              createdBy: user.name || user.email || user.id
-            }
-          ]
-        }
-      },
-      include: {
-        case: { include: { prospectClient: true } },
-        versions: { orderBy: { versionNumber: "desc" }, take: 1 }
+    const actorId = user.id || user.email || user.name || "SYSTEM";
+    const actorDisplay = user.name || user.email || user.id || "SYSTEM";
+
+    const txResult = await prisma.$transaction(async (tx) => {
+      // Acquire InnoDB row lock on the target costing baseline so concurrent requests serialize cleanly.
+      await tx.$queryRaw`
+        SELECT id, status FROM \`PreContractCostEstimateVersion\` WHERE id = ${normalizedCostEstimateVersionId} FOR UPDATE
+      `;
+
+      const costingVersion = await tx.preContractCostEstimateVersion.findUnique({
+        where: { id: normalizedCostEstimateVersionId },
+        include: { estimate: true }
+      });
+
+      if (!costingVersion) {
+        return { kind: "not_found" as const };
       }
+
+      if (!costingVersion.estimate || costingVersion.estimate.caseId !== pcCase.id) {
+        return { kind: "invalid_case" as const };
+      }
+
+      if (costingVersion.status !== "APPROVED") {
+        return { kind: "not_approved" as const };
+      }
+
+      const existingProposal = await findActiveProposalForBaseline(tx, {
+        caseId: pcCase.id,
+        costEstimateVersionId: costingVersion.id
+      });
+
+      if (existingProposal) {
+        return { kind: "duplicate" as const, existingProposal };
+      }
+
+      const proposal = await tx.preContractProposal.create({
+        data: {
+          proposalCode: proposalCode?.trim() || null,
+          caseId: pcCase.id,
+          companyId: pcCase.companyId,
+          operationType: pcCase.operationType,
+          status: "DRAFT",
+          currentVersionNumber: 1,
+          createdBy: actorDisplay,
+          versions: {
+            create: [
+              {
+                versionNumber: 1,
+                costEstimateId: costingVersion.estimateId,
+                costEstimateVersionId: costingVersion.id,
+                costEstimateChecksum: costingVersion.checksum || null,
+                status: "DRAFT",
+                title: title?.trim() || `Proposal for ${pcCase.title}`,
+                sellingPrice: costingVersion.sellingPrice,
+                currency: costingVersion.currency,
+                validityDays: vDays,
+                validUntil,
+                scopeSummary: scopeSummary?.trim() || null,
+                assumptions: assumptions?.trim() || null,
+                exclusions: exclusions?.trim() || null,
+                termsAndConditions: termsAndConditions?.trim() || null,
+                createdBy: actorDisplay
+              }
+            ]
+          }
+        },
+        include: {
+          case: { include: { prospectClient: true } },
+          versions: { orderBy: { versionNumber: "desc" }, take: 1 }
+        }
+      });
+
+      await tx.userActivityLog.create({
+        data: {
+          userId: actorId,
+          action: "CREATE_PROPOSAL",
+          entityType: "PreContractProposal",
+          entityId: proposal.id,
+          afterJson: JSON.stringify({
+            caseId: pcCase.id,
+            costEstimateVersionId: costingVersion.id,
+            proposalCode: proposal.proposalCode,
+            operationType: pcCase.operationType,
+            companyId: pcCase.companyId,
+            status: proposal.status
+          })
+        }
+      });
+
+      return { kind: "created" as const, proposal };
     });
 
-    const dto = toClientSafeProposalDTO(proposal);
+    if (txResult.kind === "not_found") {
+      return NextResponse.json({ error: "Costing estimate version not found." }, { status: 404 });
+    }
+    if (txResult.kind === "invalid_case") {
+      return NextResponse.json(
+        { error: "Invalid Costing Baseline: Selected costing version does not belong to the specified opportunity case." },
+        { status: 400 }
+      );
+    }
+    if (txResult.kind === "not_approved") {
+      return NextResponse.json(
+        { error: "Invalid Costing Baseline: Proposals can only be created from an APPROVED costing version." },
+        { status: 400 }
+      );
+    }
+    if (txResult.kind === "duplicate") {
+      try {
+        await prisma.userActivityLog.create({
+          data: {
+            userId: actorId,
+            action: "DUPLICATE_PROPOSAL_BLOCKED",
+            entityType: "PreContractProposal",
+            entityId: txResult.existingProposal.id,
+            afterJson: JSON.stringify({
+              attemptedCaseId: pcCase.id,
+              attemptedCostEstimateVersionId: normalizedCostEstimateVersionId,
+              existingProposalId: txResult.existingProposal.id,
+              existingStatus: txResult.existingProposal.status,
+              operationType: pcCase.operationType,
+              companyId: pcCase.companyId
+            })
+          }
+        });
+      } catch (auditErr) {
+        console.error("Failed to record duplicate proposal audit log:", auditErr);
+      }
 
-    return NextResponse.json({ proposal, dto }, { status: 201 });
+      return NextResponse.json(
+        buildDuplicateQuotationConflictPayload(txResult.existingProposal),
+        { status: 409 }
+      );
+    }
+
+    const dto = toClientSafeProposalDTO(txResult.proposal);
+
+    return NextResponse.json({ proposal: txResult.proposal, dto }, { status: 201 });
   } catch (err: any) {
     return NextResponse.json(
       { error: err.message || "Failed to create pre-contract proposal." },

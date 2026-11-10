@@ -3,6 +3,7 @@ import { prisma } from "@ahh-wfm/database";
 import { checkApiAuth } from "@/lib/api-guards";
 import { hasPermission, isAdminUser } from "@/lib/permissions";
 import { calculateCostingEstimate, serializeCostingEstimate } from "@/lib/precontract-costing";
+import { findActiveProposalsByCostingVersionIds } from "@/lib/precontract-proposal";
 
 export async function GET(request: Request) {
   const auth = await checkApiAuth();
@@ -98,8 +99,30 @@ export async function GET(request: Request) {
       orderBy: { updatedAt: "desc" }
     });
 
+    const approvedVersionIds: string[] = [];
+    estimates.forEach((est) => {
+      (est.versions || []).forEach((v) => {
+        if (v.status === "APPROVED") {
+          approvedVersionIds.push(v.id);
+        }
+      });
+    });
+
+    const activeProposalByVersionId = await findActiveProposalsByCostingVersionIds(
+      prisma,
+      approvedVersionIds
+    );
+
     return NextResponse.json({
-      estimates: estimates.map((est) => serializeCostingEstimate(est))
+      estimates: estimates.map((est) =>
+        serializeCostingEstimate({
+          ...est,
+          versions: (est.versions || []).map((v) => ({
+            ...v,
+            activeProposal: v.status === "APPROVED" ? activeProposalByVersionId.get(v.id) || null : null
+          }))
+        })
+      )
     });
   } catch (err: any) {
     return NextResponse.json(

@@ -1,7 +1,19 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
+import { Button } from "@ahh-wfm/ui/src";
+
+interface ActiveProposalLink {
+  id: string;
+  proposalCode: string | null;
+  title: string;
+  status: string;
+  currentVersionNumber: number;
+  caseId: string;
+  costEstimateVersionId: string;
+  url: string;
+}
 
 interface ProposalItem {
   id: string;
@@ -47,6 +59,8 @@ export default function ProposalRegisterPage() {
   const [validityDaysInput, setValidityDaysInput] = useState("30");
   const [creating, setCreating] = useState(false);
   const [formError, setFormError] = useState("");
+  const [duplicateConflict, setDuplicateConflict] = useState<ActiveProposalLink | null>(null);
+  const submitLockRef = useRef(false);
 
   useEffect(() => {
     fetchProposals();
@@ -106,6 +120,7 @@ export default function ProposalRegisterPage() {
 
   const handleOpenNewModal = () => {
     setFormError("");
+    setDuplicateConflict(null);
     setCostingsError("");
     fetchEligibleCases();
     setShowNewModal(true);
@@ -116,10 +131,12 @@ export default function ProposalRegisterPage() {
     setSelectedCostingVersionId("");
     setCostings([]);
     setCostingsError("");
+    setFormError("");
+    setDuplicateConflict(null);
     if (!cId) return;
 
     const matchedCase = cases.find((c: any) => c.id === cId);
-    if (matchedCase && !proposalTitle) {
+    if (matchedCase) {
       setProposalTitle(`Proposal for ${matchedCase.title}`);
     }
 
@@ -138,7 +155,8 @@ export default function ProposalRegisterPage() {
     }
     if (embeddedApprovedVersions.length > 0) {
       setCostings(embeddedApprovedVersions);
-      setSelectedCostingVersionId(embeddedApprovedVersions[0].id);
+      const firstAvailableEmbedded = embeddedApprovedVersions.find((v) => !v.activeProposal);
+      setSelectedCostingVersionId(firstAvailableEmbedded ? firstAvailableEmbedded.id : "");
     }
 
     setCostingsLoading(true);
@@ -158,11 +176,14 @@ export default function ProposalRegisterPage() {
           }
         });
         setCostings(approvedVersions);
-        if (approvedVersions.length > 0) {
-          setSelectedCostingVersionId((prev) =>
-            approvedVersions.some((av) => av.id === prev) ? prev : approvedVersions[0].id
-          );
-        }
+        const firstAvailable = approvedVersions.find((av) => !av.activeProposal);
+        setSelectedCostingVersionId((prev) => {
+          const prevVersion = approvedVersions.find((av) => av.id === prev);
+          if (prevVersion && !prevVersion.activeProposal) {
+            return prevVersion.id;
+          }
+          return firstAvailable ? firstAvailable.id : "";
+        });
       } else {
         const errData = await res.json().catch(() => ({}));
         if (embeddedApprovedVersions.length === 0) {
@@ -183,12 +204,27 @@ export default function ProposalRegisterPage() {
 
   const handleCreateProposal = async (e: React.FormEvent) => {
     e.preventDefault();
-    setFormError("");
-    if (!selectedCaseId || !selectedCostingVersionId) {
-      setFormError("Please select an opportunity case and an approved costing baseline.");
+    if (submitLockRef.current || creating) {
       return;
     }
 
+    setFormError("");
+    setDuplicateConflict(null);
+    if (!selectedCaseId || !selectedCostingVersionId) {
+      setFormError("Please select an opportunity case and an available approved costing baseline.");
+      return;
+    }
+
+    const selectedBaseline = costings.find((cv: any) => cv.id === selectedCostingVersionId);
+    if (selectedBaseline?.activeProposal) {
+      setDuplicateConflict(selectedBaseline.activeProposal);
+      setFormError(
+        "An active quotation already exists for this opportunity and approved costing baseline. Open the existing quotation to edit or create a revision."
+      );
+      return;
+    }
+
+    submitLockRef.current = true;
     setCreating(true);
     try {
       const res = await fetch("/api/v1/commercial/proposals", {
@@ -209,14 +245,25 @@ export default function ProposalRegisterPage() {
         setSelectedCostingVersionId("");
         setProposalTitle("");
         setProposalCodeInput("");
+        setDuplicateConflict(null);
         fetchProposals();
+        fetchEligibleCases();
       } else {
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
+        if (res.status === 409 && data.existingProposal) {
+          setDuplicateConflict(data.existingProposal);
+          fetchProposals();
+          fetchEligibleCases();
+          if (selectedCaseId) {
+            handleCaseSelect(selectedCaseId);
+          }
+        }
         setFormError(data.error || "Failed to create proposal.");
       }
     } catch (err: any) {
       setFormError(err.message || "An unexpected error occurred.");
     } finally {
+      submitLockRef.current = false;
       setCreating(false);
     }
   };
@@ -267,13 +314,15 @@ export default function ProposalRegisterPage() {
             Build, review, issue, and manage commercial proposals underpinned by approved CL-3 costing baselines.
           </p>
         </div>
-        <button
+        <Button
+          variant="primary"
+          size="md"
           onClick={handleOpenNewModal}
-          className="inline-flex items-center justify-center px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm rounded-lg shadow-sm transition-colors focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+          className="inline-flex items-center justify-center shadow-sm"
         >
           <span className="material-icons-outlined text-lg mr-2">add</span>
           New Proposal
-        </button>
+        </Button>
       </div>
 
       {proposalsError && (
@@ -443,8 +492,19 @@ export default function ProposalRegisterPage() {
             </div>
 
             {formError && (
-              <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-xs font-medium text-red-700">
-                {formError}
+              <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-xs font-medium text-red-700 space-y-2">
+                <div>{formError}</div>
+                {duplicateConflict && (
+                  <div>
+                    <Link
+                      href={duplicateConflict.url || `/commercial/proposals/${duplicateConflict.id}`}
+                      className="inline-flex items-center gap-1 font-semibold text-[#093FA6] hover:underline"
+                    >
+                      <span>Open Existing Quotation ({duplicateConflict.proposalCode || duplicateConflict.title})</span>
+                      <span className="material-icons-outlined text-sm">arrow_forward</span>
+                    </Link>
+                  </div>
+                )}
               </div>
             )}
 
@@ -487,9 +547,15 @@ export default function ProposalRegisterPage() {
                       c.costEstimates?.[0]?.survey?.prospectiveSite?.name ||
                       c.surveys?.[0]?.prospectiveSite?.name ||
                       null;
+                    const allApprovedVersions = (c.costEstimates || []).flatMap((e: any) => e.versions || []);
+                    const hasAvailableBaseline = allApprovedVersions.some((v: any) => !v.activeProposal);
+                    const statusHint =
+                      allApprovedVersions.length > 0 && !hasAvailableBaseline
+                        ? " — [Active Quotation Exists]"
+                        : "";
                     return (
                       <option key={c.id} value={c.id}>
-                        {c.title} — {clientName}{siteName ? ` | Site: ${siteName}` : ""} ({c.operationType})
+                        {c.title} — {clientName}{siteName ? ` | Site: ${siteName}` : ""} ({c.operationType}){statusHint}
                       </option>
                     );
                   })}
@@ -560,10 +626,15 @@ export default function ProposalRegisterPage() {
                     const estRef =
                       cv.estimate?.estimateNumber ||
                       `COST-${(cv.estimate?.id || cv.estimateId || cv.id).slice(0, 8).toUpperCase()}`;
+                    const activeProp: ActiveProposalLink | null = cv.activeProposal || null;
+                    const activeLabel = activeProp
+                      ? ` [Active Quotation: ${activeProp.proposalCode || activeProp.id.slice(0, 8)} • ${activeProp.status} v${activeProp.currentVersionNumber}.0 — Use Revision]`
+                      : "";
                     return (
-                      <option key={cv.id} value={cv.id}>
+                      <option key={cv.id} value={cv.id} disabled={Boolean(activeProp)}>
                         {estRef} (v{cv.versionNumber}) — {cv.currency}{" "}
                         {Number(cv.sellingPrice).toLocaleString("en-US", { minimumFractionDigits: 2 })} (Approved)
+                        {activeLabel}
                       </option>
                     );
                   })}
@@ -573,6 +644,54 @@ export default function ProposalRegisterPage() {
                     No APPROVED costing baseline found for this opportunity. Please approve a costing estimate first.
                   </p>
                 )}
+
+                {selectedCaseId && !costingsLoading && (() => {
+                  const quotedBaselines = costings.filter((cv: any) => Boolean(cv.activeProposal));
+                  if (quotedBaselines.length === 0) return null;
+                  const allQuoted = costings.length > 0 && quotedBaselines.length === costings.length;
+                  return (
+                    <div className="mt-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-900 space-y-2">
+                      <div className="font-semibold flex items-center gap-1.5">
+                        <span className="material-icons-outlined text-base text-amber-700">warning</span>
+                        <span>
+                          {allQuoted
+                            ? "Active quotation already exists for all approved costing baselines on this opportunity."
+                            : "One or more approved costing baselines already have an active quotation."}
+                        </span>
+                      </div>
+                      <p className="text-amber-800">
+                        Only one independent quotation is allowed per Opportunity Case and Approved Costing Baseline. Open the existing quotation to edit the draft or create a revision.
+                      </p>
+                      <div className="space-y-1.5">
+                        {quotedBaselines.map((cv: any) => {
+                          const ap: ActiveProposalLink = cv.activeProposal;
+                          return (
+                            <div
+                              key={cv.id}
+                              className="flex items-center justify-between gap-2 bg-white/80 border border-amber-200 rounded-md px-2.5 py-1.5"
+                            >
+                              <div className="min-w-0">
+                                <span className="font-semibold text-slate-900">
+                                  {ap.proposalCode || ap.title}
+                                </span>{" "}
+                                <span className="text-slate-600">
+                                  ({ap.status} • v{ap.currentVersionNumber}.0)
+                                </span>
+                              </div>
+                              <Link
+                                href={ap.url || `/commercial/proposals/${ap.id}`}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-[#093FA6] hover:bg-[#116BEE] text-white font-medium text-xs shrink-0 transition-colors"
+                              >
+                                Open Existing Quotation
+                                <span className="material-icons-outlined text-xs">open_in_new</span>
+                              </Link>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
 
               <div>
@@ -616,20 +735,26 @@ export default function ProposalRegisterPage() {
               </div>
 
               <div className="flex justify-end gap-3 border-t border-slate-200 pt-4 mt-6">
-                <button
+                <Button
                   type="button"
+                  variant="secondary"
+                  size="md"
                   onClick={() => setShowNewModal(false)}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-medium rounded-lg"
                 >
                   Cancel
-                </button>
-                <button
+                </Button>
+                <Button
                   type="submit"
-                  disabled={creating || !selectedCostingVersionId}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg disabled:opacity-50"
+                  variant="primary"
+                  size="md"
+                  disabled={
+                    creating ||
+                    !selectedCostingVersionId ||
+                    Boolean(costings.find((cv: any) => cv.id === selectedCostingVersionId)?.activeProposal)
+                  }
                 >
                   {creating ? "Creating..." : "Create Draft Proposal"}
-                </button>
+                </Button>
               </div>
             </form>
           </div>
