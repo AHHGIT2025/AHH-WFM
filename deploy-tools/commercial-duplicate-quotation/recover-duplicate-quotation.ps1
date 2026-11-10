@@ -259,8 +259,8 @@ param(
 
     $targetNextDir = Join-Path $RepoPath "apps\web\.next"
     $ts            = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
-    $stageDir      = "$targetNextDir.restore-stage-$PID-$ts"
-    $displacedDir  = "$targetNextDir.displaced-$PID-$ts"
+    $stageDir      = Join-Path $BackupRoot "restore-stage-$PID-$ts"
+    $displacedDir  = Join-Path $BackupRoot "displaced-live-web-next-$ts"
 
     if (Test-Path -LiteralPath $stageDir) {
         Remove-Item -LiteralPath $stageDir -Recurse -Force
@@ -277,14 +277,28 @@ param(
 
     try {
         if (Test-Path -LiteralPath $targetNextDir) {
-            [System.IO.Directory]::Move($targetNextDir, $displacedDir)
+            try {
+                [System.IO.Directory]::Move($targetNextDir, $displacedDir)
+            } catch {
+                Copy-Item -LiteralPath $targetNextDir -Destination $displacedDir -Recurse -Force
+                Remove-Item -LiteralPath $targetNextDir -Recurse -Force
+            }
             Write-Host "Displaced live build artifacts retained at: $displacedDir" -ForegroundColor Yellow
         }
-        [System.IO.Directory]::Move($stageDir, $targetNextDir)
+        try {
+            [System.IO.Directory]::Move($stageDir, $targetNextDir)
+        } catch {
+            Copy-Item -LiteralPath $stageDir -Destination $targetNextDir -Recurse -Force
+            Remove-Item -LiteralPath $stageDir -Recurse -Force
+        }
     } catch {
         $errMsg = $_.Exception.Message
         if (-not (Test-Path -LiteralPath $targetNextDir) -and (Test-Path -LiteralPath $displacedDir)) {
-            try { [System.IO.Directory]::Move($displacedDir, $targetNextDir) } catch {}
+            try {
+                [System.IO.Directory]::Move($displacedDir, $targetNextDir)
+            } catch {
+                try { Copy-Item -LiteralPath $displacedDir -Destination $targetNextDir -Recurse -Force } catch {}
+            }
         }
         Remove-Item -LiteralPath $stageDir -Recurse -Force -ErrorAction SilentlyContinue
         throw "RECOVERY ABORT: Atomic directory swap failed: $errMsg"
@@ -353,19 +367,7 @@ param(
     }
 
     if (Test-Path -LiteralPath $displacedDir) {
-        $archiveTarget = Join-Path $BackupRoot "displaced-web-next-$ts"
-        try {
-            [System.IO.Directory]::Move($displacedDir, $archiveTarget)
-            Write-Host "Displaced build artifacts archived after health check success: $archiveTarget" -ForegroundColor Green
-        } catch {
-            try {
-                Copy-Item -LiteralPath $displacedDir -Destination $archiveTarget -Recurse -Force
-                Remove-Item -LiteralPath $displacedDir -Recurse -Force
-                Write-Host "Displaced build artifacts archived via copy/remove: $archiveTarget" -ForegroundColor Green
-            } catch {
-                Write-Host "Displaced build artifacts retained at: $displacedDir" -ForegroundColor Yellow
-            }
-        }
+        Write-Host "Displaced build artifacts remain archived at: $displacedDir" -ForegroundColor Green
     }
 
     Write-Host "`n=================================================================" -ForegroundColor Green

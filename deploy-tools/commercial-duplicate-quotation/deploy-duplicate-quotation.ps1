@@ -96,6 +96,76 @@ param(
         return $catalog
     }
 
+    function Verify-DirectoryAgainstCatalog {
+        param(
+            [Parameter(Mandatory = $true)][string]$DirectoryPath,
+            [Parameter(Mandatory = $true)][hashtable]$ExpectedCatalog
+        )
+        $actualCatalog = Get-CompleteDirectoryCatalog -DirectoryPath $DirectoryPath
+        if ($actualCatalog.Count -ne $ExpectedCatalog.Count) {
+            throw "ABORT: File count mismatch in '$DirectoryPath' (actual=$($actualCatalog.Count), expected=$($ExpectedCatalog.Count))."
+        }
+        foreach ($entry in $ExpectedCatalog.GetEnumerator()) {
+            $relPath = $entry.Key
+            $expectedHash = $entry.Value
+            if (-not $actualCatalog.Contains($relPath)) {
+                throw "ABORT: Missing file '$relPath' in '$DirectoryPath'."
+            }
+            if ($actualCatalog[$relPath] -ne $expectedHash) {
+                throw "ABORT: SHA-256 mismatch for '$relPath' in '$DirectoryPath'."
+            }
+        }
+    }
+
+    function Remove-JunctionSafe {
+        param([Parameter(Mandatory = $true)][string]$JunctionPath)
+        if (Test-Path -LiteralPath $JunctionPath) {
+            $item = Get-Item -LiteralPath $JunctionPath -Force
+            if (($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -ne 0) {
+                # Deletes only the reparse point without touching target directory contents
+                [System.IO.Directory]::Delete($JunctionPath)
+            }
+        }
+    }
+
+    function Move-DirectorySafe {
+        param(
+            [Parameter(Mandatory = $true)][string]$SourcePath,
+            [Parameter(Mandatory = $true)][string]$DestPath
+        )
+        try {
+            [System.IO.Directory]::Move($SourcePath, $DestPath)
+        } catch {
+            Copy-Item -LiteralPath $SourcePath -Destination $DestPath -Recurse -Force
+            Remove-Item -LiteralPath $SourcePath -Recurse -Force
+        }
+    }
+
+    function Cleanup-StageWorktree {
+        param(
+            [string]$RepoRoot,
+            [string]$WorktreePath
+        )
+        if ([string]::IsNullOrWhiteSpace($WorktreePath)) { return }
+        try {
+            Remove-JunctionSafe -JunctionPath (Join-Path $WorktreePath "node_modules")
+            Remove-JunctionSafe -JunctionPath (Join-Path $WorktreePath "apps\web\node_modules")
+        } catch {}
+        if (Test-Path -LiteralPath $WorktreePath) {
+            $prev = $ErrorActionPreference
+            $ErrorActionPreference = "Continue"
+            try {
+                Push-Location -LiteralPath $RepoRoot
+                git -c core.longpaths=true worktree remove --force "$WorktreePath" 2>$null
+                Pop-Location
+            } catch {}
+            $ErrorActionPreference = $prev
+            if (Test-Path -LiteralPath $WorktreePath) {
+                Remove-Item -LiteralPath $WorktreePath -Recurse -Force -ErrorAction SilentlyContinue
+            }
+        }
+    }
+
     $ExpectedBranch     = "manpower-operations-scope"
     $ExpectedOrigin     = "https://github.com/AHHGIT2025/AHH-WFM.git"
     $BaselineSha        = "c44104ceb6f9a917454805f72c449e6fdbd808c3"
@@ -157,7 +227,6 @@ param(
         throw "NO-GO ABORT: Working tree is not clean:`n$worktreeJoined"
     }
 
-    # Record baseline state, PID, and restart counters for Mobile and 4 protected workers
     $protectedWorkers = @(
         "ahh-wfm-manpower-reconciliation-worker-dev",
         "ahh-wfm-secfac-notification-worker-dev",
@@ -206,6 +275,7 @@ param(
 
     Write-Host "`n=================================================================" -ForegroundColor Cyan
     Write-Host " PHASE 2: COMPLETE .NEXT BACKUP & 100% FILE INTEGRITY HASHING    " -ForegroundColor Cyan
+    Write-Host " (Web remains ONLINE serving live build)                         " -ForegroundColor Cyan
     Write-Host "=================================================================" -ForegroundColor Cyan
 
     $webNextPath = Join-Path $RepoPath "apps\web\.next"
@@ -241,20 +311,7 @@ param(
     }
 
     Write-Host "Verifying complete 100% file integrity in backup directory '$bakWebNext'..."
-    $bakCatalog = Get-CompleteDirectoryCatalog -DirectoryPath $bakWebNext
-    if ($bakCatalog.Count -ne $srcCatalog.Count) {
-        throw "NO-GO ABORT: Backup file count mismatch (source=$($srcCatalog.Count), backup=$($bakCatalog.Count))."
-    }
-    foreach ($entry in $srcCatalog.GetEnumerator()) {
-        $relPath = $entry.Key
-        $expectedHash = $entry.Value
-        if (-not $bakCatalog.Contains($relPath)) {
-            throw "NO-GO ABORT: Missing file '$relPath' in backup '$bakWebNext'."
-        }
-        if ($bakCatalog[$relPath] -ne $expectedHash) {
-            throw "NO-GO ABORT: SHA-256 mismatch for backup file '$relPath'."
-        }
-    }
+    Verify-DirectoryAgainstCatalog -DirectoryPath $bakWebNext -ExpectedCatalog $srcCatalog
     Write-Host ("100% file integrity verified across all {0} backup files." -f $srcCatalog.Count) -ForegroundColor Green
 
     $manifestFile = Join-Path $BackupRoot "backup-manifest.json"
@@ -311,8 +368,8 @@ param(
     Write-Host "Complete backup registered and locked in $BackupRoot" -ForegroundColor Green
 
     Write-Host "`n=================================================================" -ForegroundColor Cyan
-    Write-Host " PHASE 3: FETCH, ANCESTRY GATES, 8-FILE DIFF & FAST-FORWARD      " -ForegroundColor Cyan
-    Write-Host " (Preserves branch 'manpower-operations-scope' without checkout) " -ForegroundColor Cyan
+    Write-Host " PHASE 3: FETCH, SAFE P0 CHECK & PINNED RELEASE GATES            " -ForegroundColor Cyan
+    Write-Host " (No live merge yet; Web remains ONLINE at baseline)             " -ForegroundColor Cyan
     Write-Host "=================================================================" -ForegroundColor Cyan
 
     Invoke-NativeStep -StepName "git fetch origin $SourceBranch" -Command {
@@ -320,7 +377,10 @@ param(
     }
 
     Invoke-NativeStep -StepName "Verify target commit exists ($TargetSha)" -Command {
-        git cat-file -e "$TargetSha^{commit}"
+        git cat-file -e $TargetSha
+        if ($LASTEXITCODE -ne 0) { throw "Target object '$TargetSha' missing" }
+        $objType = ((git cat-file -t $TargetSha) -join "").Trim()
+        if ($LASTEXITCODE -ne 0 -or $objType -ne "commit") { throw "Target '$TargetSha' is '$objType', expected 'commit'" }
     }
 
     Invoke-NativeStep -StepName "Verify baseline -> target ancestry ($BaselineSha -> $TargetSha)" -Command {
@@ -331,20 +391,52 @@ param(
         git merge-base --is-ancestor $TargetSha "origin/$SourceBranch"
     }
 
-    # Gate: Forbidden P0 commit MUST NOT be an ancestor of TargetSha
+    # Gate: Strictly 1 commit between BaselineSha and TargetSha
     $prevPref = $ErrorActionPreference
     $ErrorActionPreference = "Continue"
-    git merge-base --is-ancestor $ForbiddenP0Sha $TargetSha
-    $p0AncExit = $LASTEXITCODE
+    $commitCountRaw = ((git rev-list --count "$BaselineSha..$TargetSha") -join "").Trim()
+    $countExit      = $LASTEXITCODE
+    $ErrorActionPreference = $prevPref
+    if ($countExit -ne 0 -or $commitCountRaw -ne "1") {
+        throw "NO-GO ABORT: Expected strictly 1 commit between '$BaselineSha' and '$TargetSha', found '$commitCountRaw' (exit=$countExit)."
+    }
+    Write-Host "Verified strict 1-commit delta ($BaselineSha..$TargetSha = 1 commit)." -ForegroundColor Green
+
+    # Correction 2: Safe P0 exclusion validation without misinterpreting exit code 128 on absent Git objects
+    $prevPref = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    git cat-file -e $ForbiddenP0Sha 2>$null
+    $p0ExistsExit = $LASTEXITCODE
+    $ErrorActionPreference = $prevPref
+
+    if ($p0ExistsExit -eq 0) {
+        $prevPref = $ErrorActionPreference
+        $ErrorActionPreference = "Continue"
+        git merge-base --is-ancestor $ForbiddenP0Sha $TargetSha 2>$null
+        $p0AncExit = $LASTEXITCODE
+        $ErrorActionPreference = $prevPref
+
+        if ($p0AncExit -eq 0) {
+            throw "CRITICAL NO-GO ABORT: Target commit '$TargetSha' contains forbidden UM-RBAC-1 P0 commit '$ForbiddenP0Sha'!"
+        } elseif ($p0AncExit -ne 1) {
+            throw "NO-GO ABORT: Unexpected Git exit code ($p0AncExit) during P0 ancestry check for '$ForbiddenP0Sha'."
+        }
+        Write-Host "Verified P0 exclusion: '$ForbiddenP0Sha' is present in Git store and confirmed NOT an ancestor of '$TargetSha'." -ForegroundColor Green
+    } elseif ($p0ExistsExit -eq 1) {
+        Write-Host "P0 Git object '$ForbiddenP0Sha' is not present in SERVER Git object store (expected; P0 was never fetched)." -ForegroundColor Yellow
+        Write-Host "P0 exclusion enforced via pinned 1-commit ancestry ($BaselineSha -> $TargetSha), exact 8-file diff, and verified LOCAL provenance." -ForegroundColor Yellow
+    } else {
+        throw "NO-GO ABORT: Unexpected Git exit code ($p0ExistsExit) checking P0 object '$ForbiddenP0Sha'."
+    }
+
+    # Exact 8-file release diff gate
+    $prevPref = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
     $diffFiles = @(git diff --name-only $BaselineSha $TargetSha)
     $diffExit  = $LASTEXITCODE
     $ErrorActionPreference = $prevPref
-
-    if ($p0AncExit -eq 0) {
-        throw "CRITICAL NO-GO ABORT: Target commit '$TargetSha' contains forbidden UM-RBAC-1 P0 commit '$ForbiddenP0Sha'!"
-    }
     if ($diffExit -ne 0) {
-        throw "NO-GO ABORT: git diff --name-only failed."
+        throw "NO-GO ABORT: git diff --name-only failed with exit code $diffExit."
     }
 
     $expectedFiles = @(
@@ -364,69 +456,147 @@ param(
     Write-Host "Verified exact 8-file release diff (0 unexpected modifications):" -ForegroundColor Green
     $diffFiles | ForEach-Object { Write-Host "  - $_" }
 
-    Invoke-NativeStep -StepName "git merge --ff-only $TargetSha" -Command {
-        git merge --ff-only $TargetSha
-    }
-
-    $prevPref = $ErrorActionPreference
-    $ErrorActionPreference = "Continue"
-    $deployedHead   = ((git rev-parse HEAD) -join "").Trim()
-    $deployedBranch = ((git branch --show-current) -join "").Trim()
-    $ErrorActionPreference = $prevPref
-
-    if ($deployedHead -eq $ForbiddenP0Sha) {
-        throw "CRITICAL ABORT: SERVER HEAD advanced to forbidden P0 commit '$ForbiddenP0Sha'!"
-    }
-    if ($deployedHead -ne $TargetSha) {
-        throw "ABORT: Post-merge HEAD is '$deployedHead', expected '$TargetSha'."
-    }
-    if ($deployedBranch -ne $ExpectedBranch) {
-        throw "ABORT: SERVER branch changed to '$deployedBranch', expected '$ExpectedBranch'."
-    }
-    Write-Host "SERVER branch '$deployedBranch' strictly preserved and fast-forwarded to: $deployedHead" -ForegroundColor Green
-
     Write-Host "`n=================================================================" -ForegroundColor Cyan
-    Write-Host " PHASE 4: WEB MAINTENANCE WINDOW & FRESH PRODUCTION BUILD        " -ForegroundColor Cyan
-    Write-Host " (Workers & Mobile remain ONLINE; DB migrations NOT executed)    " -ForegroundColor Cyan
+    Write-Host " PHASE 4: ISOLATED STAGING BUILD BEFORE WEB SERVICE DOWNTIME     " -ForegroundColor Cyan
+    Write-Host " (Web remains ONLINE; live apps/web/.next NOT overwritten)       " -ForegroundColor Cyan
     Write-Host "=================================================================" -ForegroundColor Cyan
 
+    $StageWorktreeDir = Join-Path $BackupsParent "stage-$PID-$Timestamp"
+    $StagedWebNext    = Join-Path $BackupRoot "staged-web-next"
     $buildStartTimeUtc = (Get-Date).ToUniversalTime()
+    $newCatalog = $null
+    $newWebBuildId = ""
+    $newWebBuildTimeUtc = $null
 
-    Invoke-NativeStep -StepName "pm2 stop ahh-wfm-web-dev" -Command {
-        pm2 stop ahh-wfm-web-dev
+    try {
+        Invoke-NativeStep -StepName "Create detached staging worktree at $TargetSha" -Command {
+            git -c core.longpaths=true worktree add --detach "$StageWorktreeDir" $TargetSha
+        }
+
+        # Populate gitignored runtime/build prerequisites in staging worktree without altering live repo
+        if (Test-Path -LiteralPath (Join-Path $RepoPath ".env")) {
+            Copy-Item -LiteralPath (Join-Path $RepoPath ".env") -Destination (Join-Path $StageWorktreeDir ".env") -Force
+        }
+        Get-ChildItem -LiteralPath (Join-Path $RepoPath "apps\web") -Filter ".env*" -File -ErrorAction SilentlyContinue | ForEach-Object {
+            Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $StageWorktreeDir "apps\web\$($_.Name)") -Force
+        }
+        if (Test-Path -LiteralPath (Join-Path $RepoPath "packages\database\dist")) {
+            Copy-Item -LiteralPath (Join-Path $RepoPath "packages\database\dist") -Destination (Join-Path $StageWorktreeDir "packages\database\dist") -Recurse -Force
+        }
+        if (Test-Path -LiteralPath (Join-Path $RepoPath "packages\database\src\generated")) {
+            Copy-Item -LiteralPath (Join-Path $RepoPath "packages\database\src\generated") -Destination (Join-Path $StageWorktreeDir "packages\database\src\generated") -Recurse -Force
+        }
+
+        if (-not (Test-Path -LiteralPath (Join-Path $RepoPath "node_modules"))) {
+            throw "NO-GO ABORT: Root node_modules missing at '$RepoPath\node_modules'."
+        }
+        Invoke-NativeStep -StepName "Link root node_modules junction into staging worktree" -Command {
+            cmd /c mklink /J "`"$StageWorktreeDir\node_modules`"" "`"$RepoPath\node_modules`""
+        }
+        if (Test-Path -LiteralPath (Join-Path $RepoPath "apps\web\node_modules")) {
+            Invoke-NativeStep -StepName "Link apps/web/node_modules junction into staging worktree" -Command {
+                cmd /c mklink /J "`"$StageWorktreeDir\apps\web\node_modules`"" "`"$RepoPath\apps\web\node_modules`""
+            }
+        }
+
+        Push-Location -LiteralPath $StageWorktreeDir
+        try {
+            Invoke-NativeStep -StepName "prisma validate (staging)" -Command {
+                npx.cmd prisma validate --schema packages/database/prisma/schema.prisma
+            }
+            Invoke-NativeStep -StepName "npm run build --workspace=apps/web (staging)" -Command {
+                npm.cmd run build --workspace=apps/web
+            }
+        } finally {
+            Pop-Location
+        }
+
+        $stageBuiltNext = Join-Path $StageWorktreeDir "apps\web\.next"
+        if (-not (Test-NextBuildDirectory -NextDirPath $stageBuiltNext)) {
+            throw "NO-GO ABORT: Staged Web build at '$stageBuiltNext' failed structural validation. Live Web was NOT stopped or altered."
+        }
+
+        $newWebBuildIdFile  = Get-Item -LiteralPath (Join-Path $stageBuiltNext "BUILD_ID")
+        $newWebBuildId      = (Get-Content -LiteralPath $newWebBuildIdFile.FullName -Raw).Trim()
+        $newWebBuildTimeUtc = $newWebBuildIdFile.LastWriteTimeUtc
+        if ($newWebBuildTimeUtc -le $preWebBuildTimeUtc -or $newWebBuildTimeUtc -lt $buildStartTimeUtc.AddSeconds(-5)) {
+            throw "NO-GO ABORT: Staged BUILD_ID timestamp was not updated by build."
+        }
+
+        Write-Host ("Staged Web build validated (BUILD_ID: {0} -> {1}). Cataloging SHA-256..." -f $preWebBuildId, $newWebBuildId) -ForegroundColor Cyan
+        $newCatalog = Get-CompleteDirectoryCatalog -DirectoryPath $stageBuiltNext
+        Copy-Item -LiteralPath $stageBuiltNext -Destination $StagedWebNext -Recurse -Force
+        Verify-DirectoryAgainstCatalog -DirectoryPath $StagedWebNext -ExpectedCatalog $newCatalog
+        Write-Host ("Staged replacement build locked & verified ({0} files) at: {1}" -f $newCatalog.Count, $StagedWebNext) -ForegroundColor Green
+    } finally {
+        Cleanup-StageWorktree -RepoRoot $RepoPath -WorktreePath $StageWorktreeDir
     }
-    Start-Sleep -Seconds 2
-
-    Invoke-NativeStep -StepName "prisma validate" -Command {
-        npx.cmd prisma validate --schema packages/database/prisma/schema.prisma
-    }
-
-    Invoke-NativeStep -StepName "npm run build --workspace=apps/web" -Command {
-        npm.cmd run build --workspace=apps/web
-    }
-    if (-not (Test-NextBuildDirectory -NextDirPath $webNextPath)) {
-        throw "ABORT: apps/web/.next failed post-build validation. Run recover-duplicate-quotation.ps1 -BackupRoot '$BackupRoot'."
-    }
-
-    $newWebBuildIdFile = Get-Item -LiteralPath (Join-Path $webNextPath "BUILD_ID")
-    $newWebBuildId     = (Get-Content -LiteralPath $newWebBuildIdFile.FullName -Raw).Trim()
-
-    Write-Host "`nPost-Build Artifact Verification:" -ForegroundColor Cyan
-    Write-Host ("  - Web BUILD_ID : {0} -> {1} (Modified: {2})" -f $preWebBuildId, $newWebBuildId, $newWebBuildIdFile.LastWriteTime)
-
-    if ($newWebBuildIdFile.LastWriteTimeUtc -le $preWebBuildTimeUtc -or $newWebBuildIdFile.LastWriteTimeUtc -lt $buildStartTimeUtc.AddSeconds(-5)) {
-        throw "ABORT: apps/web/.next/BUILD_ID timestamp was not updated by build."
-    }
-    Write-Host "Verified fresh Web production build." -ForegroundColor Green
 
     Write-Host "`n=================================================================" -ForegroundColor Cyan
-    Write-Host " PHASE 5: RESTART WEB SERVICE ONLY                               " -ForegroundColor Cyan
+    Write-Host " PHASE 5: SHORT MAINTENANCE WINDOW -- SWAP, MERGE & WEB RESTART  " -ForegroundColor Cyan
+    Write-Host " (Mobile & 4 protected workers remain ONLINE throughout)         " -ForegroundColor Cyan
     Write-Host "=================================================================" -ForegroundColor Cyan
 
-    Invoke-NativeStep -StepName "pm2 restart ahh-wfm-web-dev --update-env" -Command {
-        pm2 restart ahh-wfm-web-dev --update-env
+    $ts = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+    $DisplacedNextPath = Join-Path $BackupRoot "displaced-predeploy-web-next-$ts"
+    $webStopped = $false
+
+    try {
+        Invoke-NativeStep -StepName "pm2 stop ahh-wfm-web-dev" -Command {
+            pm2 stop ahh-wfm-web-dev
+        }
+        $webStopped = $true
+        Start-Sleep -Seconds 2
+
+        Invoke-NativeStep -StepName "git merge --ff-only $TargetSha" -Command {
+            git merge --ff-only $TargetSha
+        }
+
+        $prevPref = $ErrorActionPreference
+        $ErrorActionPreference = "Continue"
+        $deployedHead   = ((git rev-parse HEAD) -join "").Trim()
+        $deployedBranch = ((git branch --show-current) -join "").Trim()
+        $ErrorActionPreference = $prevPref
+
+        if ($deployedHead -eq $ForbiddenP0Sha) {
+            throw "CRITICAL ABORT: SERVER HEAD advanced to forbidden P0 commit '$ForbiddenP0Sha'!"
+        }
+        if ($deployedHead -ne $TargetSha) {
+            throw "ABORT: Post-merge HEAD is '$deployedHead', expected '$TargetSha'."
+        }
+        if ($deployedBranch -ne $ExpectedBranch) {
+            throw "ABORT: SERVER branch changed to '$deployedBranch', expected '$ExpectedBranch'."
+        }
+        Write-Host "SERVER branch '$deployedBranch' preserved and fast-forwarded to: $deployedHead" -ForegroundColor Green
+
+        # Atomic directory swap: move live .next to BackupRoot (retaining it cleanly outside Git worktree) and move staged .next into place
+        try {
+            Move-DirectorySafe -SourcePath $webNextPath -DestPath $DisplacedNextPath
+            Write-Host "Previous live .next preserved at: $DisplacedNextPath" -ForegroundColor Yellow
+            Move-DirectorySafe -SourcePath $StagedWebNext -DestPath $webNextPath
+        } catch {
+            $swapErr = $_.Exception.Message
+            if (-not (Test-Path -LiteralPath $webNextPath) -and (Test-Path -LiteralPath $DisplacedNextPath)) {
+                try { Move-DirectorySafe -SourcePath $DisplacedNextPath -DestPath $webNextPath } catch {}
+            }
+            throw "ABORT: Build swap failed ($swapErr). Recover via recover-duplicate-quotation.ps1 -BackupRoot '$BackupRoot'."
+        }
+
+        Verify-DirectoryAgainstCatalog -DirectoryPath $webNextPath -ExpectedCatalog $newCatalog
+        Write-Host ("Switched live apps/web/.next to validated build (BUILD_ID: {0})." -f $newWebBuildId) -ForegroundColor Green
+
+        Invoke-NativeStep -StepName "pm2 restart ahh-wfm-web-dev --update-env" -Command {
+            pm2 restart ahh-wfm-web-dev --update-env
+        }
+        Start-Sleep -Seconds 5
+    } catch {
+        Write-Host "`n[SAFE STOP] Deployment halted during maintenance window: $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host "[SAFE STOP] Verified baseline backup remains preserved at: $BackupRoot" -ForegroundColor Yellow
+        if ($webStopped) {
+            Write-Host "[SAFE STOP] To restore baseline safely run: recover-duplicate-quotation.ps1 -BackupRoot `"$BackupRoot`"" -ForegroundColor Yellow
+        }
+        throw
     }
-    Start-Sleep -Seconds 5
 
     Write-Host "`n=================================================================" -ForegroundColor Cyan
     Write-Host " PHASE 6: POST-DEPLOYMENT SMOKE, AUTH & WORKER PID PRESERVATION  " -ForegroundColor Cyan
@@ -436,7 +606,7 @@ param(
 
     $pWeb = $pm2After | Where-Object { $_.name -eq "ahh-wfm-web-dev" }
     if ($null -eq $pWeb -or [string]$pWeb.status -ne "online") {
-        throw "ABORT: Web service 'ahh-wfm-web-dev' is not online after restart."
+        throw "ABORT: Web service 'ahh-wfm-web-dev' is not online after restart. Backup & displaced build preserved in '$BackupRoot'."
     }
     Write-Host ("Web Service [ahh-wfm-web-dev] : online (PID {0})" -f $pWeb.pid) -ForegroundColor Green
 
@@ -523,8 +693,9 @@ param(
     Write-Host " DUPLICATE QUOTATION FIX DEPLOYED & VERIFIED AT SHA: $finalHead  " -ForegroundColor Green
     Write-Host " Deployment ID    : $DeploymentId                                " -ForegroundColor Green
     Write-Host " Branch Preserved : $finalBranch                                 " -ForegroundColor Green
-    Write-Host " New Web BUILD_ID : $newWebBuildId ($($newWebBuildIdFile.LastWriteTime))" -ForegroundColor Green
+    Write-Host " New Web BUILD_ID : $newWebBuildId ($newWebBuildTimeUtc UTC)     " -ForegroundColor Green
     Write-Host " Complete Backup  : $BackupRoot ($($srcCatalog.Count) files)     " -ForegroundColor Green
+    Write-Host " Displaced Build  : $DisplacedNextPath (Preserved)               " -ForegroundColor Green
     Write-Host " Mobile & Workers : 100% Preserved (Unchanged PIDs & Restarts)   " -ForegroundColor Green
     Write-Host "=================================================================" -ForegroundColor Green
 }

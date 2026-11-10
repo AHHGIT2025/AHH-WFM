@@ -101,11 +101,22 @@ param(
             Record-Check -Name "Git HEAD" -Status "FAIL" -Details "Expected HEAD '$ExpectedHead', found '$curHead'."
         }
 
-        git merge-base --is-ancestor $ForbiddenP0Sha $curHead 2>$null
-        if ($LASTEXITCODE -eq 0) {
-            Record-Check -Name "UM-RBAC-1 P0 Exclusion" -Status "FAIL" -Details "Forbidden P0 commit '$ForbiddenP0Sha' is an ancestor of HEAD!"
+        git cat-file -e $ForbiddenP0Sha 2>$null
+        $p0ObjExit = $LASTEXITCODE
+        if ($p0ObjExit -eq 0) {
+            git merge-base --is-ancestor $ForbiddenP0Sha $curHead 2>$null
+            $p0AncExit = $LASTEXITCODE
+            if ($p0AncExit -eq 0) {
+                Record-Check -Name "UM-RBAC-1 P0 Exclusion" -Status "FAIL" -Details "Forbidden P0 commit '$ForbiddenP0Sha' is an ancestor of HEAD!"
+            } elseif ($p0AncExit -eq 1) {
+                Record-Check -Name "UM-RBAC-1 P0 Exclusion" -Status "PASS" -Details "Forbidden P0 commit '$ForbiddenP0Sha' is present in store and confirmed excluded from HEAD."
+            } else {
+                Record-Check -Name "UM-RBAC-1 P0 Exclusion" -Status "FAIL" -Details "Unexpected Git exit code ($p0AncExit) checking P0 ancestry."
+            }
+        } elseif ($p0ObjExit -eq 1) {
+            Record-Check -Name "UM-RBAC-1 P0 Exclusion" -Status "PASS" -Details "P0 commit '$ForbiddenP0Sha' is absent from SERVER Git object store; HEAD matches pinned '$ExpectedHead'."
         } else {
-            Record-Check -Name "UM-RBAC-1 P0 Exclusion" -Status "PASS" -Details "Forbidden P0 commit '$ForbiddenP0Sha' is excluded."
+            Record-Check -Name "UM-RBAC-1 P0 Exclusion" -Status "FAIL" -Details "Unexpected Git exit code ($p0ObjExit) inspecting P0 commit object."
         }
 
         $worktreeLines = @(git status --porcelain)
@@ -323,14 +334,22 @@ param(
         Record-Check -Name "Backup Verification" -Status "INCONCLUSIVE" -Details "No backup manifest located."
     }
 
+    $displacedFound = New-Object System.Collections.Generic.List[string]
+    if (-not [string]::IsNullOrWhiteSpace($resolvedBackupRoot) -and (Test-Path -LiteralPath $resolvedBackupRoot)) {
+        @(Get-ChildItem -LiteralPath $resolvedBackupRoot -Filter "displaced-*" -Directory -ErrorAction SilentlyContinue) | ForEach-Object {
+            $displacedFound.Add($_.FullName)
+        }
+    }
     $webDir = Join-Path $RepoPath "apps\web"
     if (Test-Path -LiteralPath $webDir) {
-        $displacedItems = @(Get-ChildItem -LiteralPath $webDir -Filter "*.displaced-*" -Directory -ErrorAction SilentlyContinue)
-        if ($displacedItems.Count -gt 0) {
-            Record-Check -Name "Displaced Artifact Retention" -Status "PASS" -Details ("Retained at: {0}" -f (($displacedItems | ForEach-Object { $_.FullName }) -join "; "))
-        } else {
-            Record-Check -Name "Displaced Artifact Retention" -Status "INFO" -Details "No active .displaced-* directory in apps/web."
+        @(Get-ChildItem -LiteralPath $webDir -Filter "*.displaced-*" -Directory -ErrorAction SilentlyContinue) | ForEach-Object {
+            $displacedFound.Add($_.FullName)
         }
+    }
+    if ($displacedFound.Count -gt 0) {
+        Record-Check -Name "Displaced Artifact Retention" -Status "PASS" -Details ("Retained at: {0}" -f ($displacedFound -join "; "))
+    } else {
+        Record-Check -Name "Displaced Artifact Retention" -Status "INFO" -Details "No displaced build directory found."
     }
 
     $finalVerdict = "PASS"
