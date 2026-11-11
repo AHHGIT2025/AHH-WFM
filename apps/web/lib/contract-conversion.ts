@@ -305,9 +305,13 @@ export async function getConversionReadiness(proposalVersionId: string) {
 
   // Manpower Staffing readiness (authoritative direct lines only; no silent placeholders)
   const manpowerItems = deriveManpowerItemsFromCosting(version.costEstimateVersion);
-  const invalidManpower = manpowerItems.filter((item) => !item.isValid);
-  if (invalidManpower.length > 0) {
-    blockers.push(invalidManpower[0].validationError || "One or more inherited staffing rows have incomplete position or headcount.");
+  if (manpowerItems.length === 0) {
+    blockers.push("No direct manpower staffing requirements found in the approved costing baseline.");
+  } else {
+    const invalidManpower = manpowerItems.filter((item) => !item.isValid);
+    if (invalidManpower.length > 0) {
+      blockers.push(invalidManpower[0].validationError || "One or more inherited staffing rows have incomplete position or headcount.");
+    }
   }
 
   return {
@@ -406,7 +410,17 @@ export async function convertToContract(input: ConvertToContractInput) {
   const startDt = new Date(startDate);
   const endDt = new Date(endDate);
 
-  // Resolve manpower items from explicit input or authoritative costing baseline (no silent placeholders)
+  // Resolve authoritative inherited staffing from approved costing snapshot
+  const approvedItems = deriveManpowerItemsFromCosting(version.costEstimateVersion);
+  if (approvedItems.length === 0) {
+    throw new Error("No direct manpower staffing requirements exist in the approved costing baseline.");
+  }
+  const invalidApprovedItem = approvedItems.find((item) => !item.isValid);
+  if (invalidApprovedItem) {
+    throw new Error(invalidApprovedItem.validationError || "Approved costing snapshot contains incomplete manpower staffing requirements.");
+  }
+
+  // Resolve manpower items from explicit input (to provide operational deploymentType) or approved costing snapshot
   const rawItems = manpowerItems && manpowerItems.length > 0
     ? manpowerItems.map((m) => ({
         position: (m.position || "").trim(),
@@ -415,7 +429,7 @@ export async function convertToContract(input: ConvertToContractInput) {
         unitPrice: m.unitPrice ?? null,
         lineTotal: m.lineTotal ?? null
       }))
-    : deriveManpowerItemsFromCosting(version.costEstimateVersion);
+    : approvedItems;
 
   if (rawItems.length === 0) {
     throw new Error("At least one valid manpower staffing requirement is required for contract conversion.");
@@ -438,86 +452,124 @@ export async function convertToContract(input: ConvertToContractInput) {
     };
   });
 
-  // Execute in single atomic transaction
-  const result = await prisma.$transaction(async (tx) => {
-    // 1. Idempotency re-verify inside transaction lock
-    const existingTx = await tx.manpowerContract.findUnique({
-      where: { sourceClientResponseId: readiness.clientResponse!.id }
-    });
-    if (existingTx) {
-      return { contract: existingTx, alreadyConverted: true };
+  // Prevent silent overrides of approved commercial staffing positions or headcounts
+  if (manpowerItems && manpowerItems.length > 0) {
+    if (itemsToCreate.length !== approvedItems.length) {
+      throw new Error(
+        `Commercial Baseline Mismatch: Approved costing snapshot specifies ${approvedItems.length} staffing requirement(s), received ${itemsToCreate.length}. Scope changes require a costing/proposal revision or post-award addendum.`
+      );
     }
-
-    // 2. Create DRAFT ManpowerContract
-    const contract = await tx.manpowerContract.create({
-      data: {
-        clientId,
-        contractNumber: normalizedContractNumber,
-        title: version.title || `Contract for ${version.proposal.case.title || "Proposal"}`,
-        startDate: startDt,
-        endDate: endDt,
-        noticePeriodDays: parsedNoticePeriodDays,
-        operationType: opType,
-        status: "DRAFT",
-        approvalStatus: "DRAFT",
-        billingBasis: billingBasis || null,
-        totalContractValue: totalContractValue !== undefined ? totalContractValue : null,
-        currency: version.currency || null,
-        sourceClientResponseId: readiness.clientResponse!.id,
-        sourceProposalVersionId: version.id,
-        sourceSnapshotChecksum: readiness.clientResponse!.snapshotChecksum,
-        siteId: siteId || null,
-        projects: projectId ? { connect: [{ id: projectId }] } : undefined,
-        manpowerRequirements: {
-          create: itemsToCreate.map(m => ({
-            position: m.position,
-            quantity: m.quantity,
-            deploymentType: m.deploymentType,
-            unitPrice: m.unitPrice !== undefined ? m.unitPrice : null,
-            lineTotal: m.lineTotal !== undefined ? m.lineTotal : null
-            // billingEligible and focStatus intentionally omitted to use Prisma model defaults
-          }))
-        },
-        shiftRequirements: shiftItems && shiftItems.length > 0 ? {
-          create: shiftItems.map(s => ({
-            shiftName: s.shiftName,
-            startTime: s.startTime,
-            endTime: s.endTime,
-            postsCovered: s.postsCovered,
-            daysPattern: s.daysPattern
-          }))
-        } : undefined,
-        relieverRequirements: relieverItems && relieverItems.length > 0 ? {
-          create: relieverItems.map(r => ({
-            position: r.position,
-            quantity: r.quantity,
-            sourcePreference: r.sourcePreference
-          }))
-        } : undefined
-      },
-      include: {
-        manpowerRequirements: true,
-        shiftRequirements: true,
-        relieverRequirements: true,
-        client: true
+    const normalizeKey = (pos: string, qty: number) => `${pos.trim().toLowerCase()}::${qty}`;
+    const approvedSignature = approvedItems.map((item) => normalizeKey(item.position, item.quantity)).sort();
+    const submittedSignature = itemsToCreate.map((item) => normalizeKey(item.position, item.quantity)).sort();
+    for (let i = 0; i < approvedSignature.length; i++) {
+      if (approvedSignature[i] !== submittedSignature[i]) {
+        throw new Error(
+          "Commercial Baseline Mismatch: Inherited staffing positions and headcounts must match the approved costing snapshot. Quantity or position changes require a costing/proposal revision."
+        );
       }
-    });
-
-    // 3. Link Award Documents if provided or attached to client response
-    if (documentIds && documentIds.length > 0) {
-      await tx.manpowerClientDocument.updateMany({
-        where: { id: { in: documentIds } },
-        data: { contractId: contract.id }
-      });
-    } else if (readiness.clientResponse) {
-      await tx.manpowerClientDocument.updateMany({
-        where: { clientResponseId: readiness.clientResponse.id },
-        data: { contractId: contract.id }
-      });
     }
+  }
 
-    return { contract, alreadyConverted: false };
-  });
+  // Execute in single atomic transaction with concurrency-safe P2002 idempotency guard
+  let result: { contract: any; alreadyConverted: boolean };
+  try {
+    result = await prisma.$transaction(async (tx) => {
+      // 1. Idempotency re-verify inside transaction lock
+      const existingTx = await tx.manpowerContract.findUnique({
+        where: { sourceClientResponseId: readiness.clientResponse!.id }
+      });
+      if (existingTx) {
+        return { contract: existingTx, alreadyConverted: true };
+      }
+
+      // 2. Create DRAFT ManpowerContract
+      const contract = await tx.manpowerContract.create({
+        data: {
+          clientId,
+          contractNumber: normalizedContractNumber,
+          title: version.title || `Contract for ${version.proposal.case.title || "Proposal"}`,
+          startDate: startDt,
+          endDate: endDt,
+          noticePeriodDays: parsedNoticePeriodDays,
+          operationType: opType,
+          status: "DRAFT",
+          approvalStatus: "DRAFT",
+          billingBasis: billingBasis || null,
+          totalContractValue: totalContractValue !== undefined ? totalContractValue : null,
+          currency: version.currency || null,
+          sourceClientResponseId: readiness.clientResponse!.id,
+          sourceProposalVersionId: version.id,
+          sourceSnapshotChecksum: readiness.clientResponse!.snapshotChecksum,
+          siteId: siteId || null,
+          projects: projectId ? { connect: [{ id: projectId }] } : undefined,
+          manpowerRequirements: {
+            create: itemsToCreate.map(m => ({
+              position: m.position,
+              quantity: m.quantity,
+              deploymentType: m.deploymentType,
+              unitPrice: m.unitPrice !== undefined ? m.unitPrice : null,
+              lineTotal: m.lineTotal !== undefined ? m.lineTotal : null
+              // billingEligible and focStatus intentionally omitted to use Prisma model defaults
+            }))
+          },
+          shiftRequirements: shiftItems && shiftItems.length > 0 ? {
+            create: shiftItems.map(s => ({
+              shiftName: s.shiftName,
+              startTime: s.startTime,
+              endTime: s.endTime,
+              postsCovered: s.postsCovered,
+              daysPattern: s.daysPattern
+            }))
+          } : undefined,
+          relieverRequirements: relieverItems && relieverItems.length > 0 ? {
+            create: relieverItems.map(r => ({
+              position: r.position,
+              quantity: r.quantity,
+              sourcePreference: r.sourcePreference
+            }))
+          } : undefined
+        },
+        include: {
+          manpowerRequirements: true,
+          shiftRequirements: true,
+          relieverRequirements: true,
+          client: true
+        }
+      });
+
+      // 3. Link Award Documents if provided or attached to client response
+      if (documentIds && documentIds.length > 0) {
+        await tx.manpowerClientDocument.updateMany({
+          where: { id: { in: documentIds } },
+          data: { contractId: contract.id }
+        });
+      } else if (readiness.clientResponse) {
+        await tx.manpowerClientDocument.updateMany({
+          where: { clientResponseId: readiness.clientResponse.id },
+          data: { contractId: contract.id }
+        });
+      }
+
+      return { contract, alreadyConverted: false };
+    });
+  } catch (err: any) {
+    if (err?.code === "P2002") {
+      const existingByResponse = await prisma.manpowerContract.findUnique({
+        where: { sourceClientResponseId: readiness.clientResponse!.id }
+      });
+      if (existingByResponse) {
+        return { contract: existingByResponse, alreadyConverted: true };
+      }
+      const existingByNumber = await prisma.manpowerContract.findUnique({
+        where: { contractNumber: normalizedContractNumber }
+      });
+      if (existingByNumber) {
+        throw new Error(`Contract number '${normalizedContractNumber}' is already in use.`);
+      }
+    }
+    throw err;
+  }
 
   return result;
 }

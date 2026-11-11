@@ -485,9 +485,29 @@ describe("CL-5 Contract Conversion UAT Remediation (DEF-049, DEF-046, DEF-047, D
       { params: { id: sgProposalId } }
     );
     expect(negNoticeRes.status).toBe(400);
+
+    // Reject silent override of approved commercial positions or headcounts
+    const overrideHeadcountRes = await postConvertContract(
+      new NextRequest(`http://localhost:3100/api/v1/commercial/proposals/${sgProposalId}/convert`, {
+        method: "POST",
+        body: JSON.stringify({
+          contractNumber: `UAT-SG-T1-CON-${suffix}-INV4`,
+          startDate: "2026-08-01",
+          endDate: "2026-09-30",
+          manpowerItems: [
+            { position: "Basic Pay / Manpower Wage", quantity: 5, deploymentType: "REGULAR" },
+            { position: "Contractual Reliever Staffing", quantity: 2, deploymentType: "RELIEVER" }
+          ]
+        })
+      }),
+      { params: { id: sgProposalId } }
+    );
+    expect(overrideHeadcountRes.status).toBe(400);
+    const overrideErr = await overrideHeadcountRes.json();
+    expect(overrideErr.error).toContain("Commercial Baseline Mismatch");
   });
 
-  it("DEF-048 & DEF-047: converts accepted proposal to DRAFT contract persisting noticePeriodDays, contractNumber, and clean staffing rows", async () => {
+  it("DEF-048 & DEF-047: converts accepted proposal to DRAFT contract preserving approved positions/headcounts, noticePeriodDays, contractNumber, and idempotency", async () => {
     (getServerSession as jest.Mock).mockResolvedValue({ user: sgCreator });
 
     const contractNumber = `UAT-SG-T1-CON-${suffix}`;
@@ -502,9 +522,8 @@ describe("CL-5 Contract Conversion UAT Remediation (DEF-049, DEF-046, DEF-047, D
           billingBasis: "MONTHLY",
           totalContractValue: 130000,
           manpowerItems: [
-            { position: "Security Guard", quantity: 10, deploymentType: "REGULAR" },
-            { position: "Security Supervisor", quantity: 2, deploymentType: "SUPERVISOR" },
-            { position: "CCTV Operator", quantity: 2, deploymentType: "REGULAR" }
+            { position: "Basic Pay / Manpower Wage", quantity: 14, deploymentType: "REGULAR" },
+            { position: "Contractual Reliever Staffing", quantity: 2, deploymentType: "RELIEVER" }
           ]
         })
       }),
@@ -513,17 +532,38 @@ describe("CL-5 Contract Conversion UAT Remediation (DEF-049, DEF-046, DEF-047, D
     expect(convRes.status).toBe(200);
     const convData = await convRes.json();
     expect(convData.success).toBe(true);
+    expect(convData.alreadyConverted).toBe(false);
     expect(convData.contract.contractNumber).toBe(contractNumber);
     expect(convData.contract.status).toBe("DRAFT");
     expect(convData.contract.approvalStatus).toBe("DRAFT");
     expect(convData.contract.noticePeriodDays).toBe(60);
     expect(Number(convData.contract.totalContractValue)).toBe(130000);
     expect(convData.contract.clientId).toBe(sgClientId);
-    expect(convData.contract.manpowerRequirements).toHaveLength(3);
-    expect(convData.contract.manpowerRequirements.find((m: any) => m.position === "Security Guard")?.quantity).toBe(10);
+    expect(convData.contract.manpowerRequirements).toHaveLength(2);
+    expect(convData.contract.manpowerRequirements.find((m: any) => m.position === "Basic Pay / Manpower Wage")?.quantity).toBe(14);
+    expect(convData.contract.manpowerRequirements.find((m: any) => m.position === "Contractual Reliever Staffing")?.deploymentType).toBe("RELIEVER");
+
+    // Idempotent retry returns existing contract without creating a duplicate
+    const retryRes = await postConvertContract(
+      new NextRequest(`http://localhost:3100/api/v1/commercial/proposals/${sgProposalId}/convert`, {
+        method: "POST",
+        body: JSON.stringify({
+          contractNumber: `UAT-SG-T1-CON-${suffix}-RETRY`,
+          startDate: "2026-08-01",
+          endDate: "2026-09-30",
+          noticePeriodDays: 60
+        })
+      }),
+      { params: { id: sgProposalId } }
+    );
+    expect(retryRes.status).toBe(200);
+    const retryData = await retryRes.json();
+    expect(retryData.alreadyConverted).toBe(true);
+    expect(retryData.contract.id).toBe(convData.contract.id);
+    expect(retryData.contract.contractNumber).toBe(contractNumber);
   });
 
-  it("UI regression check: conversion wizard removes broken positionTitle/headcount bindings and placeholder text", () => {
+  it("UI regression check: conversion wizard locks commercial staffing to approved snapshot and removes placeholder text", () => {
     const wizardSource = fs.readFileSync(
       path.resolve(__dirname, "../../apps/web/app/commercial/contract-conversion/[id]/page.tsx"),
       "utf8"
@@ -531,6 +571,7 @@ describe("CL-5 Contract Conversion UAT Remediation (DEF-049, DEF-046, DEF-047, D
     expect(wizardSource).not.toContain("item.positionTitle");
     expect(wizardSource).not.toContain("item.headcount");
     expect(wizardSource).not.toContain("Standard defaults will apply");
+    expect(wizardSource).not.toContain("+ Add Staffing Row");
     expect(wizardSource).toContain("Notice Period (Days)");
     expect(wizardSource).toContain("Link Client Master");
   });

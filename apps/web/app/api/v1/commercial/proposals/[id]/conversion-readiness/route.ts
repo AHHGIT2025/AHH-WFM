@@ -4,6 +4,21 @@ import { checkApiAuth } from "../../../../../../../lib/api-guards";
 import { hasPermission, isAdminUser } from "../../../../../../../lib/permissions";
 import { getConversionReadiness, linkClientMasterToCase } from "../../../../../../../lib/contract-conversion";
 
+function hasCompanyAccess(user: any, companyId?: string | null): boolean {
+  const canCrossCompany =
+    hasPermission(user, "precontract.proposal.crossCompany") ||
+    isAdminUser(user) ||
+    hasPermission(user, "manpower.admin.full_access");
+  if (canCrossCompany || !companyId) return true;
+  if (Array.isArray(user?.allowedCompanyIds) && user.allowedCompanyIds.length > 0) {
+    return user.allowedCompanyIds.includes(companyId);
+  }
+  if (user?.companyId) {
+    return user.companyId === companyId;
+  }
+  return true;
+}
+
 function hasProposalScopeAccess(user: any, operationType?: string | null): boolean {
   if (isAdminUser(user) || hasPermission(user, "manpower.admin.full_access")) {
     return true;
@@ -44,8 +59,7 @@ export async function GET(
       return NextResponse.json({ error: "Proposal not found." }, { status: 404 });
     }
 
-    const canCrossCompany = hasPermission(user, "precontract.proposal.crossCompany") || isAdminUser(user) || hasPermission(user, "manpower.admin.full_access");
-    if (!canCrossCompany && proposal.companyId && user.companyId && proposal.companyId !== user.companyId) {
+    if (!hasCompanyAccess(user, proposal.companyId)) {
       return NextResponse.json({ error: "Forbidden: Access to this company proposal is restricted." }, { status: 403 });
     }
 
@@ -141,8 +155,7 @@ export async function PATCH(
       return NextResponse.json({ error: "Proposal not found." }, { status: 404 });
     }
 
-    const canCrossCompany = hasPermission(user, "precontract.proposal.crossCompany") || isAdminUser(user) || hasPermission(user, "manpower.admin.full_access");
-    if (!canCrossCompany && proposal.companyId && user.companyId && proposal.companyId !== user.companyId) {
+    if (!hasCompanyAccess(user, proposal.companyId)) {
       return NextResponse.json({ error: "Forbidden: Access to this company proposal is restricted." }, { status: 403 });
     }
 

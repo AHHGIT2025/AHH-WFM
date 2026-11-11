@@ -34,8 +34,13 @@ export async function POST(
     }
 
     const canCrossCompany = hasPermission(user, "precontract.proposal.crossCompany") || isAdminUser(user) || hasPermission(user, "manpower.admin.full_access");
-    if (!canCrossCompany && proposal.companyId && user.companyId && proposal.companyId !== user.companyId) {
-      return NextResponse.json({ error: "Forbidden: Access to this company proposal is restricted." }, { status: 403 });
+    if (!canCrossCompany && proposal.companyId) {
+      if (Array.isArray(user.allowedCompanyIds) && user.allowedCompanyIds.length > 0 && !user.allowedCompanyIds.includes(proposal.companyId)) {
+        return NextResponse.json({ error: "Forbidden: Access to this company proposal is restricted." }, { status: 403 });
+      }
+      if (user.companyId && proposal.companyId !== user.companyId) {
+        return NextResponse.json({ error: "Forbidden: Access to this company proposal is restricted." }, { status: 403 });
+      }
     }
 
     if (!isAdminUser(user) && !hasPermission(user, "manpower.admin.full_access")) {

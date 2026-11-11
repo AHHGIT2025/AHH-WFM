@@ -115,21 +115,10 @@ export default function ContractConversionWizardPage() {
     }
   };
 
-  const handleManpowerChange = (idx: number, field: "position" | "quantity" | "deploymentType", value: string) => {
+  const handleDeploymentTypeChange = (idx: number, deploymentType: string) => {
     setManpowerItems((prev) =>
-      prev.map((row, i) => (i === idx ? { ...row, [field]: value } : row))
+      prev.map((row, i) => (i === idx ? { ...row, deploymentType } : row))
     );
-  };
-
-  const handleAddManpowerRow = () => {
-    setManpowerItems((prev) => [
-      ...prev,
-      { position: "", quantity: "", deploymentType: "REGULAR", costingBasis: "MANUAL_ADDITION" }
-    ]);
-  };
-
-  const handleRemoveManpowerRow = (idx: number) => {
-    setManpowerItems((prev) => prev.filter((_, i) => i !== idx));
   };
 
   const handleExecuteConversion = async (e: React.FormEvent) => {
@@ -483,36 +472,19 @@ export default function ContractConversionWizardPage() {
 
         {/* Manpower Staffing Requirements Preview & Validation */}
         <div style={{ marginTop: "1.5rem", marginBottom: "1.5rem", padding: "1rem", background: "#f8fafc", borderRadius: "6px", border: "1px solid #e2e8f0" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
-            <div>
-              <h4 style={{ color: "#334155", margin: 0 }}>Inherited Staffing Requirements</h4>
-              <small style={{ color: "#64748b" }}>Derived from approved costing baseline (direct manpower lines). Verify position, headcount (&gt; 0), and deployment type.</small>
-            </div>
-            <button
-              type="button"
-              onClick={handleAddManpowerRow}
-              style={{
-                padding: "0.4rem 0.75rem",
-                background: "#1e40af",
-                color: "#ffffff",
-                border: "none",
-                borderRadius: "4px",
-                fontSize: "0.85rem",
-                fontWeight: "bold",
-                cursor: "pointer"
-              }}
-            >
-              + Add Staffing Row
-            </button>
+          <div style={{ marginBottom: "0.75rem" }}>
+            <h4 style={{ color: "#334155", margin: 0 }}>Inherited Staffing Requirements (Locked to Approved Costing Baseline)</h4>
+            <small style={{ color: "#64748b" }}>
+              Position and Headcount are inherited strictly from the approved costing/proposal snapshot and cannot be silently altered here. Specify operational Deployment Type for each approved row.
+            </small>
           </div>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.9rem" }}>
             <thead>
               <tr style={{ background: "#e2e8f0", textAlign: "left" }}>
-                <th style={{ padding: "0.5rem", border: "1px solid #cbd5e1" }}>Position *</th>
-                <th style={{ padding: "0.5rem", border: "1px solid #cbd5e1", width: "130px" }}>Headcount *</th>
-                <th style={{ padding: "0.5rem", border: "1px solid #cbd5e1", width: "170px" }}>Deployment Type *</th>
-                <th style={{ padding: "0.5rem", border: "1px solid #cbd5e1", width: "130px" }}>Costing Basis</th>
-                <th style={{ padding: "0.5rem", border: "1px solid #cbd5e1", width: "80px" }}>Action</th>
+                <th style={{ padding: "0.5rem", border: "1px solid #cbd5e1" }}>Position (Approved)</th>
+                <th style={{ padding: "0.5rem", border: "1px solid #cbd5e1", width: "130px" }}>Headcount (Approved)</th>
+                <th style={{ padding: "0.5rem", border: "1px solid #cbd5e1", width: "190px" }}>Deployment Type *</th>
+                <th style={{ padding: "0.5rem", border: "1px solid #cbd5e1", width: "150px" }}>Costing Basis</th>
               </tr>
             </thead>
             <tbody>
@@ -522,40 +494,16 @@ export default function ContractConversionWizardPage() {
                 const qtyInvalid = !Number.isInteger(qtyNum) || qtyNum <= 0;
                 return (
                   <tr key={idx}>
-                    <td style={{ padding: "0.5rem", border: "1px solid #e2e8f0" }}>
-                      <input
-                        type="text"
-                        value={item.position}
-                        onChange={(e) => handleManpowerChange(idx, "position", e.target.value)}
-                        placeholder="Required position title"
-                        style={{
-                          width: "100%",
-                          padding: "0.35rem 0.5rem",
-                          borderRadius: "4px",
-                          border: posInvalid ? "1px solid #dc2626" : "1px solid #cbd5e1"
-                        }}
-                      />
+                    <td style={{ padding: "0.5rem", border: "1px solid #e2e8f0", background: "#f1f5f9", color: posInvalid ? "#991b1b" : "#0f172a", fontWeight: 600 }}>
+                      {posInvalid ? "MISSING POSITION IN COSTING" : item.position}
                     </td>
-                    <td style={{ padding: "0.5rem", border: "1px solid #e2e8f0" }}>
-                      <input
-                        type="number"
-                        min="1"
-                        step="1"
-                        value={item.quantity}
-                        onChange={(e) => handleManpowerChange(idx, "quantity", e.target.value)}
-                        placeholder="Headcount"
-                        style={{
-                          width: "100%",
-                          padding: "0.35rem 0.5rem",
-                          borderRadius: "4px",
-                          border: qtyInvalid ? "1px solid #dc2626" : "1px solid #cbd5e1"
-                        }}
-                      />
+                    <td style={{ padding: "0.5rem", border: "1px solid #e2e8f0", background: "#f1f5f9", color: qtyInvalid ? "#991b1b" : "#0f172a", fontWeight: 600 }}>
+                      {qtyInvalid ? "INVALID (<= 0)" : item.quantity}
                     </td>
                     <td style={{ padding: "0.5rem", border: "1px solid #e2e8f0" }}>
                       <select
                         value={item.deploymentType}
-                        onChange={(e) => handleManpowerChange(idx, "deploymentType", e.target.value)}
+                        onChange={(e) => handleDeploymentTypeChange(idx, e.target.value)}
                         style={{ width: "100%", padding: "0.35rem 0.5rem", borderRadius: "4px", border: "1px solid #cbd5e1", background: "#ffffff" }}
                       >
                         <option value="REGULAR">REGULAR</option>
@@ -567,30 +515,13 @@ export default function ContractConversionWizardPage() {
                     <td style={{ padding: "0.5rem", border: "1px solid #e2e8f0", color: "#475569", fontSize: "0.8rem" }}>
                       {item.costingBasis || "COSTING"}
                     </td>
-                    <td style={{ padding: "0.5rem", border: "1px solid #e2e8f0", textAlign: "center" }}>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveManpowerRow(idx)}
-                        style={{
-                          padding: "0.25rem 0.5rem",
-                          background: "#fee2e2",
-                          color: "#991b1b",
-                          border: "1px solid #fecaca",
-                          borderRadius: "4px",
-                          cursor: "pointer",
-                          fontSize: "0.8rem"
-                        }}
-                      >
-                        Remove
-                      </button>
-                    </td>
                   </tr>
                 );
               })}
               {manpowerItems.length === 0 && (
                 <tr>
-                  <td colSpan={5} style={{ padding: "0.75rem", textAlign: "center", color: "#991b1b", fontWeight: 500 }}>
-                    No direct manpower staffing lines found. Add at least one valid staffing requirement before conversion.
+                  <td colSpan={4} style={{ padding: "0.75rem", textAlign: "center", color: "#991b1b", fontWeight: 500 }}>
+                    No direct manpower staffing lines found in the approved costing baseline. Revise costing/proposal before conversion.
                   </td>
                 </tr>
               )}
