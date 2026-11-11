@@ -96,6 +96,11 @@ export async function GET(req: NextRequest) {
               include: {
                 survey: { include: { prospectiveSite: true } }
               }
+            },
+            clientResponse: true,
+            contracts: {
+              select: { id: true, contractNumber: true, status: true, approvalStatus: true },
+              take: 1
             }
           }
         }

@@ -34,7 +34,12 @@ export async function GET(
               include: { survey: { include: { prospectiveSite: true } } }
             },
             costEstimateVersion: true,
-            issuanceLogs: { orderBy: { createdAt: "desc" } }
+            issuanceLogs: { orderBy: { createdAt: "desc" } },
+            clientResponse: true,
+            contracts: {
+              select: { id: true, contractNumber: true, status: true, approvalStatus: true },
+              take: 1
+            }
           }
         }
       }

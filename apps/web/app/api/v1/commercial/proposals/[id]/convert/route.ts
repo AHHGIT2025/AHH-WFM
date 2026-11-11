@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@ahh-wfm/database";
 import { checkApiAuth } from "../../../../../../../lib/api-guards";
-import { hasPermission } from "../../../../../../../lib/permissions";
+import { hasPermission, isAdminUser } from "../../../../../../../lib/permissions";
 import { convertToContract } from "../../../../../../../lib/contract-conversion";
 
 export async function POST(
@@ -21,6 +21,7 @@ export async function POST(
     const proposal = await prisma.preContractProposal.findUnique({
       where: { id: params.id },
       include: {
+        case: true,
         versions: {
           orderBy: { versionNumber: "desc" },
           take: 1
@@ -32,9 +33,18 @@ export async function POST(
       return NextResponse.json({ error: "Proposal not found." }, { status: 404 });
     }
 
-    const canCrossCompany = hasPermission(user, "precontract.proposal.crossCompany") || user.role === "SUPER_ADMIN" || user.role === "ADMIN" || hasPermission(user, "manpower.admin.full_access");
+    const canCrossCompany = hasPermission(user, "precontract.proposal.crossCompany") || isAdminUser(user) || hasPermission(user, "manpower.admin.full_access");
     if (!canCrossCompany && proposal.companyId && user.companyId && proposal.companyId !== user.companyId) {
       return NextResponse.json({ error: "Forbidden: Access to this company proposal is restricted." }, { status: 403 });
+    }
+
+    if (!isAdminUser(user) && !hasPermission(user, "manpower.admin.full_access")) {
+      const opType = proposal.operationType || proposal.case?.operationType;
+      const allowedSG = user?.operationAccess?.allowedSecurityGuarding ?? user?.allowedSecurityGuarding ?? true;
+      const allowedFM = user?.operationAccess?.allowedFacilityManagement ?? user?.allowedFacilityManagement ?? true;
+      if ((opType === "SECURITY_GUARDING" && !allowedSG) || (opType === "FACILITY_MANAGEMENT" && !allowedFM)) {
+        return NextResponse.json({ error: `Forbidden: You do not have access to ${opType} proposals.` }, { status: 403 });
+      }
     }
 
     const latestVersion = proposal.versions[0];
@@ -43,9 +53,9 @@ export async function POST(
     }
 
     const body = await req.json();
-    const { contractNumber, startDate, endDate, clientId, siteId, projectId, billingBasis, totalContractValue, manpowerItems, shiftItems, relieverItems, documentIds } = body;
+    const { contractNumber, startDate, endDate, noticePeriodDays, clientId, siteId, projectId, billingBasis, totalContractValue, manpowerItems, shiftItems, relieverItems, documentIds } = body;
 
-    if (!contractNumber) {
+    if (!contractNumber || !String(contractNumber).trim()) {
       return NextResponse.json({ error: "contractNumber is required." }, { status: 400 });
     }
     if (!startDate || !endDate) {
@@ -57,6 +67,7 @@ export async function POST(
       contractNumber,
       startDate,
       endDate,
+      noticePeriodDays,
       clientId,
       siteId,
       projectId,
@@ -75,9 +86,11 @@ export async function POST(
       contract: result.contract
     });
   } catch (err: any) {
+    const msg = err.message || "Failed to convert proposal to contract.";
+    const status = msg.includes("Forbidden Scope Mismatch") ? 403 : 400;
     return NextResponse.json(
-      { error: err.message || "Failed to convert proposal to contract." },
-      { status: 400 }
+      { error: msg },
+      { status }
     );
   }
 }

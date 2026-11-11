@@ -16,10 +16,24 @@ export default function ContractConversionWizardPage() {
   const [contractNumber, setContractNumber] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const [noticePeriodDays, setNoticePeriodDays] = useState<string>("");
   const [billingBasis, setBillingBasis] = useState("MONTHLY");
   const [totalContractValue, setTotalContractValue] = useState<string>("");
   const [siteId, setSiteId] = useState("");
   const [projectId, setProjectId] = useState("");
+
+  // Client Master Resolution states (DEF-049)
+  const [selectedLinkClientId, setSelectedLinkClientId] = useState("");
+  const [linkingClient, setLinkingClient] = useState(false);
+  const [linkMessage, setLinkMessage] = useState<string | null>(null);
+
+  // Manpower Staffing states (DEF-047)
+  const [manpowerItems, setManpowerItems] = useState<Array<{
+    position: string;
+    quantity: string;
+    deploymentType: string;
+    costingBasis?: string | null;
+  }>>([]);
 
   const [submitting, setSubmitting] = useState(false);
   const [successContract, setSuccessContract] = useState<any>(null);
@@ -28,6 +42,21 @@ export default function ContractConversionWizardPage() {
     if (!proposalId) return;
     fetchReadiness();
   }, [proposalId]);
+
+  const syncReadinessState = (data: any) => {
+    setReadiness(data);
+    setSelectedLinkClientId(data.resolvedClientId || "");
+
+    const derived = Array.isArray(data.manpowerItems)
+      ? data.manpowerItems.map((m: any) => ({
+          position: m.position || "",
+          quantity: m.quantity && Number(m.quantity) > 0 ? String(m.quantity) : "",
+          deploymentType: m.deploymentType || "REGULAR",
+          costingBasis: m.costingBasis || null
+        }))
+      : [];
+    setManpowerItems(derived);
+  };
 
   const fetchReadiness = async () => {
     setLoading(true);
@@ -38,17 +67,17 @@ export default function ContractConversionWizardPage() {
       if (!res.ok) {
         throw new Error(data.error || "Failed to fetch conversion readiness.");
       }
-      setReadiness(data);
+      syncReadinessState(data);
 
-      // Auto-suggest default contract number
+      // Auto-suggest production format number only if user has not entered one
       const randNum = Math.floor(1000 + Math.random() * 9000);
-      setContractNumber(`CON-${new Date().getFullYear()}-${randNum}`);
+      setContractNumber((prev) => prev || `CON-${new Date().getFullYear()}-${randNum}`);
 
-      // Auto-fill dates default (today + 1 year)
+      // Auto-fill dates default (today + 1 year) if unset
       const today = new Date().toISOString().split("T")[0];
       const nextYear = new Date(Date.now() + 365 * 86400000).toISOString().split("T")[0];
-      setStartDate(today);
-      setEndDate(nextYear);
+      setStartDate((prev) => prev || today);
+      setEndDate((prev) => prev || nextYear);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -56,11 +85,100 @@ export default function ContractConversionWizardPage() {
     }
   };
 
+  const handleLinkClientMaster = async () => {
+    if (!selectedLinkClientId) {
+      setError("Please select an active Client Master record before linking.");
+      return;
+    }
+    setLinkingClient(true);
+    setError(null);
+    setLinkMessage(null);
+    try {
+      const res = await fetch(`/api/v1/commercial/proposals/${proposalId}/conversion-readiness`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clientId: selectedLinkClientId })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to link Client Master.");
+      }
+      syncReadinessState(data);
+      const linkedLabel = data.resolvedClient
+        ? `${data.resolvedClient.code} - ${data.resolvedClient.name}`
+        : data.resolvedClientId;
+      setLinkMessage(`Client Master linked cleanly: ${linkedLabel}`);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLinkingClient(false);
+    }
+  };
+
+  const handleManpowerChange = (idx: number, field: "position" | "quantity" | "deploymentType", value: string) => {
+    setManpowerItems((prev) =>
+      prev.map((row, i) => (i === idx ? { ...row, [field]: value } : row))
+    );
+  };
+
+  const handleAddManpowerRow = () => {
+    setManpowerItems((prev) => [
+      ...prev,
+      { position: "", quantity: "", deploymentType: "REGULAR", costingBasis: "MANUAL_ADDITION" }
+    ]);
+  };
+
+  const handleRemoveManpowerRow = (idx: number) => {
+    setManpowerItems((prev) => prev.filter((_, i) => i !== idx));
+  };
+
   const handleExecuteConversion = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!contractNumber || !startDate || !endDate) {
-      alert("Please fill in contract number, start date, and end date.");
+    const trimmedContractNumber = contractNumber.trim();
+    if (!trimmedContractNumber || !startDate || !endDate) {
+      setError("Please fill in Contract Number, Start Date, and End Date.");
       return;
+    }
+
+    if (!readiness?.resolvedClientId) {
+      setError("Client master must be resolved before conversion.");
+      return;
+    }
+
+    let parsedNoticePeriod: number | null = null;
+    if (noticePeriodDays.trim() !== "") {
+      const n = Number(noticePeriodDays.trim());
+      if (!Number.isInteger(n) || n < 0) {
+        setError("Notice Period (Days) must be a non-negative whole number.");
+        return;
+      }
+      parsedNoticePeriod = n;
+    }
+
+    if (manpowerItems.length === 0) {
+      setError("At least one manpower staffing row with a valid Position and Headcount (> 0) is required.");
+      return;
+    }
+
+    const normalizedManpowerItems: Array<{ position: string; quantity: number; deploymentType: string }> = [];
+    for (let i = 0; i < manpowerItems.length; i++) {
+      const row = manpowerItems[i];
+      const pos = row.position.trim();
+      const qty = Number(row.quantity);
+      const depType = row.deploymentType.trim();
+      if (!pos) {
+        setError(`Staffing row #${i + 1}: Position title is required.`);
+        return;
+      }
+      if (!Number.isInteger(qty) || qty <= 0) {
+        setError(`Staffing row #${i + 1} (${pos}): Headcount must be a positive whole number.`);
+        return;
+      }
+      if (!depType) {
+        setError(`Staffing row #${i + 1} (${pos}): Deployment Type is required.`);
+        return;
+      }
+      normalizedManpowerItems.push({ position: pos, quantity: qty, deploymentType: depType });
     }
 
     setSubmitting(true);
@@ -68,14 +186,16 @@ export default function ContractConversionWizardPage() {
 
     try {
       const payload = {
-        contractNumber,
+        contractNumber: trimmedContractNumber,
         startDate,
         endDate,
+        noticePeriodDays: parsedNoticePeriod,
         billingBasis,
         totalContractValue: totalContractValue ? parseFloat(totalContractValue) : null,
         siteId: siteId || null,
         projectId: projectId || null,
-        clientId: readiness?.resolvedClientId
+        clientId: readiness?.resolvedClientId,
+        manpowerItems: normalizedManpowerItems
       };
 
       const res = await fetch(`/api/v1/commercial/proposals/${proposalId}/convert`, {
@@ -113,6 +233,7 @@ export default function ContractConversionWizardPage() {
           <p><strong>Contract Number:</strong> {successContract.contractNumber}</p>
           <p><strong>Status:</strong> {successContract.status} (Approval Status: {successContract.approvalStatus})</p>
           <p><strong>Operation:</strong> {successContract.operationType}</p>
+          <p><strong>Notice Period:</strong> {successContract.noticePeriodDays !== null && successContract.noticePeriodDays !== undefined ? `${successContract.noticePeriodDays} days` : "Not set"}</p>
           <p><strong>Title:</strong> {successContract.title}</p>
           <div style={{ marginTop: "1.5rem" }}>
             <button
@@ -152,8 +273,20 @@ export default function ContractConversionWizardPage() {
         </div>
       )}
 
+      {linkMessage && (
+        <div style={{ padding: "1rem", background: "#ecfdf5", border: "1px solid #10b981", borderRadius: "6px", color: "#065f46", marginBottom: "1.5rem" }}>
+          {linkMessage}
+        </div>
+      )}
+
+      {readiness?.existingContract && (
+        <div style={{ padding: "1rem", background: "#ecfdf5", border: "1px solid #10b981", borderRadius: "6px", color: "#065f46", marginBottom: "1.5rem" }}>
+          <strong>Contract Already Converted:</strong> {readiness.existingContract.contractNumber} ({readiness.existingContract.status})
+        </div>
+      )}
+
       {readiness && !readiness.ready && (
-        <div style={{ padding: "1rem", background: "#fffbebfb", border: "1px solid #f59e0b", borderRadius: "6px", color: "#92400e", marginBottom: "1.5rem" }}>
+        <div style={{ padding: "1rem", background: "#fffbeb", border: "1px solid #f59e0b", borderRadius: "6px", color: "#92400e", marginBottom: "1.5rem" }}>
           <strong>Conversion Blockers Detected:</strong>
           <ul>
             {readiness.blockers.map((b: string, i: number) => (
@@ -170,11 +303,22 @@ export default function ContractConversionWizardPage() {
           <div>
             <p><strong>Title:</strong> {version?.title || "N/A"}</p>
             <p><strong>Version:</strong> v{version?.versionNumber}</p>
-            <p><strong>Proposal Status:</strong> <span style={{ background: "#dbeafe", color: "#1e40af", padding: "2px 8px", borderRadius: "4px", fontSize: "0.85rem" }}>{version?.status}</span></p>
+            <p>
+              <strong>Proposal Issuance Status:</strong>{" "}
+              <span style={{ background: "#dbeafe", color: "#1e40af", padding: "2px 8px", borderRadius: "4px", fontSize: "0.85rem" }}>{version?.status}</span>
+            </p>
+            <p style={{ fontSize: "0.8rem", color: "#475569", marginTop: "-0.25rem" }}>
+              Proposal status remains ISSUED_TO_CLIENT after client issuance; acceptance and conversion are tracked separately.
+            </p>
             <p><strong>Selling Price Provenance:</strong> {version?.sellingPrice ? `${version.sellingPrice} ${version.currency}` : "N/A"}</p>
           </div>
           <div>
-            <p><strong>Client Response:</strong> <span style={{ background: "#d1fae5", color: "#065f46", padding: "2px 8px", borderRadius: "4px", fontSize: "0.85rem", fontWeight: "bold" }}>{clientResponse?.responseType || "N/A"}</span></p>
+            <p>
+              <strong>Client Acceptance:</strong>{" "}
+              <span style={{ background: clientResponse?.responseType === "ACCEPTED" ? "#d1fae5" : "#fee2e2", color: clientResponse?.responseType === "ACCEPTED" ? "#065f46" : "#991b1b", padding: "2px 8px", borderRadius: "4px", fontSize: "0.85rem", fontWeight: "bold" }}>
+                {clientResponse?.responseType || "PENDING"}
+              </span>
+            </p>
             <p><strong>Client Contact:</strong> {clientResponse?.clientContactName || "N/A"}</p>
             <p><strong>Reference:</strong> {clientResponse?.clientReference || "N/A"}</p>
             <p><strong>Snapshot Checksum:</strong> <code style={{ fontSize: "0.75rem" }}>{clientResponse?.snapshotChecksum?.substring(0, 16)}...</code></p>
@@ -196,8 +340,10 @@ export default function ContractConversionWizardPage() {
               required
               value={contractNumber}
               onChange={(e) => setContractNumber(e.target.value)}
+              placeholder="e.g., CON-2026-0042"
               style={{ width: "100%", padding: "0.5rem", borderRadius: "4px", border: "1px solid #cbd5e1" }}
             />
+            <small style={{ color: "#64748b" }}>Auto-suggested standard format (editable for approved client/UAT contract reference).</small>
           </div>
 
           <div>
@@ -243,6 +389,22 @@ export default function ContractConversionWizardPage() {
 
           <div>
             <label style={{ display: "block", marginBottom: "0.25rem", fontWeight: "bold", color: "#334155" }}>
+              Notice Period (Days)
+            </label>
+            <input
+              type="number"
+              min="0"
+              step="1"
+              placeholder="e.g., 60 or 90"
+              value={noticePeriodDays}
+              onChange={(e) => setNoticePeriodDays(e.target.value)}
+              style={{ width: "100%", padding: "0.5rem", borderRadius: "4px", border: "1px solid #cbd5e1" }}
+            />
+            <small style={{ color: "#64748b" }}>Optional contract notice period used for renewal/termination tracking.</small>
+          </div>
+
+          <div>
+            <label style={{ display: "block", marginBottom: "0.25rem", fontWeight: "bold", color: "#334155" }}>
               Total Contract Value (Optional)
             </label>
             <input
@@ -256,44 +418,179 @@ export default function ContractConversionWizardPage() {
             <small style={{ color: "#64748b" }}>Separated from proposal selling price provenance</small>
           </div>
 
-          <div>
+          <div style={{ gridColumn: "1 / -1" }}>
             <label style={{ display: "block", marginBottom: "0.25rem", fontWeight: "bold", color: "#334155" }}>
               Resolved Client Master
             </label>
             <input
               type="text"
               disabled
-              value={readiness?.resolvedClientId || "NOT RESOLVED"}
-              style={{ width: "100%", padding: "0.5rem", borderRadius: "4px", border: "1px solid #e2e8f0", background: "#f1f5f9" }}
+              value={
+                readiness?.resolvedClient
+                  ? `${readiness.resolvedClient.code} - ${readiness.resolvedClient.name} (${readiness.resolvedClient.id})`
+                  : "NOT RESOLVED"
+              }
+              style={{
+                width: "100%",
+                padding: "0.5rem",
+                borderRadius: "4px",
+                border: readiness?.resolvedClient ? "1px solid #10b981" : "1px solid #f59e0b",
+                background: "#f1f5f9",
+                color: readiness?.resolvedClient ? "#0f172a" : "#991b1b",
+                fontWeight: 600
+              }}
             />
+
+            {!readiness?.existingContract && readiness?.canLinkClient && (
+              <div style={{ marginTop: "0.75rem", padding: "0.75rem", background: "#f8fafc", border: "1px solid #cbd5e1", borderRadius: "6px" }}>
+                <label style={{ display: "block", marginBottom: "0.35rem", fontSize: "0.85rem", fontWeight: "bold", color: "#334155" }}>
+                  Link Existing Client Master ({version?.proposal?.operationType || version?.proposal?.case?.operationType || "Scoped"})
+                </label>
+                <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                  <select
+                    value={selectedLinkClientId}
+                    onChange={(e) => setSelectedLinkClientId(e.target.value)}
+                    style={{ flex: 1, padding: "0.5rem", borderRadius: "4px", border: "1px solid #cbd5e1", background: "#ffffff", color: "#0f172a" }}
+                  >
+                    <option value="">-- Select Authorized Client Master --</option>
+                    {(readiness?.eligibleClients || []).map((c: any) => (
+                      <option key={c.id} value={c.id}>
+                        {c.code} - {c.name} ({c.id})
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    disabled={linkingClient || !selectedLinkClientId}
+                    onClick={handleLinkClientMaster}
+                    style={{
+                      padding: "0.5rem 1rem",
+                      background: linkingClient || !selectedLinkClientId ? "#e2e8f0" : "#0f766e",
+                      color: linkingClient || !selectedLinkClientId ? "#475569" : "#ffffff",
+                      border: "none",
+                      borderRadius: "4px",
+                      fontWeight: "bold",
+                      cursor: linkingClient || !selectedLinkClientId ? "not-allowed" : "pointer"
+                    }}
+                  >
+                    {linkingClient ? "Linking..." : "Link Client Master"}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Manpower Staffing Requirements Preview */}
-        <div style={{ marginTop: "1.5rem", marginBottom: "1.5rem" }}>
-          <h4 style={{ color: "#334155", marginBottom: "0.5rem" }}>Inherited Staffing Requirements</h4>
+        {/* Manpower Staffing Requirements Preview & Validation */}
+        <div style={{ marginTop: "1.5rem", marginBottom: "1.5rem", padding: "1rem", background: "#f8fafc", borderRadius: "6px", border: "1px solid #e2e8f0" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
+            <div>
+              <h4 style={{ color: "#334155", margin: 0 }}>Inherited Staffing Requirements</h4>
+              <small style={{ color: "#64748b" }}>Derived from approved costing baseline (direct manpower lines). Verify position, headcount (&gt; 0), and deployment type.</small>
+            </div>
+            <button
+              type="button"
+              onClick={handleAddManpowerRow}
+              style={{
+                padding: "0.4rem 0.75rem",
+                background: "#1e40af",
+                color: "#ffffff",
+                border: "none",
+                borderRadius: "4px",
+                fontSize: "0.85rem",
+                fontWeight: "bold",
+                cursor: "pointer"
+              }}
+            >
+              + Add Staffing Row
+            </button>
+          </div>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.9rem" }}>
             <thead>
-              <tr style={{ background: "#f1f5f9", textAlign: "left" }}>
-                <th style={{ padding: "0.5rem", border: "1px solid #e2e8f0" }}>Position</th>
-                <th style={{ padding: "0.5rem", border: "1px solid #e2e8f0" }}>Headcount</th>
-                <th style={{ padding: "0.5rem", border: "1px solid #e2e8f0" }}>Deployment Type</th>
-                <th style={{ padding: "0.5rem", border: "1px solid #e2e8f0" }}>Billing Eligible</th>
+              <tr style={{ background: "#e2e8f0", textAlign: "left" }}>
+                <th style={{ padding: "0.5rem", border: "1px solid #cbd5e1" }}>Position *</th>
+                <th style={{ padding: "0.5rem", border: "1px solid #cbd5e1", width: "130px" }}>Headcount *</th>
+                <th style={{ padding: "0.5rem", border: "1px solid #cbd5e1", width: "170px" }}>Deployment Type *</th>
+                <th style={{ padding: "0.5rem", border: "1px solid #cbd5e1", width: "130px" }}>Costing Basis</th>
+                <th style={{ padding: "0.5rem", border: "1px solid #cbd5e1", width: "80px" }}>Action</th>
               </tr>
             </thead>
             <tbody>
-              {(version?.costEstimateVersion?.items || []).map((item: any, idx: number) => (
-                <tr key={idx}>
-                  <td style={{ padding: "0.5rem", border: "1px solid #e2e8f0" }}>{item.positionTitle}</td>
-                  <td style={{ padding: "0.5rem", border: "1px solid #e2e8f0" }}>{item.headcount}</td>
-                  <td style={{ padding: "0.5rem", border: "1px solid #e2e8f0" }}>REGULAR</td>
-                  <td style={{ padding: "0.5rem", border: "1px solid #e2e8f0" }}>Yes (Default)</td>
-                </tr>
-              ))}
-              {(!version?.costEstimateVersion?.items || version.costEstimateVersion.items.length === 0) && (
+              {manpowerItems.map((item, idx) => {
+                const posInvalid = !item.position.trim();
+                const qtyNum = Number(item.quantity);
+                const qtyInvalid = !Number.isInteger(qtyNum) || qtyNum <= 0;
+                return (
+                  <tr key={idx}>
+                    <td style={{ padding: "0.5rem", border: "1px solid #e2e8f0" }}>
+                      <input
+                        type="text"
+                        value={item.position}
+                        onChange={(e) => handleManpowerChange(idx, "position", e.target.value)}
+                        placeholder="Required position title"
+                        style={{
+                          width: "100%",
+                          padding: "0.35rem 0.5rem",
+                          borderRadius: "4px",
+                          border: posInvalid ? "1px solid #dc2626" : "1px solid #cbd5e1"
+                        }}
+                      />
+                    </td>
+                    <td style={{ padding: "0.5rem", border: "1px solid #e2e8f0" }}>
+                      <input
+                        type="number"
+                        min="1"
+                        step="1"
+                        value={item.quantity}
+                        onChange={(e) => handleManpowerChange(idx, "quantity", e.target.value)}
+                        placeholder="Headcount"
+                        style={{
+                          width: "100%",
+                          padding: "0.35rem 0.5rem",
+                          borderRadius: "4px",
+                          border: qtyInvalid ? "1px solid #dc2626" : "1px solid #cbd5e1"
+                        }}
+                      />
+                    </td>
+                    <td style={{ padding: "0.5rem", border: "1px solid #e2e8f0" }}>
+                      <select
+                        value={item.deploymentType}
+                        onChange={(e) => handleManpowerChange(idx, "deploymentType", e.target.value)}
+                        style={{ width: "100%", padding: "0.35rem 0.5rem", borderRadius: "4px", border: "1px solid #cbd5e1", background: "#ffffff" }}
+                      >
+                        <option value="REGULAR">REGULAR</option>
+                        <option value="RELIEVER">RELIEVER</option>
+                        <option value="SUPERVISOR">SUPERVISOR</option>
+                        <option value="TEMPORARY">TEMPORARY</option>
+                      </select>
+                    </td>
+                    <td style={{ padding: "0.5rem", border: "1px solid #e2e8f0", color: "#475569", fontSize: "0.8rem" }}>
+                      {item.costingBasis || "COSTING"}
+                    </td>
+                    <td style={{ padding: "0.5rem", border: "1px solid #e2e8f0", textAlign: "center" }}>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveManpowerRow(idx)}
+                        style={{
+                          padding: "0.25rem 0.5rem",
+                          background: "#fee2e2",
+                          color: "#991b1b",
+                          border: "1px solid #fecaca",
+                          borderRadius: "4px",
+                          cursor: "pointer",
+                          fontSize: "0.8rem"
+                        }}
+                      >
+                        Remove
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+              {manpowerItems.length === 0 && (
                 <tr>
-                  <td colSpan={4} style={{ padding: "0.5rem", textAlign: "center", color: "#64748b" }}>
-                    No items in cost estimate snapshot. Standard defaults will apply.
+                  <td colSpan={5} style={{ padding: "0.75rem", textAlign: "center", color: "#991b1b", fontWeight: 500 }}>
+                    No direct manpower staffing lines found. Add at least one valid staffing requirement before conversion.
                   </td>
                 </tr>
               )}
@@ -304,15 +601,15 @@ export default function ContractConversionWizardPage() {
         <div style={{ marginTop: "2rem", display: "flex", gap: "1rem" }}>
           <button
             type="submit"
-            disabled={submitting || (readiness && !readiness.ready)}
+            disabled={submitting || (readiness && !readiness.ready) || manpowerItems.length === 0}
             style={{
               padding: "0.75rem 1.75rem",
-              background: submitting || (readiness && !readiness.ready) ? "#94a3b8" : "#2563eb",
-              color: "#ffffff",
+              background: submitting || (readiness && !readiness.ready) || manpowerItems.length === 0 ? "#e2e8f0" : "#2563eb",
+              color: submitting || (readiness && !readiness.ready) || manpowerItems.length === 0 ? "#475569" : "#ffffff",
               border: "none",
               borderRadius: "6px",
               fontWeight: "bold",
-              cursor: submitting || (readiness && !readiness.ready) ? "not-allowed" : "pointer"
+              cursor: submitting || (readiness && !readiness.ready) || manpowerItems.length === 0 ? "not-allowed" : "pointer"
             }}
           >
             {submitting ? "Converting..." : "Execute Contract Conversion"}

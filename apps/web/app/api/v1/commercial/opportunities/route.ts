@@ -296,11 +296,30 @@ export async function POST(request: Request) {
       }
     }
 
+    if (existingClientId) {
+      const client = await prisma.manpowerClient.findUnique({
+        where: { id: String(existingClientId).trim() },
+        select: { id: true, name: true, operationType: true, isActive: true }
+      });
+      if (!client) {
+        return NextResponse.json({ error: "Selected Client Master does not exist." }, { status: 400 });
+      }
+      if (!client.isActive) {
+        return NextResponse.json({ error: `Client Master '${client.name}' is inactive.` }, { status: 400 });
+      }
+      if (client.operationType !== effectiveOpType) {
+        return NextResponse.json(
+          { error: `Forbidden: Client Master '${client.name}' belongs to ${client.operationType}, expected ${effectiveOpType}.` },
+          { status: 403 }
+        );
+      }
+    }
+
     const newCase = await prisma.preContractCase.create({
       data: {
         title: title.trim(),
         prospectClientId: prospectClientId || null,
-        existingClientId: existingClientId || null,
+        existingClientId: existingClientId ? String(existingClientId).trim() : null,
         companyId: effectiveCompanyId,
         operationType: effectiveOpType,
         lifecycle: "DRAFT",
@@ -345,7 +364,7 @@ export async function PATCH(request: Request) {
 
   try {
     const body = await request.json();
-    const { id, title, businessOutcome, lifecycle, prospectClientId } = body;
+    const { id, title, businessOutcome, lifecycle, prospectClientId, existingClientId } = body;
 
     if (!id) {
       return NextResponse.json({ error: "Opportunity Case ID is required." }, { status: 400 });
@@ -380,13 +399,33 @@ export async function PATCH(request: Request) {
       }
     }
 
+    if (existingClientId !== undefined && existingClientId !== null && String(existingClientId).trim() !== "") {
+      const client = await prisma.manpowerClient.findUnique({
+        where: { id: String(existingClientId).trim() },
+        select: { id: true, name: true, operationType: true, isActive: true }
+      });
+      if (!client) {
+        return NextResponse.json({ error: "Selected Client Master does not exist." }, { status: 400 });
+      }
+      if (!client.isActive) {
+        return NextResponse.json({ error: `Client Master '${client.name}' is inactive.` }, { status: 400 });
+      }
+      if (client.operationType !== existing.operationType) {
+        return NextResponse.json(
+          { error: `Forbidden: Client Master '${client.name}' belongs to ${client.operationType}, expected ${existing.operationType}.` },
+          { status: 403 }
+        );
+      }
+    }
+
     const updated = await prisma.preContractCase.update({
       where: { id },
       data: {
         ...(title && { title: title.trim() }),
         ...(businessOutcome && { businessOutcome }),
         ...(lifecycle && { lifecycle }),
-        ...(prospectClientId !== undefined && { prospectClientId: prospectClientId || null })
+        ...(prospectClientId !== undefined && { prospectClientId: prospectClientId || null }),
+        ...(existingClientId !== undefined && { existingClientId: existingClientId ? String(existingClientId).trim() : null })
       },
       include: {
         prospectClient: {

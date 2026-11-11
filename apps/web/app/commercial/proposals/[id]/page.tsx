@@ -348,6 +348,26 @@ export default function ProposalDetailPage() {
           <div>
             <div className="text-xs font-semibold text-slate-500 uppercase">Proposal Status</div>
             <div className="text-sm font-semibold text-blue-700 mt-0.5">{ver.status}</div>
+            {ver.clientResponse && (
+              <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                <span
+                  className={`inline-flex items-center px-2 py-0.5 text-[11px] font-semibold rounded-full border ${
+                    ver.clientResponse.responseType === "ACCEPTED"
+                      ? "bg-emerald-100 text-emerald-800 border-emerald-300"
+                      : ver.clientResponse.responseType === "REJECTED"
+                        ? "bg-rose-100 text-rose-800 border-rose-300"
+                        : "bg-amber-100 text-amber-800 border-amber-300"
+                  }`}
+                >
+                  Client: {ver.clientResponse.responseType}
+                </span>
+                {ver.contracts?.[0] && (
+                  <span className="inline-flex items-center px-2 py-0.5 text-[11px] font-semibold rounded-full bg-slate-100 text-slate-800 border border-slate-300">
+                    Contract: {ver.contracts[0].contractNumber}
+                  </span>
+                )}
+              </div>
+            )}
           </div>
           <div>
             <div className="text-xs font-semibold text-slate-500 uppercase">Valid Until</div>

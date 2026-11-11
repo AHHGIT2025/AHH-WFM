@@ -38,6 +38,7 @@ interface ProposalItem {
 
 export default function ProposalRegisterPage() {
   const [proposals, setProposals] = useState<ProposalItem[]>([]);
+  const [rawById, setRawById] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(true);
   const [proposalsError, setProposalsError] = useState("");
   const [search, setSearch] = useState("");
@@ -75,6 +76,13 @@ export default function ProposalRegisterPage() {
       if (res.ok) {
         const data = await res.json();
         setProposals(data.proposals || []);
+        const map: Record<string, any> = {};
+        if (Array.isArray(data.raw)) {
+          data.raw.forEach((item: any) => {
+            if (item?.id) map[item.id] = item;
+          });
+        }
+        setRawById(map);
       } else {
         const errData = await res.json().catch(() => ({}));
         setProposalsError(errData.error || `Failed to load proposals (HTTP ${res.status}).`);
@@ -449,7 +457,29 @@ export default function ProposalRegisterPage() {
                     <td className="py-3.5 px-4 text-right font-semibold text-slate-900">
                       {p.currency} {p.sellingPrice.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </td>
-                    <td className="py-3.5 px-4">{getStatusBadge(p.status, p.isExpired)}</td>
+                    <td className="py-3.5 px-4">
+                      <div className="flex flex-col items-start gap-1">
+                        {getStatusBadge(p.status, p.isExpired)}
+                        {rawById[p.id]?.versions?.[0]?.clientResponse && (
+                          <span
+                            className={`px-2 py-0.5 text-[11px] font-semibold rounded-full border ${
+                              rawById[p.id].versions[0].clientResponse.responseType === "ACCEPTED"
+                                ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                                : rawById[p.id].versions[0].clientResponse.responseType === "REJECTED"
+                                  ? "bg-rose-50 text-rose-800 border-rose-200"
+                                  : "bg-amber-50 text-amber-800 border-amber-200"
+                            }`}
+                          >
+                            Client {rawById[p.id].versions[0].clientResponse.responseType}
+                          </span>
+                        )}
+                        {rawById[p.id]?.versions?.[0]?.contracts?.[0] && (
+                          <span className="px-2 py-0.5 text-[11px] font-semibold rounded-full bg-slate-100 text-slate-800 border border-slate-200">
+                            Converted: {rawById[p.id].versions[0].contracts[0].contractNumber}
+                          </span>
+                        )}
+                      </div>
+                    </td>
                     <td className="py-3.5 px-4 text-xs text-slate-600">
                       {p.validUntil ? new Date(p.validUntil).toLocaleDateString() : "Not set"}
                     </td>
