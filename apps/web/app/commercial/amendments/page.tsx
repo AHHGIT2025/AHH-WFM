@@ -117,7 +117,7 @@ export default function ContractAmendmentsPage() {
           effectiveFrom: new Date().toISOString().split("T")[0],
           calculatedCommercialImpact: Number(newImpact) || 0,
           description: newDescription,
-          submit: canSubmitAddendum
+          submit: false
         })
       });
       if (res.ok) {

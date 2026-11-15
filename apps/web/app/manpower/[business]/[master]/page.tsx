@@ -7484,7 +7484,7 @@ export default function ManpowerMasterPage() {
                                     Delete
                                   </button>
                                 )}
-                                {(item.status === "ACTIVE" || item.status === "APPROVED") && (
+                                {item.status === "ACTIVE" && (
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();
@@ -7498,7 +7498,7 @@ export default function ManpowerMasterPage() {
                                 )}
                               </>
                             )}
-                            {!canManage && canCreateAddendum && (item.status === "ACTIVE" || item.status === "APPROVED") && (
+                            {!canManage && canCreateAddendum && item.status === "ACTIVE" && (
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -9696,7 +9696,7 @@ export default function ManpowerMasterPage() {
               <div className="bg-surface-container-low border border-outline-variant p-4 rounded-xl space-y-3">
                 <div className="flex justify-between items-center border-b border-outline-variant pb-1">
                   <h4 className="text-xs font-bold text-primary uppercase tracking-wider">Contract Addendums / Revisions</h4>
-                  {(selectedContractDetail.status === "ACTIVE" || selectedContractDetail.status === "APPROVED") && canCreateAddendum && (
+                  {selectedContractDetail.status === "ACTIVE" && canCreateAddendum && (
                     <button
                       onClick={() => {
                         setAddendumContract(selectedContractDetail);
@@ -9724,7 +9724,49 @@ export default function ManpowerMasterPage() {
                         <p><span className="text-on-surface-variant font-semibold">Type:</span> {a.addendumType}</p>
                         <p><span className="text-on-surface-variant font-semibold">Effective From:</span> {new Date(a.effectiveFrom).toLocaleDateString()}</p>
                         {a.commercialImpact && <p><span className="text-on-surface-variant font-semibold">Commercial Impact:</span> {a.commercialImpact}</p>}
+                        {a.calculatedCommercialImpact !== undefined && a.calculatedCommercialImpact !== null && (
+                          <p><span className="text-on-surface-variant font-semibold">Full-Term Financial Impact:</span> <span className="font-mono font-bold text-primary">QAR {Number(a.calculatedCommercialImpact).toLocaleString()}</span></p>
+                        )}
                         {a.description && <p className="text-on-surface-variant italic">{a.description}</p>}
+                        <div className="flex items-center gap-2 pt-1">
+                          {a.status === "DRAFT" && (canCreateAddendum || canManage) && (
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                try {
+                                  const res = await fetch(`/api/v1/commercial/contracts/${selectedContractDetail.id}/addendums`, {
+                                    method: "POST",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({ addendumId: a.id, action: "SUBMIT" })
+                                  });
+                                  const data = await res.json();
+                                  if (!res.ok) {
+                                    alert(data.error || "Failed to submit addendum for approval.");
+                                    return;
+                                  }
+                                  loadData();
+                                  setSelectedContractDetail((prev: any) => prev ? {
+                                    ...prev,
+                                    addendums: (prev.addendums || []).map((item: any) => item.id === a.id ? { ...item, status: "PENDING_APPROVAL" } : item)
+                                  } : prev);
+                                } catch (err) {
+                                  alert("Network error submitting addendum.");
+                                }
+                              }}
+                              className="px-2.5 py-1 bg-primary text-white text-[10px] font-bold rounded-lg hover:bg-primary-container transition-colors"
+                            >
+                              Submit for Approval
+                            </button>
+                          )}
+                          {a.status === "PENDING_APPROVAL" && (
+                            <a
+                              href={`/commercial/amendments?contractId=${selectedContractDetail.id}`}
+                              className="px-2.5 py-1 bg-amber-500/15 text-amber-800 border border-amber-500/30 text-[10px] font-bold rounded-lg hover:bg-amber-500/25 transition-colors"
+                            >
+                              Review / Approve in Amendments →
+                            </a>
+                          )}
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -10060,11 +10102,33 @@ export default function ManpowerMasterPage() {
                 const res = await fetch(`/api/v1/manpower/${business}/contracts/${addendumContract.id}/addendums`, {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    ...addendumForm,
-                    lineItems: addFormLineItems,
-                    contractNumber: addendumContract.contractNumber
-                  })
+                  body: JSON.stringify((() => {
+                    const startD = new Date(addendumForm.effectiveFrom || addendumContract.startDate);
+                    const endD = new Date(addendumForm.effectiveTo || addendumContract.endDate);
+                    const rawMonths = (endD.getFullYear() - startD.getFullYear()) * 12 + (endD.getMonth() - startD.getMonth()) + (endD.getDate() >= startD.getDate() ? 1 : 0);
+                    const remainingMonths = Math.max(1, isNaN(rawMonths) ? 1 : rawMonths);
+                    const monthlyNet = addFormLineItems.reduce((sum: number, li: any) => {
+                      if (li.isFoc === true || li.isFoc === "Yes") return sum;
+                      const qty = parseFloat(li.quantity) || 0;
+                      const price = parseFloat(li.unitPrice) || 0;
+                      const action = li.action || li.changeType || "ADD";
+                      if (action === "REMOVE") return sum - (qty * price);
+                      if (action === "UPDATE") {
+                        const origReq = (addendumContract.manpowerRequirements || []).find((r: any) => (r.position || r.designation) === (li.label || li.itemName));
+                        const origQty = origReq ? (parseFloat(origReq.quantity) || 0) : 0;
+                        return sum + ((qty - origQty) * price);
+                      }
+                      return sum + (qty * price);
+                    }, 0);
+                    const fullTermNet = Math.round(monthlyNet * remainingMonths * 100) / 100;
+                    return {
+                      ...addendumForm,
+                      status: "DRAFT",
+                      calculatedCommercialImpact: fullTermNet,
+                      lineItems: addFormLineItems,
+                      contractNumber: addendumContract.contractNumber
+                    };
+                  })())
                 });
                 if (res.ok) {
                   setAddendumContract(null);
@@ -10326,15 +10390,43 @@ export default function ManpowerMasterPage() {
                               </select>
                             </div>
                             <div className="col-span-4">
-                              <label className="block text-[9px] font-bold text-on-surface-variant uppercase mb-0.5">Position / Designation Label *</label>
-                              <input
-                                type="text"
-                                required
-                                placeholder="e.g. Security Guard, Supervisor"
-                                value={row.label || ""}
-                                onChange={(e) => updateAddendumLineById(row.id, "label", e.target.value)}
-                                className="w-full bg-surface border border-outline-variant rounded-lg px-2.5 py-1 text-[11px] focus:outline-none text-on-surface font-semibold"
-                              />
+                              <label className="block text-[9px] font-bold text-on-surface-variant uppercase mb-0.5">
+                                {(row.action === "UPDATE" || row.action === "REMOVE") ? "Existing Contract Position *" : "Position / Designation Label *"}
+                              </label>
+                              {(row.action === "UPDATE" || row.action === "REMOVE") && (addendumContract?.manpowerRequirements || []).length > 0 ? (
+                                <select
+                                  required
+                                  value={row.label || ""}
+                                  onChange={(e) => {
+                                    const pos = e.target.value;
+                                    const req = (addendumContract.manpowerRequirements || []).find((r: any) => (r.position || r.designation) === pos);
+                                    updateAddendumLineById(row.id, "label", pos);
+                                    if (req && req.unitPrice !== undefined) {
+                                      updateAddendumLineById(row.id, "unitPrice", Number(req.unitPrice) || 0);
+                                    }
+                                  }}
+                                  className="w-full bg-surface border border-outline-variant rounded-lg px-2.5 py-1 text-[11px] focus:outline-none text-on-surface font-semibold"
+                                >
+                                  <option value="">-- Select Contract Position --</option>
+                                  {(addendumContract.manpowerRequirements || []).map((mr: any, idx: number) => {
+                                    const posName = mr.position || mr.designation;
+                                    return (
+                                      <option key={mr.id || idx} value={posName}>
+                                        {posName} (Current Qty: {mr.quantity})
+                                      </option>
+                                    );
+                                  })}
+                                </select>
+                              ) : (
+                                <input
+                                  type="text"
+                                  required
+                                  placeholder="e.g. Security Guard, Supervisor"
+                                  value={row.label || ""}
+                                  onChange={(e) => updateAddendumLineById(row.id, "label", e.target.value)}
+                                  className="w-full bg-surface border border-outline-variant rounded-lg px-2.5 py-1 text-[11px] focus:outline-none text-on-surface font-semibold"
+                                />
+                              )}
                             </div>
                             <div className="col-span-2">
                               <label className="block text-[9px] font-bold text-on-surface-variant uppercase mb-0.5 text-center">Qty</label>
@@ -10564,10 +10656,39 @@ export default function ManpowerMasterPage() {
                         />
                       </div>
                       <div>
-                        <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Calculated Net Impact</label>
-                        <div className="p-2 border border-outline-variant rounded-lg bg-surface text-sm font-black text-primary font-mono">
-                          {addendumForm.commercialImpact || "QAR 0.00"}
-                        </div>
+                        <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Calculated Financial Impact (Monthly & Full-Term)</label>
+                        {(() => {
+                          const startD = new Date(addendumForm.effectiveFrom || addendumContract.startDate);
+                          const endD = new Date(addendumForm.effectiveTo || addendumContract.endDate);
+                          const rawMonths = (endD.getFullYear() - startD.getFullYear()) * 12 + (endD.getMonth() - startD.getMonth()) + (endD.getDate() >= startD.getDate() ? 1 : 0);
+                          const remainingMonths = Math.max(1, isNaN(rawMonths) ? 1 : rawMonths);
+                          const monthlyNet = addFormLineItems.reduce((sum: number, li: any) => {
+                            if (li.isFoc === true || li.isFoc === "Yes") return sum;
+                            const qty = parseFloat(li.quantity) || 0;
+                            const price = parseFloat(li.unitPrice) || 0;
+                            const action = li.action || li.changeType || "ADD";
+                            if (action === "REMOVE") return sum - (qty * price);
+                            if (action === "UPDATE") {
+                              const origReq = (addendumContract.manpowerRequirements || []).find((r: any) => (r.position || r.designation) === (li.label || li.itemName));
+                              const origQty = origReq ? (parseFloat(origReq.quantity) || 0) : 0;
+                              return sum + ((qty - origQty) * price);
+                            }
+                            return sum + (qty * price);
+                          }, 0);
+                          const fullTermNet = Math.round(monthlyNet * remainingMonths * 100) / 100;
+                          return (
+                            <div className="p-2 border border-outline-variant rounded-lg bg-surface space-y-1">
+                              <div className="flex justify-between text-xs font-bold text-on-surface">
+                                <span>Monthly Delta:</span>
+                                <span className="font-mono">{monthlyNet >= 0 ? "+" : ""}QAR {monthlyNet.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                              </div>
+                              <div className="flex justify-between text-sm font-black text-primary border-t border-outline-variant/40 pt-1">
+                                <span>Full-Term ({remainingMonths} mo):</span>
+                                <span className="font-mono">{fullTermNet >= 0 ? "+" : ""}QAR {fullTermNet.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                              </div>
+                            </div>
+                          );
+                        })()}
                       </div>
                     </div>
 

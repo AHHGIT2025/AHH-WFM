@@ -4,7 +4,7 @@ import { checkApiAuth } from "@/lib/api-guards";
 import { hasPermission } from "@/lib/permissions";
 
 export async function GET(request: Request, { params }: { params: { id: string } }) {
-  const auth = await checkApiAuth();
+  const auth = await checkApiAuth(undefined, { requiredOperation: "SECURITY_GUARDING" });
   if (auth.error) return auth.error;
 
   if (!hasPermission(auth.session?.user, "manpower.admin.full_access") &&
@@ -15,6 +15,18 @@ export async function GET(request: Request, { params }: { params: { id: string }
   }
 
   try {
+    const user = auth.session?.user as any;
+    const contract = await mockDb.getManpowerContract(params.id);
+    if (!contract) {
+      return NextResponse.json({ error: "Contract not found" }, { status: 404 });
+    }
+    if (contract.operationType && contract.operationType !== "SECURITY_GUARDING") {
+      return NextResponse.json({ error: "Forbidden: Scope mismatch" }, { status: 403 });
+    }
+    if (user?.companyId && user?.role !== "SUPER_ADMIN" && (contract as any).companyId && (contract as any).companyId !== user.companyId) {
+      return NextResponse.json({ error: "Forbidden: Company boundary violation" }, { status: 403 });
+    }
+
     const addendums = await mockDb.getManpowerContractAddendums(params.id);
     return NextResponse.json(addendums);
   } catch (e) {
@@ -23,7 +35,7 @@ export async function GET(request: Request, { params }: { params: { id: string }
 }
 
 export async function POST(request: Request, { params }: { params: { id: string } }) {
-  const auth = await checkApiAuth();
+  const auth = await checkApiAuth(undefined, { requiredOperation: "SECURITY_GUARDING" });
   if (auth.error) return auth.error;
 
   if (!hasPermission(auth.session?.user, "manpower.admin.full_access") &&
@@ -34,13 +46,21 @@ export async function POST(request: Request, { params }: { params: { id: string 
   }
 
   try {
+    const user = auth.session?.user as any;
     const contract = await mockDb.getManpowerContract(params.id);
     if (!contract) {
       return NextResponse.json({ error: "Contract not found" }, { status: 404 });
     }
+    if (contract.operationType && contract.operationType !== "SECURITY_GUARDING") {
+      return NextResponse.json({ error: "Forbidden: Scope mismatch" }, { status: 403 });
+    }
+    if (user?.companyId && user?.role !== "SUPER_ADMIN" && (contract as any).companyId && (contract as any).companyId !== user.companyId) {
+      return NextResponse.json({ error: "Forbidden: Company boundary violation" }, { status: 403 });
+    }
 
-    if (contract.status !== "ACTIVE" && contract.status !== "APPROVED") {
-      return NextResponse.json({ error: "Addendum can be created only for active or approved contracts." }, { status: 400 });
+    // Business Rule 9 & 11: Addendum is allowed only for ACTIVE contracts.
+    if (contract.status !== "ACTIVE") {
+      return NextResponse.json({ error: "Addendum can be created only for ACTIVE contracts." }, { status: 400 });
     }
 
     const payload = await request.json();
@@ -56,17 +76,12 @@ export async function POST(request: Request, { params }: { params: { id: string 
       }));
     }
 
-    const isSuperOrAdmin = auth.session?.user?.role === "ADMIN" || auth.session?.user?.role === "SUPER_ADMIN";
-    let targetStatus = payload.status || "DRAFT";
-    if (targetStatus === "APPROVED" && !isSuperOrAdmin) {
-      targetStatus = "DRAFT";
-    }
-
+    // DEF-081: Every addendum must start as DRAFT, including Admin-created records, requiring workflow approval.
     const addendum = await mockDb.createManpowerContractAddendum({
       ...payload,
-      status: targetStatus,
+      status: "DRAFT",
       contractId: params.id,
-      createdBy: auth.session?.user?.id || "unknown"
+      createdBy: user?.id || "unknown"
     });
     return NextResponse.json(addendum);
   } catch (e: any) {

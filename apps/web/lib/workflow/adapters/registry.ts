@@ -234,6 +234,42 @@ const ContractAdapter: WorkflowSourceAdapter = {
   },
   getSourceDeepLink(referenceId: string) {
     return `/commercial/contracts?id=${referenceId}`;
+  },
+  async onWorkflowStatusChange(referenceId, action, newStatus, remarks, tx) {
+    const db = tx || prisma;
+    const now = new Date();
+    let finalStatus = "PENDING_APPROVAL";
+    let approvalStatus = "PENDING_APPROVAL";
+    if (action === "APPROVE" && newStatus === "APPROVED") {
+      finalStatus = "APPROVED";
+      approvalStatus = "APPROVED";
+    } else if (action === "REJECT") {
+      finalStatus = "REJECTED";
+      approvalStatus = "REJECTED";
+    } else if (action === "RETURN") {
+      finalStatus = "DRAFT";
+      approvalStatus = "DRAFT";
+    }
+
+    await db.manpowerContract.update({
+      where: { id: referenceId },
+      data: {
+        status: finalStatus,
+        approvalStatus,
+        ...(finalStatus === "APPROVED" ? { approvedAt: now } : {}),
+        ...(finalStatus === "REJECTED" && remarks ? { rejectionRemarks: remarks } : {}),
+        updatedAt: now
+      }
+    });
+
+    await db.contractApprovalWorkflow.updateMany({
+      where: { contractId: referenceId },
+      data: {
+        status: finalStatus === "APPROVED" ? "APPROVED" : finalStatus === "REJECTED" ? "REJECTED" : "PENDING",
+        ...(finalStatus === "APPROVED" ? { approvedAt: now } : {}),
+        ...(finalStatus === "REJECTED" ? { rejectedAt: now, finalRemarks: remarks || null } : {})
+      }
+    });
   }
 };
 WorkflowAdapterRegistry.register(ContractAdapter);

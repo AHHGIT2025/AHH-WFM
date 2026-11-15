@@ -10177,13 +10177,17 @@ export const mockDb = {
       : `ADD-${seqPart}`;
 
     const lines = data.lineItems || [];
-    const calculatedCommercialImpact = lines.reduce((sum: number, li: any) => {
+    const computedLineImpact = lines.reduce((sum: number, li: any) => {
       if (li.isFoc === true || li.isFoc === "Yes") return sum;
       const qty = parseFloat(li.quantity) || 0;
       const price = parseFloat(li.unitPrice) || 0;
       const factor = li.changeType === "REMOVE" ? -1 : 1;
       return sum + (factor * qty * price);
     }, 0);
+    const calculatedCommercialImpact =
+      data.calculatedCommercialImpact !== undefined && data.calculatedCommercialImpact !== null && !isNaN(Number(data.calculatedCommercialImpact))
+        ? Number(data.calculatedCommercialImpact)
+        : computedLineImpact;
 
     const payload = {
       contractId: data.contractId,
@@ -14589,7 +14593,7 @@ export const mockDb = {
         (cAny.createdById && (cAny.createdById === actorUser.id || cAny.createdById === actorUser.employeeId)) ||
         (cAny.submittedBy && (cAny.submittedBy === actorUser.name || cAny.submittedBy === actorUser.email))
       );
-      if (isCreator && actorUser?.role !== "SUPER_ADMIN") {
+      if (isCreator) {
         throw new Error("Segregation of Duties: Creator cannot approve their own contract.");
       }
 
@@ -14624,12 +14628,11 @@ export const mockDb = {
       let approver = await prismaClient.contractApprovalApprover.findFirst({
         where: {
           levelId,
-          OR: [
-            { employeeId },
-            ...(actorUser?.employeeId ? [{ employeeId: actorUser.employeeId }] : []),
-            ...(actorUser?.id ? [{ employeeId: actorUser.id }] : []),
-            ...(actorUser?.email ? [{ email: actorUser.email }] : [])
-          ]
+          OR: actorUser ? [
+            ...(actorUser.employeeId ? [{ employeeId: actorUser.employeeId }] : []),
+            ...(actorUser.id ? [{ employeeId: actorUser.id }] : []),
+            ...(actorUser.email ? [{ email: actorUser.email }] : [])
+          ] : [{ employeeId }]
         }
       });
 
@@ -14660,15 +14663,7 @@ export const mockDb = {
         }
       }
 
-      // Fallback for Admin / Super Admin
-      if (!approver && (actorUser?.role === "ADMIN" || actorUser?.role === "SUPER_ADMIN")) {
-        approver = await prismaClient.contractApprovalApprover.findFirst({
-          where: { levelId, approvalStatus: "PENDING" }
-        });
-        if (approver) {
-          delegationRemarks = `[Approved by ${actorUser.name || actorUser.role} under Administrator authority] `;
-        }
-      }
+
 
       if (!approver) throw new Error("You are not authorized to approve this workflow level.");
 
@@ -14780,7 +14775,7 @@ export const mockDb = {
       (cAnyApprove.createdById && (cAnyApprove.createdById === actorUser.id || cAnyApprove.createdById === actorUser.employeeId)) ||
       (cAnyApprove.submittedBy && (cAnyApprove.submittedBy === actorUser.name || cAnyApprove.submittedBy === actorUser.email))
     );
-    if (isCreator && actorUser?.role !== "SUPER_ADMIN") {
+    if (isCreator) {
       throw new Error("Segregation of Duties: Creator cannot approve their own contract.");
     }
 
@@ -14891,7 +14886,7 @@ export const mockDb = {
         (cAnyRejectDb.createdById && (cAnyRejectDb.createdById === actorUser.id || cAnyRejectDb.createdById === actorUser.employeeId)) ||
         (cAnyRejectDb.submittedBy && (cAnyRejectDb.submittedBy === actorUser.name || cAnyRejectDb.submittedBy === actorUser.email))
       );
-      if (isCreator && actorUser?.role !== "SUPER_ADMIN") {
+      if (isCreator) {
         throw new Error("Segregation of Duties: Creator cannot reject their own contract.");
       }
 
@@ -14903,12 +14898,11 @@ export const mockDb = {
       let approver = await prismaClient.contractApprovalApprover.findFirst({
         where: {
           levelId,
-          OR: [
-            { employeeId },
-            ...(actorUser?.employeeId ? [{ employeeId: actorUser.employeeId }] : []),
-            ...(actorUser?.id ? [{ employeeId: actorUser.id }] : []),
-            ...(actorUser?.email ? [{ email: actorUser.email }] : [])
-          ]
+          OR: actorUser ? [
+            ...(actorUser.employeeId ? [{ employeeId: actorUser.employeeId }] : []),
+            ...(actorUser.id ? [{ employeeId: actorUser.id }] : []),
+            ...(actorUser.email ? [{ email: actorUser.email }] : [])
+          ] : [{ employeeId }]
         }
       });
 
@@ -14938,15 +14932,7 @@ export const mockDb = {
         }
       }
 
-      // Fallback for Admin / Super Admin
-      if (!approver && (actorUser?.role === "ADMIN" || actorUser?.role === "SUPER_ADMIN")) {
-        approver = await prismaClient.contractApprovalApprover.findFirst({
-          where: { levelId, approvalStatus: "PENDING" }
-        });
-        if (approver) {
-          delegationRemarks = `[Rejected by ${actorUser.name || actorUser.role} under Administrator authority] `;
-        }
-      }
+
 
       if (!approver) throw new Error("You are not authorized to reject this workflow level.");
 
@@ -15011,7 +14997,7 @@ export const mockDb = {
       (cAnyReject.createdById && (cAnyReject.createdById === actorUser.id || cAnyReject.createdById === actorUser.employeeId)) ||
       (cAnyReject.submittedBy && (cAnyReject.submittedBy === actorUser.name || cAnyReject.submittedBy === actorUser.email))
     );
-    if (isCreator && actorUser?.role !== "SUPER_ADMIN") {
+    if (isCreator) {
       throw new Error("Segregation of Duties: Creator cannot reject their own contract.");
     }
 

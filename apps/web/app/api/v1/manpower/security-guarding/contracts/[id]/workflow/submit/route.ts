@@ -4,7 +4,7 @@ import { checkApiAuth } from "@/lib/api-guards";
 import { hasPermission } from "@/lib/permissions";
 
 export async function POST(request: Request, { params }: { params: { id: string } }) {
-  const auth = await checkApiAuth();
+  const auth = await checkApiAuth(undefined, { requiredOperation: "SECURITY_GUARDING" });
   if (auth.error) return auth.error;
 
   if (!hasPermission(auth.session?.user, "manpower.admin.full_access") &&
@@ -16,7 +16,18 @@ export async function POST(request: Request, { params }: { params: { id: string 
   }
 
   try {
-    const user = auth.session?.user;
+    const user = auth.session?.user as any;
+    const existingContract = await mockDb.getManpowerContract(params.id);
+    if (!existingContract) {
+      return NextResponse.json({ error: "Contract not found" }, { status: 404 });
+    }
+    if (existingContract.operationType && existingContract.operationType !== "SECURITY_GUARDING") {
+      return NextResponse.json({ error: "Forbidden: Scope mismatch" }, { status: 403 });
+    }
+    if (user?.companyId && user?.role !== "SUPER_ADMIN" && (existingContract as any).companyId && (existingContract as any).companyId !== user.companyId) {
+      return NextResponse.json({ error: "Forbidden: Company boundary violation" }, { status: 403 });
+    }
+
     const submittedBy = user?.name || user?.email || "System";
     const submittedById = user?.id || user?.employeeId || null;
     const contract = await mockDb.submitContractWorkflow(params.id, submittedBy, submittedById);

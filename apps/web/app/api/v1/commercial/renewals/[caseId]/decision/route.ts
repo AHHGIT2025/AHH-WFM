@@ -115,7 +115,7 @@ export async function POST(
             manpowerRequirements: {
               create: effective.effectiveManpower.map((req: any) => ({
                 position: req.position || req.roleName || "Security Officer",
-                quantity: req.totalQty || req.originalQty || 1,
+                quantity: req.quantity ?? req.totalQty ?? req.originalQty ?? 1,
                 deploymentType: req.deploymentType || "REGULAR",
                 unitPrice: req.billingRate || req.unitPrice || null,
                 remarks: "Copied from effective requirements of previous contract term"
