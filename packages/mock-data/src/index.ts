@@ -14461,9 +14461,7 @@ export const mockDb = {
         where: { id },
         data: {
           status: "PENDING_APPROVAL",
-          approvalStatus: "PENDING_APPROVAL",
-          submittedForApprovalAt: new Date(),
-          submittedBy: submittedBy || "System"
+          approvalStatus: "PENDING_APPROVAL"
         }
       });
 

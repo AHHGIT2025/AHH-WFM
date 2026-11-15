@@ -5,7 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { hasPermission, isAdminUser } from "../../../../lib/permissions";
-import { getEffectiveContractManpower } from "../../../../lib/contract-helpers";
+import { getEffectiveContractManpower, calculateAddendumFinancialImpact } from "../../../../lib/contract-helpers";
 import { EmployeeDetailModal } from "../../../../components/workforce/EmployeeDetailModal";
 
 interface ChecklistItem {
@@ -10103,24 +10103,12 @@ export default function ManpowerMasterPage() {
                   method: "POST",
                   headers: { "Content-Type": "application/json" },
                   body: JSON.stringify((() => {
-                    const startD = new Date(addendumForm.effectiveFrom || addendumContract.startDate);
-                    const endD = new Date(addendumForm.effectiveTo || addendumContract.endDate);
-                    const rawMonths = (endD.getFullYear() - startD.getFullYear()) * 12 + (endD.getMonth() - startD.getMonth()) + (endD.getDate() >= startD.getDate() ? 1 : 0);
-                    const remainingMonths = Math.max(1, isNaN(rawMonths) ? 1 : rawMonths);
-                    const monthlyNet = addFormLineItems.reduce((sum: number, li: any) => {
-                      if (li.isFoc === true || li.isFoc === "Yes") return sum;
-                      const qty = parseFloat(li.quantity) || 0;
-                      const price = parseFloat(li.unitPrice) || 0;
-                      const action = li.action || li.changeType || "ADD";
-                      if (action === "REMOVE") return sum - (qty * price);
-                      if (action === "UPDATE") {
-                        const origReq = (addendumContract.manpowerRequirements || []).find((r: any) => (r.position || r.designation) === (li.label || li.itemName));
-                        const origQty = origReq ? (parseFloat(origReq.quantity) || 0) : 0;
-                        return sum + ((qty - origQty) * price);
-                      }
-                      return sum + (qty * price);
-                    }, 0);
-                    const fullTermNet = Math.round(monthlyNet * remainingMonths * 100) / 100;
+                    const { fullTermNet } = calculateAddendumFinancialImpact(
+                      addFormLineItems,
+                      addendumForm.effectiveFrom || addendumContract.startDate,
+                      addendumForm.effectiveTo || addendumContract.endDate,
+                      addendumContract.manpowerRequirements || []
+                    );
                     return {
                       ...addendumForm,
                       status: "DRAFT",
@@ -10658,24 +10646,12 @@ export default function ManpowerMasterPage() {
                       <div>
                         <label className="block text-[10px] font-bold text-on-surface-variant uppercase mb-1">Calculated Financial Impact (Monthly & Full-Term)</label>
                         {(() => {
-                          const startD = new Date(addendumForm.effectiveFrom || addendumContract.startDate);
-                          const endD = new Date(addendumForm.effectiveTo || addendumContract.endDate);
-                          const rawMonths = (endD.getFullYear() - startD.getFullYear()) * 12 + (endD.getMonth() - startD.getMonth()) + (endD.getDate() >= startD.getDate() ? 1 : 0);
-                          const remainingMonths = Math.max(1, isNaN(rawMonths) ? 1 : rawMonths);
-                          const monthlyNet = addFormLineItems.reduce((sum: number, li: any) => {
-                            if (li.isFoc === true || li.isFoc === "Yes") return sum;
-                            const qty = parseFloat(li.quantity) || 0;
-                            const price = parseFloat(li.unitPrice) || 0;
-                            const action = li.action || li.changeType || "ADD";
-                            if (action === "REMOVE") return sum - (qty * price);
-                            if (action === "UPDATE") {
-                              const origReq = (addendumContract.manpowerRequirements || []).find((r: any) => (r.position || r.designation) === (li.label || li.itemName));
-                              const origQty = origReq ? (parseFloat(origReq.quantity) || 0) : 0;
-                              return sum + ((qty - origQty) * price);
-                            }
-                            return sum + (qty * price);
-                          }, 0);
-                          const fullTermNet = Math.round(monthlyNet * remainingMonths * 100) / 100;
+                          const { monthlyNet, effectiveMonths, fullTermNet } = calculateAddendumFinancialImpact(
+                            addFormLineItems,
+                            addendumForm.effectiveFrom || addendumContract.startDate,
+                            addendumForm.effectiveTo || addendumContract.endDate,
+                            addendumContract.manpowerRequirements || []
+                          );
                           return (
                             <div className="p-2 border border-outline-variant rounded-lg bg-surface space-y-1">
                               <div className="flex justify-between text-xs font-bold text-on-surface">
@@ -10683,7 +10659,7 @@ export default function ManpowerMasterPage() {
                                 <span className="font-mono">{monthlyNet >= 0 ? "+" : ""}QAR {monthlyNet.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                               </div>
                               <div className="flex justify-between text-sm font-black text-primary border-t border-outline-variant/40 pt-1">
-                                <span>Full-Term ({remainingMonths} mo):</span>
+                                <span>Full-Term ({Number(effectiveMonths.toFixed(2))} mo):</span>
                                 <span className="font-mono">{fullTermNet >= 0 ? "+" : ""}QAR {fullTermNet.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                               </div>
                             </div>

@@ -340,6 +340,82 @@ export function isContractDateValid(contract: any, targetDate?: Date | string): 
   return targetObj.getTime() <= endDate.getTime();
 }
 
+/**
+ * Calculates pro-rata calendar-month financial impact for an addendum period.
+ * Walks each calendar month overlapping [effectiveFrom, effectiveEnd] inclusive
+ * and sums overlapDays / daysInMonth so non-whole-month periods are prorated accurately.
+ */
+export function calculateAddendumFinancialImpact(
+  lineItems: any[],
+  effectiveFrom: Date | string,
+  effectiveEnd: Date | string,
+  originalRequirements: any[] = []
+): { monthlyNet: number; effectiveMonths: number; fullTermNet: number } {
+  let monthlyNet = 0;
+  for (const li of lineItems || []) {
+    if (li?.isFoc === true || li?.isFoc === "Yes") continue;
+    const qty = Number(li?.quantity ?? li?.newQuantity ?? 0) || 0;
+    const rate = Number(li?.unitRate ?? li?.unitPrice ?? 0) || 0;
+    const action = li?.action || li?.changeType || "ADD";
+    if (action === "REMOVE") {
+      monthlyNet -= qty * rate;
+    } else if (action === "MODIFY" || action === "UPDATE") {
+      const orig = (originalRequirements || []).find(
+        (r: any) =>
+          (li?.categoryId && r?.categoryId === li.categoryId) ||
+          (li?.designationId && r?.designationId === li.designationId) ||
+          (li?.roleTitle && r?.roleTitle === li.roleTitle) ||
+          ((r?.position || r?.designation) &&
+            (r?.position || r?.designation) === (li?.label || li?.itemName))
+      );
+      const oldQty = orig ? Number(orig.quantity ?? 0) || 0 : Number(li?.previousQuantity ?? 0) || 0;
+      const oldRate = orig ? Number(orig.unitRate ?? orig.unitPrice ?? rate) || 0 : rate;
+      monthlyNet += qty * rate - oldQty * oldRate;
+    } else {
+      monthlyNet += qty * rate;
+    }
+  }
+
+  let effectiveMonths = 0;
+  if (effectiveFrom && effectiveEnd) {
+    const s = new Date(effectiveFrom);
+    const e = new Date(effectiveEnd);
+    if (!Number.isNaN(s.getTime()) && !Number.isNaN(e.getTime())) {
+      const startDay = new Date(Date.UTC(s.getUTCFullYear(), s.getUTCMonth(), s.getUTCDate()));
+      const endDay = new Date(Date.UTC(e.getUTCFullYear(), e.getUTCMonth(), e.getUTCDate()));
+      if (endDay.getTime() >= startDay.getTime()) {
+        let curY = startDay.getUTCFullYear();
+        let curM = startDay.getUTCMonth();
+        const endY = endDay.getUTCFullYear();
+        const endM = endDay.getUTCMonth();
+        const msPerDay = 86400000;
+
+        while (curY < endY || (curY === endY && curM <= endM)) {
+          const daysInMonth = new Date(Date.UTC(curY, curM + 1, 0)).getUTCDate();
+          const mStart = new Date(Date.UTC(curY, curM, 1));
+          const mEnd = new Date(Date.UTC(curY, curM, daysInMonth));
+          const overlapStart = startDay > mStart ? startDay : mStart;
+          const overlapEnd = endDay < mEnd ? endDay : mEnd;
+          if (overlapEnd >= overlapStart) {
+            const overlapDays = Math.floor((overlapEnd.getTime() - overlapStart.getTime()) / msPerDay) + 1;
+            effectiveMonths += overlapDays / daysInMonth;
+          }
+          curM += 1;
+          if (curM > 11) {
+            curM = 0;
+            curY += 1;
+          }
+        }
+      }
+    }
+  }
+
+  effectiveMonths = Math.round(effectiveMonths * 10000) / 10000;
+  monthlyNet = Math.round(monthlyNet * 100) / 100;
+  const fullTermNet = Math.round(monthlyNet * effectiveMonths * 100) / 100;
+  return { monthlyNet, effectiveMonths, fullTermNet };
+}
+
 
 
 
