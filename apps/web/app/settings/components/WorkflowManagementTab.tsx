@@ -245,8 +245,16 @@ export function WorkflowManagementTab({ employees, onShowMessage }: WorkflowMana
     setModuleType(val);
     if (val === "SECURITY_GUARDING_CONTRACT") {
       setOperationType("SECURITY_GUARDING");
+      setAppliesTo("ACTIVATION");
     } else if (val === "FACILITY_MANAGEMENT_CONTRACT") {
       setOperationType("FACILITY_MANAGEMENT");
+      setAppliesTo("ACTIVATION");
+    } else if (val === "CONTRACT_RENEWAL") {
+      setOperationType("GLOBAL");
+      setAppliesTo("RENEWAL");
+    } else if (val === "CONTRACT_ADDENDUM") {
+      setOperationType("GLOBAL");
+      setAppliesTo("ACTIVATION");
     } else {
       setOperationType("GLOBAL");
     }
@@ -361,6 +369,7 @@ export function WorkflowManagementTab({ employees, onShowMessage }: WorkflowMana
                   <option value="CONTRACT_CONVERSION">Contract Conversion</option>
                   <option value="VARIATION_COSTING">Variation Costing</option>
                   <option value="CONTRACT_ADDENDUM">Contract Addendum</option>
+                  <option value="CONTRACT_RENEWAL">Contract Renewal</option>
                   <option value="FUTURE_MODULE">Future Module</option>
                 </select>
               </div>
@@ -374,6 +383,7 @@ export function WorkflowManagementTab({ employees, onShowMessage }: WorkflowMana
                 >
                   <option value="ACTIVATION">Contract Activation / Submit</option>
                   <option value="TERMINATION">Contract Termination</option>
+                  <option value="RENEWAL">Contract Renewal / Term Extension</option>
                 </select>
               </div>
 

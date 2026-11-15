@@ -8,7 +8,10 @@ export async function GET() {
   if (auth.error) return auth.error;
 
   if (!hasPermission(auth.session?.user, "manpower.admin.full_access") &&
-      !hasPermission(auth.session?.user, "manpower.security.view")) {
+      !hasPermission(auth.session?.user, "manpower.security.view") &&
+      !hasPermission(auth.session?.user, "commercial.handover.view") &&
+      !hasPermission(auth.session?.user, "commercial.handover.manage") &&
+      !hasPermission(auth.session?.user, "commercial.opportunities.view")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

@@ -11,6 +11,7 @@ const MODULE_OPTIONS = [
   { value: "PROPOSAL", label: "Commercial Proposals" },
   { value: "CONTRACT", label: "Commercial Contracts" },
   { value: "ADDENDUM", label: "Contract Addendums" },
+  { value: "RENEWAL", label: "Contract Renewals" },
   { value: "CLEARANCE", label: "Employee Clearance" },
   { value: "LEAVE", label: "Leave Requests" },
   { value: "CALENDAR", label: "Manpower Calendars" }

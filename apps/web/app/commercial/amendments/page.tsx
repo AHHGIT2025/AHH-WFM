@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
+import { useSearchParams } from "next/navigation";
 import { LayoutShell } from "../../../components/layout-shell";
 import CommercialActivityFeedPanel from "../../../components/commercial/CommercialActivityFeedPanel";
 import { hasPermission, isAdminUser } from "@/lib/permissions";
@@ -20,6 +21,9 @@ interface AddendumRow {
 }
 
 export default function ContractAmendmentsPage() {
+  const searchParams = useSearchParams();
+  const urlContractId = searchParams.get("contractId") || "";
+
   const { data: session } = useSession();
   const user = session?.user as any;
   const currentUserId = user?.id || "current-user";
@@ -29,22 +33,11 @@ export default function ContractAmendmentsPage() {
   const canApproveAddendum = isAdminUser(user) || hasPermission(user, "commercial.addendum.approve");
   const canRejectAddendum = isAdminUser(user) || hasPermission(user, "commercial.addendum.reject");
 
-  const [selectedContractId] = useState("CONT-2026-001");
-  const [contractStatus] = useState("ACTIVE");
-  const [addendums, setAddendums] = useState<AddendumRow[]>([
-    {
-      id: "add-1",
-      addendumNumber: "CONT-2026-001-ADD-01",
-      title: "Headcount Expansion & Guard Post Addition",
-      addendumType: "SCOPE_CHANGE",
-      addendumDate: "2026-08-11",
-      effectiveFrom: "2026-09-01",
-      status: "APPROVED",
-      calculatedCommercialImpact: 45000,
-      description: "Added 4 Senior Security Guards for West Wing Perimeter.",
-      createdBy: "maker-seed-1"
-    }
-  ]);
+  const [contractsList, setContractsList] = useState<any[]>([]);
+  const [selectedContractId, setSelectedContractId] = useState(urlContractId);
+  const [contractStatus, setContractStatus] = useState("ACTIVE");
+  const [addendums, setAddendums] = useState<AddendumRow[]>([]);
+  const [loading, setLoading] = useState(false);
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [newTitle, setNewTitle] = useState("");
@@ -52,45 +45,166 @@ export default function ContractAmendmentsPage() {
   const [newImpact, setNewImpact] = useState("");
   const [newDescription, setNewDescription] = useState("");
 
-  const handleCreateAddendum = (e: React.FormEvent) => {
+  // Load contracts
+  useEffect(() => {
+    async function loadContracts() {
+      try {
+        const res = await fetch("/api/v1/manpower/security-guarding/contracts?limit=50");
+        if (res.ok) {
+          const data = await res.json();
+          const items: any[] = Array.isArray(data) ? data : (data.items || data.contracts || []);
+          const eligible = items.filter((c: any) => c.status === "ACTIVE" || c.status === "APPROVED");
+          setContractsList(eligible.length > 0 ? eligible : items);
+          if (!selectedContractId && eligible.length > 0) {
+            setSelectedContractId(eligible[0].id);
+            setContractStatus(eligible[0].status);
+          }
+        }
+      } catch (e) {
+        console.error("Failed to load contracts:", e);
+      }
+    }
+    loadContracts();
+  }, [selectedContractId]);
+
+  // Load addendums for selected contract
+  useEffect(() => {
+    if (!selectedContractId) return;
+    async function loadAddendums() {
+      setLoading(true);
+      try {
+        const res = await fetch(`/api/v1/commercial/contracts/${selectedContractId}/addendums`);
+        if (res.ok) {
+          const json = await res.json();
+          if (json.contract) {
+            setContractStatus(json.contract.status);
+          }
+          if (json.addendums) {
+            setAddendums(json.addendums.map((a: any) => ({
+              id: a.id,
+              addendumNumber: a.addendumNumber,
+              title: a.title,
+              addendumType: a.addendumType,
+              addendumDate: a.addendumDate ? a.addendumDate.split("T")[0] : "",
+              effectiveFrom: a.effectiveFrom ? a.effectiveFrom.split("T")[0] : "",
+              status: a.status,
+              calculatedCommercialImpact: a.calculatedCommercialImpact || 0,
+              description: a.description || "",
+              createdBy: a.createdBy
+            })));
+          }
+        }
+      } catch (e) {
+        console.error("Failed to load addendums:", e);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadAddendums();
+  }, [selectedContractId]);
+
+  const handleCreateAddendum = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newTitle || !canCreateAddendum) return;
+    if (!newTitle || !canCreateAddendum || !selectedContractId) return;
 
-    const newAdd: AddendumRow = {
-      id: `add-${Date.now()}`,
-      addendumNumber: `CONT-2026-001-ADD-0${addendums.length + 1}`,
-      title: newTitle,
-      addendumType: newType,
-      addendumDate: new Date().toISOString().split("T")[0],
-      effectiveFrom: new Date().toISOString().split("T")[0],
-      status: canSubmitAddendum ? "PENDING_APPROVAL" : "DRAFT",
-      calculatedCommercialImpact: Number(newImpact) || 0,
-      description: newDescription,
-      createdBy: currentUserId
-    };
-
-    setAddendums([newAdd, ...addendums]);
-    setNewTitle("");
-    setNewImpact("");
-    setNewDescription("");
-    setShowAddModal(false);
+    try {
+      const res = await fetch(`/api/v1/commercial/contracts/${selectedContractId}/addendums`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: newTitle,
+          addendumType: newType,
+          effectiveFrom: new Date().toISOString().split("T")[0],
+          calculatedCommercialImpact: Number(newImpact) || 0,
+          description: newDescription,
+          submit: canSubmitAddendum
+        })
+      });
+      if (res.ok) {
+        const json = await res.json();
+        const created = json.addendum;
+        if (created) {
+          setAddendums([{
+            id: created.id,
+            addendumNumber: created.addendumNumber,
+            title: created.title,
+            addendumType: created.addendumType,
+            addendumDate: created.addendumDate ? created.addendumDate.split("T")[0] : "",
+            effectiveFrom: created.effectiveFrom ? created.effectiveFrom.split("T")[0] : "",
+            status: created.status,
+            calculatedCommercialImpact: created.calculatedCommercialImpact || 0,
+            description: created.description || "",
+            createdBy: currentUserId
+          }, ...addendums]);
+        }
+        setNewTitle("");
+        setNewImpact("");
+        setNewDescription("");
+        setShowAddModal(false);
+      } else {
+        const err = await res.json();
+        alert(err.error || "Failed to create addendum");
+      }
+    } catch (e) {
+      alert("Network error creating addendum");
+    }
   };
 
-  const handleSubmitAddendum = (id: string) => {
-    if (!canSubmitAddendum) return;
-    setAddendums(addendums.map(a => a.id === id ? { ...a, status: "PENDING_APPROVAL" } : a));
+  const handleSubmitAddendum = async (id: string) => {
+    if (!canSubmitAddendum || !selectedContractId) return;
+    try {
+      const res = await fetch(`/api/v1/commercial/contracts/${selectedContractId}/addendums`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ addendumId: id, action: "SUBMIT" })
+      });
+      if (res.ok) {
+        setAddendums(addendums.map(a => a.id === id ? { ...a, status: "PENDING_APPROVAL" } : a));
+      } else {
+        const err = await res.json();
+        alert(err.error || "Failed to submit addendum");
+      }
+    } catch (e) {
+      alert("Network error submitting addendum");
+    }
   };
 
-  const handleApproveAddendum = (id: string) => {
-    const target = addendums.find(a => a.id === id);
-    if (!target || !canApproveAddendum || target.createdBy === currentUserId) return;
-    setAddendums(addendums.map(a => a.id === id ? { ...a, status: "APPROVED" } : a));
+  const handleApproveAddendum = async (id: string) => {
+    if (!canApproveAddendum || !selectedContractId) return;
+    try {
+      const res = await fetch(`/api/v1/commercial/contracts/${selectedContractId}/addendums/${id}/approve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "APPROVE", remarks: "Approved by checker" })
+      });
+      if (res.ok) {
+        setAddendums(addendums.map(a => a.id === id ? { ...a, status: "APPROVED" } : a));
+      } else {
+        const err = await res.json();
+        alert(err.error || "Failed to approve addendum");
+      }
+    } catch (e) {
+      alert("Network error approving addendum");
+    }
   };
 
-  const handleRejectAddendum = (id: string) => {
-    const target = addendums.find(a => a.id === id);
-    if (!target || !canRejectAddendum || target.createdBy === currentUserId) return;
-    setAddendums(addendums.map(a => a.id === id ? { ...a, status: "REJECTED" } : a));
+  const handleRejectAddendum = async (id: string) => {
+    if (!canRejectAddendum || !selectedContractId) return;
+    try {
+      const res = await fetch(`/api/v1/commercial/contracts/${selectedContractId}/addendums/${id}/approve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "REJECT", remarks: "Rejected by checker" })
+      });
+      if (res.ok) {
+        setAddendums(addendums.map(a => a.id === id ? { ...a, status: "REJECTED" } : a));
+      } else {
+        const err = await res.json();
+        alert(err.error || "Failed to reject addendum");
+      }
+    } catch (e) {
+      alert("Network error rejecting addendum");
+    }
   };
 
   return (
@@ -105,6 +219,22 @@ export default function ContractAmendmentsPage() {
             </p>
           </div>
           <div className="flex items-center gap-3">
+            {contractsList.length > 0 && (
+              <div className="flex items-center gap-2">
+                <label className="text-xs font-semibold text-slate-600">Contract:</label>
+                <select
+                  value={selectedContractId}
+                  onChange={(e) => setSelectedContractId(e.target.value)}
+                  className="text-xs font-medium border border-slate-300 rounded px-2.5 py-1.5 bg-slate-50 text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                >
+                  {contractsList.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.contractNumber} - {c.title} ({c.status})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             <span className="px-3 py-1 bg-emerald-100 text-emerald-800 text-xs font-semibold rounded-full">
               Contract Status: {contractStatus}
             </span>

@@ -1,4 +1,4 @@
-export function getEffectiveContractManpower(contract: any) {
+export function getEffectiveContractManpower(contract: any, asOfDate?: Date | string | null) {
   if (!contract) {
     return {
       effectiveManpower: [],
@@ -6,6 +6,8 @@ export function getEffectiveContractManpower(contract: any) {
       effectiveShift: []
     };
   }
+
+  const evalDate = asOfDate ? new Date(asOfDate) : null;
 
   // 1. Gather original manpower requirements
   const originalManpower = contract.manpowerRequirements || [];
@@ -44,11 +46,19 @@ export function getEffectiveContractManpower(contract: any) {
     });
   }
 
-  // 2. Fetch approved/draft addendums
-  // Filter for ACTIVE, APPROVED, or DRAFT (since no separate approval workflow currently exists on backend, saved is treated as active)
-  const activeAddendums = (contract.addendums || []).filter(
-    (a: any) => a.status === "APPROVED" || a.status === "ACTIVE" || a.status === "DRAFT"
-  );
+  // 2. Fetch approved active addendums ONLY (DEF-083: DRAFT, PENDING, REJECTED, and CANCELLED have zero effect)
+  const activeAddendums = (contract.addendums || []).filter((a: any) => {
+    const isApprovedStatus = a.status === "APPROVED" || a.status === "ACTIVE";
+    if (!isApprovedStatus) return false;
+
+    // If an evaluation date is specified, enforce effective date window
+    if (evalDate) {
+      if (a.effectiveFrom && new Date(a.effectiveFrom) > evalDate) return false;
+      if (a.effectiveTo && new Date(a.effectiveTo) < evalDate) return false;
+    }
+
+    return true;
+  });
 
   // Apply addendum changes for MANPOWER
   for (const addendum of activeAddendums) {

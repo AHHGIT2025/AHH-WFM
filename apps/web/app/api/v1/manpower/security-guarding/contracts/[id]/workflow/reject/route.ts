@@ -6,16 +6,34 @@ export async function POST(request: Request, { params }: { params: { id: string 
   const auth = await checkApiAuth();
   if (auth.error) return auth.error;
 
+  const user = auth.session?.user as any;
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
-    const payload = await request.json();
-    const { levelId, employeeId, remarks } = payload;
-    if (!levelId || !employeeId) {
-      return NextResponse.json({ error: "Missing levelId or employeeId" }, { status: 400 });
+    const payload = await request.json().catch(() => ({}));
+    const { levelId, remarks } = payload;
+    if (!levelId) {
+      return NextResponse.json({ error: "Missing levelId" }, { status: 400 });
     }
-    
-    const contract = await mockDb.rejectContractWorkflowLevel(params.id, levelId, employeeId, remarks);
+
+    const resolvedEmployeeId = payload.employeeId || user.employeeId || user.id;
+
+    const contract = await mockDb.rejectContractWorkflowLevel(
+      params.id,
+      levelId,
+      resolvedEmployeeId,
+      remarks,
+      user
+    );
     return NextResponse.json(contract);
   } catch (e: any) {
-    return NextResponse.json({ error: e.message || "Failed to reject level" }, { status: 500 });
+    const isSoDError = e.message?.includes("Segregation of Duties");
+    const isAuthError = e.message?.includes("not authorized");
+    return NextResponse.json(
+      { error: e.message || "Failed to reject level" },
+      { status: isSoDError || isAuthError ? 403 : 500 }
+    );
   }
 }

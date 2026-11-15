@@ -388,10 +388,14 @@ export default function ManpowerMasterPage() {
   // Permission Checks
   const canView = isAdminUser(session?.user as any) ||
                   hasPermission(session?.user as any, "manpower.admin.full_access") ||
-                  hasPermission(session?.user as any, isSecurity ? "manpower.security.view" : "manpower.fm.view");
+                  hasPermission(session?.user as any, isSecurity ? "manpower.security.view" : "manpower.fm.view") ||
+                  hasPermission(session?.user as any, isSecurity ? "manpower.security.contracts.view" : "manpower.fm.contracts.view") ||
+                  hasPermission(session?.user as any, "commercial.addendum.view") ||
+                  hasPermission(session?.user as any, "commercial.opportunities.view");
   const canManage = isAdminUser(session?.user as any) ||
                     hasPermission(session?.user as any, "manpower.admin.full_access") ||
                     hasPermission(session?.user as any, isSecurity ? "manpower.security.manage" : "manpower.fm.manage");
+  const canCreateAddendum = canManage || hasPermission(session?.user as any, "commercial.addendum.create");
 
   const apiBase = master === "coordinators"
     ? `/api/v1/security/coordinators?operationType=${isSecurity ? "SECURITY_GUARDING" : "FACILITY_MANAGEMENT"}`
@@ -7480,7 +7484,7 @@ export default function ManpowerMasterPage() {
                                     Delete
                                   </button>
                                 )}
-                                {item.status === "ACTIVE" && (
+                                {(item.status === "ACTIVE" || item.status === "APPROVED") && (
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();
@@ -7493,6 +7497,18 @@ export default function ManpowerMasterPage() {
                                   </button>
                                 )}
                               </>
+                            )}
+                            {!canManage && canCreateAddendum && (item.status === "ACTIVE" || item.status === "APPROVED") && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setAddendumContract(item);
+                                  setAddFormLineItems([]);
+                                }}
+                                className="text-status-warning hover:underline text-[11px] font-bold"
+                              >
+                                Add Addendum
+                              </button>
                             )}
                           </td>
                         </>
@@ -9678,7 +9694,21 @@ export default function ManpowerMasterPage() {
                 </div>
 
               <div className="bg-surface-container-low border border-outline-variant p-4 rounded-xl space-y-3">
-                <h4 className="text-xs font-bold text-primary uppercase tracking-wider border-b border-outline-variant pb-1">Contract Addendums / Revisions</h4>
+                <div className="flex justify-between items-center border-b border-outline-variant pb-1">
+                  <h4 className="text-xs font-bold text-primary uppercase tracking-wider">Contract Addendums / Revisions</h4>
+                  {(selectedContractDetail.status === "ACTIVE" || selectedContractDetail.status === "APPROVED") && canCreateAddendum && (
+                    <button
+                      onClick={() => {
+                        setAddendumContract(selectedContractDetail);
+                        setAddFormLineItems([]);
+                      }}
+                      className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white text-[11px] font-bold rounded-lg transition-colors flex items-center gap-1"
+                    >
+                      <span className="material-symbols-outlined text-[14px]">add</span>
+                      Add Addendum
+                    </button>
+                  )}
+                </div>
                 {(!selectedContractDetail.addendums || selectedContractDetail.addendums.length === 0) ? (
                   <p className="text-[11px] text-on-surface-variant italic">No addendums logged for this contract.</p>
                 ) : (
@@ -9858,48 +9888,57 @@ export default function ManpowerMasterPage() {
 
                     const pendingApprovers = activePendingLevel.approvers?.filter((ap: any) => ap.approvalStatus === "PENDING") || [];
 
+                    const currentUserName = session?.user?.name || session?.user?.email || "User";
+                    const currentUserId = (session?.user as any)?.id || "";
+                    const currentUserEmpId = (session?.user as any)?.employeeId || "";
+                    const isSuperAdmin = (session?.user as any)?.role === "SUPER_ADMIN";
+                    const isSystemAdmin = (session?.user as any)?.role === "ADMIN" || isSuperAdmin || hasPermission(session?.user as any, "manpower.admin.full_access");
+
+                    const isCreator = Boolean(
+                      (selectedContractDetail.submittedBy && (selectedContractDetail.submittedBy === currentUserName || selectedContractDetail.submittedBy === session?.user?.email)) ||
+                      (selectedContractDetail.createdById && (selectedContractDetail.createdById === currentUserId || selectedContractDetail.createdById === currentUserEmpId))
+                    );
+
+                    const isAssignedApprover = pendingApprovers.some((ap: any) =>
+                      (currentUserEmpId && ap.employeeId === currentUserEmpId) ||
+                      (currentUserId && ap.employeeId === currentUserId) ||
+                      (ap.email && ap.email === session?.user?.email)
+                    );
+
+                    const hasDelegation = (delegations || []).some((d: any) =>
+                      pendingApprovers.some((ap: any) => ap.employeeId === d.originalApproverEmployeeId) &&
+                      d.isActive &&
+                      (d.delegatedApproverEmployeeId === currentUserEmpId || d.delegatedApproverEmployeeId === currentUserId)
+                    );
+
+                    const canApproveCurrentStage = (isAssignedApprover || hasDelegation || isSystemAdmin) && (!isCreator || isSuperAdmin);
+
                     return (
                       <div className="space-y-3">
                         <p className="text-xs text-on-surface-variant">Acting on <span className="font-semibold text-primary">Level {activePendingLevel.levelNumber}: {activePendingLevel.levelName}</span></p>
 
-                        <div>
-                          <label className="block text-[9px] font-bold text-on-surface-variant uppercase mb-1">Select Approver Entity</label>
-                          <select
-                            id="workflowActAsSelect"
-                            className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-2.5 py-1.5 text-xs text-on-surface"
-                          >
-                            {(() => {
-                              const options: any[] = [];
-                              const now = new Date();
-
-                              pendingApprovers.forEach((ap: any) => {
-                                // Original option
-                                options.push({
-                                  value: `${activePendingLevel.id}:${ap.employeeId}`,
-                                  label: ap.employeeName || "Approver"
-                                });
-
-                                // Check if there is an active delegation for this pending approver
-                                const activeDel = (delegations || []).find((d: any) =>
-                                  d.originalApproverEmployeeId === ap.employeeId &&
-                                  d.isActive &&
-                                  new Date(d.effectiveFrom) <= now &&
-                                  now <= new Date(d.effectiveTo)
-                                );
-                                if (activeDel) {
-                                  options.push({
-                                    value: `${activePendingLevel.id}:${activeDel.delegatedApproverEmployeeId}`,
-                                    label: `${activeDel.delegatedApproverName} (on behalf of ${ap.employeeName})`
-                                  });
-                                }
-                              });
-
-                              return options.map((opt, oIdx) => (
-                                <option key={oIdx} value={opt.value}>{opt.label}</option>
-                              ));
-                            })()}
-                          </select>
+                        <div className="bg-surface-container-lowest border border-outline-variant rounded-lg p-3 space-y-2">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-on-surface-variant font-medium">Designated Approver(s):</span>
+                            <span className="font-bold text-primary">
+                              {pendingApprovers.map((ap: any) => ap.employeeName || ap.roleName || "Approver").join(", ")}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between text-xs border-t border-outline-variant pt-2">
+                            <span className="text-on-surface-variant font-medium">Acting Identity:</span>
+                            <span className="font-bold text-on-surface flex items-center gap-1">
+                              <span className="material-symbols-outlined text-xs text-primary">badge</span>
+                              {currentUserName} {isSystemAdmin ? "(Admin)" : isAssignedApprover ? "(Assigned)" : hasDelegation ? "(Delegated)" : ""}
+                            </span>
+                          </div>
                         </div>
+
+                        {isCreator && !isSuperAdmin && (
+                          <div className="p-2.5 bg-amber-500/10 border border-amber-500/30 rounded-lg text-xs text-amber-700 dark:text-amber-400 font-semibold flex items-center gap-2">
+                            <span className="material-symbols-outlined text-sm">gavel</span>
+                            Segregation of Duties: Creator cannot approve their own contract.
+                          </div>
+                        )}
 
                         <div>
                           <label className="block text-[9px] font-bold text-on-surface-variant uppercase mb-1">Remarks / Comments</label>
@@ -9913,28 +9952,22 @@ export default function ManpowerMasterPage() {
 
                         <div className="flex gap-2">
                           <button
+                            disabled={!canApproveCurrentStage}
                             onClick={() => {
-                              const select = document.getElementById("workflowActAsSelect") as HTMLSelectElement;
                               const remarks = (document.getElementById("workflowRemarksTextarea") as HTMLTextAreaElement)?.value || "";
-                              if (select?.value) {
-                                const [levelId, employeeId] = select.value.split(":");
-                                handleWorkflowAction("approve", { levelId, employeeId, remarks });
-                              }
+                              handleWorkflowAction("approve", { levelId: activePendingLevel.id, remarks });
                             }}
-                            className="flex-1 py-1.5 bg-status-success text-white text-xs font-bold rounded-lg hover:opacity-90 transition-opacity"
+                            className="flex-1 py-1.5 bg-status-success text-white text-xs font-bold rounded-lg hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
                           >
                             Approve Level
                           </button>
                           <button
+                            disabled={!canApproveCurrentStage}
                             onClick={() => {
-                              const select = document.getElementById("workflowActAsSelect") as HTMLSelectElement;
                               const remarks = (document.getElementById("workflowRemarksTextarea") as HTMLTextAreaElement)?.value || "";
-                              if (select?.value) {
-                                const [levelId, employeeId] = select.value.split(":");
-                                handleWorkflowAction("reject", { levelId, employeeId, remarks });
-                              }
+                              handleWorkflowAction("reject", { levelId: activePendingLevel.id, remarks });
                             }}
-                            className="flex-1 py-1.5 bg-status-error text-white text-xs font-bold rounded-lg hover:opacity-90 transition-opacity"
+                            className="flex-1 py-1.5 bg-status-error text-white text-xs font-bold rounded-lg hover:opacity-90 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
                           >
                             Reject Level
                           </button>

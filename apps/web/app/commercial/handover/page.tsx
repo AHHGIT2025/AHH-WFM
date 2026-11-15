@@ -51,10 +51,20 @@ export default function HandoverPage() {
       const res = await fetch("/api/v1/manpower/security-guarding/contracts?limit=50");
       if (res.ok) {
         const data = await res.json();
-        const items = data.items || data.contracts || [];
-        setContracts(items);
-        if (items.length > 0) {
-          setSelectedContractId(items[0].id);
+        const rawItems: any[] = Array.isArray(data) ? data : (data.items || data.contracts || []);
+        // Handover covers contracts that are APPROVED (ready for mobilization/handover) or ACTIVE
+        const eligible = rawItems.filter((c: any) =>
+          c.status === "APPROVED" ||
+          c.status === "ACTIVE" ||
+          c.approvalStatus === "APPROVED" ||
+          c.mobilisationStatus === "PENDING_HANDOVER" ||
+          c.mobilisationStatus === "IN_PROGRESS" ||
+          c.mobilisationStatus === "MOBILISED"
+        );
+        const finalItems = eligible.length > 0 ? eligible : rawItems;
+        setContracts(finalItems);
+        if (finalItems.length > 0) {
+          setSelectedContractId(finalItems[0].id);
         }
       } else {
         // Fallback to general contracts fetch if SG route fails
@@ -212,7 +222,7 @@ export default function HandoverPage() {
         {/* Left Column: Contract Selector */}
         <div className="rounded-xl border border-outline bg-surface-container p-4 lg:col-span-1">
           <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-on-surface-variant">
-            Active Contracts ({contracts.length})
+            Eligible Contracts ({contracts.length})
           </h2>
 
           {loading ? (

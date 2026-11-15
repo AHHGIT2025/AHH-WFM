@@ -8,7 +8,9 @@ export async function GET(request: Request, { params }: { params: { id: string }
   if (auth.error) return auth.error;
 
   if (!hasPermission(auth.session?.user, "manpower.admin.full_access") &&
-      !hasPermission(auth.session?.user, "manpower.security.view")) {
+      !hasPermission(auth.session?.user, "manpower.security.view") &&
+      !hasPermission(auth.session?.user, "commercial.addendum.view") &&
+      !hasPermission(auth.session?.user, "commercial.opportunities.view")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -25,7 +27,9 @@ export async function POST(request: Request, { params }: { params: { id: string 
   if (auth.error) return auth.error;
 
   if (!hasPermission(auth.session?.user, "manpower.admin.full_access") &&
-      !hasPermission(auth.session?.user, "manpower.security.manage")) {
+      !hasPermission(auth.session?.user, "manpower.security.manage") &&
+      !hasPermission(auth.session?.user, "commercial.addendum.create") &&
+      !hasPermission(auth.session?.user, "commercial.addendum.submit")) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -35,8 +39,8 @@ export async function POST(request: Request, { params }: { params: { id: string 
       return NextResponse.json({ error: "Contract not found" }, { status: 404 });
     }
 
-    if (contract.status !== "ACTIVE") {
-      return NextResponse.json({ error: "Addendum can be created only for active contracts." }, { status: 400 });
+    if (contract.status !== "ACTIVE" && contract.status !== "APPROVED") {
+      return NextResponse.json({ error: "Addendum can be created only for active or approved contracts." }, { status: 400 });
     }
 
     const payload = await request.json();
@@ -52,9 +56,17 @@ export async function POST(request: Request, { params }: { params: { id: string 
       }));
     }
 
+    const isSuperOrAdmin = auth.session?.user?.role === "ADMIN" || auth.session?.user?.role === "SUPER_ADMIN";
+    let targetStatus = payload.status || "DRAFT";
+    if (targetStatus === "APPROVED" && !isSuperOrAdmin) {
+      targetStatus = "DRAFT";
+    }
+
     const addendum = await mockDb.createManpowerContractAddendum({
       ...payload,
-      contractId: params.id
+      status: targetStatus,
+      contractId: params.id,
+      createdBy: auth.session?.user?.id || "unknown"
     });
     return NextResponse.json(addendum);
   } catch (e: any) {

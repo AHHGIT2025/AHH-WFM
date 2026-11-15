@@ -3,10 +3,15 @@
 import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
+import { useSession } from "next-auth/react";
+import { hasPermission, isAdminUser } from "@/lib/permissions";
 
 export default function ProposalDetailPage() {
   const params = useParams();
   const proposalId = params.id as string;
+  const { data: session } = useSession();
+  const user = session?.user as any;
+  const canIssue = isAdminUser(user) || hasPermission(user, "precontract.proposal.issue");
 
   const [proposal, setProposal] = useState<any>(null);
   const [dto, setDto] = useState<any>(null);
@@ -287,7 +292,7 @@ export default function ProposalDetailPage() {
               Client Preview & Print
             </button>
 
-            {isApproved && (
+            {isApproved && canIssue && (
               <button
                 onClick={() => setShowIssueModal(true)}
                 className="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"

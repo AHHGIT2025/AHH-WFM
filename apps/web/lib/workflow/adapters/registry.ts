@@ -238,6 +238,8 @@ const ContractAdapter: WorkflowSourceAdapter = {
 };
 WorkflowAdapterRegistry.register(ContractAdapter);
 WorkflowAdapterRegistry.register({ ...ContractAdapter, moduleType: "CONTRACT_CONVERSION" });
+WorkflowAdapterRegistry.register({ ...ContractAdapter, moduleType: "SECURITY_GUARDING_CONTRACT" });
+WorkflowAdapterRegistry.register({ ...ContractAdapter, moduleType: "FACILITY_MANAGEMENT_CONTRACT" });
 
 // 5. Addendum Adapter
 const AddendumAdapter: WorkflowSourceAdapter = {
@@ -386,3 +388,37 @@ const CalendarAdapter: WorkflowSourceAdapter = {
   }
 };
 WorkflowAdapterRegistry.register(CalendarAdapter);
+
+// 9. Renewal Adapter
+const RenewalAdapter: WorkflowSourceAdapter = {
+  moduleType: "CONTRACT_RENEWAL",
+  async getBusinessSummary(referenceId: string) {
+    try {
+      const ren = await prisma.manpowerContractRenewalCase.findUnique({
+        where: { id: referenceId },
+        include: { contract: { include: { client: true } } }
+      });
+      if (!ren) return null;
+      return {
+        reference: ren.caseNumber || referenceId,
+        title: `Contract Renewal #${ren.caseNumber || referenceId}`,
+        subtitle: ren.contract?.title || ren.contract?.client?.name || "Contract Renewal",
+        requesterName: ren.createdByName || "Commercial Team",
+        companyId: ren.companyId,
+        createdAt: ren.createdAt.toISOString(),
+        keyFields: [
+          { label: "Case Number", value: ren.caseNumber },
+          { label: "Contract", value: ren.contract?.contractNumber || "Contract" },
+          { label: "Status", value: ren.status, badge: ren.status }
+        ],
+        rawDetails: { ren }
+      };
+    } catch (e) {
+      return null;
+    }
+  },
+  getSourceDeepLink(referenceId: string) {
+    return `/commercial/renewals`;
+  }
+};
+WorkflowAdapterRegistry.register(RenewalAdapter);

@@ -14375,7 +14375,7 @@ export const mockDb = {
     writeDb(db);
     return updated;
   },
-  submitContractWorkflow: async (id: string, submittedBy?: string): Promise<any> => {
+  submitContractWorkflow: async (id: string, submittedBy?: string, submittedById?: string | null): Promise<any> => {
     if (isDbConnected()) {
       const contract = await prismaClient.manpowerContract.findUnique({
         where: { id }
@@ -14458,9 +14458,38 @@ export const mockDb = {
         data: {
           status: "PENDING_APPROVAL",
           approvalStatus: "PENDING_APPROVAL",
-          submittedForApprovalAt: new Date()
+          submittedForApprovalAt: new Date(),
+          submittedBy: submittedBy || "System"
         }
       });
+
+      // Synchronize central WorkflowInstance for Universal Approval Center visibility
+      try {
+        await prismaClient.workflowInstance.deleteMany({
+          where: { referenceId: id, moduleType: { in: ["SECURITY_GUARDING_CONTRACT", "FACILITY_MANAGEMENT_CONTRACT", "CONTRACT"] } }
+        });
+        await prismaClient.workflowInstance.create({
+          data: {
+            templateId: template.id,
+            moduleType,
+            referenceId: id,
+            status: "IN_PROGRESS",
+            currentLevelNumber: 1,
+            companyId: contract.companyId || null,
+            operationScope: contract.operationType,
+            history: {
+              create: {
+                levelNumber: 1,
+                action: "SUBMIT",
+                actedBy: submittedById || submittedBy || "System",
+                remarks: "Contract submitted for approval."
+              }
+            }
+          }
+        });
+      } catch (wfSyncErr) {
+        console.warn("[Workflow Sync] Non-blocking central instance sync error:", wfSyncErr);
+      }
 
       return await mockDb.getManpowerContract(id);
     }
@@ -14546,9 +14575,24 @@ export const mockDb = {
     writeDb(db);
     return await mockDb.getManpowerContract(id);
   },
-  approveContractWorkflowLevel: async (id: string, levelId: string, employeeId: string, remarks?: string): Promise<any> => {
+  approveContractWorkflowLevel: async (id: string, levelId: string, employeeId: string, remarks?: string, actorUser?: any): Promise<any> => {
     const now = new Date();
     if (isDbConnected()) {
+      const contract = await prismaClient.manpowerContract.findUnique({
+        where: { id }
+      });
+      if (!contract) throw new Error("Contract not found.");
+
+      // Strict Segregation of Duties (SoD): Submitter / Creator cannot approve their own contract
+      const cAny = contract as any;
+      const isCreator = actorUser && (
+        (cAny.createdById && (cAny.createdById === actorUser.id || cAny.createdById === actorUser.employeeId)) ||
+        (cAny.submittedBy && (cAny.submittedBy === actorUser.name || cAny.submittedBy === actorUser.email))
+      );
+      if (isCreator && actorUser?.role !== "SUPER_ADMIN") {
+        throw new Error("Segregation of Duties: Creator cannot approve their own contract.");
+      }
+
       const currentLevel = await prismaClient.contractApprovalLevel.findUnique({
         where: { id: levelId },
         include: { workflow: true }
@@ -14578,7 +14622,15 @@ export const mockDb = {
 
       // Find the approver record for this level
       let approver = await prismaClient.contractApprovalApprover.findFirst({
-        where: { levelId, employeeId }
+        where: {
+          levelId,
+          OR: [
+            { employeeId },
+            ...(actorUser?.employeeId ? [{ employeeId: actorUser.employeeId }] : []),
+            ...(actorUser?.id ? [{ employeeId: actorUser.id }] : []),
+            ...(actorUser?.email ? [{ email: actorUser.email }] : [])
+          ]
+        }
       });
 
       let delegationRemarks = "";
@@ -14593,7 +14645,7 @@ export const mockDb = {
             const delegation = await prismaClient.workflowDelegation.findFirst({
               where: {
                 originalApproverEmployeeId: la.employeeId,
-                delegatedApproverEmployeeId: employeeId,
+                delegatedApproverEmployeeId: { in: [employeeId, actorUser?.employeeId, actorUser?.id].filter(Boolean) as string[] },
                 isActive: true,
                 effectiveFrom: { lte: now },
                 effectiveTo: { gte: now }
@@ -14601,10 +14653,20 @@ export const mockDb = {
             });
             if (delegation) {
               approver = la;
-              delegationRemarks = `[Approved by ${delegation.delegatedApproverName || employeeId} on behalf of ${delegation.originalApproverName || la.employeeName || "Original Approver"}] `;
+              delegationRemarks = `[Approved by ${delegation.delegatedApproverName || actorUser?.name || employeeId} on behalf of ${delegation.originalApproverName || la.employeeName || "Original Approver"}] `;
               break;
             }
           }
+        }
+      }
+
+      // Fallback for Admin / Super Admin
+      if (!approver && (actorUser?.role === "ADMIN" || actorUser?.role === "SUPER_ADMIN")) {
+        approver = await prismaClient.contractApprovalApprover.findFirst({
+          where: { levelId, approvalStatus: "PENDING" }
+        });
+        if (approver) {
+          delegationRemarks = `[Approved by ${actorUser.name || actorUser.role} under Administrator authority] `;
         }
       }
 
@@ -14669,13 +14731,59 @@ export const mockDb = {
               }
             });
           }
+          // Update central WorkflowInstance
+          try {
+            await prismaClient.workflowInstance.updateMany({
+              where: { referenceId: id, moduleType: { in: ["SECURITY_GUARDING_CONTRACT", "FACILITY_MANAGEMENT_CONTRACT", "CONTRACT"] } },
+              data: { status: "APPROVED" }
+            });
+          } catch (e) {}
+        } else {
+          // Advance central WorkflowInstance level
+          try {
+            await prismaClient.workflowInstance.updateMany({
+              where: { referenceId: id, moduleType: { in: ["SECURITY_GUARDING_CONTRACT", "FACILITY_MANAGEMENT_CONTRACT", "CONTRACT"] } },
+              data: { currentLevelNumber: nextLevel.levelNumber }
+            });
+          } catch (e) {}
         }
       }
+
+      // Record workflow action history in central workflow table
+      try {
+        const inst = await prismaClient.workflowInstance.findFirst({
+          where: { referenceId: id, moduleType: { in: ["SECURITY_GUARDING_CONTRACT", "FACILITY_MANAGEMENT_CONTRACT", "CONTRACT"] } }
+        });
+        if (inst) {
+          await prismaClient.workflowActionHistory.create({
+            data: {
+              instanceId: inst.id,
+              levelNumber: currentLevel.levelNumber,
+              action: "APPROVE",
+              actedBy: actorUser?.id || employeeId || "System",
+              remarks: `${delegationRemarks}${remarks || ""}`
+            }
+          });
+        }
+      } catch (e) {}
 
       return await mockDb.getManpowerContract(id);
     }
 
     const db = readDb();
+    const contract = (db.manpowerContracts || []).find((c: any) => c.id === id);
+    if (!contract) throw new Error("Contract not found.");
+
+    // Strict Segregation of Duties (SoD): Submitter / Creator cannot approve their own contract
+    const cAnyApprove = contract as any;
+    const isCreator = actorUser && (
+      (cAnyApprove.createdById && (cAnyApprove.createdById === actorUser.id || cAnyApprove.createdById === actorUser.employeeId)) ||
+      (cAnyApprove.submittedBy && (cAnyApprove.submittedBy === actorUser.name || cAnyApprove.submittedBy === actorUser.email))
+    );
+    if (isCreator && actorUser?.role !== "SUPER_ADMIN") {
+      throw new Error("Segregation of Duties: Creator cannot approve their own contract.");
+    }
+
     const currentLevel = (db.contractApprovalLevels || []).find((l: any) => l.id === levelId);
     if (!currentLevel) throw new Error("Workflow level not found.");
 
@@ -14698,7 +14806,14 @@ export const mockDb = {
       }
     }
 
-    let approver = (db.contractApprovalApprovers || []).find((ap: any) => ap.levelId === levelId && ap.employeeId === employeeId);
+    let approver = (db.contractApprovalApprovers || []).find((ap: any) => 
+      ap.levelId === levelId && (
+        ap.employeeId === employeeId ||
+        (actorUser?.employeeId && ap.employeeId === actorUser.employeeId) ||
+        (actorUser?.id && ap.employeeId === actorUser.id) ||
+        (actorUser?.email && ap.email === actorUser.email)
+      )
+    );
     let delegationRemarks = "";
 
     if (!approver) {
@@ -14744,7 +14859,6 @@ export const mockDb = {
           wf.status = "APPROVED";
           wf.approvedAt = new Date().toISOString();
         }
-        const contract = (db.manpowerContracts || []).find((c: any) => c.id === id);
         if (contract) {
           if (contract.terminationStatus === "PENDING_APPROVAL") {
             contract.status = "TERMINATED";
@@ -14763,16 +14877,39 @@ export const mockDb = {
     writeDb(db);
     return await mockDb.getManpowerContract(id);
   },
-  rejectContractWorkflowLevel: async (id: string, levelId: string, employeeId: string, remarks?: string): Promise<any> => {
+  rejectContractWorkflowLevel: async (id: string, levelId: string, employeeId: string, remarks?: string, actorUser?: any): Promise<any> => {
     const now = new Date();
     if (isDbConnected()) {
+      const contract = await prismaClient.manpowerContract.findUnique({
+        where: { id }
+      });
+      if (!contract) throw new Error("Contract not found.");
+
+      // Strict Segregation of Duties (SoD): Submitter / Creator cannot reject their own contract
+      const cAnyRejectDb = contract as any;
+      const isCreator = actorUser && (
+        (cAnyRejectDb.createdById && (cAnyRejectDb.createdById === actorUser.id || cAnyRejectDb.createdById === actorUser.employeeId)) ||
+        (cAnyRejectDb.submittedBy && (cAnyRejectDb.submittedBy === actorUser.name || cAnyRejectDb.submittedBy === actorUser.email))
+      );
+      if (isCreator && actorUser?.role !== "SUPER_ADMIN") {
+        throw new Error("Segregation of Duties: Creator cannot reject their own contract.");
+      }
+
       const currentLevel = await prismaClient.contractApprovalLevel.findUnique({
         where: { id: levelId }
       });
       if (!currentLevel) throw new Error("Workflow level not found.");
 
       let approver = await prismaClient.contractApprovalApprover.findFirst({
-        where: { levelId, employeeId }
+        where: {
+          levelId,
+          OR: [
+            { employeeId },
+            ...(actorUser?.employeeId ? [{ employeeId: actorUser.employeeId }] : []),
+            ...(actorUser?.id ? [{ employeeId: actorUser.id }] : []),
+            ...(actorUser?.email ? [{ email: actorUser.email }] : [])
+          ]
+        }
       });
 
       let delegationRemarks = "";
@@ -14786,7 +14923,7 @@ export const mockDb = {
             const delegation = await prismaClient.workflowDelegation.findFirst({
               where: {
                 originalApproverEmployeeId: la.employeeId,
-                delegatedApproverEmployeeId: employeeId,
+                delegatedApproverEmployeeId: { in: [employeeId, actorUser?.employeeId, actorUser?.id].filter(Boolean) as string[] },
                 isActive: true,
                 effectiveFrom: { lte: now },
                 effectiveTo: { gte: now }
@@ -14794,10 +14931,20 @@ export const mockDb = {
             });
             if (delegation) {
               approver = la;
-              delegationRemarks = `[Rejected by ${delegation.delegatedApproverName || employeeId} on behalf of ${delegation.originalApproverName || la.employeeName || "Original Approver"}] `;
+              delegationRemarks = `[Rejected by ${delegation.delegatedApproverName || actorUser?.name || employeeId} on behalf of ${delegation.originalApproverName || la.employeeName || "Original Approver"}] `;
               break;
             }
           }
+        }
+      }
+
+      // Fallback for Admin / Super Admin
+      if (!approver && (actorUser?.role === "ADMIN" || actorUser?.role === "SUPER_ADMIN")) {
+        approver = await prismaClient.contractApprovalApprover.findFirst({
+          where: { levelId, approvalStatus: "PENDING" }
+        });
+        if (approver) {
+          delegationRemarks = `[Rejected by ${actorUser.name || actorUser.role} under Administrator authority] `;
         }
       }
 
@@ -14830,14 +14977,55 @@ export const mockDb = {
         }
       });
 
+      try {
+        await prismaClient.workflowInstance.updateMany({
+          where: { referenceId: id, moduleType: { in: ["SECURITY_GUARDING_CONTRACT", "FACILITY_MANAGEMENT_CONTRACT", "CONTRACT"] } },
+          data: { status: "REJECTED" }
+        });
+        const inst = await prismaClient.workflowInstance.findFirst({
+          where: { referenceId: id, moduleType: { in: ["SECURITY_GUARDING_CONTRACT", "FACILITY_MANAGEMENT_CONTRACT", "CONTRACT"] } }
+        });
+        if (inst) {
+          await prismaClient.workflowActionHistory.create({
+            data: {
+              instanceId: inst.id,
+              levelNumber: currentLevel.levelNumber,
+              action: "REJECT",
+              actedBy: actorUser?.id || employeeId || "System",
+              remarks: `${delegationRemarks}${remarks || ""}`
+            }
+          });
+        }
+      } catch (e) {}
+
       return await mockDb.getManpowerContract(id);
     }
 
     const db = readDb();
+    const contract = (db.manpowerContracts || []).find((c: any) => c.id === id);
+    if (!contract) throw new Error("Contract not found.");
+
+    // Strict Segregation of Duties (SoD): Submitter / Creator cannot reject their own contract
+    const cAnyReject = contract as any;
+    const isCreator = actorUser && (
+      (cAnyReject.createdById && (cAnyReject.createdById === actorUser.id || cAnyReject.createdById === actorUser.employeeId)) ||
+      (cAnyReject.submittedBy && (cAnyReject.submittedBy === actorUser.name || cAnyReject.submittedBy === actorUser.email))
+    );
+    if (isCreator && actorUser?.role !== "SUPER_ADMIN") {
+      throw new Error("Segregation of Duties: Creator cannot reject their own contract.");
+    }
+
     const currentLevel = (db.contractApprovalLevels || []).find((l: any) => l.id === levelId);
     if (!currentLevel) throw new Error("Workflow level not found.");
 
-    let approver = (db.contractApprovalApprovers || []).find((ap: any) => ap.levelId === levelId && ap.employeeId === employeeId);
+    let approver = (db.contractApprovalApprovers || []).find((ap: any) => 
+      ap.levelId === levelId && (
+        ap.employeeId === employeeId ||
+        (actorUser?.employeeId && ap.employeeId === actorUser.employeeId) ||
+        (actorUser?.id && ap.employeeId === actorUser.id) ||
+        (actorUser?.email && ap.email === actorUser.email)
+      )
+    );
     let delegationRemarks = "";
 
     if (!approver) {
@@ -14874,7 +15062,6 @@ export const mockDb = {
       wf.finalRemarks = `${delegationRemarks}${remarks || ""}`;
     }
 
-    const contract = (db.manpowerContracts || []).find((c: any) => c.id === id);
     if (contract) {
       contract.status = "REJECTED";
       contract.approvalStatus = "REJECTED";
