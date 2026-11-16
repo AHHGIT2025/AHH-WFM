@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { Card, Badge, Button, Input } from "@ahh-wfm/ui/src";
+import { canSubmitOpportunity, canApproveOpportunity } from "../../../lib/opportunity-workflow-helpers";
 import CommercialActivityFeedPanel from "../../../components/commercial/CommercialActivityFeedPanel";
 
 interface ProspectClient {
@@ -46,6 +47,7 @@ export default function OpportunitiesPage() {
   const [selectedProspectId, setSelectedProspectId] = useState<string>("");
   const [operationType, setOperationType] = useState<string>("SECURITY_GUARDING");
   const [submitting, setSubmitting] = useState<boolean>(false);
+  const [createError, setCreateError] = useState<string | null>(null);
 
   // Workflow Action Modal State
   const [selectedCase, setSelectedCase] = useState<OpportunityCase | null>(null);
@@ -53,6 +55,7 @@ export default function OpportunitiesPage() {
   const [workflowAction, setWorkflowAction] = useState<"SUBMIT" | "APPROVE" | "REJECT" | "RETURN">("SUBMIT");
   const [workflowRemarks, setWorkflowRemarks] = useState<string>("");
   const [workflowExecuting, setWorkflowExecuting] = useState<boolean>(false);
+  const [workflowError, setWorkflowError] = useState<string | null>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -93,6 +96,7 @@ export default function OpportunitiesPage() {
     if (!newTitle.trim()) return;
 
     setSubmitting(true);
+    setCreateError(null);
     try {
       const res = await fetch("/api/v1/commercial/opportunities", {
         method: "POST",
@@ -105,16 +109,17 @@ export default function OpportunitiesPage() {
       });
 
       if (!res.ok) {
-        const errJson = await res.json();
+        const errJson = await res.json().catch(() => ({}));
         throw new Error(errJson.error || "Failed to create opportunity");
       }
 
       setNewTitle("");
       setSelectedProspectId("");
+      setCreateError(null);
       setShowCreateModal(false);
       fetchData();
     } catch (err: any) {
-      alert(`Error: ${err.message}`);
+      setCreateError(err.message || "Failed to create opportunity");
     } finally {
       setSubmitting(false);
     }
@@ -125,6 +130,7 @@ export default function OpportunitiesPage() {
     if (!selectedCase) return;
 
     setWorkflowExecuting(true);
+    setWorkflowError(null);
     try {
       const res = await fetch(`/api/v1/commercial/opportunities/${selectedCase.id}/workflow`, {
         method: "POST",
@@ -136,16 +142,17 @@ export default function OpportunitiesPage() {
       });
 
       if (!res.ok) {
-        const errJson = await res.json();
+        const errJson = await res.json().catch(() => ({}));
         throw new Error(errJson.error || "Failed to execute workflow action");
       }
 
       setShowWorkflowModal(false);
       setSelectedCase(null);
       setWorkflowRemarks("");
+      setWorkflowError(null);
       fetchData();
     } catch (err: any) {
-      alert(`Workflow Error: ${err.message}`);
+      setWorkflowError(err.message || "Failed to execute workflow action");
     } finally {
       setWorkflowExecuting(false);
     }
@@ -155,6 +162,8 @@ export default function OpportunitiesPage() {
     setSelectedCase(c);
     setWorkflowAction(action);
     setWorkflowRemarks("");
+    setWorkflowError(null);
+    setWorkflowExecuting(false);
     setShowWorkflowModal(true);
   };
 
@@ -351,7 +360,7 @@ export default function OpportunitiesPage() {
 
                         {/* Stage Actions */}
                         <div className="pt-2 border-t border-outline-variant/30 flex items-center justify-between gap-1 text-xs">
-                          {c.lifecycle === "DRAFT" && (
+                          {c.lifecycle === "DRAFT" && canSubmitOpportunity(user, c) && (
                             <Button
                               variant="primary"
                               size="sm"
@@ -362,7 +371,7 @@ export default function OpportunitiesPage() {
                             </Button>
                           )}
 
-                          {c.lifecycle === "IN_WORKFLOW" && (
+                          {c.lifecycle === "IN_WORKFLOW" && canApproveOpportunity(user, c) && (
                             <div className="grid grid-cols-2 gap-1 w-full">
                               <Button
                                 variant="success"
@@ -446,7 +455,7 @@ export default function OpportunitiesPage() {
                       <td className="py-2.5 px-3">{getLifecycleBadge(c.lifecycle)}</td>
                       <td className="py-2.5 px-3">{c.createdBy}</td>
                       <td className="py-2.5 px-3 text-right">
-                        {c.lifecycle === "DRAFT" && (
+                        {c.lifecycle === "DRAFT" && canSubmitOpportunity(user, c) && (
                           <Button
                             variant="primary"
                             size="sm"
@@ -456,7 +465,7 @@ export default function OpportunitiesPage() {
                             Submit Workflow
                           </Button>
                         )}
-                        {c.lifecycle === "IN_WORKFLOW" && (
+                        {c.lifecycle === "IN_WORKFLOW" && canApproveOpportunity(user, c) && (
                           <Button
                             variant="success"
                             size="sm"
@@ -495,10 +504,16 @@ export default function OpportunitiesPage() {
                 <span className="material-symbols-outlined text-secondary">add_circle</span>
                 New Commercial Opportunity Deal
               </h3>
-              <button onClick={() => setShowCreateModal(false)} className="text-on-surface-variant hover:text-on-surface">
+              <button onClick={() => { setShowCreateModal(false); setCreateError(null); setSubmitting(false); }} className="text-on-surface-variant hover:text-on-surface" aria-label="Close create opportunity modal">
                 <span className="material-symbols-outlined text-[18px]">close</span>
               </button>
             </div>
+
+            {createError && (
+              <div role="alert" className="p-3 rounded-lg bg-status-error/10 border border-status-error text-status-error text-xs font-medium">
+                {createError}
+              </div>
+            )}
 
             <form onSubmit={handleCreateCase} className="space-y-3">
               <div>
@@ -542,7 +557,7 @@ export default function OpportunitiesPage() {
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-3 border-t border-outline-variant">
-                <Button variant="ghost" size="sm" type="button" onClick={() => setShowCreateModal(false)}>
+                <Button variant="ghost" size="sm" type="button" onClick={() => { setShowCreateModal(false); setCreateError(null); setSubmitting(false); }}>
                   Cancel
                 </Button>
                 <Button variant="primary" size="sm" type="submit" disabled={submitting}>
@@ -563,10 +578,16 @@ export default function OpportunitiesPage() {
                 <span className="material-symbols-outlined text-secondary">flowsheet</span>
                 Execute Workflow Action: {workflowAction}
               </h3>
-              <button onClick={() => setShowWorkflowModal(false)} className="text-on-surface-variant hover:text-on-surface">
+              <button onClick={() => { setShowWorkflowModal(false); setWorkflowError(null); setWorkflowExecuting(false); }} className="text-on-surface-variant hover:text-on-surface" aria-label="Close workflow modal">
                 <span className="material-symbols-outlined text-[18px]">close</span>
               </button>
             </div>
+
+            {workflowError && (
+              <div role="alert" className="p-3 rounded-lg bg-status-error/10 border border-status-error text-status-error text-xs font-medium">
+                {workflowError}
+              </div>
+            )}
 
             <div className="text-xs space-y-1">
               <div><span className="font-semibold">Deal Title:</span> {selectedCase.title}</div>
@@ -586,7 +607,7 @@ export default function OpportunitiesPage() {
               </div>
 
               <div className="flex items-center justify-end gap-2 pt-3 border-t border-outline-variant">
-                <Button variant="ghost" size="sm" type="button" onClick={() => setShowWorkflowModal(false)}>
+                <Button variant="ghost" size="sm" type="button" onClick={() => { setShowWorkflowModal(false); setWorkflowError(null); setWorkflowExecuting(false); }}>
                   Cancel
                 </Button>
                 <Button variant="primary" size="sm" type="submit" disabled={workflowExecuting}>

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma, PreContractLifecycle } from "@ahh-wfm/database";
 import { checkApiAuth } from "@/lib/api-guards";
 import { hasPermission, isAdminUser } from "@/lib/permissions";
+import { canSubmitOpportunity } from "@/lib/opportunity-workflow-helpers";
 
 export async function POST(
   request: Request,
@@ -83,6 +84,15 @@ export async function POST(
     });
 
     if (action === "SUBMIT") {
+      // DEF-089: Standard creators may submit only opportunities they created;
+      // authorized administrators may submit on behalf of another user only when explicitly permitted.
+      if (!canSubmitOpportunity(user, opportunityCase)) {
+        return NextResponse.json(
+          { error: "Forbidden: You can only submit commercial opportunities that you created." },
+          { status: 403 }
+        );
+      }
+
       if (opportunityCase.lifecycle === "IN_WORKFLOW") {
         return NextResponse.json(
           { error: "Invalid Action: Opportunity is already in workflow approval." },

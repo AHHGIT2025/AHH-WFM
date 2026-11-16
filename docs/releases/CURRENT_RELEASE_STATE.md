@@ -237,3 +237,10 @@ Server Migration Status:
 
 `20260825120000_add_at1_attendance_import_staging` (ALREADY APPLIED)
 Phase AT-1 / AT-1A / Scope Correction: 0 NEW DATABASE MIGRATIONS
+
+---
+
+## 9. SG UAT Run 3 Day 1 — Confirmed Commercial Business Rules (DEF-059 & DEF-088)
+
+- **DEF-059 (Site Survey Eligible Opportunities)**: Pre-contract Site Surveys are allowed against opportunities in `DRAFT`, `IN_WORKFLOW`, and `COMPLETED` lifecycles, and excluded only for `CANCELLED` and `SUPERSEDED` opportunities. Site Survey creation is intentionally not restricted to WON (`COMPLETED`) opportunities.
+- **DEF-088 (Prospective Site vs Site Master)**: Pre-contract Site Surveys reference `PreContractProspectiveSite` (`prospectiveSiteId`), not operational `ManpowerSite` (Site Master). Operational `ManpowerSite` records are created only post-award / at contract conversion.
