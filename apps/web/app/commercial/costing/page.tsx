@@ -640,7 +640,13 @@ export default function CostingPage() {
                 >
                   <option value="">-- Choose Completed Site Survey --</option>
                   {surveys
-                    .filter((s) => !selectedCaseId || s.caseId === selectedCaseId)
+                    .filter((s) => {
+                      if (s.lifecycle !== "COMPLETED") return false;
+                      if (selectedCaseId && s.caseId !== selectedCaseId) return false;
+                      const selCase = cases.find((c) => c.id === selectedCaseId);
+                      if (selCase?.operationType && (s as any).operationType && (s as any).operationType !== selCase.operationType) return false;
+                      return true;
+                    })
                     .map((s) => (
                       <option key={s.id} value={s.id}>
                         Survey #{s.id.slice(0, 8).toUpperCase()} - {s.prospectiveSite?.name || "Prospective Site"}

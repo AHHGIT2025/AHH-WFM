@@ -150,6 +150,7 @@ export async function PATCH(
     isAdminUser(user) ||
     hasPermission(user, "precontract.case.manage") ||
     hasPermission(user, "commercial.surveys.manage") ||
+    hasPermission(user, "precontract.workflow.submit") ||
     hasPermission(user, "manpower.admin.full_access");
 
   if (!isAuthorized) {

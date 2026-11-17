@@ -47,25 +47,46 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         return NextResponse.json({ success: false, error: `Workflow is no longer pending (Current status: ${instance.status})` }, { status: 409 });
       }
 
-      // Execute action through authoritative central WorkflowEngine
-      try {
-        const updatedInstance = await WorkflowEngine.executeAction({
-          instanceId: instance.id,
-          action: action as any,
-          user: {
-            id: user.id,
-            employeeId: user.employeeId,
-            role: user.role,
-            companyId: user.companyId
-          },
-          remarks
+      // Resolve creatorId for SoD enforcement on pre-contract modules
+      let creatorId: string | null = null;
+      if (instance.moduleType === "PRE_CONTRACT_CASE" || instance.moduleType === "COMMERCIAL_OPPORTUNITY") {
+        const opp = await prisma.preContractCase.findUnique({
+          where: { id: instance.referenceId },
+          select: { createdBy: true }
         });
+        creatorId = opp?.createdBy || null;
+      } else if (instance.moduleType === "SITE_SURVEY" || instance.moduleType === "PRE_CONTRACT_SURVEY") {
+        const srv = await prisma.preContractSurvey.findUnique({
+          where: { id: instance.referenceId },
+          select: { conductedBy: true }
+        });
+        creatorId = srv?.conductedBy || null;
+      }
 
-        // Synchronize source record status via adapter
-        const adapter = WorkflowAdapterRegistry.get(instance.moduleType);
-        if (adapter && adapter.onWorkflowStatusChange) {
-          await adapter.onWorkflowStatusChange(instance.referenceId, action as any, updatedInstance.status, remarks);
-        }
+      // Execute action + business lifecycle sync atomically inside a single transaction
+      try {
+        const updatedInstance = await prisma.$transaction(async (tx) => {
+          const updated = await WorkflowEngine.executeAction({
+            instanceId: instance!.id,
+            action: action as any,
+            user: {
+              id: user.id,
+              employeeId: user.employeeId,
+              role: user.role,
+              companyId: user.companyId
+            },
+            remarks,
+            creatorId,
+            tx
+          });
+
+          const adapter = WorkflowAdapterRegistry.get(instance!.moduleType);
+          if (adapter && adapter.onWorkflowStatusChange) {
+            await adapter.onWorkflowStatusChange(instance!.referenceId, action as any, updated.status, remarks, tx);
+          }
+
+          return updated;
+        });
 
         return NextResponse.json({
           success: true,
@@ -78,7 +99,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         });
       } catch (wfErr: any) {
         const isUnsupported = wfErr.message?.startsWith("UNSUPPORTED_WORKFLOW_RULE");
-        return NextResponse.json({ success: false, error: wfErr.message }, { status: isUnsupported ? 400 : 403 });
+        const isNotPending = wfErr.message?.includes("not pending") || wfErr.message?.includes("Invalid or closed");
+        return NextResponse.json({ success: false, error: wfErr.message }, { status: isUnsupported ? 400 : isNotPending ? 409 : 403 });
       }
     }
 

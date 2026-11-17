@@ -21,6 +21,7 @@ export interface ExecuteWorkflowActionParams {
   user: UserSessionContext;
   remarks?: string;
   creatorId?: string | null;
+  tx?: any;
 }
 
 export class WorkflowEngine {
@@ -81,8 +82,9 @@ export class WorkflowEngine {
     return instance;
   }
 
-  static async approve(instanceId: string, userId: string, remarks?: string) {
-    const instance = await prisma.workflowInstance.findUnique({
+  static async approve(instanceId: string, userId: string, remarks?: string, tx?: any) {
+    const db = tx || prisma;
+    const instance = await db.workflowInstance.findUnique({
       where: { id: instanceId },
       include: { template: { include: { levels: { orderBy: { levelNumber: 'asc' } } } } }
     });
@@ -91,13 +93,13 @@ export class WorkflowEngine {
       throw new Error('Invalid or closed workflow instance.');
     }
 
-    const currentLevel = instance.template.levels.find(l => l.levelNumber === instance.currentLevelNumber);
+    const currentLevel = instance.template.levels.find((l: any) => l.levelNumber === instance.currentLevelNumber);
     if (!currentLevel) {
       throw new Error('Workflow configuration error: Level not found.');
     }
 
     // Record the approval
-    await prisma.workflowActionHistory.create({
+    await db.workflowActionHistory.create({
       data: {
         instanceId,
         levelNumber: instance.currentLevelNumber,
@@ -117,20 +119,21 @@ export class WorkflowEngine {
     const isLastLevel = instance.currentLevelNumber >= instance.template.levels.length;
     
     if (isLastLevel) {
-      return prisma.workflowInstance.update({
+      return db.workflowInstance.update({
         where: { id: instanceId },
         data: { status: 'APPROVED' }
       });
     } else {
-      return prisma.workflowInstance.update({
+      return db.workflowInstance.update({
         where: { id: instanceId },
         data: { currentLevelNumber: instance.currentLevelNumber + 1 }
       });
     }
   }
 
-  static async reject(instanceId: string, userId: string, remarks: string) {
-    await prisma.workflowActionHistory.create({
+  static async reject(instanceId: string, userId: string, remarks: string, tx?: any) {
+    const db = tx || prisma;
+    await db.workflowActionHistory.create({
       data: {
         instanceId,
         levelNumber: 0,
@@ -140,14 +143,15 @@ export class WorkflowEngine {
       }
     });
 
-    return prisma.workflowInstance.update({
+    return db.workflowInstance.update({
       where: { id: instanceId },
       data: { status: 'REJECTED' }
     });
   }
 
-  static async returnForCorrection(instanceId: string, userId: string, remarks: string) {
-    await prisma.workflowActionHistory.create({
+  static async returnForCorrection(instanceId: string, userId: string, remarks: string, tx?: any) {
+    const db = tx || prisma;
+    await db.workflowActionHistory.create({
       data: {
         instanceId,
         levelNumber: 0,
@@ -157,7 +161,7 @@ export class WorkflowEngine {
       }
     });
 
-    return prisma.workflowInstance.update({
+    return db.workflowInstance.update({
       where: { id: instanceId },
       data: { status: 'RETURNED', currentLevelNumber: 1 }
     });
@@ -168,9 +172,10 @@ export class WorkflowEngine {
    * SoD guard, and fail-closed parallel rule protection.
    */
   static async executeAction(params: ExecuteWorkflowActionParams) {
-    const { instanceId, action, user, remarks, creatorId } = params;
+    const { instanceId, action, user, remarks, creatorId, tx } = params;
+    const db = tx || prisma;
 
-    const instance = await prisma.workflowInstance.findUnique({
+    const instance = await db.workflowInstance.findUnique({
       where: { id: instanceId },
       include: {
         template: {
@@ -192,7 +197,7 @@ export class WorkflowEngine {
       throw new Error(`Workflow instance is not pending (Current status: ${instance.status}).`);
     }
 
-    const currentLevel = instance.template.levels.find(l => l.levelNumber === instance.currentLevelNumber);
+    const currentLevel = instance.template.levels.find((l: any) => l.levelNumber === instance.currentLevelNumber);
     if (!currentLevel) {
       throw new Error(`Workflow level ${instance.currentLevelNumber} not found.`);
     }
@@ -213,17 +218,17 @@ export class WorkflowEngine {
     }
 
     if (action === 'APPROVE') {
-      return await WorkflowEngine.approve(instanceId, user.id, remarks);
+      return await WorkflowEngine.approve(instanceId, user.id, remarks, db);
     } else if (action === 'REJECT') {
       if (!remarks || remarks.trim() === '') {
         throw new Error('Remarks are mandatory for REJECT action.');
       }
-      return await WorkflowEngine.reject(instanceId, user.id, remarks);
+      return await WorkflowEngine.reject(instanceId, user.id, remarks, db);
     } else if (action === 'RETURN') {
       if (!remarks || remarks.trim() === '') {
         throw new Error('Remarks are mandatory for RETURN action.');
       }
-      return await WorkflowEngine.returnForCorrection(instanceId, user.id, remarks);
+      return await WorkflowEngine.returnForCorrection(instanceId, user.id, remarks, db);
     } else {
       throw new Error(`Invalid workflow action: ${action}`);
     }

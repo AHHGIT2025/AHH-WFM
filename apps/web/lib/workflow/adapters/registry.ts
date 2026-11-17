@@ -1,6 +1,26 @@
 import { prisma } from "@ahh-wfm/database";
 import { WorkflowSourceAdapter, WorkflowBusinessSummary } from "./types";
 
+async function resolveRequesterDisplayName(
+  rawActor: string | null | undefined,
+  fallback: string
+): Promise<string> {
+  if (!rawActor || !rawActor.trim()) return fallback;
+  const trimmed = rawActor.trim();
+  try {
+    const emp = await prisma.employee.findFirst({
+      where: {
+        OR: [{ id: trimmed }, { email: trimmed }]
+      },
+      select: { name: true }
+    });
+    if (emp?.name) return emp.name;
+  } catch {
+    // Fallback to rawActor if employee lookup fails
+  }
+  return trimmed;
+}
+
 export class WorkflowAdapterRegistry {
   private static adapters: Map<string, WorkflowSourceAdapter> = new Map();
 
@@ -175,11 +195,12 @@ const CaseAdapter: WorkflowSourceAdapter = {
         include: { prospectClient: true }
       });
       if (!c) return null;
+      const requesterName = await resolveRequesterDisplayName(c.createdBy, "Business Development");
       return {
         reference: `CASE-${c.id.substring(0, 8).toUpperCase()}`,
         title: c.title || `Commercial Case #${c.id.substring(0, 8)}`,
         subtitle: c.prospectClient?.name || "Pre-Contract Case",
-        requesterName: c.createdBy || "Business Development",
+        requesterName,
         companyId: c.companyId,
         companyName: "Al Hattab Holding",
         createdAt: c.createdAt.toISOString(),
@@ -196,10 +217,116 @@ const CaseAdapter: WorkflowSourceAdapter = {
   },
   getSourceDeepLink(referenceId: string) {
     return `/commercial/opportunities?id=${referenceId}`;
+  },
+  async onWorkflowStatusChange(referenceId, action, newStatus, _remarks, tx) {
+    const db = tx || prisma;
+    if (action === "APPROVE" && newStatus === "APPROVED") {
+      await db.preContractCase.update({
+        where: { id: referenceId },
+        data: {
+          lifecycle: "COMPLETED",
+          businessOutcome: "WON",
+          updatedAt: new Date()
+        }
+      });
+    } else if (action === "RETURN") {
+      await db.preContractCase.update({
+        where: { id: referenceId },
+        data: {
+          lifecycle: "DRAFT",
+          updatedAt: new Date()
+        }
+      });
+    } else if (action === "REJECT") {
+      await db.preContractCase.update({
+        where: { id: referenceId },
+        data: {
+          lifecycle: "CANCELLED",
+          businessOutcome: "LOST",
+          updatedAt: new Date()
+        }
+      });
+    }
   }
 };
 WorkflowAdapterRegistry.register(CaseAdapter);
 WorkflowAdapterRegistry.register({ ...CaseAdapter, moduleType: "COMMERCIAL_OPPORTUNITY" });
+
+// 3B. Site Survey Adapter (DEF-093, DEF-092, DEF-095)
+const SiteSurveyAdapter: WorkflowSourceAdapter = {
+  moduleType: "SITE_SURVEY",
+  async getBusinessSummary(referenceId: string) {
+    try {
+      const survey = await prisma.preContractSurvey.findUnique({
+        where: { id: referenceId },
+        include: {
+          case: { include: { prospectClient: true } },
+          prospectiveSite: true
+        }
+      });
+      if (!survey) return null;
+
+      const siteLabel = survey.prospectiveSite?.name || `Survey ${survey.id.substring(0, 8).toUpperCase()}`;
+      const caseTitle = survey.case?.title || "Commercial Opportunity";
+      const requesterName = await resolveRequesterDisplayName(
+        survey.conductedBy || survey.case?.createdBy,
+        "Commercial Surveyor"
+      );
+
+      return {
+        reference: `SRV-${survey.id.substring(0, 8).toUpperCase()}`,
+        title: `${siteLabel} — ${caseTitle}`,
+        subtitle: `${caseTitle} · ${survey.case?.prospectClient?.name || "Prospective Client"}`,
+        requesterName,
+        companyId: survey.companyId || survey.case?.companyId || null,
+        companyName: "Al Hattab Holding",
+        createdAt: survey.createdAt.toISOString(),
+        keyFields: [
+          { label: "Opportunity", value: caseTitle },
+          { label: "Prospective Site", value: siteLabel },
+          { label: "Operation Scope", value: survey.operationType || "SECURITY_GUARDING" },
+          { label: "Lifecycle", value: survey.lifecycle, badge: survey.lifecycle }
+        ],
+        rawDetails: { survey }
+      };
+    } catch (e) {
+      return null;
+    }
+  },
+  getSourceDeepLink(referenceId: string) {
+    return `/commercial/surveys?id=${referenceId}`;
+  },
+  async onWorkflowStatusChange(referenceId, action, newStatus, _remarks, tx) {
+    const db = tx || prisma;
+    if (action === "APPROVE" && newStatus === "APPROVED") {
+      await db.preContractSurvey.update({
+        where: { id: referenceId },
+        data: {
+          lifecycle: "COMPLETED",
+          updatedAt: new Date()
+        }
+      });
+    } else if (action === "RETURN") {
+      await db.preContractSurvey.update({
+        where: { id: referenceId },
+        data: {
+          lifecycle: "DRAFT",
+          updatedAt: new Date()
+        }
+      });
+    } else if (action === "REJECT") {
+      await db.preContractSurvey.update({
+        where: { id: referenceId },
+        data: {
+          lifecycle: "CANCELLED",
+          updatedAt: new Date()
+        }
+      });
+    }
+  }
+};
+WorkflowAdapterRegistry.register(SiteSurveyAdapter);
+WorkflowAdapterRegistry.register({ ...SiteSurveyAdapter, moduleType: "PRE_CONTRACT_SURVEY" });
 
 // 4. Contract Adapter
 const ContractAdapter: WorkflowSourceAdapter = {

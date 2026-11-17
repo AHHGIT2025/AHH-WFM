@@ -184,6 +184,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Forbidden: Company boundary violation." }, { status: 403 });
     }
 
+    // SG / FM Scope Isolation Check
+    if (!isAdminUser(user) && !hasPermission(user, "manpower.admin.full_access")) {
+      const userAllowedSG = user?.operationAccess?.allowedSecurityGuarding ?? true;
+      const userAllowedFM = user?.operationAccess?.allowedFacilityManagement ?? true;
+      if (opCase.operationType === "SECURITY_GUARDING" && !userAllowedSG) {
+        return NextResponse.json({ error: "Forbidden: You do not have access to Security Guarding operational data." }, { status: 403 });
+      }
+      if (opCase.operationType === "FACILITY_MANAGEMENT" && !userAllowedFM) {
+        return NextResponse.json({ error: "Forbidden: You do not have access to Facility Management operational data." }, { status: 403 });
+      }
+    }
+
     // Validate Survey
     const survey = await prisma.preContractSurvey.findUnique({
       where: { id: surveyId }
@@ -196,6 +208,22 @@ export async function POST(request: Request) {
     }
     if (survey.lifecycle !== "COMPLETED") {
       return NextResponse.json({ error: "Selected site survey is not COMPLETED. Only COMPLETED surveys can be costed." }, { status: 400 });
+    }
+
+    // DEF-098: Prevent duplicate active costing estimate for the same opportunity + survey (versions/revisions use existing estimate)
+    const existingActiveCosting = await prisma.preContractCostEstimate.findFirst({
+      where: {
+        caseId,
+        surveyId,
+        status: { notIn: ["CANCELLED", "REJECTED", "SUPERSEDED"] }
+      },
+      select: { id: true, status: true }
+    });
+    if (existingActiveCosting) {
+      return NextResponse.json(
+        { error: `Duplicate Costing Blocked: An active costing estimate (${existingActiveCosting.status}) already exists for this opportunity and site survey. Create a new version on the existing estimate instead.` },
+        { status: 409 }
+      );
     }
 
     // Calculate initial costing breakdown using domain service

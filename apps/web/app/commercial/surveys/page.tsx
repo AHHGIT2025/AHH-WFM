@@ -718,7 +718,7 @@ export default function SiteSurveysPage() {
                   <Input
                     type="number"
                     step="any"
-                    placeholder="25.3548"
+                    placeholder="e.g. 25.3548"
                     value={latitude}
                     onChange={(e) => setLatitude(e.target.value)}
                     className="text-xs"
@@ -729,7 +729,7 @@ export default function SiteSurveysPage() {
                   <Input
                     type="number"
                     step="any"
-                    placeholder="51.5310"
+                    placeholder="e.g. 51.5310"
                     value={longitude}
                     onChange={(e) => setLongitude(e.target.value)}
                     className="text-xs"
@@ -739,7 +739,7 @@ export default function SiteSurveysPage() {
                   <label className="block text-[10px] font-bold text-on-surface-variant mb-1">Area (sqm)</label>
                   <Input
                     type="number"
-                    placeholder="12500"
+                    placeholder="e.g. 12500"
                     value={approximateArea}
                     onChange={(e) => setApproximateArea(e.target.value)}
                     className="text-xs"
@@ -817,6 +817,24 @@ export default function SiteSurveysPage() {
                 </button>
               </div>
             </div>
+
+            {workflowDetail?.status === "RETURNED" && selectedSurvey.lifecycle === "DRAFT" && (() => {
+              const latestReturn = [...(workflowDetail.history || [])].reverse().find((h) => h.action === "RETURN");
+              return (
+                <div role="alert" className="mx-4 mt-3 p-3 rounded-lg border bg-status-warning/10 border-status-warning text-on-surface text-xs space-y-1">
+                  <div className="font-bold text-status-warning flex items-center gap-1.5">
+                    <span className="material-symbols-outlined text-[16px]">assignment_return</span>
+                    <span>Returned for Correction — Update fields, click Save Workspace, and Resubmit</span>
+                  </div>
+                  {latestReturn && (
+                    <div className="text-[11px] text-on-surface-variant">
+                      <span className="font-semibold text-on-surface">Returned By {latestReturn.actedBy}:</span>{" "}
+                      {latestReturn.remarks || "No remarks provided."}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {workspaceFeedback && (
               <div
@@ -905,12 +923,17 @@ export default function SiteSurveysPage() {
                         <label className="block font-bold text-on-surface-variant mb-1">Required Guard / Operator Posts</label>
                         <Input
                           type="number"
+                          min={0}
+                          step={1}
                           value={editingResponses["ELEM_POST_COUNT"] || ""}
                           onChange={(e) => setEditingResponses({ ...editingResponses, ELEM_POST_COUNT: e.target.value })}
                           disabled={selectedSurvey.lifecycle === "COMPLETED" || selectedSurvey.lifecycle === "CANCELLED"}
                           className="text-xs"
-                          placeholder="e.g., 6 continuous 24/7 posts"
+                          placeholder="e.g. 6"
                         />
+                        <p className="text-[10px] text-on-surface-variant mt-1">
+                          Numeric post count (e.g. 6). Use Shift Coverage Pattern below for shift details.
+                        </p>
                       </div>
 
                       <div>
