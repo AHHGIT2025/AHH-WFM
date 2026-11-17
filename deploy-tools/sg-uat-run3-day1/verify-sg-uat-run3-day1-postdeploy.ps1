@@ -155,15 +155,19 @@ param(
     }
 
     $guardedApis = @(
-        "http://127.0.0.1:3200/api/v1/commercial/opportunities",
-        "http://127.0.0.1:3200/api/v1/commercial/costing",
-        "http://127.0.0.1:3200/api/v1/commercial/proposals",
-        "http://127.0.0.1:3200/api/v1/commercial/opportunities/test-id/workflow"
+        @{ Url = "http://127.0.0.1:3200/api/v1/commercial/opportunities"; Method = "GET" },
+        @{ Url = "http://127.0.0.1:3200/api/v1/commercial/costing"; Method = "GET" },
+        @{ Url = "http://127.0.0.1:3200/api/v1/commercial/proposals"; Method = "GET" },
+        @{ Url = "http://127.0.0.1:3200/api/v1/commercial/opportunities/test-id/workflow"; Method = "POST"; Body = '{"action":"SUBMIT"}' }
     )
     foreach ($api in $guardedApis) {
         $statusCode = 0
         try {
-            $r = Invoke-WebRequest -Uri $api -UseBasicParsing -TimeoutSec 10
+            if ($api.Method -eq "POST") {
+                $r = Invoke-WebRequest -Uri $api.Url -Method Post -ContentType "application/json" -Body $api.Body -UseBasicParsing -TimeoutSec 10
+            } else {
+                $r = Invoke-WebRequest -Uri $api.Url -Method Get -UseBasicParsing -TimeoutSec 10
+            }
             $statusCode = [int]$r.StatusCode
         } catch {
             if ($null -ne $_.Exception.Response) {
@@ -171,9 +175,9 @@ param(
             }
         }
         if ($statusCode -eq 401) {
-            Record-Check -Name "Auth Guard ($api)" -Status "PASS" -Details "HTTP 401 Unauthorized (Auth guard active)."
+            Record-Check -Name "Auth Guard ($($api.Method) $($api.Url))" -Status "PASS" -Details "HTTP 401 Unauthorized (Auth guard active)."
         } else {
-            Record-Check -Name "Auth Guard ($api)" -Status "FAIL" -Details "Expected HTTP 401, got HTTP $statusCode."
+            Record-Check -Name "Auth Guard ($($api.Method) $($api.Url))" -Status "FAIL" -Details "Expected HTTP 401, got HTTP $statusCode."
         }
     }
 

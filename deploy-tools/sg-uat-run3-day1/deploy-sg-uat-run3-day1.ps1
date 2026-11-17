@@ -696,15 +696,19 @@ param(
     }
 
     $guardedApis = @(
-        "http://127.0.0.1:3200/api/v1/commercial/opportunities",
-        "http://127.0.0.1:3200/api/v1/commercial/costing",
-        "http://127.0.0.1:3200/api/v1/commercial/proposals",
-        "http://127.0.0.1:3200/api/v1/commercial/opportunities/test-id/workflow"
+        @{ Url = "http://127.0.0.1:3200/api/v1/commercial/opportunities"; Method = "GET" },
+        @{ Url = "http://127.0.0.1:3200/api/v1/commercial/costing"; Method = "GET" },
+        @{ Url = "http://127.0.0.1:3200/api/v1/commercial/proposals"; Method = "GET" },
+        @{ Url = "http://127.0.0.1:3200/api/v1/commercial/opportunities/test-id/workflow"; Method = "POST"; Body = '{"action":"SUBMIT"}' }
     )
     foreach ($api in $guardedApis) {
         $statusCode = 0
         try {
-            $r = Invoke-WebRequest -Uri $api -UseBasicParsing -TimeoutSec 15
+            if ($api.Method -eq "POST") {
+                $r = Invoke-WebRequest -Uri $api.Url -Method Post -ContentType "application/json" -Body $api.Body -UseBasicParsing -TimeoutSec 15
+            } else {
+                $r = Invoke-WebRequest -Uri $api.Url -Method Get -UseBasicParsing -TimeoutSec 15
+            }
             $statusCode = [int]$r.StatusCode
         } catch {
             if ($null -ne $_.Exception.Response) {
@@ -714,9 +718,9 @@ param(
             }
         }
         if ($statusCode -ne 401) {
-            throw "ABORT: Expected HTTP 401 from unauthenticated $api, received HTTP $statusCode."
+            throw "ABORT: Expected HTTP 401 from unauthenticated $($api.Method) $($api.Url), received HTTP $statusCode."
         }
-        Write-Host ("Auth Guard {0} -> HTTP {1} (Verified)" -f $api, $statusCode) -ForegroundColor Green
+        Write-Host ("Auth Guard {0} {1} -> HTTP {2} (Verified)" -f $api.Method, $api.Url, $statusCode) -ForegroundColor Green
     }
 
     Invoke-NativeStep -StepName "Inspect Web PM2 Logs" -Command {
