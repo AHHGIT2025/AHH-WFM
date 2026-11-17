@@ -1,6 +1,6 @@
 # RUN ON SERVER
 # AHH WFM -- SG UAT Run 3 Day 1 Remediation Guarded Recovery Script (PowerShell 5.1 Compatible)
-# Restores apps/web/.next and Git HEAD back to baseline (142e6f28e9bdffbc66d514f55ca9b0b00b01b304)
+# Restores apps/web/.next and Git HEAD back to baseline (c5ba25ab8fc880c7196441845c3a328703003941)
 # Preserves branch 'manpower-operations-scope' without destructive hard-reset or forced checkout.
 # Retains displaced build artifacts until post-recovery health checks pass.
 
@@ -111,7 +111,7 @@ param(
     }
 
     $ExpectedBranch     = "manpower-operations-scope"
-    $BaselineSha        = "142e6f28e9bdffbc66d514f55ca9b0b00b01b304"
+    $BaselineSha        = "c5ba25ab8fc880c7196441845c3a328703003941"
     $IntermediateSha    = "e87f3895aa9dcf67badf77797c380e93e1fc45bd"
     $TargetSha          = "142e6f28e9bdffbc66d514f55ca9b0b00b01b304"
     $AttemptPointerPath = Join-Path $BackupsParent "latest-cl5-deployment-attempt.json"
@@ -216,7 +216,7 @@ param(
         throw "RECOVERY ABORT: Expected branch '$ExpectedBranch', found '$preRecoverBranch'."
     }
     if (@($TargetSha, $IntermediateSha, $BaselineSha) -notcontains $preRecoverHead) {
-        throw "RECOVERY ABORT: Current HEAD '$preRecoverHead' is outside pinned CL-5 release range."
+        throw "RECOVERY ABORT: Current HEAD '$preRecoverHead' is outside pinned SG UAT Run 3 Day 1 release range."
     }
     if (-not [string]::IsNullOrWhiteSpace($preRecoverStatus)) {
         throw "RECOVERY ABORT: Cannot recover with uncommitted modifications:`n$preRecoverStatus"

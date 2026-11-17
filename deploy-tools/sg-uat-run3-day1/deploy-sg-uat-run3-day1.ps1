@@ -1,8 +1,9 @@
 # RUN ON SERVER
-# AHH WFM -- SG UAT Run 3 Day 1 Remediation (DEF-089, DEF-057, DEF-091) Pinned SERVER Deployment Script (PowerShell 5.1 Compatible)
-# Baseline SHA : 142e6f28e9bdffbc66d514f55ca9b0b00b01b304 (Confirmed Deployed SERVER Baseline)
-# Target SHA   : 142e6f28e9bdffbc66d514f55ca9b0b00b01b304 (Pinned CL-5 Remediation Commit)
-# Intermediate : e87f3895aa9dcf67badf77797c380e93e1fc45bd (Initial CL-5 Remediation Commit)
+# AHH WFM -- SG UAT Run 3 Day 1 Remediation Pinned SERVER Deployment Script (PowerShell 5.1 Compatible)
+# Baseline SHA : c5ba25ab8fc880c7196441845c3a328703003941 (Confirmed Deployed SERVER Baseline)
+# Intermediate : e87f3895aa9dcf67badf77797c380e93e1fc45bd (Prior Combined Run 2 Tooling Commit)
+# Target SHA   : 142e6f28e9bdffbc66d514f55ca9b0b00b01b304 (Pinned SG UAT Run 3 Day 1 Application Commit)
+# Tooling SHA  : 5badc993b34416191e7252a43dcfc2bffe8e2ce4 (Run 3 Day 1 Tooling Commit; SERVER stops at Target SHA)
 # Forbidden P0 : cb35ce886b17b43d20da164171373f706214dddd (Undeployed UM-RBAC-1 P0; must NEVER be deployed)
 # Branch       : manpower-operations-scope (Preserved throughout)
 
@@ -168,9 +169,10 @@ param(
 
     $ExpectedBranch      = "manpower-operations-scope"
     $ExpectedOrigin      = "https://github.com/AHHGIT2025/AHH-WFM.git"
-    $BaselineSha         = "142e6f28e9bdffbc66d514f55ca9b0b00b01b304"
-    $TargetSha           = "142e6f28e9bdffbc66d514f55ca9b0b00b01b304"
+    $BaselineSha         = "c5ba25ab8fc880c7196441845c3a328703003941"
     $IntermediateSha     = "e87f3895aa9dcf67badf77797c380e93e1fc45bd"
+    $TargetSha           = "142e6f28e9bdffbc66d514f55ca9b0b00b01b304"
+    $PublishedToolSha    = "5badc993b34416191e7252a43dcfc2bffe8e2ce4"
     $ForbiddenP0Sha      = "cb35ce886b17b43d20da164171373f706214dddd"
     $SourceBranch        = "fix/sg-uat-run2-remediation"
     $Timestamp           = Get-Date -Format "yyyyMMdd-HHmmss"
@@ -369,7 +371,7 @@ param(
     Write-Host "Complete backup registered and locked in $BackupRoot" -ForegroundColor Green
 
     Write-Host "`n=================================================================" -ForegroundColor Cyan
-    Write-Host " PHASE 3: FETCH, SAFE P0 CHECK & PINNED CL-5 RELEASE GATES       " -ForegroundColor Cyan
+    Write-Host " PHASE 3: FETCH, SAFE P0 CHECK & PINNED RUN 3 DAY 1 RELEASE GATES" -ForegroundColor Cyan
     Write-Host " (No live merge yet; Web remains ONLINE at baseline)             " -ForegroundColor Cyan
     Write-Host "=================================================================" -ForegroundColor Cyan
 
@@ -392,13 +394,20 @@ param(
         git merge-base --is-ancestor $TargetSha "origin/$SourceBranch"
     }
 
-    # Gate: Strictly the 2 pinned CL-5 commits between BaselineSha and TargetSha
+    Invoke-NativeStep -StepName "Verify published Run 3 tooling is descended from Target ($TargetSha -> $PublishedToolSha)" -Command {
+        cmd /c "git cat-file -e $PublishedToolSha >nul 2>&1"
+        if ($LASTEXITCODE -eq 0) {
+            git merge-base --is-ancestor $TargetSha $PublishedToolSha
+        }
+    }
+
+    # Gate: Strictly the 2 pinned commits between BaselineSha and TargetSha
     $prevPref = $ErrorActionPreference
     $ErrorActionPreference = "Continue"
     $revListRaw = @(git rev-list "$BaselineSha..$TargetSha")
     $revListExit = $LASTEXITCODE
     $ErrorActionPreference = $prevPref
-            $expectedCommits = @(
+    $expectedCommits = @(
         "142e6f28e9bdffbc66d514f55ca9b0b00b01b304",
         "e87f3895aa9dcf67badf77797c380e93e1fc45bd"
     )
@@ -406,9 +415,9 @@ param(
     if ($revListExit -ne 0 -or $null -ne $revListMismatch) {
         throw "NO-GO ABORT: Commit chain mismatch in '$BaselineSha..$TargetSha'. Expected: $($expectedCommits -join ', '). Found: $($revListRaw -join ', ')"
     }
-    Write-Host "Verified strict 2-commit SG UAT Run 3 Day 1 delta (e87f389 -> 142e6f2)." -ForegroundColor Green
+    Write-Host "Verified strict 2-commit SG UAT Run 3 Day 1 delta ($BaselineSha -> $IntermediateSha -> $TargetSha)." -ForegroundColor Green
 
-    # Safe P0 exclusion validation without misinterpreting exit code 128 on absent Git objects
+    # Safe P0 exclusion validation without terminating on missing Git objects in PowerShell 5.1
     $prevPref = $ErrorActionPreference
     $ErrorActionPreference = "Continue"
     cmd /c "git cat-file -e $ForbiddenP0Sha >nul 2>&1"
@@ -418,7 +427,7 @@ param(
     if ($p0ExistsExit -eq 0) {
         $prevPref = $ErrorActionPreference
         $ErrorActionPreference = "Continue"
-        git merge-base --is-ancestor $ForbiddenP0Sha $TargetSha 2>$null
+        cmd /c "git merge-base --is-ancestor $ForbiddenP0Sha $TargetSha >nul 2>&1"
         $p0AncExit = $LASTEXITCODE
         $ErrorActionPreference = $prevPref
 
@@ -430,40 +439,63 @@ param(
         Write-Host "Verified P0 exclusion: '$ForbiddenP0Sha' is present in Git store and confirmed NOT an ancestor of '$TargetSha'." -ForegroundColor Green
     } else {
         Write-Host "P0 Git object '$ForbiddenP0Sha' is not present in SERVER Git object store (exit $p0ExistsExit; expected; P0 was never fetched)." -ForegroundColor Yellow
-        Write-Host "P0 exclusion enforced via pinned 2-commit ancestry ($BaselineSha -> $TargetSha), exact 9-file diff, and verified LOCAL provenance." -ForegroundColor Yellow
+        Write-Host "P0 exclusion enforced via pinned 2-commit ancestry ($BaselineSha -> $TargetSha), independent commit diffs, and verified LOCAL provenance." -ForegroundColor Yellow
     }
 
-
-    # Exact 10-file CL-5 release diff gate (zero migrations, zero schema modifications)
+    # Gate A: Independently verify prior tooling commit (c5ba25a..e87f389)
     $prevPref = $ErrorActionPreference
     $ErrorActionPreference = "Continue"
-    $diffFiles = @(git diff --name-only $BaselineSha $TargetSha)
-    $diffExit  = $LASTEXITCODE
+    $toolingDiffFiles = @(git diff --name-only "$BaselineSha..$IntermediateSha")
+    $toolingDiffExit  = $LASTEXITCODE
     $ErrorActionPreference = $prevPref
-    if ($diffExit -ne 0) {
-        throw "NO-GO ABORT: git diff --name-only failed with exit code $diffExit."
+    if ($toolingDiffExit -ne 0) {
+        throw "NO-GO ABORT: git diff --name-only $BaselineSha..$IntermediateSha failed with exit code $toolingDiffExit."
     }
-
-            $expectedFiles = @(
-        "apps/web/app/api/v1/commercial/opportunities/[id]/workflow/route.ts",
-        "apps/web/app/commercial/opportunities/page.tsx",
-        "apps/web/lib/opportunity-workflow-helpers.ts",
+    $expectedToolingFiles = @(
         "deploy-tools/sg-uat-run2-combined/deploy-sg-uat-run2.ps1",
         "deploy-tools/sg-uat-run2-combined/normalize-pm2-jlist.js",
         "deploy-tools/sg-uat-run2-combined/recover-sg-uat-run2.ps1",
-        "deploy-tools/sg-uat-run2-combined/verify-sg-uat-run2-postdeploy.ps1",
+        "deploy-tools/sg-uat-run2-combined/verify-sg-uat-run2-postdeploy.ps1"
+    )
+    if ($null -ne (Compare-Object -ReferenceObject $expectedToolingFiles -DifferenceObject $toolingDiffFiles)) {
+        throw "NO-GO ABORT: Prior tooling diff mismatch in $BaselineSha..$IntermediateSha. Found: $($toolingDiffFiles -join ', ')"
+    }
+    Write-Host "Verified prior tooling commit ($BaselineSha..$IntermediateSha) contains exact 4 sg-uat-run2-combined files." -ForegroundColor Green
+
+    # Gate B: Independently verify Run 3 Day 1 application files (e87f389..142e6f2)
+    $prevPref = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    $appDiffFiles = @(git diff --name-only "$IntermediateSha..$TargetSha")
+    $appDiffExit  = $LASTEXITCODE
+    $ErrorActionPreference = $prevPref
+    if ($appDiffExit -ne 0) {
+        throw "NO-GO ABORT: git diff --name-only $IntermediateSha..$TargetSha failed with exit code $appDiffExit."
+    }
+    $expectedAppFiles = @(
+        "apps/web/app/api/v1/commercial/opportunities/[id]/workflow/route.ts",
+        "apps/web/app/commercial/opportunities/page.tsx",
+        "apps/web/lib/opportunity-workflow-helpers.ts",
         "docs/releases/CURRENT_RELEASE_STATE.md",
         "tests/api/sg-uat-run3-day1-remediation.spec.ts"
     )
-    $diffMismatch = Compare-Object -ReferenceObject $expectedFiles -DifferenceObject $diffFiles
-    if ($null -ne $diffMismatch) {
-        throw "NO-GO ABORT: Release diff mismatch between $BaselineSha and $TargetSha. Found: $($diffFiles -join ', ')"
+    if ($null -ne (Compare-Object -ReferenceObject $expectedAppFiles -DifferenceObject $appDiffFiles)) {
+        throw "NO-GO ABORT: Run 3 Day 1 application diff mismatch in $IntermediateSha..$TargetSha. Found: $($appDiffFiles -join ', ')"
+    }
+    Write-Host "Verified Run 3 Day 1 application diff ($IntermediateSha..$TargetSha) contains exact 5 approved files." -ForegroundColor Green
+
+    # Gate C: Full range zero Prisma schema/migration check (c5ba25a..142e6f2)
+    $prevPref = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    $diffFiles = @(git diff --name-only "$BaselineSha..$TargetSha")
+    $diffExit  = $LASTEXITCODE
+    $ErrorActionPreference = $prevPref
+    if ($diffExit -ne 0) {
+        throw "NO-GO ABORT: git diff --name-only $BaselineSha..$TargetSha failed with exit code $diffExit."
     }
     if (@($diffFiles | Where-Object { $_ -match "prisma|migration" }).Count -gt 0) {
-        throw "NO-GO ABORT: Unexpected Prisma or migration file in CL-5 diff!"
+        throw "NO-GO ABORT: Unexpected Prisma or migration file in Run 3 Day 1 release diff!"
     }
-    Write-Host "Verified exact 9-file release diff (5 Run 3 Day 1 app/doc/test files + 4 prior deploy-tools files; 0 migrations, 0 schema changes):" -ForegroundColor Green
-    $diffFiles | ForEach-Object { Write-Host "  - $_" }
+    Write-Host "Verified zero Prisma schema/migration changes across full range ($BaselineSha..$TargetSha)." -ForegroundColor Green
 
     Write-Host "`n=================================================================" -ForegroundColor Cyan
     Write-Host " PHASE 4: ISOLATED STAGING BUILD BEFORE WEB SERVICE DOWNTIME     " -ForegroundColor Cyan
@@ -524,9 +556,9 @@ param(
             throw "NO-GO ABORT: Staged Web build at '$stageBuiltNext' failed structural validation. Live Web was NOT stopped or altered."
         }
 
-        $conversionPageChunk = Join-Path $stageBuiltNext "server\app\commercial\contract-conversion\[id]\page.js"
-        if (-not (Test-Path -LiteralPath $conversionPageChunk)) {
-            throw "NO-GO ABORT: Expected CL-5 route build artifact missing at '$conversionPageChunk'."
+        $opportunitiesPageChunk = Join-Path $stageBuiltNext "server\app\commercial\opportunities\page.js"
+        if (-not (Test-Path -LiteralPath $opportunitiesPageChunk)) {
+            throw "NO-GO ABORT: Expected SG UAT Run 3 Day 1 route build artifact missing at '$opportunitiesPageChunk'."
         }
 
         $newWebBuildIdFile  = Get-Item -LiteralPath (Join-Path $stageBuiltNext "BUILD_ID")

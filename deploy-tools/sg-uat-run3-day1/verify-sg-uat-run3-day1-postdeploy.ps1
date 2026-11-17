@@ -177,7 +177,7 @@ param(
         }
     }
 
-    # Verify CL-5 conversion page route is served (HTTP 200 or auth redirect 307/302; never 404/500)
+    # Verify SG UAT Run 3 Day 1 opportunities page route is served (HTTP 200 or auth redirect 307/302; never 404/500)
     $conversionRoute = "http://127.0.0.1:3200/commercial/opportunities"
     try {
         $rConv = Invoke-WebRequest -Uri $conversionRoute -MaximumRedirection 0 -UseBasicParsing -TimeoutSec 10 -ErrorAction Stop
