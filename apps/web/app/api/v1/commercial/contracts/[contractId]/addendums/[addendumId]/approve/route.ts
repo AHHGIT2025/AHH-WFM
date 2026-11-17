@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@ahh-wfm/database";
 import { checkApiAuth } from "../../../../../../../../../lib/api-guards";
 import { hasPermission, isAdminUser } from "../../../../../../../../../lib/permissions";
+import { applyAddendumWorkflowTransition } from "../../../../../../../../../lib/addendum-workflow";
 
 export async function POST(
   req: NextRequest,
@@ -215,38 +216,14 @@ export async function POST(
     }
 
     const result = await prisma.$transaction(async (tx) => {
-      const approvedAddendum = await tx.manpowerContractAddendum.update({
-        where: { id: addendum.id },
-        data: {
-          status: "APPROVED"
-        },
-        include: {
-          lineItems: true
-        }
-      });
-
-      // GATE 1: totalContractValue / Commercial Impact Safety
-      // Preserve endDate if effectiveTo is provided and later than contract endDate
-      let updatedEndDate = addendum.contract.endDate;
-      if (addendum.effectiveTo && addendum.effectiveTo > addendum.contract.endDate) {
-        updatedEndDate = addendum.effectiveTo;
-      }
-
-      // Preserve totalContractValue if base contract total is null; do not force 0 without explicit full-term authority
-      let updatedTotalValue = addendum.contract.totalContractValue;
-      if (addendum.contract.totalContractValue !== null && addendum.calculatedCommercialImpact !== null && addendum.calculatedCommercialImpact !== undefined) {
-        // Apply explicit full-term commercial impact delta (supports ADD, REMOVE, MODIFY)
-        const impactDelta = Number(addendum.calculatedCommercialImpact);
-        updatedTotalValue = addendum.contract.totalContractValue + impactDelta;
-      }
-
-      const updatedContract = await tx.manpowerContract.update({
-        where: { id: params.contractId },
-        data: {
-          endDate: updatedEndDate,
-          totalContractValue: updatedTotalValue
-        }
-      });
+      const transition = await applyAddendumWorkflowTransition(
+        addendum.id,
+        "APPROVE",
+        "APPROVED",
+        tx,
+        user.id || "unknown",
+        remarks
+      );
 
       // Update or create WorkflowInstance to APPROVED status with canonical moduleType CONTRACT_ADDENDUM
       let wfInst = workflowInstance;
@@ -285,22 +262,7 @@ export async function POST(
         }).catch(() => null);
       }
 
-      await tx.userActivityLog.create({
-        data: {
-          userId: user.id || "unknown",
-          action: "ADDENDUM_APPROVED",
-          entityType: "CONTRACT_ADDENDUM",
-          entityId: addendum.id,
-          afterJson: JSON.stringify({
-            contractId: params.contractId,
-            addendumId: addendum.id,
-            approvedBy: user.id,
-            remarks: remarks || null
-          })
-        }
-      }).catch(() => null);
-
-      return { approvedAddendum, updatedContract };
+      return { approvedAddendum: transition.addendum, updatedContract: transition.contract };
     });
 
     return NextResponse.json({

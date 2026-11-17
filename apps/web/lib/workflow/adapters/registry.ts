@@ -1,5 +1,6 @@
 import { prisma } from "@ahh-wfm/database";
 import { WorkflowSourceAdapter, WorkflowBusinessSummary } from "./types";
+import { applyAddendumWorkflowTransition } from "@/lib/addendum-workflow";
 
 async function resolveRequesterDisplayName(
   rawActor: string | null | undefined,
@@ -225,7 +226,6 @@ const CaseAdapter: WorkflowSourceAdapter = {
         where: { id: referenceId },
         data: {
           lifecycle: "COMPLETED",
-          businessOutcome: "WON",
           updatedAt: new Date()
         }
       });
@@ -437,6 +437,9 @@ const AddendumAdapter: WorkflowSourceAdapter = {
   },
   getSourceDeepLink(referenceId: string) {
     return `/commercial/amendments`;
+  },
+  async onWorkflowStatusChange(referenceId, action, newStatus, remarks, tx) {
+    await applyAddendumWorkflowTransition(referenceId, action, newStatus, tx, undefined, remarks);
   }
 };
 WorkflowAdapterRegistry.register(AddendumAdapter);

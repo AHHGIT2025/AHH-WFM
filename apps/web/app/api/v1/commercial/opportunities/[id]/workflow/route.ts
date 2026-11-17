@@ -130,52 +130,58 @@ export async function POST(
         );
       }
 
-      if (workflowInstance) {
-        workflowInstance = await prisma.workflowInstance.update({
-          where: { id: workflowInstance.id },
+      const { savedInstance, updatedCase } = await prisma.$transaction(async (tx) => {
+        let savedInst;
+        if (workflowInstance) {
+          savedInst = await tx.workflowInstance.update({
+            where: { id: workflowInstance.id },
+            data: {
+              templateId: template.id,
+              status: "IN_PROGRESS",
+              currentLevelNumber: 1,
+              updatedAt: new Date()
+            },
+            include: { history: true }
+          });
+        } else {
+          savedInst = await tx.workflowInstance.create({
+            data: {
+              templateId: template.id,
+              moduleType: "PRE_CONTRACT_CASE",
+              referenceId: caseId,
+              status: "IN_PROGRESS",
+              currentLevelNumber: 1,
+              companyId: opportunityCase.companyId,
+              operationScope: opportunityCase.operationType
+            },
+            include: { history: true }
+          });
+        }
+
+        // Log SUBMIT in immutable WorkflowActionHistory
+        await tx.workflowActionHistory.create({
           data: {
-            templateId: template.id,
-            status: "IN_PROGRESS",
-            currentLevelNumber: 1,
+            instanceId: savedInst.id,
+            levelNumber: 1,
+            action: "SUBMIT",
+            actedBy: user?.name || user?.email || user?.id || "USER",
+            remarks: remarks?.trim() || "Submitted for commercial governance approval."
+          }
+        });
+
+        const updCase = await tx.preContractCase.update({
+          where: { id: caseId },
+          data: {
+            lifecycle: "IN_WORKFLOW",
+            workflowInstanceId: savedInst.id,
+            workflowTemplateId: template.id,
             updatedAt: new Date()
-          },
-          include: { history: true }
+          }
         });
-      } else {
-        workflowInstance = await prisma.workflowInstance.create({
-          data: {
-            templateId: template.id,
-            moduleType: "PRE_CONTRACT_CASE",
-            referenceId: caseId,
-            status: "IN_PROGRESS",
-            currentLevelNumber: 1,
-            companyId: opportunityCase.companyId,
-            operationScope: opportunityCase.operationType
-          },
-          include: { history: true }
-        });
-      }
 
-      // Log SUBMIT in immutable WorkflowActionHistory
-      await prisma.workflowActionHistory.create({
-        data: {
-          instanceId: workflowInstance.id,
-          levelNumber: 1,
-          action: "SUBMIT",
-          actedBy: user?.name || user?.email || user?.id || "USER",
-          remarks: remarks?.trim() || "Submitted for commercial governance approval."
-        }
+        return { savedInstance: savedInst, updatedCase: updCase };
       });
-
-      const updatedCase = await prisma.preContractCase.update({
-        where: { id: caseId },
-        data: {
-          lifecycle: "IN_WORKFLOW",
-          workflowInstanceId: workflowInstance.id,
-          workflowTemplateId: template.id,
-          updatedAt: new Date()
-        }
-      });
+      workflowInstance = savedInstance;
 
       return NextResponse.json({
         case: updatedCase,
@@ -279,35 +285,37 @@ export async function POST(
       newCaseLifecycle = "CANCELLED";
     }
 
-    // Record Immutable WorkflowActionHistory Entry
-    await prisma.workflowActionHistory.create({
-      data: {
-        instanceId: workflowInstance.id,
-        levelNumber: workflowInstance.currentLevelNumber,
-        action,
-        actedBy: user?.name || user?.email || user?.id || "USER",
-        remarks: remarks?.trim() || `Workflow level ${workflowInstance.currentLevelNumber} action ${action} executed.`
-      }
-    });
+    const updatedCase = await prisma.$transaction(async (tx) => {
+      // Record Immutable WorkflowActionHistory Entry
+      await tx.workflowActionHistory.create({
+        data: {
+          instanceId: workflowInstance!.id,
+          levelNumber: workflowInstance!.currentLevelNumber,
+          action,
+          actedBy: user?.name || user?.email || user?.id || "USER",
+          remarks: remarks?.trim() || `Workflow level ${workflowInstance!.currentLevelNumber} action ${action} executed.`
+        }
+      });
 
-    // Update WorkflowInstance State
-    await prisma.workflowInstance.update({
-      where: { id: workflowInstance.id },
-      data: {
-        status: newWorkflowStatus,
-        currentLevelNumber: newCurrentLevelNumber,
-        updatedAt: new Date()
-      }
-    });
+      // Update WorkflowInstance State
+      await tx.workflowInstance.update({
+        where: { id: workflowInstance!.id },
+        data: {
+          status: newWorkflowStatus,
+          currentLevelNumber: newCurrentLevelNumber,
+          updatedAt: new Date()
+        }
+      });
 
-    // Update Opportunity Case State
-    const updatedCase = await prisma.preContractCase.update({
-      where: { id: caseId },
-      data: {
-        lifecycle: newCaseLifecycle,
-        businessOutcome: newCaseLifecycle === "COMPLETED" ? "WON" : newCaseLifecycle === "CANCELLED" ? "LOST" : opportunityCase.businessOutcome,
-        updatedAt: new Date()
-      }
+      // Update Opportunity Case State (Correction 1: COMPLETED on internal approval; never auto-set WON)
+      return await tx.preContractCase.update({
+        where: { id: caseId },
+        data: {
+          lifecycle: newCaseLifecycle,
+          businessOutcome: newCaseLifecycle === "CANCELLED" ? "LOST" : opportunityCase.businessOutcome,
+          updatedAt: new Date()
+        }
+      });
     });
 
     return NextResponse.json({

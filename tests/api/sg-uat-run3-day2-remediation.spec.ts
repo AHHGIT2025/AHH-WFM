@@ -7,8 +7,10 @@ import { POST as createSiteSurveyRoute, GET as getSiteSurveysRoute } from "../..
 import { PATCH as patchSiteSurveyRoute, GET as getSiteSurveyDetailRoute } from "../../apps/web/app/api/v1/commercial/surveys/[id]/route";
 import { POST as surveyWorkflowRoute } from "../../apps/web/app/api/v1/commercial/surveys/[id]/workflow/route";
 import { POST as createCostingRoute } from "../../apps/web/app/api/v1/commercial/costing/route";
+import { POST as approveAddendumRoute } from "../../apps/web/app/api/v1/commercial/contracts/[contractId]/addendums/[addendumId]/approve/route";
 import { GET as getApprovalsInboxRoute } from "../../apps/web/app/api/v1/approvals/route";
 import { POST as executeApprovalActionRoute } from "../../apps/web/app/api/v1/approvals/[id]/action/route";
+import { WorkflowAdapterRegistry } from "../../apps/web/lib/workflow/adapters/registry";
 import { DEFAULT_ROLE_PERMISSIONS } from "../../apps/web/lib/permissions";
 
 jest.mock("next-auth/next", () => ({
@@ -22,8 +24,10 @@ describe("SG UAT Run 3 Day 2 Remediation Suite (TEST DATABASE)", () => {
   let oppTemplateId: string;
   let survey1LvlTemplateId: string;
   let survey2LvlTemplateId: string;
+  let addendumTemplateId: string;
   let prevOppDefaultIds: string[] = [];
   let prevSurveyDefaultIds: string[] = [];
+  let prevAddendumDefaultIds: string[] = [];
 
   const creatorId = `emp-r3d2-cr-${rand}`;
   const approver1Id = `emp-r3d2-a1-${rand}`;
@@ -32,9 +36,13 @@ describe("SG UAT Run 3 Day 2 Remediation Suite (TEST DATABASE)", () => {
   const companyBUserId = `emp-r3d2-cb-${rand}`;
 
   let oppId: string;
+  let oppModuleId: string;
   let survey1Id: string;
   let survey2Id: string;
   let surveyMultiId: string;
+  let testClientId: string;
+  let testContractId: string;
+  let testAddendumId: string;
   const createdCostingIds: string[] = [];
   const createdProspectiveSiteIds: string[] = [];
 
@@ -237,6 +245,91 @@ describe("SG UAT Run 3 Day 2 Remediation Suite (TEST DATABASE)", () => {
       },
     });
     oppId = opp.id;
+
+    const oppMod = await prisma.preContractCase.create({
+      data: {
+        title: `OPP-MOD Run3 Day2 Deal ${rand}`,
+        companyId: companyAId,
+        operationType: "SECURITY_GUARDING",
+        lifecycle: "DRAFT",
+        businessOutcome: "IN_PROGRESS",
+        createdBy: creatorId,
+      },
+    });
+    oppModuleId = oppMod.id;
+
+    const prevAddDefs = await prisma.workflowTemplate.findMany({
+      where: { isActive: true, isDefault: true, moduleType: "CONTRACT_ADDENDUM" },
+      select: { id: true },
+    });
+    prevAddendumDefaultIds = prevAddDefs.map((t) => t.id);
+    if (prevAddendumDefaultIds.length > 0) {
+      await prisma.workflowTemplate.updateMany({ where: { id: { in: prevAddendumDefaultIds } }, data: { isDefault: false } });
+    }
+
+    const addTpl = await prisma.workflowTemplate.create({
+      data: {
+        workflowName: `Run3 Day2 Addendum Approval ${rand}`,
+        moduleType: "CONTRACT_ADDENDUM",
+        appliesTo: "ACTIVATION",
+        operationType: "SECURITY_GUARDING",
+        isDefault: true,
+        isActive: true,
+        levels: {
+          create: [
+            {
+              levelNumber: 1,
+              levelName: "Commercial Checker",
+              approvalRule: "ANY_ONE",
+              isMandatory: true,
+              approvers: { create: [{ approverType: "SPECIFIC_EMPLOYEE", employeeId: approver1Id, employeeName: "Checker Level 1" }] },
+            },
+          ],
+        },
+      },
+    });
+    addendumTemplateId = addTpl.id;
+
+    const client = await prisma.manpowerClient.create({
+      data: {
+        code: `CLR3D2-${rand}`,
+        name: `Run3 Day2 Client ${rand}`,
+        operationType: "SECURITY_GUARDING",
+        isActive: true,
+      },
+    });
+    testClientId = client.id;
+
+    const contract = await prisma.manpowerContract.create({
+      data: {
+        clientId: testClientId,
+        contractNumber: `CON-R3D2-${rand}`,
+        title: "Run3 Day2 Active Contract",
+        startDate: new Date("2026-09-01"),
+        endDate: new Date("2027-08-31"),
+        totalContractValue: 100000,
+        operationType: "SECURITY_GUARDING",
+        status: "ACTIVE",
+        approvalStatus: "APPROVED",
+        mobilisationStatus: "MOBILISED",
+      },
+    });
+    testContractId = contract.id;
+
+    const addendum = await prisma.manpowerContractAddendum.create({
+      data: {
+        contractId: testContractId,
+        addendumNumber: `ADD-R3D2-${rand}`,
+        title: "Run3 Day2 Addendum",
+        addendumDate: new Date(),
+        effectiveFrom: new Date("2026-10-01"),
+        effectiveTo: new Date("2027-08-31"),
+        addendumType: "MANPOWER_ADDITION",
+        calculatedCommercialImpact: 25000,
+        status: "PENDING_APPROVAL",
+      },
+    });
+    testAddendumId = addendum.id;
   });
 
   afterAll(async () => {
@@ -259,16 +352,28 @@ describe("SG UAT Run 3 Day 2 Remediation Suite (TEST DATABASE)", () => {
       if (createdProspectiveSiteIds.length > 0) {
         await prisma.preContractProspectiveSite.deleteMany({ where: { id: { in: createdProspectiveSiteIds } } });
       }
-      await prisma.workflowInstance.deleteMany({ where: { referenceId: oppId } });
-      await prisma.preContractCase.deleteMany({ where: { id: oppId } });
+      await prisma.workflowInstance.deleteMany({ where: { referenceId: { in: [oppId, oppModuleId, testAddendumId].filter(Boolean) } } });
+      if (testAddendumId) {
+        await prisma.manpowerContractAddendum.deleteMany({ where: { id: testAddendumId } });
+      }
+      if (testContractId) {
+        await prisma.manpowerContract.deleteMany({ where: { id: testContractId } });
+      }
+      if (testClientId) {
+        await prisma.manpowerClient.deleteMany({ where: { id: testClientId } });
+      }
+      await prisma.preContractCase.deleteMany({ where: { id: { in: [oppId, oppModuleId].filter(Boolean) } } });
       await prisma.workflowTemplate.deleteMany({
-        where: { id: { in: [oppTemplateId, survey1LvlTemplateId, survey2LvlTemplateId] } },
+        where: { id: { in: [oppTemplateId, survey1LvlTemplateId, survey2LvlTemplateId, addendumTemplateId].filter(Boolean) } },
       });
       if (prevOppDefaultIds.length > 0) {
         await prisma.workflowTemplate.updateMany({ where: { id: { in: prevOppDefaultIds } }, data: { isDefault: true } });
       }
       if (prevSurveyDefaultIds.length > 0) {
         await prisma.workflowTemplate.updateMany({ where: { id: { in: prevSurveyDefaultIds } }, data: { isDefault: true } });
+      }
+      if (prevAddendumDefaultIds.length > 0) {
+        await prisma.workflowTemplate.updateMany({ where: { id: { in: prevAddendumDefaultIds } }, data: { isDefault: true } });
       }
       await prisma.employee.deleteMany({
         where: { id: { in: [creatorId, approver1Id, approver2Id, otherMakerId, companyBUserId] } },
@@ -344,7 +449,34 @@ describe("SG UAT Run 3 Day 2 Remediation Suite (TEST DATABASE)", () => {
 
     const updatedOpp = await prisma.preContractCase.findUnique({ where: { id: oppId } });
     expect(updatedOpp?.lifecycle).toBe("COMPLETED");
-    expect(updatedOpp?.businessOutcome).toBe("WON");
+    expect(updatedOpp?.businessOutcome).toBe("IN_PROGRESS"); // Correction 1: never auto-set WON on internal approval
+
+    // Module-direct opportunity approval also sets COMPLETED without WON
+    (getServerSession as jest.Mock).mockResolvedValue({ user: creatorSession() });
+    const modSubRes = await opportunityWorkflowRoute(
+      new Request(`http://localhost:3100/api/v1/commercial/opportunities/${oppModuleId}/workflow`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "SUBMIT" }),
+      }),
+      { params: { id: oppModuleId } }
+    );
+    expect(modSubRes.status).toBe(200);
+
+    (getServerSession as jest.Mock).mockResolvedValue({ user: approver1Session() });
+    const modAppRes = await opportunityWorkflowRoute(
+      new Request(`http://localhost:3100/api/v1/commercial/opportunities/${oppModuleId}/workflow`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "APPROVE", remarks: "Module-direct approval" }),
+      }),
+      { params: { id: oppModuleId } }
+    );
+    expect(modAppRes.status).toBe(200);
+
+    const updatedModOpp = await prisma.preContractCase.findUnique({ where: { id: oppModuleId } });
+    expect(updatedModOpp?.lifecycle).toBe("COMPLETED");
+    expect(updatedModOpp?.businessOutcome).toBe("IN_PROGRESS");
 
     // Duplicate approval on completed workflow is rejected (409)
     const dupRes = await executeApprovalActionRoute(
@@ -618,5 +750,113 @@ describe("SG UAT Run 3 Day 2 Remediation Suite (TEST DATABASE)", () => {
 
     const afterL2 = await prisma.preContractSurvey.findUnique({ where: { id: surveyMultiId } });
     expect(afterL2?.lifecycle).toBe("COMPLETED");
+  });
+
+  it("5. Addendum approval via Approval Center applies contract impact exactly once; module route is idempotent; duplicate Approval Center call rejected (409)", async () => {
+    const wfInst = await prisma.workflowInstance.create({
+      data: {
+        templateId: addendumTemplateId,
+        moduleType: "CONTRACT_ADDENDUM",
+        referenceId: testAddendumId,
+        status: "IN_PROGRESS",
+        currentLevelNumber: 1,
+        companyId: companyAId,
+        operationScope: "SECURITY_GUARDING",
+      },
+    });
+
+    (getServerSession as jest.Mock).mockResolvedValue({ user: approver1Session() });
+    const appRes = await executeApprovalActionRoute(
+      new NextRequest(`http://localhost:3100/api/v1/approvals/${wfInst.id}/action`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "APPROVE", remarks: "Addendum approved via Approval Center" }),
+      }),
+      { params: { id: wfInst.id } }
+    );
+    expect(appRes.status).toBe(200);
+
+    const afterAddendum = await prisma.manpowerContractAddendum.findUnique({ where: { id: testAddendumId } });
+    const afterContract = await prisma.manpowerContract.findUnique({ where: { id: testContractId } });
+    expect(afterAddendum?.status).toBe("APPROVED");
+    expect(afterContract?.totalContractValue).toBe(125000); // 100000 + 25000 applied once
+
+    // Duplicate Approval Center call rejected (409) and contract impact untouched
+    const dupRes = await executeApprovalActionRoute(
+      new NextRequest(`http://localhost:3100/api/v1/approvals/${wfInst.id}/action`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "APPROVE", remarks: "Duplicate" }),
+      }),
+      { params: { id: wfInst.id } }
+    );
+    expect(dupRes.status).toBe(409);
+
+    // Module-level route returns alreadyApproved: true without re-applying impact
+    const modApproveRes = await approveAddendumRoute(
+      new NextRequest(`http://localhost:3100/api/v1/commercial/contracts/${testContractId}/addendums/${testAddendumId}/approve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "APPROVE" }),
+      }),
+      { params: { contractId: testContractId, addendumId: testAddendumId } }
+    );
+    expect(modApproveRes.status).toBe(200);
+    const modData = await modApproveRes.json();
+    expect(modData.alreadyApproved).toBe(true);
+
+    const finalContract = await prisma.manpowerContract.findUnique({ where: { id: testContractId } });
+    expect(finalContract?.totalContractValue).toBe(125000);
+  });
+
+  it("6. Transaction rollback on injected adapter failure leaves WorkflowInstance IN_PROGRESS and history rolled back", async () => {
+    const rollbackOpp = await prisma.preContractCase.create({
+      data: {
+        title: `OPP Rollback ${rand}`,
+        companyId: companyAId,
+        operationType: "SECURITY_GUARDING",
+        lifecycle: "IN_WORKFLOW",
+        businessOutcome: "IN_PROGRESS",
+        createdBy: creatorId,
+      },
+    });
+    const wfInst = await prisma.workflowInstance.create({
+      data: {
+        templateId: oppTemplateId,
+        moduleType: "PRE_CONTRACT_CASE",
+        referenceId: rollbackOpp.id,
+        status: "IN_PROGRESS",
+        currentLevelNumber: 1,
+        companyId: companyAId,
+        operationScope: "SECURITY_GUARDING",
+      },
+    });
+
+    const origAdapter = WorkflowAdapterRegistry.get("PRE_CONTRACT_CASE")!;
+    const spy = jest.spyOn(origAdapter, "onWorkflowStatusChange").mockRejectedValueOnce(new Error("Injected adapter failure"));
+
+    try {
+      (getServerSession as jest.Mock).mockResolvedValue({ user: approver1Session() });
+      const res = await executeApprovalActionRoute(
+        new NextRequest(`http://localhost:3100/api/v1/approvals/${wfInst.id}/action`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "APPROVE", remarks: "Should roll back" }),
+        }),
+        { params: { id: wfInst.id } }
+      );
+      expect(res.status).toBe(403);
+
+      const persistedInst = await prisma.workflowInstance.findUnique({
+        where: { id: wfInst.id },
+        include: { history: true },
+      });
+      expect(persistedInst?.status).toBe("IN_PROGRESS");
+      expect(persistedInst?.history.length).toBe(0);
+    } finally {
+      spy.mockRestore();
+      await prisma.workflowInstance.deleteMany({ where: { id: wfInst.id } });
+      await prisma.preContractCase.deleteMany({ where: { id: rollbackOpp.id } });
+    }
   });
 });

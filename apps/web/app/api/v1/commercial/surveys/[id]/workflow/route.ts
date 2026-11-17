@@ -124,53 +124,59 @@ export async function POST(
         );
       }
 
-      if (workflowInstance) {
-        workflowInstance = await prisma.workflowInstance.update({
-          where: { id: workflowInstance.id },
+      const { savedInstance, updatedSurvey } = await prisma.$transaction(async (tx) => {
+        let savedInst;
+        if (workflowInstance) {
+          savedInst = await tx.workflowInstance.update({
+            where: { id: workflowInstance.id },
+            data: {
+              templateId: template.id,
+              moduleType: "SITE_SURVEY",
+              status: "IN_PROGRESS",
+              currentLevelNumber: 1,
+              updatedAt: new Date()
+            },
+            include: { history: true }
+          });
+        } else {
+          savedInst = await tx.workflowInstance.create({
+            data: {
+              templateId: template.id,
+              moduleType: "SITE_SURVEY",
+              referenceId: surveyId,
+              status: "IN_PROGRESS",
+              currentLevelNumber: 1,
+              companyId: survey.companyId,
+              operationScope: survey.operationType
+            },
+            include: { history: true }
+          });
+        }
+
+        // Record SUBMIT in immutable WorkflowActionHistory
+        await tx.workflowActionHistory.create({
           data: {
-            templateId: template.id,
-            moduleType: "SITE_SURVEY",
-            status: "IN_PROGRESS",
-            currentLevelNumber: 1,
+            instanceId: savedInst.id,
+            levelNumber: 1,
+            action: "SUBMIT",
+            actedBy: user?.name || user?.email || user?.id || "USER",
+            remarks: remarks?.trim() || "Submitted site survey for technical and commercial approval."
+          }
+        });
+
+        const updSurvey = await tx.preContractSurvey.update({
+          where: { id: surveyId },
+          data: {
+            lifecycle: "IN_WORKFLOW",
+            workflowInstanceId: savedInst.id,
+            workflowTemplateId: template.id,
             updatedAt: new Date()
-          },
-          include: { history: true }
+          }
         });
-      } else {
-        workflowInstance = await prisma.workflowInstance.create({
-          data: {
-            templateId: template.id,
-            moduleType: "SITE_SURVEY",
-            referenceId: surveyId,
-            status: "IN_PROGRESS",
-            currentLevelNumber: 1,
-            companyId: survey.companyId,
-            operationScope: survey.operationType
-          },
-          include: { history: true }
-        });
-      }
 
-      // Record SUBMIT in immutable WorkflowActionHistory
-      await prisma.workflowActionHistory.create({
-        data: {
-          instanceId: workflowInstance.id,
-          levelNumber: 1,
-          action: "SUBMIT",
-          actedBy: user?.name || user?.email || user?.id || "USER",
-          remarks: remarks?.trim() || "Submitted site survey for technical and commercial approval."
-        }
+        return { savedInstance: savedInst, updatedSurvey: updSurvey };
       });
-
-      const updatedSurvey = await prisma.preContractSurvey.update({
-        where: { id: surveyId },
-        data: {
-          lifecycle: "IN_WORKFLOW",
-          workflowInstanceId: workflowInstance.id,
-          workflowTemplateId: template.id,
-          updatedAt: new Date()
-        }
-      });
+      workflowInstance = savedInstance;
 
       return NextResponse.json({
         survey: updatedSurvey,
@@ -276,34 +282,36 @@ export async function POST(
       newSurveyLifecycle = "CANCELLED";
     }
 
-    // Record Immutable WorkflowActionHistory Entry
-    await prisma.workflowActionHistory.create({
-      data: {
-        instanceId: workflowInstance.id,
-        levelNumber: workflowInstance.currentLevelNumber,
-        action,
-        actedBy: user?.name || user?.email || user?.id || "USER",
-        remarks: remarks?.trim() || `Workflow level ${workflowInstance.currentLevelNumber} action ${action} executed.`
-      }
-    });
+    const updatedSurvey = await prisma.$transaction(async (tx) => {
+      // Record Immutable WorkflowActionHistory Entry
+      await tx.workflowActionHistory.create({
+        data: {
+          instanceId: workflowInstance!.id,
+          levelNumber: workflowInstance!.currentLevelNumber,
+          action,
+          actedBy: user?.name || user?.email || user?.id || "USER",
+          remarks: remarks?.trim() || `Workflow level ${workflowInstance!.currentLevelNumber} action ${action} executed.`
+        }
+      });
 
-    // Update WorkflowInstance State
-    await prisma.workflowInstance.update({
-      where: { id: workflowInstance.id },
-      data: {
-        status: newWorkflowStatus,
-        currentLevelNumber: newCurrentLevelNumber,
-        updatedAt: new Date()
-      }
-    });
+      // Update WorkflowInstance State
+      await tx.workflowInstance.update({
+        where: { id: workflowInstance!.id },
+        data: {
+          status: newWorkflowStatus,
+          currentLevelNumber: newCurrentLevelNumber,
+          updatedAt: new Date()
+        }
+      });
 
-    // Update Survey State
-    const updatedSurvey = await prisma.preContractSurvey.update({
-      where: { id: surveyId },
-      data: {
-        lifecycle: newSurveyLifecycle,
-        updatedAt: new Date()
-      }
+      // Update Survey State
+      return await tx.preContractSurvey.update({
+        where: { id: surveyId },
+        data: {
+          lifecycle: newSurveyLifecycle,
+          updatedAt: new Date()
+        }
+      });
     });
 
     return NextResponse.json({
