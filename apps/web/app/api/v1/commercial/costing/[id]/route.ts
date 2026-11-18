@@ -103,7 +103,7 @@ export async function PATCH(
       return NextResponse.json({ error: "No version found for this costing estimate." }, { status: 404 });
     }
 
-    // Permission checks
+    // Permission & Company Boundary checks
     const hasManage = isAdminUser(user) || hasPermission(user, "precontract.costing.manage") || hasPermission(user, "manpower.admin.full_access");
     const hasOverride = isAdminUser(user) || hasPermission(user, "precontract.costing.override") || hasPermission(user, "manpower.admin.full_access");
 
@@ -111,8 +111,47 @@ export async function PATCH(
       return NextResponse.json({ error: "Forbidden: You do not have permission to edit costing estimates." }, { status: 403 });
     }
 
+    if (user?.companyId && !isAdminUser(user) && !hasPermission(user, "precontract.costing.crossCompany") && estimate.companyId && estimate.companyId !== user.companyId) {
+      return NextResponse.json({ error: "Forbidden: Company boundary violation." }, { status: 403 });
+    }
+
     if (overrides.length > 0 && !hasOverride) {
       return NextResponse.json({ error: "Forbidden: You do not have permission to override rate or cost line items." }, { status: 403 });
+    }
+
+    if (overrides.length > 0) {
+      for (const o of overrides) {
+        if (!o || !["BASIC_PAY", "ALLOWANCES"].includes(o.elementCode)) {
+          return NextResponse.json(
+            { error: "Invalid override elementCode. Allowed: BASIC_PAY, ALLOWANCES." },
+            { status: 400 }
+          );
+        }
+        if (typeof o.reason !== "string" || o.reason.trim().length < 3) {
+          return NextResponse.json(
+            { error: "Invalid override: A meaningful override reason (at least 3 characters) is required." },
+            { status: 400 }
+          );
+        }
+        if (o.quantity === undefined && o.unitRate === undefined) {
+          return NextResponse.json(
+            { error: "Invalid override: At least one of quantity or unitRate must be provided." },
+            { status: 400 }
+          );
+        }
+        if (o.quantity !== undefined && (!Number.isFinite(Number(o.quantity)) || Number(o.quantity) <= 0)) {
+          return NextResponse.json(
+            { error: "Invalid override quantity: Quantity must be a finite positive number." },
+            { status: 400 }
+          );
+        }
+        if (o.unitRate !== undefined && (!Number.isFinite(Number(o.unitRate)) || Number(o.unitRate) <= 0)) {
+          return NextResponse.json(
+            { error: "Invalid override unitRate: Unit rate must be a finite positive number." },
+            { status: 400 }
+          );
+        }
+      }
     }
 
     // If current version is APPROVED or in workflow, editing requires creating a new revision

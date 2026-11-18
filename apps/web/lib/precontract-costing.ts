@@ -110,41 +110,82 @@ export function assessCostingValidation(
   );
   const hasMappedSurveyHeadcount = Boolean(mappedHeadcountResponse);
 
-  const unmappedSurveyManpowerFields = !hasMappedSurveyHeadcount
-    ? responses
-        .filter((r) => {
-          if (!UNMAPPED_MANPOWER_SURVEY_CODES.has(r.elementCode)) return false;
-          const hasNum = r.numericValue !== null && r.numericValue !== undefined && Number(r.numericValue) > 0;
-          const hasText = typeof r.textValue === "string" && r.textValue.trim().length > 0;
-          return hasNum || hasText;
-        })
-        .map((r) => r.elementCode)
-    : [];
+  const unmappedPostCount = !hasMappedSurveyHeadcount
+    ? responses.some((r) => {
+        if (r.elementCode !== "ELEM_POST_COUNT") return false;
+        const hasNum = r.numericValue !== null && r.numericValue !== undefined && Number(r.numericValue) > 0;
+        const hasText = typeof r.textValue === "string" && r.textValue.trim().length > 0;
+        return hasNum || hasText;
+      })
+    : false;
 
-  const hasBasicPayOverride =
-    overrides.some((o) => o.fieldPath === "items[BASIC_PAY]") ||
-    items.some((i) => i.elementCode === "BASIC_PAY" && i.calculationBasis === "OVERRIDE");
-  const hasAllowanceOverride =
-    overrides.some((o) => o.fieldPath === "items[ALLOWANCES]") ||
-    items.some((i) => i.elementCode === "ALLOWANCES" && i.calculationBasis === "OVERRIDE");
+  const hasMappedReliefDriver = responses.some(
+    (r) =>
+      (r.elementCode === "RELIEVER_REQUIRED" || r.elementCode === "COVERAGE_TYPE") &&
+      (Boolean(r.booleanValue) || (typeof r.textValue === "string" && r.textValue.trim().length > 0))
+  );
+  const unmappedShiftPattern = !hasMappedReliefDriver
+    ? responses.some((r) => {
+        if (r.elementCode !== "ELEM_SHIFT_PATTERN") return false;
+        const hasNum = r.numericValue !== null && r.numericValue !== undefined && Number(r.numericValue) > 0;
+        const hasText = typeof r.textValue === "string" && r.textValue.trim().length > 0;
+        return hasNum || hasText;
+      })
+    : false;
 
-  const assumedFallbackHeadcount = !hasMappedSurveyHeadcount && !hasBasicPayOverride;
-  const hasActiveCostConfig = Boolean(version?.costConfigVersionId);
+  const unmappedSurveyManpowerFields: string[] = [];
+  if (unmappedPostCount) unmappedSurveyManpowerFields.push("ELEM_POST_COUNT");
+  if (unmappedShiftPattern) unmappedSurveyManpowerFields.push("ELEM_SHIFT_PATTERN");
 
-  const fallbackRateItems: string[] = [];
   const basicItem = items.find((i) => i.elementCode === "BASIC_PAY");
   const allowanceItem = items.find((i) => i.elementCode === "ALLOWANCES");
 
+  const parseOverrideAudit = (fieldPath: string) =>
+    overrides.filter(
+      (o) =>
+        o.fieldPath === fieldPath &&
+        typeof o.reason === "string" &&
+        o.reason.trim().length >= 3 &&
+        typeof (o as any).overriddenBy === "string" &&
+        (o as any).overriddenBy.trim().length > 0
+    );
+
+  const basicOverrideLogs = parseOverrideAudit("items[BASIC_PAY]");
+  const allowanceOverrideLogs = parseOverrideAudit("items[ALLOWANCES]");
+
+  const hasBasicPayQuantityOverride =
+    basicItem?.calculationBasis === "OVERRIDE" &&
+    basicOverrideLogs.some((o) => /qty=([0-9]*\.?[0-9]+)/.test((o as any).newValue || "") && Number(RegExp.$1) > 0);
+
+  const hasBasicPayRateOverride =
+    basicItem?.calculationBasis === "OVERRIDE" &&
+    basicOverrideLogs.some((o) => /rate=([0-9]*\.?[0-9]+)/.test((o as any).newValue || "") && Number(RegExp.$1) > 0);
+
+  const hasAllowanceQuantityOverride =
+    allowanceItem?.calculationBasis === "OVERRIDE" &&
+    allowanceOverrideLogs.some((o) => /qty=([0-9]*\.?[0-9]+)/.test((o as any).newValue || "") && Number(RegExp.$1) > 0);
+
+  const hasAllowanceRateOverride =
+    allowanceItem?.calculationBasis === "OVERRIDE" &&
+    allowanceOverrideLogs.some((o) => /rate=([0-9]*\.?[0-9]+)/.test((o as any).newValue || "") && Number(RegExp.$1) > 0);
+
+  const hasAllowanceOverride = hasAllowanceQuantityOverride || hasAllowanceRateOverride;
+
+  const assumedFallbackHeadcount = !hasMappedSurveyHeadcount && !hasBasicPayQuantityOverride;
+  const hasActiveCostConfig = Boolean(version?.costConfigVersionId);
+
+  const fallbackRateItems: string[] = [];
+
   if (
     basicItem &&
-    basicItem.calculationBasis !== "OVERRIDE" &&
+    !hasBasicPayRateOverride &&
     (basicItem.calculationBasis === "FALLBACK" || !hasActiveCostConfig)
   ) {
     fallbackRateItems.push("BASIC_PAY");
   }
   if (
     allowanceItem &&
-    allowanceItem.calculationBasis !== "OVERRIDE" &&
+    !hasAllowanceRateOverride &&
     (allowanceItem.calculationBasis === "FALLBACK" || Number(allowanceItem.unitRate) === 1000)
   ) {
     fallbackRateItems.push("ALLOWANCES");
@@ -152,18 +193,24 @@ export function assessCostingValidation(
 
   const usesFallbackRates = fallbackRateItems.length > 0;
   const hasAllFallbacksOverridden =
-    (!assumedFallbackHeadcount || hasBasicPayOverride) &&
-    (!fallbackRateItems.includes("BASIC_PAY") || hasBasicPayOverride) &&
+    (!assumedFallbackHeadcount || hasBasicPayQuantityOverride) &&
+    (!unmappedShiftPattern) &&
+    (!fallbackRateItems.includes("BASIC_PAY") || hasBasicPayRateOverride) &&
     (!fallbackRateItems.includes("ALLOWANCES") || hasAllowanceOverride);
 
   const warnings: string[] = [];
-  if (unmappedSurveyManpowerFields.length > 0 && !hasBasicPayOverride) {
+  if (unmappedPostCount && !hasBasicPayQuantityOverride) {
     warnings.push(
-      `Survey captured unmapped manpower/shift fields (${unmappedSurveyManpowerFields.join(", ")}); costing defaulted to assumed headcount = 1.`
+      "Survey captured unmapped ELEM_POST_COUNT; costing defaulted to assumed headcount = 1. A BASIC_PAY quantity override is required."
     );
   } else if (assumedFallbackHeadcount) {
     warnings.push(
       "Survey lacks mapped headcount drivers (HEADCOUNT / GUARDS_REQUIRED / STAFF_COUNT); costing defaulted to assumed headcount = 1."
+    );
+  }
+  if (unmappedShiftPattern) {
+    warnings.push(
+      "Survey captured unmapped ELEM_SHIFT_PATTERN (relief coverage); BASIC_PAY overrides do not validate shift/relief coverage."
     );
   }
   if (!hasActiveCostConfig) {
@@ -176,7 +223,7 @@ export function assessCostingValidation(
   }
 
   let validationStatus: CostingValidationSummary["validationStatus"] = "UNVALIDATED_FALLBACK";
-  if (hasMappedSurveyHeadcount && hasActiveCostConfig && !usesFallbackRates) {
+  if (hasMappedSurveyHeadcount && !unmappedShiftPattern && hasActiveCostConfig && !usesFallbackRates) {
     validationStatus = "VALIDATED_CONFIGURED";
   } else if (overrides.length > 0 && hasAllFallbacksOverridden) {
     validationStatus = "VALIDATED_BY_OVERRIDE";
@@ -186,7 +233,10 @@ export function assessCostingValidation(
 
   const isValidated =
     validationStatus === "VALIDATED_CONFIGURED" || validationStatus === "VALIDATED_BY_OVERRIDE";
-  const blocksCommercialSubmission = unmappedSurveyManpowerFields.length > 0 && !hasBasicPayOverride;
+  const blocksCommercialSubmission =
+    (unmappedPostCount && !hasBasicPayQuantityOverride) ||
+    unmappedShiftPattern ||
+    ((unmappedPostCount || unmappedShiftPattern) && fallbackRateItems.length > 0);
 
   return {
     validationStatus,

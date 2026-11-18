@@ -446,7 +446,19 @@ describe("Commercial Lifecycle — Phase CL-3 Comprehensive Test Suite (Pre-Cont
   // -------------------------------------------------------------
   // SECTION 5: LINE OVERRIDES & AUDIT LOGGING
   // -------------------------------------------------------------
+  const clearPriorCompAEstimates = async () => {
+    await prisma.preContractCostEstimate.updateMany({
+      where: {
+        caseId: testCaseCompA_SG.id,
+        surveyId: testCompletedSurveyCompA_SG.id,
+        status: { notIn: ["CANCELLED", "REJECTED", "SUPERSEDED"] },
+      },
+      data: { status: "SUPERSEDED" },
+    });
+  };
+
   describe("5. Line Overrides & Audit Trail", () => {
+    beforeEach(clearPriorCompAEstimates);
     it("should allow override and log audit entry when user has precontract.costing.override", async () => {
       // 1. Create Draft Costing
       (getServerSession as jest.Mock).mockResolvedValue({ user: mockSuperAdmin });
@@ -505,6 +517,7 @@ describe("Commercial Lifecycle — Phase CL-3 Comprehensive Test Suite (Pre-Cont
   // SECTION 6: REVISIONING ENGINE
   // -------------------------------------------------------------
   describe("6. Version Revisioning Engine", () => {
+    beforeEach(clearPriorCompAEstimates);
     it("should increment versionNumber and set clonedFromVersionId when revising an estimate", async () => {
       // 1. Create Draft
       (getServerSession as jest.Mock).mockResolvedValue({ user: mockSuperAdmin });
@@ -538,6 +551,7 @@ describe("Commercial Lifecycle — Phase CL-3 Comprehensive Test Suite (Pre-Cont
   // SECTION 7: WORKFLOW GOVERNANCE & SEGREGATION OF DUTIES
   // -------------------------------------------------------------
   describe("7. Centralized Workflow Governance & Segregation of Duties", () => {
+    beforeEach(clearPriorCompAEstimates);
     it("should SUBMIT draft costing and transition status to IN_WORKFLOW", async () => {
       // 1. Create Draft
       (getServerSession as jest.Mock).mockResolvedValue({ user: mockSuperAdmin });
@@ -688,6 +702,7 @@ describe("Commercial Lifecycle — Phase CL-3 Comprehensive Test Suite (Pre-Cont
   // SECTION 10: MULTI-LEVEL WORKFLOW (CENTRALIZED)
   // -------------------------------------------------------------
   describe("10. Multi-Level Centralized Workflow", () => {
+    beforeAll(clearPriorCompAEstimates);
     let multiLevelTemplate: any;
     let multiLevelEstimate: any;
 
@@ -861,6 +876,7 @@ describe("Commercial Lifecycle — Phase CL-3 Comprehensive Test Suite (Pre-Cont
   // SECTION 11: EXPLICIT REJECT TEST
   // -------------------------------------------------------------
   describe("11. Explicit REJECT Test", () => {
+    beforeEach(clearPriorCompAEstimates);
     it("should REJECT costing estimate and prove no snapshot is created", async () => {
       // 1. Create fresh draft
       (getServerSession as jest.Mock).mockResolvedValue({ user: mockSuperAdmin });
@@ -982,6 +998,7 @@ describe("Commercial Lifecycle — Phase CL-3 Comprehensive Test Suite (Pre-Cont
   // SECTION 13: CASE-STATE GUARDS
   // -------------------------------------------------------------
   describe("13. Case-State Guards", () => {
+    beforeEach(clearPriorCompAEstimates);
     it("should ALLOW costing creation when case lifecycle is DRAFT (allowed active state)", async () => {
       // testCaseCompA_SG has lifecycle DRAFT — this is the allowed state in current implementation
       (getServerSession as jest.Mock).mockResolvedValue({ user: mockSuperAdmin });
@@ -1036,6 +1053,7 @@ describe("Commercial Lifecycle — Phase CL-3 Comprehensive Test Suite (Pre-Cont
   // SECTION 14: T1-DEF-026 REGRESSION — NUMERIC SERIALIZATION & UI RENDERING
   // -------------------------------------------------------------
   describe("14. T1-DEF-026 Regression — Numeric Serialization & UI Rendering", () => {
+    beforeEach(clearPriorCompAEstimates);
     it("should serialize all Prisma Decimal fields as JavaScript numbers across POST, GET list, GET detail, PATCH, and workflow APIs", async () => {
       (getServerSession as jest.Mock).mockResolvedValue({ user: mockSgUserCompA });
 
