@@ -131,12 +131,12 @@ export class WorkflowEngine {
     }
   }
 
-  static async reject(instanceId: string, userId: string, remarks: string, tx?: any) {
+  static async reject(instanceId: string, userId: string, remarks: string, tx?: any, levelNumber: number = 1) {
     const db = tx || prisma;
     await db.workflowActionHistory.create({
       data: {
         instanceId,
-        levelNumber: 0,
+        levelNumber,
         action: 'REJECT',
         actedBy: userId,
         remarks: remarks || 'Workflow rejected'
@@ -149,12 +149,12 @@ export class WorkflowEngine {
     });
   }
 
-  static async returnForCorrection(instanceId: string, userId: string, remarks: string, tx?: any) {
+  static async returnForCorrection(instanceId: string, userId: string, remarks: string, tx?: any, levelNumber: number = 1) {
     const db = tx || prisma;
     await db.workflowActionHistory.create({
       data: {
         instanceId,
-        levelNumber: 0,
+        levelNumber,
         action: 'RETURN',
         actedBy: userId,
         remarks: remarks || 'Returned for correction'
@@ -223,12 +223,12 @@ export class WorkflowEngine {
       if (!remarks || remarks.trim() === '') {
         throw new Error('Remarks are mandatory for REJECT action.');
       }
-      return await WorkflowEngine.reject(instanceId, user.id, remarks, db);
+      return await WorkflowEngine.reject(instanceId, user.id, remarks, db, instance.currentLevelNumber);
     } else if (action === 'RETURN') {
       if (!remarks || remarks.trim() === '') {
         throw new Error('Remarks are mandatory for RETURN action.');
       }
-      return await WorkflowEngine.returnForCorrection(instanceId, user.id, remarks, db);
+      return await WorkflowEngine.returnForCorrection(instanceId, user.id, remarks, db, instance.currentLevelNumber);
     } else {
       throw new Error(`Invalid workflow action: ${action}`);
     }

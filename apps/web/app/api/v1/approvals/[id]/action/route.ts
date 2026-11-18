@@ -61,6 +61,24 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
           select: { conductedBy: true }
         });
         creatorId = srv?.conductedBy || null;
+      } else if (instance.moduleType === "PRE_CONTRACT_COSTING" || instance.moduleType === "COMMERCIAL_COSTING" || instance.moduleType === "COSTING") {
+        const est = await prisma.preContractCostEstimate.findUnique({
+          where: { id: instance.referenceId },
+          select: {
+            createdBy: true,
+            versions: { orderBy: { versionNumber: "desc" }, take: 1, select: { createdBy: true } }
+          }
+        });
+        creatorId = est?.versions?.[0]?.createdBy || est?.createdBy || null;
+      } else if (instance.moduleType === "COMMERCIAL_PROPOSAL" || instance.moduleType === "PRE_CONTRACT_PROPOSAL") {
+        const prop = await prisma.preContractProposal.findUnique({
+          where: { id: instance.referenceId },
+          select: {
+            createdBy: true,
+            versions: { orderBy: { versionNumber: "desc" }, take: 1, select: { createdBy: true } }
+          }
+        });
+        creatorId = prop?.versions?.[0]?.createdBy || prop?.createdBy || null;
       }
 
       // Execute action + business lifecycle sync atomically inside a single transaction

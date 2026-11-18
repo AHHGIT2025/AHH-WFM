@@ -257,6 +257,14 @@ export default function SiteSurveysPage() {
       setCreateError("Please select an eligible opportunity case.");
       return;
     }
+    if (!siteName.trim()) {
+      setCreateError("Prospective Site Name is required.");
+      return;
+    }
+    if (!siteAddress.trim()) {
+      setCreateError("Site Address is required.");
+      return;
+    }
     setSubmitting(true);
     try {
       const selectedOpp = opportunities.find((o) => o.id === selectedCaseId);
@@ -702,13 +710,14 @@ export default function SiteSurveysPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-on-surface-variant mb-1">Site Address</label>
+                <label className="block text-xs font-bold text-on-surface-variant mb-1">Site Address *</label>
                 <Input
                   type="text"
                   placeholder="Building/Street address in Lusail/Doha..."
                   value={siteAddress}
                   onChange={(e) => setSiteAddress(e.target.value)}
                   className="text-xs"
+                  required
                 />
               </div>
 

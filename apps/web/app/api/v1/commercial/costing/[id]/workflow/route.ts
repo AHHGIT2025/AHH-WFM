@@ -274,78 +274,77 @@ export async function POST(
         newWorkflowStatus = "APPROVED";
         newEstimateStatus = "APPROVED";
         newVersionStatus = "APPROVED";
-
-        // Generate SHA-256 snapshot
-        const { snapshotJson, checksum } = generateCostingSnapshot(
-          estimate,
-          currentVersion,
-          currentVersion.items
-        );
-
-        await prisma.preContractCostEstimateVersion.update({
-          where: { id: currentVersion.id },
-          data: {
-            snapshotJson,
-            checksum,
-            status: "APPROVED"
-          }
-        });
       }
     } else if (action === "REJECT") {
       newWorkflowStatus = "REJECTED";
       newEstimateStatus = "REJECTED";
       newVersionStatus = "REJECTED";
     } else if (action === "RETURN") {
-      newWorkflowStatus = "REJECTED";
+      newWorkflowStatus = "RETURNED";
       newEstimateStatus = "DRAFT";
       newVersionStatus = "DRAFT";
     }
 
-    // Update WorkflowInstance & Action History
-    await prisma.workflowInstance.update({
-      where: { id: workflowInstance.id },
-      data: {
-        status: newWorkflowStatus,
-        currentLevelNumber: newCurrentLevelNumber,
-        updatedAt: new Date()
-      }
-    });
+    const updatedEstimate = await prisma.$transaction(async (tx) => {
+      // Update WorkflowInstance & Action History
+      await tx.workflowInstance.update({
+        where: { id: workflowInstance!.id },
+        data: {
+          status: newWorkflowStatus,
+          currentLevelNumber: newCurrentLevelNumber,
+          updatedAt: new Date()
+        }
+      });
 
-    await prisma.workflowActionHistory.create({
-      data: {
-        instanceId: workflowInstance.id,
-        levelNumber: workflowInstance.currentLevelNumber,
-        action,
-        actedBy: user?.name || user?.email || user?.id || "USER",
-        remarks: remarks?.trim() || `Workflow action ${action} executed.`
-      }
-    });
+      await tx.workflowActionHistory.create({
+        data: {
+          instanceId: workflowInstance!.id,
+          levelNumber: workflowInstance!.currentLevelNumber,
+          action,
+          actedBy: user?.name || user?.email || user?.id || "USER",
+          remarks: remarks?.trim() || `Workflow action ${action} executed.`
+        }
+      });
 
-    await prisma.preContractCostEstimateVersion.update({
-      where: { id: currentVersion.id },
-      data: {
-        status: newVersionStatus,
-        updatedAt: new Date()
-      }
-    });
+      const snapshotPayload =
+        action === "APPROVE" && newWorkflowStatus === "APPROVED"
+          ? (() => {
+              const { snapshotJson, checksum } = generateCostingSnapshot(
+                estimate,
+                currentVersion,
+                currentVersion.items
+              );
+              return { snapshotJson, checksum };
+            })()
+          : {};
 
-    const updatedEstimate = await prisma.preContractCostEstimate.update({
-      where: { id: estimateId },
-      data: {
-        status: newEstimateStatus,
-        updatedAt: new Date()
-      },
-      include: {
-        case: { include: { prospectClient: true } },
-        survey: { include: { prospectiveSite: true } },
-        versions: {
-          orderBy: { versionNumber: "desc" },
-          include: {
-            items: true,
-            overrides: { orderBy: { overriddenAt: "desc" } }
+      await tx.preContractCostEstimateVersion.update({
+        where: { id: currentVersion.id },
+        data: {
+          status: newVersionStatus,
+          ...snapshotPayload,
+          updatedAt: new Date()
+        }
+      });
+
+      return await tx.preContractCostEstimate.update({
+        where: { id: estimateId },
+        data: {
+          status: newEstimateStatus,
+          updatedAt: new Date()
+        },
+        include: {
+          case: { include: { prospectClient: true } },
+          survey: { include: { prospectiveSite: true } },
+          versions: {
+            orderBy: { versionNumber: "desc" },
+            include: {
+              items: true,
+              overrides: { orderBy: { overriddenAt: "desc" } }
+            }
           }
         }
-      }
+      });
     });
 
     return NextResponse.json({

@@ -171,6 +171,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Opportunity Case ID (caseId) is required." }, { status: 400 });
     }
 
+    if (!prospectiveSiteId && (!siteName || !String(siteName).trim())) {
+      return NextResponse.json({ error: "Prospective Site Name is required." }, { status: 400 });
+    }
+    if (!prospectiveSiteId && (!siteAddress || !String(siteAddress).trim())) {
+      return NextResponse.json({ error: "Site Address is required." }, { status: 400 });
+    }
+
     const opportunityCase = await prisma.preContractCase.findUnique({
       where: { id: caseId },
       include: { prospectClient: true }

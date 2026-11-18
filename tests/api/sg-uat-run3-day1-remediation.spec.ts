@@ -339,6 +339,7 @@ describe("SG UAT Run 3 Day 1 Targeted Remediation (DEF-089, DEF-057, DEF-091, DE
       body: JSON.stringify({
         caseId: otherUserOppId,
         siteName: `Run3 Draft Survey Site ${rand}`,
+        siteAddress: "Doha Test Address 1",
         operationType: "SECURITY_GUARDING",
       }),
     });
@@ -354,6 +355,7 @@ describe("SG UAT Run 3 Day 1 Targeted Remediation (DEF-089, DEF-057, DEF-091, DE
       body: JSON.stringify({
         caseId: adminSubmitOppId,
         siteName: `Run3 Workflow Survey Site ${rand}`,
+        siteAddress: "Doha Test Address 2",
         operationType: "SECURITY_GUARDING",
       }),
     });

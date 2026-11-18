@@ -583,7 +583,7 @@ export default function ProposalDetailPage() {
               />
 
               <div className="flex flex-wrap items-center gap-3 pt-2">
-                {ver.status === "DRAFT" && (
+                {ver.status === "DRAFT" && (isAdminUser(user) || hasPermission(user, "precontract.workflow.submit") || hasPermission(user, "precontract.proposal.manage")) && (
                   <button
                     type="button"
                     onClick={() => handleExecuteWorkflow("SUBMIT")}
@@ -594,34 +594,49 @@ export default function ProposalDetailPage() {
                   </button>
                 )}
 
-                {ver.status === "IN_WORKFLOW" && (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => handleExecuteWorkflow("APPROVE")}
-                      disabled={executingWorkflow}
-                      className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg disabled:opacity-50"
-                    >
-                      Approve Proposal
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleExecuteWorkflow("RETURN")}
-                      disabled={executingWorkflow}
-                      className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-sm font-medium rounded-lg disabled:opacity-50"
-                    >
-                      Return for Correction
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleExecuteWorkflow("REJECT")}
-                      disabled={executingWorkflow}
-                      className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-sm font-medium rounded-lg disabled:opacity-50"
-                    >
-                      Reject Proposal
-                    </button>
-                  </>
-                )}
+                {ver.status === "IN_WORKFLOW" && (() => {
+                  const isProposalCreator = Boolean(
+                    user &&
+                      ((ver.createdBy && (ver.createdBy === user.id || ver.createdBy === user.email || ver.createdBy === user.name)) ||
+                        (proposal.createdBy && (proposal.createdBy === user.id || proposal.createdBy === user.email || proposal.createdBy === user.name)))
+                  );
+                  const canReviewProposal = Boolean(
+                    user &&
+                      !isProposalCreator &&
+                      (isAdminUser(user) ||
+                        hasPermission(user, "precontract.workflow.approve") ||
+                        hasPermission(user, "precontract.workflow.review"))
+                  );
+                  if (!canReviewProposal) return null;
+                  return (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => handleExecuteWorkflow("APPROVE")}
+                        disabled={executingWorkflow}
+                        className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg disabled:opacity-50"
+                      >
+                        Approve Proposal
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleExecuteWorkflow("RETURN")}
+                        disabled={executingWorkflow}
+                        className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-sm font-medium rounded-lg disabled:opacity-50"
+                      >
+                        Return for Correction
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleExecuteWorkflow("REJECT")}
+                        disabled={executingWorkflow}
+                        className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white text-sm font-medium rounded-lg disabled:opacity-50"
+                      >
+                        Reject Proposal
+                      </button>
+                    </>
+                  );
+                })()}
               </div>
             </div>
 

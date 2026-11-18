@@ -620,11 +620,13 @@ export default function CostingPage() {
                   className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-1.5 text-xs text-on-surface"
                 >
                   <option value="">-- Choose Opportunity Case --</option>
-                  {cases.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.title} ({c.operationType || "SG/FM"})
-                    </option>
-                  ))}
+                  {cases
+                    .filter((c) => c.lifecycle !== "CANCELLED" && c.lifecycle !== "SUPERSEDED" && surveys.some((s) => s.caseId === c.id && s.lifecycle === "COMPLETED"))
+                    .map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.title} ({c.operationType || "SG/FM"})
+                      </option>
+                    ))}
                 </select>
               </div>
 

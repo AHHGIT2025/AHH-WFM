@@ -499,6 +499,7 @@ describe("SG UAT Run 3 Day 2 Remediation Suite (TEST DATABASE)", () => {
         body: JSON.stringify({
           caseId: oppId,
           siteName: `QP Tower A R3 ${rand}`,
+          siteAddress: "Doha West Bay Tower A",
           operationType: "SECURITY_GUARDING",
           conductedBy: creatorId,
         }),
@@ -606,6 +607,7 @@ describe("SG UAT Run 3 Day 2 Remediation Suite (TEST DATABASE)", () => {
         body: JSON.stringify({
           caseId: oppId,
           siteName: `QP Tower A Return ${rand}`,
+          siteAddress: "Doha West Bay Tower A",
           operationType: "SECURITY_GUARDING",
           conductedBy: creatorId,
         }),
@@ -700,6 +702,7 @@ describe("SG UAT Run 3 Day 2 Remediation Suite (TEST DATABASE)", () => {
         body: JSON.stringify({
           caseId: oppId,
           siteName: `QP Tower MultiLvl ${rand}`,
+          siteAddress: "Doha West Bay Tower Multi",
           operationType: "SECURITY_GUARDING",
           conductedBy: creatorId,
         }),

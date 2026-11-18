@@ -68,13 +68,28 @@ export async function GET(request: NextRequest) {
       // Ignore if clearance tables empty
     }
 
-    // 3. Count Outbox actions taken by current user
-    const actionedCountCentral = await prisma.workflowActionHistory.count({
+    // 3. Count Outbox actions taken by current user (deduplicated by instanceId to match outbox list)
+    const centralOutboxHistories = await prisma.workflowActionHistory.findMany({
       where: {
         actedBy: user.id,
         action: { in: ["APPROVE", "REJECT", "RETURN", "MARK_NOT_APPLICABLE"] }
+      },
+      select: {
+        instanceId: true,
+        instance: {
+          select: { id: true, companyId: true }
+        }
       }
     });
+    const seenOutboxInstances = new Set<string>();
+    for (const h of centralOutboxHistories) {
+      if (!h.instance || seenOutboxInstances.has(h.instance.id)) continue;
+      if (user.companyId && !isSuperAdmin && h.instance.companyId && h.instance.companyId !== user.companyId) {
+        continue;
+      }
+      seenOutboxInstances.add(h.instance.id);
+    }
+    const actionedCountCentral = seenOutboxInstances.size;
 
     let actionedCountClearance = 0;
     try {

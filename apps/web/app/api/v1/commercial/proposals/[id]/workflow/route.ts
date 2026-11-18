@@ -165,9 +165,10 @@ export async function POST(
     }
 
     if (!workflowInstance || workflowInstance.status !== "IN_PROGRESS") {
+      const isClosed = workflowInstance && workflowInstance.status !== "IN_PROGRESS";
       return NextResponse.json(
         { error: "Invalid Action: No active workflow in progress for this proposal." },
-        { status: 400 }
+        { status: isClosed ? 409 : 400 }
       );
     }
 
@@ -205,11 +206,15 @@ export async function POST(
       );
     }
 
-    if (action === "APPROVE" && currentVersion.createdBy === user.id && user.role !== "SUPER_ADMIN") {
+    const isProposalCreator = Boolean(
+      (currentVersion.createdBy && (currentVersion.createdBy === user.id || currentVersion.createdBy === user.email || currentVersion.createdBy === user.name)) ||
+      (proposal.createdBy && (proposal.createdBy === user.id || proposal.createdBy === user.email || proposal.createdBy === user.name))
+    );
+    if (isProposalCreator && user.role !== "SUPER_ADMIN") {
       const isExplicitSelfApprover = currentLevel?.approvers.some(ap => ap.approverType === "SPECIFIC_EMPLOYEE" && ap.employeeId === user.id);
       if (!isExplicitSelfApprover) {
         return NextResponse.json(
-          { error: "Forbidden: Segregation of Duties policy prohibits proposal preparer from self-approving." },
+          { error: "Forbidden: Segregation of Duties policy prohibits proposal preparer from reviewing or approving their own proposal." },
           { status: 403 }
         );
       }
@@ -221,7 +226,7 @@ export async function POST(
     let newCurrentLevelNumber = workflowInstance.currentLevelNumber;
 
     if (action === "APPROVE") {
-      const nextLevel = levels.find((l) => l.levelNumber === workflowInstance.currentLevelNumber + 1);
+      const nextLevel = levels.find((l) => l.levelNumber === workflowInstance!.currentLevelNumber + 1);
       if (nextLevel) {
         newCurrentLevelNumber = nextLevel.levelNumber;
         newWorkflowStatus = "IN_PROGRESS";
@@ -231,65 +236,66 @@ export async function POST(
         newWorkflowStatus = "APPROVED";
         newProposalStatus = "APPROVED_INTERNAL";
         newVersionStatus = "APPROVED_INTERNAL";
-
-        const { snapshotJson, checksum } = generateProposalSnapshot(proposal, currentVersion);
-
-        await prisma.preContractProposalVersion.update({
-          where: { id: currentVersion.id },
-          data: {
-            snapshotJson,
-            snapshotChecksum: checksum,
-            status: "APPROVED_INTERNAL"
-          }
-        });
       }
     } else if (action === "REJECT") {
       newWorkflowStatus = "REJECTED";
       newProposalStatus = "REJECTED";
       newVersionStatus = "REJECTED";
     } else if (action === "RETURN") {
-      newWorkflowStatus = "REJECTED";
+      newWorkflowStatus = "RETURNED";
       newProposalStatus = "DRAFT";
       newVersionStatus = "DRAFT";
+      newCurrentLevelNumber = 1;
     }
 
-    await prisma.workflowInstance.update({
-      where: { id: workflowInstance.id },
-      data: {
-        status: newWorkflowStatus,
-        currentLevelNumber: newCurrentLevelNumber,
-        updatedAt: new Date()
-      }
-    });
+    const updatedProposal = await prisma.$transaction(async (tx) => {
+      await tx.workflowInstance.update({
+        where: { id: workflowInstance!.id },
+        data: {
+          status: newWorkflowStatus,
+          currentLevelNumber: newCurrentLevelNumber,
+          updatedAt: new Date()
+        }
+      });
 
-    await prisma.workflowActionHistory.create({
-      data: {
-        instanceId: workflowInstance.id,
-        levelNumber: workflowInstance.currentLevelNumber,
-        action,
-        actedBy: user?.name || user?.email || user?.id || "USER",
-        remarks: remarks?.trim() || `Workflow action ${action} executed.`
-      }
-    });
+      await tx.workflowActionHistory.create({
+        data: {
+          instanceId: workflowInstance!.id,
+          levelNumber: workflowInstance!.currentLevelNumber,
+          action,
+          actedBy: user?.name || user?.email || user?.id || "USER",
+          remarks: remarks?.trim() || `Workflow action ${action} executed.`
+        }
+      });
 
-    await prisma.preContractProposalVersion.update({
-      where: { id: currentVersion.id },
-      data: {
-        status: newVersionStatus,
-        updatedAt: new Date()
-      }
-    });
+      const snapshotPayload =
+        action === "APPROVE" && newWorkflowStatus === "APPROVED"
+          ? (() => {
+              const { snapshotJson, checksum } = generateProposalSnapshot(proposal, currentVersion);
+              return { snapshotJson, snapshotChecksum: checksum };
+            })()
+          : {};
 
-    const updatedProposal = await prisma.preContractProposal.update({
-      where: { id: proposalId },
-      data: {
-        status: newProposalStatus,
-        updatedAt: new Date()
-      },
-      include: {
-        case: { include: { prospectClient: true } },
-        versions: { orderBy: { versionNumber: "desc" }, take: 1 }
-      }
+      await tx.preContractProposalVersion.update({
+        where: { id: currentVersion.id },
+        data: {
+          status: newVersionStatus,
+          ...snapshotPayload,
+          updatedAt: new Date()
+        }
+      });
+
+      return await tx.preContractProposal.update({
+        where: { id: proposalId },
+        data: {
+          status: newProposalStatus,
+          updatedAt: new Date()
+        },
+        include: {
+          case: { include: { prospectClient: true } },
+          versions: { orderBy: { versionNumber: "desc" }, take: 1 }
+        }
+      });
     });
 
     return NextResponse.json({

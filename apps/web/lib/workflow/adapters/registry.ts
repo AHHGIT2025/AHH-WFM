@@ -1,6 +1,8 @@
 import { prisma } from "@ahh-wfm/database";
 import { WorkflowSourceAdapter, WorkflowBusinessSummary } from "./types";
 import { applyAddendumWorkflowTransition } from "@/lib/addendum-workflow";
+import { generateCostingSnapshot } from "@/lib/precontract-costing";
+import { generateProposalSnapshot } from "@/lib/precontract-proposal";
 
 async function resolveRequesterDisplayName(
   rawActor: string | null | undefined,
@@ -78,11 +80,16 @@ const CostingAdapter: WorkflowSourceAdapter = {
       const targetMargin = currentVersion?.targetMarginPercentage?.toNumber ? currentVersion.targetMarginPercentage.toNumber() : (currentVersion?.targetMarginPercentage ? Number(currentVersion.targetMarginPercentage) : 0);
       const totalHeadcount = currentVersion?.items?.reduce((sum: number, it: any) => sum + (it.quantity ? Number(it.quantity) : 1), 0) || 0;
 
+      const requesterName = await resolveRequesterDisplayName(
+        currentVersion?.createdBy || estimate.createdBy,
+        "Commercial Estimator"
+      );
+
       return {
         reference: estimate.estimateNumber || referenceId,
         title: `Commercial Costing #${estimate.estimateNumber || referenceId}`,
         subtitle: estimate.case?.title || "Commercial Costing",
-        requesterName: currentVersion?.createdBy || "Commercial Estimator",
+        requesterName,
         companyId: estimate.case?.companyId,
         companyName: "Al Hattab Holding",
         createdAt: currentVersion?.createdAt ? currentVersion.createdAt.toISOString() : new Date().toISOString(),
@@ -105,27 +112,57 @@ const CostingAdapter: WorkflowSourceAdapter = {
     const db = tx || prisma;
     const estimate = await db.preContractCostEstimate.findUnique({
       where: { id: referenceId },
-      include: { versions: { orderBy: { versionNumber: "desc" }, take: 1 } }
+      include: {
+        versions: {
+          orderBy: { versionNumber: "desc" },
+          take: 1,
+          include: { items: true }
+        }
+      }
     });
     if (!estimate) return;
     const currentVersion = estimate.versions[0];
 
+    let estimateStatus = estimate.status;
     let versionStatus = currentVersion?.status || "DRAFT";
+    let snapshotData: { snapshotJson?: string; checksum?: string } = {};
 
     if (action === "APPROVE" && newStatus === "APPROVED") {
+      estimateStatus = "APPROVED";
       versionStatus = "APPROVED";
+      if (currentVersion) {
+        const snap = generateCostingSnapshot(estimate, currentVersion, currentVersion.items || []);
+        snapshotData = { snapshotJson: snap.snapshotJson, checksum: snap.checksum };
+      }
+    } else if (action === "APPROVE" && newStatus === "IN_PROGRESS") {
+      estimateStatus = "IN_WORKFLOW";
+      versionStatus = "SUBMITTED";
     } else if (action === "REJECT") {
+      estimateStatus = "REJECTED";
       versionStatus = "REJECTED";
     } else if (action === "RETURN") {
+      estimateStatus = "DRAFT";
       versionStatus = "DRAFT";
     }
 
     if (currentVersion) {
       await db.preContractCostEstimateVersion.update({
         where: { id: currentVersion.id },
-        data: { status: versionStatus, updatedAt: new Date() }
+        data: {
+          status: versionStatus,
+          ...snapshotData,
+          updatedAt: new Date()
+        }
       });
     }
+
+    await db.preContractCostEstimate.update({
+      where: { id: estimate.id },
+      data: {
+        status: estimateStatus,
+        updatedAt: new Date()
+      }
+    });
   }
 };
 WorkflowAdapterRegistry.register(CostingAdapter);
@@ -148,11 +185,16 @@ const ProposalAdapter: WorkflowSourceAdapter = {
       const currentVersion = proposal.versions[0];
       const sellingPrice = currentVersion?.sellingPrice?.toNumber ? currentVersion.sellingPrice.toNumber() : (currentVersion?.sellingPrice ? Number(currentVersion.sellingPrice) : 0);
 
+      const requesterName = await resolveRequesterDisplayName(
+        currentVersion?.createdBy || proposal.createdBy,
+        "Sales Team"
+      );
+
       return {
         reference: proposal.proposalCode || referenceId,
         title: currentVersion?.title || `Commercial Proposal #${proposal.proposalCode || referenceId}`,
         subtitle: proposal.case?.title || "Commercial Proposal",
-        requesterName: proposal.createdBy || "Sales Team",
+        requesterName,
         companyId: proposal.companyId,
         companyName: "Al Hattab Holding",
         createdAt: proposal.createdAt.toISOString(),
@@ -168,14 +210,49 @@ const ProposalAdapter: WorkflowSourceAdapter = {
     }
   },
   getSourceDeepLink(referenceId: string) {
-    return `/commercial/proposals?id=${referenceId}`;
+    return `/commercial/proposals/${referenceId}`;
   },
   async onWorkflowStatusChange(referenceId, action, newStatus, remarks, tx) {
     const db = tx || prisma;
+    const proposal = await db.preContractProposal.findUnique({
+      where: { id: referenceId },
+      include: {
+        case: { include: { prospectClient: true } },
+        versions: { orderBy: { versionNumber: "desc" }, take: 1 }
+      }
+    });
+    if (!proposal) return;
+    const currentVersion = proposal.versions[0];
+
     let finalStatus = "IN_WORKFLOW";
-    if (action === "APPROVE" && newStatus === "APPROVED") finalStatus = "APPROVED";
-    else if (action === "REJECT") finalStatus = "REJECTED";
-    else if (action === "RETURN") finalStatus = "DRAFT";
+    let versionStatus = "IN_WORKFLOW";
+    let snapshotData: { snapshotJson?: string; snapshotChecksum?: string } = {};
+
+    if (action === "APPROVE" && newStatus === "APPROVED") {
+      finalStatus = "APPROVED_INTERNAL";
+      versionStatus = "APPROVED_INTERNAL";
+      if (currentVersion) {
+        const snap = generateProposalSnapshot(proposal, currentVersion);
+        snapshotData = { snapshotJson: snap.snapshotJson, snapshotChecksum: snap.checksum };
+      }
+    } else if (action === "REJECT") {
+      finalStatus = "REJECTED";
+      versionStatus = "REJECTED";
+    } else if (action === "RETURN") {
+      finalStatus = "DRAFT";
+      versionStatus = "DRAFT";
+    }
+
+    if (currentVersion) {
+      await db.preContractProposalVersion.update({
+        where: { id: currentVersion.id },
+        data: {
+          status: versionStatus,
+          ...snapshotData,
+          updatedAt: new Date()
+        }
+      });
+    }
 
     await db.preContractProposal.update({
       where: { id: referenceId },
