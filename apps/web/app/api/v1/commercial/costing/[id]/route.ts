@@ -173,8 +173,13 @@ export async function PATCH(
           overrides: {
             create: overrides.map((o: any) => ({
               fieldPath: `items[${o.elementCode}]`,
-              priorValue: "CONFIGURED",
-              newValue: `${o.unitRate || o.quantity}`,
+              priorValue: "FALLBACK_OR_CONFIGURED",
+              newValue: [
+                o.quantity !== undefined ? `qty=${o.quantity}` : null,
+                o.unitRate !== undefined ? `rate=${o.unitRate}` : null
+              ]
+                .filter(Boolean)
+                .join(", ") || "CONFIRMED",
               reason: o.reason || revisionReason || "Manual revision override",
               overriddenBy: user?.name || user?.email || user?.id || "USER"
             }))
@@ -192,7 +197,7 @@ export async function PATCH(
         },
         include: {
           case: { include: { prospectClient: true } },
-          survey: { include: { prospectiveSite: true } },
+          survey: { include: { prospectiveSite: true, responses: true } },
           versions: {
             orderBy: { versionNumber: "desc" },
             include: { items: true, overrides: { orderBy: { overriddenAt: "desc" } } }
@@ -246,8 +251,13 @@ export async function PATCH(
           data: overrides.map((o: any) => ({
             estimateVersionId: currentVersion.id,
             fieldPath: `items[${o.elementCode}]`,
-            priorValue: "CONFIGURED",
-            newValue: `${o.unitRate || o.quantity}`,
+            priorValue: "FALLBACK_OR_CONFIGURED",
+            newValue: [
+              o.quantity !== undefined ? `qty=${o.quantity}` : null,
+              o.unitRate !== undefined ? `rate=${o.unitRate}` : null
+            ]
+              .filter(Boolean)
+              .join(", ") || "CONFIRMED",
             reason: o.reason || "Manual line override",
             overriddenBy: user?.name || user?.email || user?.id || "USER"
           }))
@@ -258,7 +268,7 @@ export async function PATCH(
         where: { id: estimateId },
         include: {
           case: { include: { prospectClient: true } },
-          survey: { include: { prospectiveSite: true } },
+          survey: { include: { prospectiveSite: true, responses: true } },
           versions: {
             orderBy: { versionNumber: "desc" },
             include: { items: true, overrides: { orderBy: { overriddenAt: "desc" } } }

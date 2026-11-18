@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@ahh-wfm/database";
 import { checkApiAuth } from "../../../../../../../lib/api-guards";
 import { toClientSafeProposalDTO } from "../../../../../../../lib/precontract-proposal";
+import { assessCostingValidation } from "../../../../../../../lib/precontract-costing";
 
 export async function POST(
   req: NextRequest,
@@ -25,7 +26,20 @@ export async function POST(
       where: { id: proposalId },
       include: {
         versions: {
-          orderBy: { versionNumber: "desc" }
+          orderBy: { versionNumber: "desc" },
+          include: {
+            costEstimate: {
+              include: {
+                survey: { include: { responses: true } }
+              }
+            },
+            costEstimateVersion: {
+              include: {
+                items: true,
+                overrides: true
+              }
+            }
+          }
         }
       }
     });
@@ -44,6 +58,22 @@ export async function POST(
         { error: `Issuance Guard: Proposal version v${currentVersion.versionNumber} is in ${currentVersion.status} status. Only APPROVED_INTERNAL proposals can be issued to client.` },
         { status: 400 }
       );
+    }
+
+    if (currentVersion.costEstimateVersion) {
+      const validationSummary = assessCostingValidation(
+        currentVersion.costEstimate?.survey?.responses,
+        currentVersion.costEstimateVersion
+      );
+      if (validationSummary.blocksCommercialSubmission) {
+        return NextResponse.json(
+          {
+            error: `DEF-104 Issuance Guard: Cannot issue proposal to client because linked costing relies on unmapped survey manpower fields (${validationSummary.unmappedSurveyManpowerFields.join(", ")}) with assumed headcount = 1 and no authorized estimator override.`,
+            validationSummary
+          },
+          { status: 400 }
+        );
+      }
     }
 
     const issuedAt = new Date();

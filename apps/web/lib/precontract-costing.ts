@@ -22,6 +22,25 @@ export interface CalculateCostingParams {
   }>;
 }
 
+export interface CostingValidationSummary {
+  validationStatus:
+    | "VALIDATED_CONFIGURED"
+    | "VALIDATED_BY_OVERRIDE"
+    | "UNVALIDATED_LEGACY_APPROVED"
+    | "UNVALIDATED_FALLBACK";
+  isValidated: boolean;
+  requiresValidation: boolean;
+  blocksCommercialSubmission: boolean;
+  hasMappedSurveyHeadcount: boolean;
+  assumedFallbackHeadcount: boolean;
+  unmappedSurveyManpowerFields: string[];
+  hasActiveCostConfig: boolean;
+  usesFallbackRates: boolean;
+  fallbackRateItems: string[];
+  overrideAuditCount: number;
+  warnings: string[];
+}
+
 export interface CalculatedCostingResult {
   currency: string;
   totalDirectCost: Decimal;
@@ -32,6 +51,7 @@ export interface CalculatedCostingResult {
   sellingPrice: Decimal;
   pricingBasis: "MARGIN" | "MARKUP" | "MANUAL";
   costConfigVersionId: string | null;
+  validationSummary: CostingValidationSummary;
   items: Array<{
     elementCode: string;
     elementName: string;
@@ -44,6 +64,144 @@ export interface CalculatedCostingResult {
     calculationBasis: string;
     overrideReason?: string | null;
   }>;
+}
+
+const MAPPED_HEADCOUNT_CODES = new Set(["HEADCOUNT", "GUARDS_REQUIRED", "STAFF_COUNT"]);
+const UNMAPPED_MANPOWER_SURVEY_CODES = new Set(["ELEM_POST_COUNT", "ELEM_SHIFT_PATTERN"]);
+
+/**
+ * Evaluates whether a costing version relies on unmapped survey manpower fields,
+ * assumed fallback headcount, or hardcoded fallback rates, and whether an
+ * authorized estimator override audit exists.
+ */
+export function assessCostingValidation(
+  surveyResponses?: Array<{
+    elementCode: string;
+    numericValue?: any;
+    textValue?: string | null;
+    booleanValue?: boolean | null;
+  }> | null,
+  version?: {
+    status?: string | null;
+    costConfigVersionId?: string | null;
+    items?: Array<{
+      elementCode: string;
+      quantity?: any;
+      unitRate?: any;
+      calculationBasis?: string | null;
+    }> | null;
+    overrides?: Array<{
+      fieldPath: string;
+      overriddenBy?: string | null;
+      reason?: string | null;
+    }> | null;
+  } | null
+): CostingValidationSummary {
+  const responses = Array.isArray(surveyResponses) ? surveyResponses : [];
+  const items = Array.isArray(version?.items) ? version!.items! : [];
+  const overrides = Array.isArray(version?.overrides) ? version!.overrides! : [];
+
+  const mappedHeadcountResponse = responses.find(
+    (r) =>
+      MAPPED_HEADCOUNT_CODES.has(r.elementCode) &&
+      r.numericValue !== null &&
+      r.numericValue !== undefined &&
+      Number(r.numericValue) > 0
+  );
+  const hasMappedSurveyHeadcount = Boolean(mappedHeadcountResponse);
+
+  const unmappedSurveyManpowerFields = !hasMappedSurveyHeadcount
+    ? responses
+        .filter((r) => {
+          if (!UNMAPPED_MANPOWER_SURVEY_CODES.has(r.elementCode)) return false;
+          const hasNum = r.numericValue !== null && r.numericValue !== undefined && Number(r.numericValue) > 0;
+          const hasText = typeof r.textValue === "string" && r.textValue.trim().length > 0;
+          return hasNum || hasText;
+        })
+        .map((r) => r.elementCode)
+    : [];
+
+  const hasBasicPayOverride =
+    overrides.some((o) => o.fieldPath === "items[BASIC_PAY]") ||
+    items.some((i) => i.elementCode === "BASIC_PAY" && i.calculationBasis === "OVERRIDE");
+  const hasAllowanceOverride =
+    overrides.some((o) => o.fieldPath === "items[ALLOWANCES]") ||
+    items.some((i) => i.elementCode === "ALLOWANCES" && i.calculationBasis === "OVERRIDE");
+
+  const assumedFallbackHeadcount = !hasMappedSurveyHeadcount && !hasBasicPayOverride;
+  const hasActiveCostConfig = Boolean(version?.costConfigVersionId);
+
+  const fallbackRateItems: string[] = [];
+  const basicItem = items.find((i) => i.elementCode === "BASIC_PAY");
+  const allowanceItem = items.find((i) => i.elementCode === "ALLOWANCES");
+
+  if (
+    basicItem &&
+    basicItem.calculationBasis !== "OVERRIDE" &&
+    (basicItem.calculationBasis === "FALLBACK" || !hasActiveCostConfig)
+  ) {
+    fallbackRateItems.push("BASIC_PAY");
+  }
+  if (
+    allowanceItem &&
+    allowanceItem.calculationBasis !== "OVERRIDE" &&
+    (allowanceItem.calculationBasis === "FALLBACK" || Number(allowanceItem.unitRate) === 1000)
+  ) {
+    fallbackRateItems.push("ALLOWANCES");
+  }
+
+  const usesFallbackRates = fallbackRateItems.length > 0;
+  const hasAllFallbacksOverridden =
+    (!assumedFallbackHeadcount || hasBasicPayOverride) &&
+    (!fallbackRateItems.includes("BASIC_PAY") || hasBasicPayOverride) &&
+    (!fallbackRateItems.includes("ALLOWANCES") || hasAllowanceOverride);
+
+  const warnings: string[] = [];
+  if (unmappedSurveyManpowerFields.length > 0 && !hasBasicPayOverride) {
+    warnings.push(
+      `Survey captured unmapped manpower/shift fields (${unmappedSurveyManpowerFields.join(", ")}); costing defaulted to assumed headcount = 1.`
+    );
+  } else if (assumedFallbackHeadcount) {
+    warnings.push(
+      "Survey lacks mapped headcount drivers (HEADCOUNT / GUARDS_REQUIRED / STAFF_COUNT); costing defaulted to assumed headcount = 1."
+    );
+  }
+  if (!hasActiveCostConfig) {
+    warnings.push("No ACTIVE Cost Configuration Version was linked; hardcoded fallback baseline rates may apply.");
+  }
+  if (usesFallbackRates) {
+    warnings.push(
+      `Hardcoded fallback unit rates are active on: ${fallbackRateItems.join(", ")}.`
+    );
+  }
+
+  let validationStatus: CostingValidationSummary["validationStatus"] = "UNVALIDATED_FALLBACK";
+  if (hasMappedSurveyHeadcount && hasActiveCostConfig && !usesFallbackRates) {
+    validationStatus = "VALIDATED_CONFIGURED";
+  } else if (overrides.length > 0 && hasAllFallbacksOverridden) {
+    validationStatus = "VALIDATED_BY_OVERRIDE";
+  } else if (version?.status === "APPROVED") {
+    validationStatus = "UNVALIDATED_LEGACY_APPROVED";
+  }
+
+  const isValidated =
+    validationStatus === "VALIDATED_CONFIGURED" || validationStatus === "VALIDATED_BY_OVERRIDE";
+  const blocksCommercialSubmission = unmappedSurveyManpowerFields.length > 0 && !hasBasicPayOverride;
+
+  return {
+    validationStatus,
+    isValidated,
+    requiresValidation: !isValidated,
+    blocksCommercialSubmission,
+    hasMappedSurveyHeadcount,
+    assumedFallbackHeadcount,
+    unmappedSurveyManpowerFields,
+    hasActiveCostConfig,
+    usesFallbackRates,
+    fallbackRateItems,
+    overrideAuditCount: overrides.length,
+    warnings,
+  };
 }
 
 /**
@@ -142,22 +300,33 @@ export async function calculateCostingEstimate(
   const basicPayElement = activeVersion?.elements?.find(
     (e: any) => e.code === "BASIC_PAY" || (e.name && e.name.toLowerCase().includes("basic"))
   );
+  const hasConfiguredBasicRate = Boolean(basicPayElement && (basicPayElement as any).baseRate);
   let basicUnitRate = new Decimal(2500); // Baseline monthly rate per headcount
-  if (basicPayElement && (basicPayElement as any).baseRate) {
+  if (hasConfiguredBasicRate) {
     basicUnitRate = new Decimal((basicPayElement as any).baseRate.toString());
   }
 
   // Check for override
   const basicOverride = overrides.find((o) => o.elementCode === "BASIC_PAY");
-  let basicCalcBasis = "CONFIGURED";
+  const hasMappedHeadcount = Boolean(
+    headcountResponse && headcountResponse.numericValue && headcountResponse.numericValue > 0
+  );
+  let basicHeadcount = totalHeadcount;
+  let basicCalcBasis =
+    hasMappedHeadcount && hasConfiguredBasicRate ? "CONFIGURED" : "FALLBACK";
   let basicOverrideReason: string | null = null;
-  if (basicOverride && basicOverride.unitRate !== undefined) {
-    basicUnitRate = new Decimal(basicOverride.unitRate);
+  if (basicOverride && (basicOverride.unitRate !== undefined || basicOverride.quantity !== undefined)) {
+    if (basicOverride.unitRate !== undefined) {
+      basicUnitRate = new Decimal(basicOverride.unitRate);
+    }
+    if (basicOverride.quantity !== undefined && basicOverride.quantity > 0) {
+      basicHeadcount = basicOverride.quantity;
+    }
     basicCalcBasis = "OVERRIDE";
-    basicOverrideReason = basicOverride.reason || "Manual unit rate override";
+    basicOverrideReason = basicOverride.reason || "Manual line override";
   }
 
-  const basicQty = new Decimal(totalHeadcount);
+  const basicQty = new Decimal(basicHeadcount);
   const basicTotal = basicQty.mul(basicUnitRate);
 
   items.push({
@@ -174,16 +343,22 @@ export async function calculateCostingEstimate(
   });
 
   // Build Allowance Direct Cost Line (e.g. Housing, Transport, Food)
-  const allowanceQty = new Decimal(totalHeadcount);
+  let allowanceHeadcount = basicHeadcount;
   let allowanceUnitRate = new Decimal(1000);
   const allowanceOverride = overrides.find((o) => o.elementCode === "ALLOWANCES");
-  let allowanceCalcBasis = "CONFIGURED";
+  let allowanceCalcBasis = "FALLBACK";
   let allowanceOverrideReason: string | null = null;
-  if (allowanceOverride && allowanceOverride.unitRate !== undefined) {
-    allowanceUnitRate = new Decimal(allowanceOverride.unitRate);
+  if (allowanceOverride && (allowanceOverride.unitRate !== undefined || allowanceOverride.quantity !== undefined)) {
+    if (allowanceOverride.unitRate !== undefined) {
+      allowanceUnitRate = new Decimal(allowanceOverride.unitRate);
+    }
+    if (allowanceOverride.quantity !== undefined && allowanceOverride.quantity > 0) {
+      allowanceHeadcount = allowanceOverride.quantity;
+    }
     allowanceCalcBasis = "OVERRIDE";
     allowanceOverrideReason = allowanceOverride.reason || "Manual allowance override";
   }
+  const allowanceQty = new Decimal(allowanceHeadcount);
   const allowanceTotal = allowanceQty.mul(allowanceUnitRate);
 
   items.push({
@@ -299,6 +474,21 @@ export async function calculateCostingEstimate(
     }
   }
 
+  const validationSummary = assessCostingValidation(survey.responses, {
+    status: "DRAFT",
+    costConfigVersionId,
+    items: items.map((i) => ({
+      elementCode: i.elementCode,
+      quantity: i.quantity,
+      unitRate: i.unitRate,
+      calculationBasis: i.calculationBasis
+    })),
+    overrides: overrides.map((o) => ({
+      fieldPath: `items[${o.elementCode}]`,
+      reason: o.reason
+    }))
+  });
+
   // Round all totals to 2 decimal places using Decimal.toFixed(2)
   return {
     currency,
@@ -310,6 +500,7 @@ export async function calculateCostingEstimate(
     sellingPrice: new Decimal(sellingPrice.toFixed(2)),
     pricingBasis,
     costConfigVersionId,
+    validationSummary,
     items: items.map((i) => ({
       ...i,
       quantity: new Decimal(i.quantity.toFixed(4)),
@@ -449,7 +640,10 @@ export function serializeCostingItem<T extends Record<string, any> | null | unde
 /**
  * Normalizes a PreContractCostEstimateVersion record so all Decimal fields serialize as JSON numbers.
  */
-export function serializeCostingVersion<T extends Record<string, any> | null | undefined>(version: T): any {
+export function serializeCostingVersion<T extends Record<string, any> | null | undefined>(
+  version: T,
+  surveyResponses?: Array<any> | null
+): any {
   if (!version) return version;
   return {
     ...version,
@@ -459,6 +653,7 @@ export function serializeCostingVersion<T extends Record<string, any> | null | u
     targetMarginPercentage: toSafeNullableCostingNumber(version.targetMarginPercentage),
     targetMarkupPercentage: toSafeNullableCostingNumber(version.targetMarkupPercentage),
     sellingPrice: toSafeCostingNumber(version.sellingPrice, 0),
+    validationSummary: assessCostingValidation(surveyResponses, version),
     ...(Array.isArray(version.items)
       ? { items: version.items.map((item: any) => serializeCostingItem(item)) }
       : {})
@@ -470,10 +665,13 @@ export function serializeCostingVersion<T extends Record<string, any> | null | u
  */
 export function serializeCostingEstimate<T extends Record<string, any> | null | undefined>(estimate: T): any {
   if (!estimate) return estimate;
+  const surveyResponses = estimate?.survey?.responses ?? null;
+  const serializedVersions = Array.isArray(estimate.versions)
+    ? estimate.versions.map((ver: any) => serializeCostingVersion(ver, surveyResponses))
+    : undefined;
   return {
     ...estimate,
-    ...(Array.isArray(estimate.versions)
-      ? { versions: estimate.versions.map((ver: any) => serializeCostingVersion(ver)) }
-      : {})
+    validationSummary: serializedVersions?.[0]?.validationSummary ?? assessCostingValidation(surveyResponses, null),
+    ...(serializedVersions ? { versions: serializedVersions } : {})
   };
 }

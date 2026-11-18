@@ -4,6 +4,7 @@ import { checkApiAuth } from "@/lib/api-guards";
 import { WorkflowEngine } from "@/lib/workflow-engine";
 import { WorkflowAdapterRegistry } from "@/lib/workflow/adapters/registry";
 import { executeClearanceApprove, executeClearanceReject, executeClearanceReturn, executeClearanceMarkNotApplicable } from "@/lib/clearance-execution";
+import { assessCostingValidation } from "@/lib/precontract-costing";
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -66,10 +67,34 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
           where: { id: instance.referenceId },
           select: {
             createdBy: true,
-            versions: { orderBy: { versionNumber: "desc" }, take: 1, select: { createdBy: true } }
+            survey: { select: { responses: true } },
+            versions: {
+              orderBy: { versionNumber: "desc" },
+              take: 1,
+              select: {
+                createdBy: true,
+                status: true,
+                costConfigVersionId: true,
+                items: true,
+                overrides: true
+              }
+            }
           }
         });
         creatorId = est?.versions?.[0]?.createdBy || est?.createdBy || null;
+        if (action === "APPROVE" && est?.versions?.[0]) {
+          const validationSummary = assessCostingValidation(est.survey?.responses, est.versions[0]);
+          if (validationSummary.blocksCommercialSubmission) {
+            return NextResponse.json(
+              {
+                success: false,
+                error: `DEF-104 Costing Validation Guard: Survey captured unmapped manpower fields (${validationSummary.unmappedSurveyManpowerFields.join(", ")}) while costing defaulted to assumed headcount = 1. Authorized estimator override is required before approval.`,
+                validationSummary
+              },
+              { status: 400 }
+            );
+          }
+        }
       } else if (instance.moduleType === "COMMERCIAL_PROPOSAL" || instance.moduleType === "PRE_CONTRACT_PROPOSAL") {
         const prop = await prisma.preContractProposal.findUnique({
           where: { id: instance.referenceId },

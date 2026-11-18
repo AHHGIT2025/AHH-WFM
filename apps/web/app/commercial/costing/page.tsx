@@ -51,6 +51,21 @@ interface OverrideLog {
   overriddenAt: string;
 }
 
+interface CostingValidationSummary {
+  validationStatus: string;
+  isValidated: boolean;
+  requiresValidation: boolean;
+  blocksCommercialSubmission: boolean;
+  hasMappedSurveyHeadcount: boolean;
+  assumedFallbackHeadcount: boolean;
+  unmappedSurveyManpowerFields: string[];
+  hasActiveCostConfig: boolean;
+  usesFallbackRates: boolean;
+  fallbackRateItems: string[];
+  overrideAuditCount: number;
+  warnings: string[];
+}
+
 interface CostingVersion {
   id: string;
   versionNumber: number;
@@ -69,6 +84,7 @@ interface CostingVersion {
   createdAt: string;
   items: CostingItem[];
   overrides?: OverrideLog[];
+  validationSummary?: CostingValidationSummary;
 }
 
 interface CostingEstimate {
@@ -86,6 +102,7 @@ interface CostingEstimate {
   case: PreContractCase;
   survey: PreContractSurvey;
   versions: CostingVersion[];
+  validationSummary?: CostingValidationSummary;
 }
 
 function toSafeNumber(val: unknown, fallback: number = 0): number {
@@ -147,6 +164,7 @@ export default function CostingPage() {
   // Override Modal State
   const [showOverrideModal, setShowOverrideModal] = useState<boolean>(false);
   const [overrideElementCode, setOverrideElementCode] = useState<string>("BASIC_PAY");
+  const [overrideQuantity, setOverrideQuantity] = useState<string>("");
   const [overrideUnitRate, setOverrideUnitRate] = useState<string>("3000");
   const [overrideReason, setOverrideReason] = useState<string>("");
   const [overrideExecuting, setOverrideExecuting] = useState<boolean>(false);
@@ -336,6 +354,7 @@ export default function CostingPage() {
     setOverrideError(null);
     setOverrideExecuting(true);
     try {
+      const parsedQty = overrideQuantity.trim() ? toSafeNumber(overrideQuantity, 0) : undefined;
       const res = await fetch(`/api/v1/commercial/costing/${selectedEstimate.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -343,6 +362,7 @@ export default function CostingPage() {
           overrides: [
             {
               elementCode: overrideElementCode,
+              ...(parsedQty && parsedQty > 0 ? { quantity: parsedQty } : {}),
               unitRate: toSafeNumber(overrideUnitRate, 3000),
               reason: overrideReason || "Manual rate calibration override"
             }
@@ -793,6 +813,34 @@ export default function CostingPage() {
                 );
               })()}
 
+              {/* DEF-104 Costing Validation Warning Banner */}
+              {(() => {
+                const vSummary = selectedEstimate.versions?.[0]?.validationSummary ?? selectedEstimate.validationSummary;
+                if (!vSummary || !vSummary.requiresValidation) return null;
+                return (
+                  <div className="p-3.5 rounded-lg border border-status-warning bg-status-warning/10 space-y-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 text-xs font-bold text-status-warning">
+                        <span className="material-symbols-outlined text-base">warning</span>
+                        <span>
+                          {vSummary.validationStatus === "UNVALIDATED_LEGACY_APPROVED"
+                            ? "Legacy Approved Costing — Unvalidated Fallback Drivers"
+                            : "DEF-104 Costing Validation Warning"}
+                        </span>
+                      </div>
+                      <Badge variant={vSummary.blocksCommercialSubmission ? "error" : "warning"}>
+                        {vSummary.blocksCommercialSubmission ? "SUBMISSION BLOCKED" : vSummary.validationStatus}
+                      </Badge>
+                    </div>
+                    <ul className="list-disc list-inside text-xs text-on-surface-variant space-y-0.5">
+                      {(vSummary.warnings || []).map((w: string, i: number) => (
+                        <li key={i}>{w}</li>
+                      ))}
+                    </ul>
+                  </div>
+                );
+              })()}
+
               {/* Cost Line Items Breakdown */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
@@ -851,7 +899,15 @@ export default function CostingPage() {
                               {formatCostingCurrency(item.totalAmount, selectedEstimate.versions?.[0]?.currency)}
                             </td>
                             <td className="py-2 px-3">
-                              <Badge variant={item.calculationBasis === "OVERRIDE" ? "warning" : "secondary"}>
+                              <Badge
+                                variant={
+                                  item.calculationBasis === "OVERRIDE"
+                                    ? "warning"
+                                    : item.calculationBasis === "FALLBACK"
+                                      ? "error"
+                                      : "secondary"
+                                }
+                              >
                                 {item.calculationBasis}
                               </Badge>
                             </td>
@@ -1043,6 +1099,20 @@ export default function CostingPage() {
                 <option value="BASIC_PAY">BASIC_PAY (Basic Pay / Manpower Wage)</option>
                 <option value="ALLOWANCES">ALLOWANCES (Fixed Employment Allowances)</option>
               </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-on-surface-variant mb-1">
+                Override Quantity / Headcount (Optional)
+              </label>
+              <Input
+                type="number"
+                value={overrideQuantity}
+                disabled={overrideExecuting}
+                placeholder="Leave blank to keep current quantity"
+                onChange={(e) => setOverrideQuantity(e.target.value)}
+                className="text-xs"
+              />
             </div>
 
             <div>

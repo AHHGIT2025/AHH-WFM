@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@ahh-wfm/database";
 import { checkApiAuth } from "@/lib/api-guards";
 import { hasPermission, isAdminUser } from "@/lib/permissions";
-import { generateCostingSnapshot, serializeCostingEstimate } from "@/lib/precontract-costing";
+import { assessCostingValidation, generateCostingSnapshot, serializeCostingEstimate } from "@/lib/precontract-costing";
 
 export async function POST(
   request: Request,
@@ -42,10 +42,14 @@ export async function POST(
     const estimate = await prisma.preContractCostEstimate.findUnique({
       where: { id: estimateId },
       include: {
+        survey: { include: { responses: true } },
         versions: {
           orderBy: { versionNumber: "desc" },
           take: 1,
-          include: { items: true }
+          include: {
+            items: true,
+            overrides: true
+          }
         }
       }
     });
@@ -75,6 +79,19 @@ export async function POST(
     const currentVersion = estimate.versions[0];
     if (!currentVersion) {
       return NextResponse.json({ error: "No version found for this costing estimate." }, { status: 404 });
+    }
+
+    if (action === "SUBMIT" || action === "APPROVE") {
+      const validationSummary = assessCostingValidation(estimate.survey?.responses, currentVersion);
+      if (validationSummary.blocksCommercialSubmission) {
+        return NextResponse.json(
+          {
+            error: `DEF-104 Costing Validation Guard: Survey captured unmapped manpower fields (${validationSummary.unmappedSurveyManpowerFields.join(", ")}) while costing defaulted to assumed headcount = 1. Authorized estimator override is required before ${action.toLowerCase()}.`,
+            validationSummary
+          },
+          { status: 400 }
+        );
+      }
     }
 
     // 4. Resolve Central Workflow Instance

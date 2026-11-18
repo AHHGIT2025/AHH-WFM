@@ -85,7 +85,8 @@ export async function GET(request: Request) {
         },
         survey: {
           include: {
-            prospectiveSite: true
+            prospectiveSite: true,
+            responses: true
           }
         },
         versions: {
@@ -281,7 +282,7 @@ export async function POST(request: Request) {
       },
       include: {
         case: { include: { prospectClient: true } },
-        survey: { include: { prospectiveSite: true } },
+        survey: { include: { prospectiveSite: true, responses: true } },
         versions: { include: { items: true, overrides: true } }
       }
     });
