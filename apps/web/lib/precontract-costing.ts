@@ -186,7 +186,7 @@ export function assessCostingValidation(
   if (
     allowanceItem &&
     !hasAllowanceRateOverride &&
-    (allowanceItem.calculationBasis === "FALLBACK" || Number(allowanceItem.unitRate) === 1000)
+    (allowanceItem.calculationBasis === "FALLBACK" || (!hasActiveCostConfig && Number(allowanceItem.unitRate) === 1000))
   ) {
     fallbackRateItems.push("ALLOWANCES");
   }
@@ -233,10 +233,14 @@ export function assessCostingValidation(
 
   const isValidated =
     validationStatus === "VALIDATED_CONFIGURED" || validationStatus === "VALIDATED_BY_OVERRIDE";
+  const ratesValidated =
+    (!usesFallbackRates && hasActiveCostConfig) ||
+    (hasBasicPayRateOverride && hasAllowanceOverride);
   const blocksCommercialSubmission =
-    (unmappedPostCount && !hasBasicPayQuantityOverride) ||
+    !hasMappedSurveyHeadcount ||
+    unmappedPostCount ||
     unmappedShiftPattern ||
-    ((unmappedPostCount || unmappedShiftPattern) && fallbackRateItems.length > 0);
+    !ratesValidated;
 
   return {
     validationStatus,
@@ -303,27 +307,109 @@ export async function calculateCostingEstimate(
     throw new Error(`Survey ${surveyId} does not belong to Case ${caseId}.`);
   }
 
-  // 3. Resolve Effective PC-1 Cost Configuration Version
-  const activeVersion = await prisma.costConfigurationVersion.findFirst({
-    where: {
-      status: "ACTIVE",
-      effectiveFrom: { lte: new Date(effectiveDate) },
-      OR: [
-        { effectiveTo: null },
-        { effectiveTo: { gt: new Date(effectiveDate) } }
-      ]
-    },
-    include: {
-      categories: true,
-      elements: true,
-      rates: true,
-      formulas: true,
-      driverMappings: true
-    },
-    orderBy: { effectiveFrom: "desc" }
-  });
+  // 3. Resolve Effective PC-2A Cost Rate Card Version (authoritative), falling back to legacy CostConfigurationVersion only if PC-2A has none
+  const effDate = new Date(effectiveDate);
+  const effTime = effDate.getTime();
+  const targetCompanyId = params.companyId ?? opCase.companyId ?? null;
+  const targetOperationType = params.operationType ?? opCase.operationType ?? null;
 
-  const costConfigVersionId = activeVersion?.id || null;
+  let pc2aRateCardVersion: any = null;
+  let hasAnyPc2aRateCardForScope = false;
+  if ((prisma as any).costRateCardMaster?.findMany) {
+    const rateCardMasters = await (prisma as any).costRateCardMaster.findMany({
+      where: {
+        OR: [
+          ...(targetCompanyId ? [{ companyId: targetCompanyId }] : []),
+          { companyId: null }
+        ]
+      },
+      include: {
+        versions: {
+          where: { status: "ACTIVE" }
+        }
+      }
+    });
+    hasAnyPc2aRateCardForScope = Array.isArray(rateCardMasters) && rateCardMasters.length > 0;
+
+    const eligiblePc2a: Array<{ version: any; master: any; specificity: number }> = [];
+    for (const master of rateCardMasters || []) {
+      if (master.companyId && targetCompanyId && master.companyId !== targetCompanyId) {
+        continue;
+      }
+      for (const ver of master.versions || []) {
+        // Verify Maker/Checker approval on ACTIVE version
+        if (!ver.approvedBy || ver.approvedBy === ver.createdBy) {
+          continue;
+        }
+        const from = new Date(ver.effectiveFrom).getTime();
+        const to = ver.effectiveTo ? new Date(ver.effectiveTo).getTime() : Infinity;
+        if (from <= effTime && effTime < to) {
+          eligiblePc2a.push({
+            version: ver,
+            master,
+            specificity: master.companyId ? 2 : 1
+          });
+        }
+      }
+    }
+
+    if (eligiblePc2a.length > 0) {
+      const maxSpec = Math.max(...eligiblePc2a.map((c) => c.specificity));
+      const topMatches = eligiblePc2a.filter((c) => c.specificity === maxSpec);
+      if (topMatches.length > 1) {
+        throw new Error(
+          `Ambiguous PC-2A Cost Configuration: ${topMatches.length} ACTIVE CostRateCardVersion records match the same company scope and effective date.`
+        );
+      }
+      pc2aRateCardVersion = topMatches[0];
+    }
+  }
+
+  // Verify PC-2A CostElementMaster operationType compatibility when element masters exist
+  if (pc2aRateCardVersion && targetOperationType && (prisma as any).costElementMaster?.findMany) {
+    const elemMasters = await (prisma as any).costElementMaster.findMany({
+      where: {
+        code: { in: ["BASIC_PAY", "ALLOWANCES"] },
+        OR: [
+          ...(targetCompanyId ? [{ companyId: targetCompanyId }] : []),
+          { companyId: null }
+        ]
+      }
+    });
+    for (const em of elemMasters || []) {
+      if (em.operationType && em.operationType !== targetOperationType) {
+        pc2aRateCardVersion = null;
+        break;
+      }
+    }
+  }
+
+  // Legacy CostConfigurationVersion only consulted when no PC-2A rate card master exists for the scope
+  const activeVersion =
+    pc2aRateCardVersion || hasAnyPc2aRateCardForScope
+      ? null
+      : await prisma.costConfigurationVersion.findFirst({
+        where: {
+          status: "ACTIVE",
+          ...(targetCompanyId ? { OR: [{ companyId: targetCompanyId }, { companyId: null }] } : {}),
+          ...(targetOperationType ? { OR: [{ operationType: targetOperationType }, { operationType: null }] } : {}),
+          effectiveFrom: { lte: effDate },
+          OR: [
+            { effectiveTo: null },
+            { effectiveTo: { gt: effDate } }
+          ]
+        },
+        include: {
+          categories: true,
+          elements: true,
+          rates: true,
+          formulas: true,
+          driverMappings: true
+        },
+        orderBy: { effectiveFrom: "desc" }
+      });
+
+  const costConfigVersionId = pc2aRateCardVersion?.version?.id || activeVersion?.id || null;
 
   // 4. Build Cost Line Items
   const items: CalculatedCostingResult["items"] = [];
@@ -337,9 +423,11 @@ export async function calculateCostingEstimate(
     totalHeadcount = headcountResponse.numericValue;
   }
 
-  // Determine currency from rates or default QAR
+  // Determine currency from PC-2A rate card, legacy rates, or default QAR
   let currency = "QAR";
-  if (activeVersion?.rates && activeVersion.rates.length > 0) {
+  if (pc2aRateCardVersion?.master?.currency) {
+    currency = pc2aRateCardVersion.master.currency;
+  } else if (activeVersion?.rates && activeVersion.rates.length > 0) {
     const rc = activeVersion.rates[0];
     if (rc && rc.currency) {
       currency = rc.currency;
@@ -347,13 +435,30 @@ export async function calculateCostingEstimate(
   }
 
   // Build Manpower Direct Cost Line
+  const pc2aRatesMap = (pc2aRateCardVersion?.version?.ratesJson && typeof pc2aRateCardVersion.version.ratesJson === "object")
+    ? (pc2aRateCardVersion.version.ratesJson as Record<string, any>)
+    : null;
+  const pc2aBasicRate =
+    pc2aRatesMap && Number.isFinite(Number(pc2aRatesMap["BASIC_PAY"])) && Number(pc2aRatesMap["BASIC_PAY"]) > 0
+      ? Number(pc2aRatesMap["BASIC_PAY"])
+      : null;
+
   const basicPayElement = activeVersion?.elements?.find(
     (e: any) => e.code === "BASIC_PAY" || (e.name && e.name.toLowerCase().includes("basic"))
   );
-  const hasConfiguredBasicRate = Boolean(basicPayElement && (basicPayElement as any).baseRate);
+  const basicPayRateRow = activeVersion?.rates?.find((r: any) => r.elementCode === "BASIC_PAY");
+  const configuredBasicRate =
+    pc2aBasicRate !== null
+      ? pc2aBasicRate
+      : basicPayRateRow && Number.isFinite(Number(basicPayRateRow.rateValue)) && Number(basicPayRateRow.rateValue) > 0
+        ? Number(basicPayRateRow.rateValue)
+        : (basicPayElement as any)?.baseRate && Number((basicPayElement as any).baseRate) > 0
+          ? Number((basicPayElement as any).baseRate)
+          : null;
+  const hasConfiguredBasicRate = configuredBasicRate !== null;
   let basicUnitRate = new Decimal(2500); // Baseline monthly rate per headcount
   if (hasConfiguredBasicRate) {
-    basicUnitRate = new Decimal((basicPayElement as any).baseRate.toString());
+    basicUnitRate = new Decimal(configuredBasicRate!.toString());
   }
 
   // Check for override
@@ -394,9 +499,25 @@ export async function calculateCostingEstimate(
 
   // Build Allowance Direct Cost Line (e.g. Housing, Transport, Food)
   let allowanceHeadcount = basicHeadcount;
+  const pc2aAllowanceRate =
+    pc2aRatesMap && pc2aRatesMap["ALLOWANCES"] !== undefined && Number.isFinite(Number(pc2aRatesMap["ALLOWANCES"])) && Number(pc2aRatesMap["ALLOWANCES"]) >= 0
+      ? Number(pc2aRatesMap["ALLOWANCES"])
+      : null;
+  const allowanceRateRow = activeVersion?.rates?.find((r: any) => r.elementCode === "ALLOWANCES");
+  const configuredAllowanceRate =
+    pc2aAllowanceRate !== null
+      ? pc2aAllowanceRate
+      : allowanceRateRow && Number.isFinite(Number(allowanceRateRow.rateValue)) && Number(allowanceRateRow.rateValue) >= 0
+        ? Number(allowanceRateRow.rateValue)
+        : null;
+  const hasConfiguredAllowanceRate = configuredAllowanceRate !== null;
   let allowanceUnitRate = new Decimal(1000);
+  if (hasConfiguredAllowanceRate) {
+    allowanceUnitRate = new Decimal(configuredAllowanceRate!.toString());
+  }
   const allowanceOverride = overrides.find((o) => o.elementCode === "ALLOWANCES");
-  let allowanceCalcBasis = "FALLBACK";
+  let allowanceCalcBasis =
+    hasMappedHeadcount && hasConfiguredAllowanceRate ? "CONFIGURED" : "FALLBACK";
   let allowanceOverrideReason: string | null = null;
   if (allowanceOverride && (allowanceOverride.unitRate !== undefined || allowanceOverride.quantity !== undefined)) {
     if (allowanceOverride.unitRate !== undefined) {

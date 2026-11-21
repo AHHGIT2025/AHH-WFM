@@ -309,13 +309,19 @@ export default function SiteSurveysPage() {
     setSavingWorkspace(true);
     setWorkspaceFeedback(null);
     try {
-      const formattedResponses = Object.entries(editingResponses).map(([elementCode, val]) => {
-        const isNum = typeof val === "number" || (!isNaN(val as any) && val !== "" && typeof val === "string" && !isNaN(Number(val)));
-        return {
-          elementCode,
-          ...(typeof val === "boolean" ? { booleanValue: val } : isNum ? { numericValue: Number(val) } : { textValue: String(val) })
-        };
-      });
+      const formattedResponses = Object.entries(editingResponses)
+        .filter(([, val]) => val !== "" && val !== null && val !== undefined)
+        .map(([elementCode, val]) => {
+          if (elementCode === "RELIEVER_REQUIRED") {
+            const boolVal = val === true || val === "true";
+            return { elementCode, booleanValue: boolVal };
+          }
+          const isNum = typeof val === "number" || (!isNaN(val as any) && val !== "" && typeof val === "string" && !isNaN(Number(val)));
+          return {
+            elementCode,
+            ...(typeof val === "boolean" ? { booleanValue: val } : isNum ? { numericValue: Number(val) } : { textValue: String(val) })
+          };
+        });
 
       const res = await fetch(`/api/v1/commercial/surveys/${selectedSurvey.id}`, {
         method: "PATCH",
@@ -955,6 +961,57 @@ export default function SiteSurveysPage() {
                           className="text-xs"
                           placeholder="e.g., 2 shifts x 12 hours"
                         />
+                      </div>
+
+                      <div>
+                        <label className="block font-bold text-on-surface-variant mb-1">Approved Guard Headcount (HEADCOUNT)</label>
+                        <Input
+                          type="number"
+                          min={0}
+                          step={1}
+                          value={editingResponses["HEADCOUNT"] || ""}
+                          onChange={(e) => setEditingResponses({ ...editingResponses, HEADCOUNT: e.target.value })}
+                          disabled={selectedSurvey.lifecycle === "COMPLETED" || selectedSurvey.lifecycle === "CANCELLED"}
+                          className="text-xs"
+                          placeholder="Explicit Operations-approved guard headcount (e.g. 12)"
+                        />
+                        <p className="text-[10px] text-on-surface-variant mt-1">
+                          Required for DEF-104 commercial costing validation. Must be explicitly approved by Operations (1 post does not equal 1 guard).
+                        </p>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block font-bold text-on-surface-variant mb-1">Reliever Coverage Required (RELIEVER_REQUIRED)</label>
+                          <select
+                            value={
+                              editingResponses["RELIEVER_REQUIRED"] === true || editingResponses["RELIEVER_REQUIRED"] === "true"
+                                ? "true"
+                                : editingResponses["RELIEVER_REQUIRED"] === false || editingResponses["RELIEVER_REQUIRED"] === "false"
+                                  ? "false"
+                                  : ""
+                            }
+                            onChange={(e) => setEditingResponses({ ...editingResponses, RELIEVER_REQUIRED: e.target.value })}
+                            disabled={selectedSurvey.lifecycle === "COMPLETED" || selectedSurvey.lifecycle === "CANCELLED"}
+                            className="w-full bg-surface-container-lowest border border-outline-variant text-on-surface rounded-lg p-2 text-xs"
+                          >
+                            <option value="">-- Select Reliever Decision --</option>
+                            <option value="true">Yes (Reliever Required)</option>
+                            <option value="false">No (No Reliever Required)</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block font-bold text-on-surface-variant mb-1">Coverage Type (COVERAGE_TYPE)</label>
+                          <Input
+                            type="text"
+                            value={editingResponses["COVERAGE_TYPE"] || ""}
+                            onChange={(e) => setEditingResponses({ ...editingResponses, COVERAGE_TYPE: e.target.value })}
+                            disabled={selectedSurvey.lifecycle === "COMPLETED" || selectedSurvey.lifecycle === "CANCELLED"}
+                            className="text-xs"
+                            placeholder="e.g., 24/7, 12H_DAY, STANDARD"
+                          />
+                        </div>
                       </div>
 
                       <div>
