@@ -172,7 +172,10 @@ export function assessCostingValidation(
   const hasAllowanceOverride = hasAllowanceQuantityOverride || hasAllowanceRateOverride;
 
   const assumedFallbackHeadcount = !hasMappedSurveyHeadcount && !hasBasicPayQuantityOverride;
-  const hasActiveCostConfig = Boolean(version?.costConfigVersionId);
+  const hasConfiguredRateCardItems =
+    basicItem?.calculationBasis === "CONFIGURED" &&
+    allowanceItem?.calculationBasis === "CONFIGURED";
+  const hasActiveCostConfig = Boolean(version?.costConfigVersionId) || hasConfiguredRateCardItems;
 
   const fallbackRateItems: string[] = [];
 

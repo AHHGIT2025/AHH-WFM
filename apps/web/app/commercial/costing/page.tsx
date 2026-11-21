@@ -205,7 +205,22 @@ export default function CostingPage() {
       if (!res.ok) throw new Error("Failed to fetch commercial costing estimates.");
 
       const data = await res.json();
-      setEstimates(data.estimates || []);
+      const loadedEstimates: CostingEstimate[] = data.estimates || [];
+      setEstimates(loadedEstimates);
+
+      if (typeof window !== "undefined") {
+        const deepLinkId = new URLSearchParams(window.location.search).get("id");
+        if (deepLinkId && !(window as any).__ahhCostingDeepLinkHandled?.[deepLinkId]) {
+          const target = loadedEstimates.find((e) => e.id === deepLinkId);
+          if (target) {
+            (window as any).__ahhCostingDeepLinkHandled = {
+              ...((window as any).__ahhCostingDeepLinkHandled || {}),
+              [deepLinkId]: true,
+            };
+            handleOpenDetailModal(target);
+          }
+        }
+      }
     } catch (err: any) {
       setError(err.message || "Error loading commercial costing estimates.");
     } finally {

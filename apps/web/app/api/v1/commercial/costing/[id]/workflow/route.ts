@@ -109,27 +109,28 @@ export async function POST(
       }
 
       // Mandatory Centralized Workflow Resolution from Settings > Workflow Setup
-      const template = await prisma.workflowTemplate.findFirst({
-        where: {
-          isActive: true,
-          OR: [
-            { moduleType: "PRE_CONTRACT_COSTING" },
-            { moduleType: "COMMERCIAL_COSTING" },
-            { moduleType: "PRE_CONTRACT_CASE" }
-          ],
-          levels: { some: {} }
-        },
-        include: {
-          levels: {
-            orderBy: { levelNumber: "asc" },
-            include: { approvers: true }
-          }
-        },
-        orderBy: [
-          { isDefault: "desc" },
-          { createdAt: "desc" }
-        ]
-      });
+      // Deterministic priority: PRE_CONTRACT_COSTING -> COMMERCIAL_COSTING (never PRE_CONTRACT_CASE)
+      const templateInclude = {
+        levels: {
+          orderBy: { levelNumber: "asc" as const },
+          include: { approvers: true }
+        }
+      };
+      const templateOrderBy = [
+        { isDefault: "desc" as const },
+        { createdAt: "desc" as const }
+      ];
+      const template =
+        (await prisma.workflowTemplate.findFirst({
+          where: { isActive: true, moduleType: "PRE_CONTRACT_COSTING", levels: { some: {} } },
+          include: templateInclude,
+          orderBy: templateOrderBy
+        })) ||
+        (await prisma.workflowTemplate.findFirst({
+          where: { isActive: true, moduleType: "COMMERCIAL_COSTING", levels: { some: {} } },
+          include: templateInclude,
+          orderBy: templateOrderBy
+        }));
 
       if (!template || !template.levels || template.levels.length === 0) {
         return NextResponse.json(

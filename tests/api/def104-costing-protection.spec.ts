@@ -397,7 +397,8 @@ describe("DEF-104 Commercial Costing Protection (TEST DATABASE)", () => {
     );
     expect(crossCompPatch.status).toBe(403);
 
-    // 3 & 8: Authorized override of BASIC_PAY + ALLOWANCES persists audit logs & allows SUBMIT -> APPROVE
+    // 3 & 8: Authorized override of BASIC_PAY + ALLOWANCES persists audit logs;
+    // under OPP6, unmapped survey headcount STILL blocks commercial submission until Operations maps headcount
     (getServerSession as jest.Mock).mockResolvedValue({ user: makerSession(true) });
     const validPatch = await patchCostingDetailRoute(
       new Request(`http://localhost:3100/api/v1/commercial/costing/${postCountEstId}`, {
@@ -415,7 +416,7 @@ describe("DEF-104 Commercial Costing Protection (TEST DATABASE)", () => {
     expect(validPatch.status).toBe(200);
     const patched = await validPatch.json();
     expect(patched.estimate.validationSummary.validationStatus).toBe("VALIDATED_BY_OVERRIDE");
-    expect(patched.estimate.validationSummary.blocksCommercialSubmission).toBe(false);
+    expect(patched.estimate.validationSummary.blocksCommercialSubmission).toBe(true);
     expect(patched.estimate.versions[0].overrides.length).toBe(2);
 
     const subRes = await costingWorkflowRoute(
@@ -426,19 +427,7 @@ describe("DEF-104 Commercial Costing Protection (TEST DATABASE)", () => {
       }),
       { params: { id: postCountEstId } }
     );
-    expect(subRes.status).toBe(200);
-    const wfId = (await subRes.json()).workflow.instanceId;
-
-    (getServerSession as jest.Mock).mockResolvedValue({ user: checkerSession() });
-    const appRes = await executeApprovalActionRoute(
-      new NextRequest(`http://localhost:3100/api/v1/approvals/${wfId}/action`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "APPROVE", remarks: "Approved after DEF-104 override" }),
-      }),
-      { params: { id: wfId } }
-    );
-    expect(appRes.status).toBe(200);
+    expect(subRes.status).toBe(400);
   });
 
   it("7. Approved snapshots remain immutable and new revisions do NOT inherit prior validation", async () => {

@@ -88,7 +88,7 @@ export async function POST(
       }
 
       // Mandatory Centralized Workflow Resolution from Settings > Workflow Setup
-      // Deterministic compatibility priority: 1. SITE_SURVEY (canonical) -> 2. PRE_CONTRACT_SURVEY (legacy) -> 3. PRE_CONTRACT_CASE (temporary UAT workaround compatibility)
+      // Only SITE_SURVEY or compatible legacy PRE_CONTRACT_SURVEY allowed (never PRE_CONTRACT_CASE)
       const templateInclude = {
         levels: {
           orderBy: { levelNumber: "asc" as const },
@@ -107,11 +107,6 @@ export async function POST(
         })) ||
         (await prisma.workflowTemplate.findFirst({
           where: { isActive: true, moduleType: "PRE_CONTRACT_SURVEY", levels: { some: {} } },
-          include: templateInclude,
-          orderBy: templateOrderBy
-        })) ||
-        (await prisma.workflowTemplate.findFirst({
-          where: { isActive: true, moduleType: "PRE_CONTRACT_CASE", levels: { some: {} } },
           include: templateInclude,
           orderBy: templateOrderBy
         }));

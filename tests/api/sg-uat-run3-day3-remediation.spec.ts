@@ -30,6 +30,7 @@ describe("SG UAT Run 3 Day 3 Remediation Suite (TEST DATABASE)", () => {
   let proposalTplId: string;
   let prevCostingDefaults: string[] = [];
   let prevProposalDefaults: string[] = [];
+  let rateCardMasterId = "";
 
   const makerId = `emp-r3d3-mk-${rand}`;
   const checker1Id = `emp-r3d3-c1-${rand}`;
@@ -198,9 +199,37 @@ describe("SG UAT Run 3 Day 3 Remediation Suite (TEST DATABASE)", () => {
         operationType: "SECURITY_GUARDING",
         lifecycle: "COMPLETED",
         conductedBy: makerId,
+        responses: {
+          create: [
+            { elementCode: "HEADCOUNT", numericValue: 4 },
+            { elementCode: "RELIEVER_REQUIRED", booleanValue: false },
+            { elementCode: "COVERAGE_TYPE", textValue: "12H_DAY" },
+          ],
+        },
       },
     });
     surveyId = srv.id;
+
+    const rc = await (prisma as any).costRateCardMaster.create({
+      data: {
+        code: `RC-R3D3-${rand}`,
+        name: `Run3 Day3 Synthetic Rate Card ${rand}`,
+        currency: "QAR",
+        companyId,
+        createdBy: makerId,
+        versions: {
+          create: {
+            versionNumber: 1,
+            status: "ACTIVE",
+            effectiveFrom: new Date(Date.now() - 86400000),
+            ratesJson: { BASIC_PAY: 2400, ALLOWANCES: 900 },
+            createdBy: makerId,
+            approvedBy: checker1Id,
+          },
+        },
+      },
+    });
+    rateCardMasterId = rc.id;
   });
 
   afterAll(async () => {
@@ -216,6 +245,10 @@ describe("SG UAT Run 3 Day 3 Remediation Suite (TEST DATABASE)", () => {
         await prisma.workflowInstance.deleteMany({ where: { referenceId: estimateId } });
         await prisma.preContractCostEstimate.deleteMany({ where: { id: estimateId } });
       }
+      if (rateCardMasterId) {
+        await (prisma as any).costRateCardMaster.deleteMany({ where: { id: rateCardMasterId } });
+      }
+      await prisma.surveyResponse.deleteMany({ where: { surveyId } });
       await prisma.preContractSurvey.deleteMany({ where: { id: surveyId } });
       if (prospectiveSiteId) {
         await prisma.preContractProspectiveSite.deleteMany({ where: { id: prospectiveSiteId } });

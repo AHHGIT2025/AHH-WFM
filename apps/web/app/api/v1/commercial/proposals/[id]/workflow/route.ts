@@ -69,24 +69,24 @@ export async function POST(
         return NextResponse.json({ error: "Invalid Action: Approved or issued proposals cannot be resubmitted. Create a new revision." }, { status: 400 });
       }
 
-      const template = await prisma.workflowTemplate.findFirst({
-        where: {
-          isActive: true,
-          OR: [
-            { moduleType: "PRE_CONTRACT_PROPOSAL" },
-            { moduleType: "PRE_CONTRACT_COSTING" },
-            { moduleType: "PRE_CONTRACT_CASE" }
-          ],
-          levels: { some: {} }
-        },
-        include: {
-          levels: {
-            orderBy: { levelNumber: "asc" },
-            include: { approvers: true }
-          }
-        },
-        orderBy: [{ isDefault: "desc" }, { createdAt: "desc" }]
-      });
+      const templateInclude = {
+        levels: {
+          orderBy: { levelNumber: "asc" as const },
+          include: { approvers: true }
+        }
+      };
+      const templateOrderBy = [{ isDefault: "desc" as const }, { createdAt: "desc" as const }];
+      const template =
+        (await prisma.workflowTemplate.findFirst({
+          where: { isActive: true, moduleType: "PRE_CONTRACT_PROPOSAL", levels: { some: {} } },
+          include: templateInclude,
+          orderBy: templateOrderBy
+        })) ||
+        (await prisma.workflowTemplate.findFirst({
+          where: { isActive: true, moduleType: "COMMERCIAL_PROPOSAL", levels: { some: {} } },
+          include: templateInclude,
+          orderBy: templateOrderBy
+        }));
 
       if (!template || !template.levels || template.levels.length === 0) {
         return NextResponse.json(

@@ -365,38 +365,68 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Failed to resolve active survey template version." }, { status: 500 });
     }
 
-    const newSurvey = await prisma.preContractSurvey.create({
-      data: {
-        companyId: effectiveCompanyId,
-        operationType: effectiveOpType,
-        caseId,
-        prospectiveSiteId: siteRecordId,
-        lifecycle: "DRAFT",
-        conductedBy: conductedBy?.trim() || user?.name || user?.email || "SURVEYOR",
-        conductedAt: conductedAt ? new Date(conductedAt) : new Date()
-      },
-      include: {
-        case: {
-          select: { id: true, title: true, prospectClient: { select: { id: true, name: true } } }
-        },
-        prospectiveSite: true
-      }
-    });
-
-    // Create immutable SurveyConfigurationSnapshot
+    // DEF-099: Prevent duplicate independent surveys for the same opportunity case and prospective site
+    // Blocks DRAFT, IN_WORKFLOW, and COMPLETED (approved) surveys while allowing CANCELLED / SUPERSEDED.
+    // Transaction narrows concurrent creation race; residual limitation: no DB-level filtered unique index exists on PreContractSurvey.
     const snapshotContent = JSON.stringify(activeVersion);
     const checksum = crypto.createHash("sha256").update(snapshotContent).digest("hex");
 
-    await prisma.surveyConfigurationSnapshot.create({
-      data: {
-        surveyId: newSurvey.id,
-        templateVersionId: activeVersion.id,
-        snapshotJson: snapshotContent,
-        checksum
+    const txResult = await prisma.$transaction(async (tx) => {
+      if (siteRecordId) {
+        const existingSurvey = await tx.preContractSurvey.findFirst({
+          where: {
+            caseId,
+            prospectiveSiteId: siteRecordId,
+            lifecycle: { in: ["DRAFT", "IN_WORKFLOW", "COMPLETED"] }
+          },
+          select: { id: true, lifecycle: true }
+        });
+        if (existingSurvey) {
+          return { duplicate: existingSurvey } as const;
+        }
       }
+
+      const createdSurvey = await tx.preContractSurvey.create({
+        data: {
+          companyId: effectiveCompanyId,
+          operationType: effectiveOpType,
+          caseId,
+          prospectiveSiteId: siteRecordId,
+          lifecycle: "DRAFT",
+          conductedBy: conductedBy?.trim() || user?.name || user?.email || "SURVEYOR",
+          conductedAt: conductedAt ? new Date(conductedAt) : new Date()
+        },
+        include: {
+          case: {
+            select: { id: true, title: true, prospectClient: { select: { id: true, name: true } } }
+          },
+          prospectiveSite: true
+        }
+      });
+
+      await tx.surveyConfigurationSnapshot.create({
+        data: {
+          surveyId: createdSurvey.id,
+          templateVersionId: activeVersion.id,
+          snapshotJson: snapshotContent,
+          checksum
+        }
+      });
+
+      return { survey: createdSurvey } as const;
     });
 
-    return NextResponse.json({ survey: newSurvey }, { status: 201 });
+    if ("duplicate" in txResult && txResult.duplicate) {
+      return NextResponse.json(
+        {
+          error: `Duplicate Survey Blocked: A ${txResult.duplicate.lifecycle} site survey already exists for this opportunity case and prospective site.`,
+          existingSurveyId: txResult.duplicate.id
+        },
+        { status: 409 }
+      );
+    }
+
+    return NextResponse.json({ survey: txResult.survey }, { status: 201 });
   } catch (error: any) {
     console.error("COMMERCIAL SITE SURVEYS POST ERROR:", error);
     return NextResponse.json(

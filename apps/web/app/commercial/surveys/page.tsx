@@ -168,7 +168,22 @@ export default function SiteSurveysPage() {
 
       if (!resSurveys.ok) throw new Error("Failed to fetch commercial site surveys");
       const dataSurveys = await resSurveys.json();
-      setSurveys(dataSurveys.surveys || []);
+      const loadedSurveys: PreContractSurvey[] = dataSurveys.surveys || [];
+      setSurveys(loadedSurveys);
+
+      if (typeof window !== "undefined") {
+        const deepLinkId = new URLSearchParams(window.location.search).get("id");
+        if (deepLinkId && !(window as any).__ahhSurveyDeepLinkHandled?.[deepLinkId]) {
+          const target = loadedSurveys.find((s) => s.id === deepLinkId);
+          if (target) {
+            (window as any).__ahhSurveyDeepLinkHandled = {
+              ...((window as any).__ahhSurveyDeepLinkHandled || {}),
+              [deepLinkId]: true,
+            };
+            openWorkspace(target);
+          }
+        }
+      }
 
       if (resOpps.ok) {
         const dataOpps = await resOpps.json();
