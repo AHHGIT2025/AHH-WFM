@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { mockDb, isDbConnected, readDb, writeDb } from "@ahh-wfm/mock-data";
 import { checkApiAuth } from "@/lib/api-guards";
-import { hasPermission, isAdminUser } from "@/lib/permissions";
+import { canAccessEmployeeRecord, canViewWorkforceDirectory, hasPermission, isAdminUser } from "@/lib/permissions";
 import { prisma } from "@ahh-wfm/database";
 
 function normalizeEmployee(emp: any) {
@@ -124,8 +124,13 @@ function resolveEmployee(paramsId: string, authSession: any, employees: any[]) {
 }
 
 export async function GET(request: Request, { params }: RouteParams) {
-  const auth = await checkApiAuth(["ADMIN", "SUPERVISOR"]);
+  const auth = await checkApiAuth();
   if (auth.error) return auth.error;
+
+  const user = auth.session?.user as any;
+  if (params.id !== "me" && !isAdminUser(user) && !canViewWorkforceDirectory(user)) {
+    return NextResponse.json({ error: "Forbidden: Insufficient permissions" }, { status: 403 });
+  }
 
   try {
     const employees = await mockDb.getEmployees();
@@ -134,6 +139,10 @@ export async function GET(request: Request, { params }: RouteParams) {
       return NextResponse.json({ error: resolution.error }, { status: resolution.status });
     }
     const { employee } = resolution;
+
+    if (params.id !== "me" && !isAdminUser(user) && !canAccessEmployeeRecord(user, employee)) {
+      return NextResponse.json({ error: "Forbidden: Cross-company or cross-operation record access denied" }, { status: 403 });
+    }
 
     const normalized = normalizeEmployee(employee);
     delete (normalized as any).passwordHash;

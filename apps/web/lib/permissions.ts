@@ -516,6 +516,48 @@ export function isAdminUser(user: { role?: string } | null | undefined): boolean
   return role === "ADMIN" || role === "SUPER_ADMIN";
 }
 
+export const MANPOWER_ADMIN_IMPLIED_PERMISSIONS = new Set<string>([
+  "manpower.view",
+  "manpower.manage",
+  "manpower.admin.full_access",
+  "manpower.schedule.view",
+  "manpower.schedule.write",
+  "manpower.schedule.edit",
+  "manpower.schedule.manage",
+  "manpower.schedule.assign",
+  "manpower.schedule.unassign",
+  "manpower.schedule.override",
+  "manpower.schedule.sync",
+  "manpower.roster.publish",
+  "manpower.roster.cancel",
+  "manpower.roster.changeRequest.submit",
+  "manpower.roster.changeRequest.review",
+  "manpower.roster.changeRequest.approve",
+  "manpower.roster.changeRequest.reject",
+  "manpower.roster.changeRequest.withdraw",
+  "manpower.roster.acknowledge",
+  "manpower.roster.publication.viewHistory",
+  "manpower.reconciliation.view",
+  "manpower.reconciliation.run",
+  "manpower.reconciliation.review",
+  "manpower.reconciliation.excuse",
+  "manpower.reconciliation.classifyUnexcused",
+  "manpower.reconciliation.markSyncDelay",
+  "manpower.reconciliation.manageConfig",
+  "manpower.advisory.view",
+  "manpower.advisory.calculate",
+  "manpower.advisory.review",
+  "manpower.advisory.lock",
+  "manpower.advisory.export",
+  "manpower.calendars.manage",
+  "manpower.calendars.approve",
+  "security.scheduling.view",
+  "security.scheduling.assign",
+  "security.scheduling.instructions.manage",
+  "security.scheduling.siteAllowance.manage",
+  "security.scheduling.siteShift.manage",
+]);
+
 export function hasPermission(user: { role?: string; permissions?: string[] } | null | undefined, permissionKey: string): boolean {
   if (!user) return false;
 
@@ -528,8 +570,7 @@ export function hasPermission(user: { role?: string; permissions?: string[] } | 
   if (user.permissions && Array.isArray(user.permissions)) {
     if (
       user.permissions.includes("manpower.admin.full_access") &&
-      !permissionKey.startsWith("precontract.") &&
-      (!permissionKey.startsWith("commercial.") || permissionKey.startsWith("commercial.commandCenter."))
+      MANPOWER_ADMIN_IMPLIED_PERMISSIONS.has(permissionKey)
     ) {
       return true;
     }
@@ -576,6 +617,66 @@ export function canViewSecfacAlerts(user: { role?: string; permissions?: string[
   return isAdminUser(user) || hasPermission(user, "secfac.alerts.view");
 }
 
+export function canViewWorkforceDirectory(user: { role?: string; permissions?: string[] } | null | undefined): boolean {
+  if (!user) return false;
+  return (
+    isAdminUser(user) ||
+    hasPermission(user, "employees.view") ||
+    hasPermission(user, "manpower.security.manpower.view") ||
+    hasPermission(user, "manpower.fm.manpower.view")
+  );
+}
+
+export function getAuthorizedCompanyIds(user: any): string[] {
+  if (!user) return [];
+  const raw = user?.operationAccess?.allowedCompanyIds;
+  if (Array.isArray(raw)) {
+    return raw.filter((id): id is string => typeof id === "string" && id.trim().length > 0);
+  }
+  return [];
+}
+
+export function getAuthorizedEmployeeOperations(user: any): string[] {
+  if (!user) return [];
+  const ops: string[] = [];
+  const opAccess = user?.operationAccess || {};
+  const hasBroadEmployees = hasPermission(user, "employees.view");
+
+  if (hasBroadEmployees && opAccess.allowedWhiteCollar !== false) {
+    ops.push("WHITE_COLLAR");
+  }
+  if (
+    opAccess.allowedSecurityGuarding === true &&
+    (hasBroadEmployees || hasPermission(user, "manpower.security.manpower.view"))
+  ) {
+    ops.push("SECURITY_GUARDING");
+  }
+  if (
+    opAccess.allowedFacilityManagement === true &&
+    (hasBroadEmployees || hasPermission(user, "manpower.fm.manpower.view"))
+  ) {
+    ops.push("FACILITY_MANAGEMENT");
+  }
+  return ops;
+}
+
+export function canAccessEmployeeRecord(user: any, emp: any): boolean {
+  if (!user || !emp) return false;
+  if (isAdminUser(user)) return true;
+
+  if (!canViewWorkforceDirectory(user)) return false;
+
+  const allowedCompanyIds = getAuthorizedCompanyIds(user);
+  if (allowedCompanyIds.length === 0) return false;
+  if (!emp.companyId || !allowedCompanyIds.includes(emp.companyId)) return false;
+
+  const allowedOps = getAuthorizedEmployeeOperations(user);
+  if (allowedOps.length === 0) return false;
+
+  const empOp = emp.operationType || "WHITE_COLLAR";
+  return allowedOps.includes(empOp);
+}
+
 export function filterNavigationByPermissions(user: { role?: string; permissions?: string[] } | null | undefined, navItems: any[]): any[] {
   if (!user) return [];
   return navItems.filter(item => {
@@ -584,6 +685,7 @@ export function filterNavigationByPermissions(user: { role?: string; permissions
       return hasCommercialAccess(user);
     }
     if (item.path === "/" || item.path === "/dashboard") return hasPermission(user, "dashboard.view");
+    if (item.path === "/approvals") return Boolean(user);
     if (item.path === "/secfac/post-orders") return hasPermission(user, "secfac.postOrders.view") || hasPermission(user, "manpower.security.view") || hasPermission(user, "manpower.admin.full_access");
     if (item.path === "/secfac/shift-briefings") return hasPermission(user, "secfac.briefings.view") || hasPermission(user, "manpower.security.view") || hasPermission(user, "manpower.admin.full_access");
     if (item.path === "/secfac/incidents") return hasPermission(user, "secfac.incidents.view") || hasPermission(user, "manpower.security.view") || hasPermission(user, "manpower.admin.full_access");
@@ -595,7 +697,7 @@ export function filterNavigationByPermissions(user: { role?: string; permissions
              hasPermission(user, "manpower.fm.view");
     }
 
-    if (item.path.startsWith("/workforce")) return hasPermission(user, "employees.view");
+    if (item.path.startsWith("/workforce")) return canViewWorkforceDirectory(user);
     if (item.path.startsWith("/attendance/import")) {
       const opAccess = (user as any)?.operationAccess;
       const isAdmin = user?.role === "SUPER_ADMIN" || user?.role === "ADMIN" || hasPermission(user, "manpower.admin.full_access");
@@ -609,6 +711,7 @@ export function filterNavigationByPermissions(user: { role?: string; permissions
     }
     if (item.path.startsWith("/attendance")) return hasPermission(user, "attendance.view");
     if (item.path.startsWith("/leave")) return hasPermission(user, "leaves.view");
+    if (item.path.startsWith("/clearance")) return hasPermission(user, "clearance.view");
     if (item.path.startsWith("/sap")) return hasPermission(user, "sap.view");
     if (item.path.startsWith("/shifts")) return hasPermission(user, "shifts.view");
     if (item.path.startsWith("/admin/backup")) return hasPermission(user, "backup.view");
@@ -646,13 +749,14 @@ export function filterNavigationByPermissions(user: { role?: string; permissions
     if (item.path === "/manpower/facility-management/alerts") return canViewSecfacAlerts(user);
 
     if (item.path.startsWith("/manpower/security-guarding")) {
-      return hasPermission(user, "manpower.admin.full_access") || hasPermission(user, "manpower.security.view");
+      return isAdminUser(user) || hasPermission(user, "manpower.security.view");
     }
     if (item.path.startsWith("/manpower/facility-management")) {
-      return hasPermission(user, "manpower.admin.full_access") || hasPermission(user, "manpower.fm.view");
+      return isAdminUser(user) || hasPermission(user, "manpower.fm.view");
     }
     
-    return true;
+    // Fail-closed: any route without an explicit permission rule is hidden
+    return false;
   });
 }
 

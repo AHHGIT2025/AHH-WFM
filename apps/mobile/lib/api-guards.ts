@@ -34,6 +34,48 @@ export function isAdminUser(user: { role?: string } | null | undefined): boolean
   return role === "ADMIN" || role === "SUPER_ADMIN";
 }
 
+const MANPOWER_ADMIN_IMPLIED_PERMISSIONS = new Set<string>([
+  "manpower.view",
+  "manpower.manage",
+  "manpower.admin.full_access",
+  "manpower.schedule.view",
+  "manpower.schedule.write",
+  "manpower.schedule.edit",
+  "manpower.schedule.manage",
+  "manpower.schedule.assign",
+  "manpower.schedule.unassign",
+  "manpower.schedule.override",
+  "manpower.schedule.sync",
+  "manpower.roster.publish",
+  "manpower.roster.cancel",
+  "manpower.roster.changeRequest.submit",
+  "manpower.roster.changeRequest.review",
+  "manpower.roster.changeRequest.approve",
+  "manpower.roster.changeRequest.reject",
+  "manpower.roster.changeRequest.withdraw",
+  "manpower.roster.acknowledge",
+  "manpower.roster.publication.viewHistory",
+  "manpower.reconciliation.view",
+  "manpower.reconciliation.run",
+  "manpower.reconciliation.review",
+  "manpower.reconciliation.excuse",
+  "manpower.reconciliation.classifyUnexcused",
+  "manpower.reconciliation.markSyncDelay",
+  "manpower.reconciliation.manageConfig",
+  "manpower.advisory.view",
+  "manpower.advisory.calculate",
+  "manpower.advisory.review",
+  "manpower.advisory.lock",
+  "manpower.advisory.export",
+  "manpower.calendars.manage",
+  "manpower.calendars.approve",
+  "security.scheduling.view",
+  "security.scheduling.assign",
+  "security.scheduling.instructions.manage",
+  "security.scheduling.siteAllowance.manage",
+  "security.scheduling.siteShift.manage",
+]);
+
 export function hasPermission(user: { role?: string; permissions?: string[] } | null | undefined, permissionKey: string): boolean {
   if (!user) return false;
   if (isAdminUser(user)) {
@@ -41,7 +83,12 @@ export function hasPermission(user: { role?: string; permissions?: string[] } | 
   }
   const roleUpper = user.role?.toUpperCase().replace(/\s+/g, "_") || "";
   if (user.permissions && Array.isArray(user.permissions)) {
-    if (user.permissions.includes("manpower.admin.full_access")) return true;
+    if (
+      user.permissions.includes("manpower.admin.full_access") &&
+      MANPOWER_ADMIN_IMPLIED_PERMISSIONS.has(permissionKey)
+    ) {
+      return true;
+    }
     return user.permissions.includes(permissionKey);
   }
   const permissions = DEFAULT_ROLE_PERMISSIONS[roleUpper] || [];

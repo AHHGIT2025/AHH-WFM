@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { checkApiAuth } from "@/lib/api-guards";
+import { hasPermission } from "@/lib/permissions";
 import { MASTER_SCHEMAS } from "@/lib/masters-schema";
 import { isDbConnected, readDb, writeDb } from "@ahh-wfm/mock-data";
 import { prisma } from "@ahh-wfm/database";
@@ -35,6 +36,10 @@ const memoryKeyMap: Record<string, string> = {
 export async function POST(request: Request, { params }: { params: { entity: string } }) {
   const auth = await checkApiAuth();
   if (auth.error) return auth.error;
+  const user = auth.session?.user as any;
+  if (!hasPermission(user, "masterdata.manage") && !hasPermission(user, "masters.manage")) {
+    return NextResponse.json({ error: "Forbidden: Requires masterdata.manage permission" }, { status: 403 });
+  }
 
   const { entity } = params;
   const schema = MASTER_SCHEMAS[entity];

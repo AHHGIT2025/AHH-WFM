@@ -1,7 +1,14 @@
 import { NextResponse } from "next/server";
 import { mockDb } from "@ahh-wfm/mock-data";
 import { checkApiAuth } from "@/lib/api-guards";
-import { hasPermission } from "@/lib/permissions";
+import {
+  canAccessEmployeeRecord,
+  canViewWorkforceDirectory,
+  getAuthorizedCompanyIds,
+  getAuthorizedEmployeeOperations,
+  hasPermission,
+  isAdminUser
+} from "@/lib/permissions";
 
 function normalizeEmployee(emp: any) {
   if (!emp) return emp;
@@ -97,19 +104,39 @@ function maskNumber(num: string | null | undefined): string | null {
 }
 
 export async function GET(request: Request) {
-  const auth = await checkApiAuth(); // Any authenticated session may read the directory
+  const auth = await checkApiAuth();
   if (auth.error) return auth.error;
+
+  const user = auth.session?.user as any;
+  if (!canViewWorkforceDirectory(user)) {
+    return NextResponse.json({ error: "Forbidden: Workforce directory access denied" }, { status: 403 });
+  }
 
   const { searchParams } = new URL(request.url);
   const operationType = searchParams.get("operationType") || "ALL";
   const employeeCategory = searchParams.get("employeeCategory");
   const companyId = searchParams.get("companyId");
 
+  if (!isAdminUser(user)) {
+    const allowedCompanies = getAuthorizedCompanyIds(user);
+    if (companyId && !allowedCompanies.includes(companyId)) {
+      return NextResponse.json({ error: "Forbidden: Company scope violation" }, { status: 403 });
+    }
+    const allowedOps = getAuthorizedEmployeeOperations(user);
+    if (operationType !== "ALL" && operationType !== "WHITE_COLLAR_STRICT" && !allowedOps.includes(operationType)) {
+      return NextResponse.json({ error: "Forbidden: Operation scope violation" }, { status: 403 });
+    }
+  }
+
   try {
     const employees = await mockDb.getEmployees();
     const canView = canViewIdentity(auth.session?.user);
 
     const filtered = employees.filter(emp => {
+      if (!isAdminUser(user) && !canAccessEmployeeRecord(user, emp)) {
+        return false;
+      }
+
       // Apply strict White Collar filtering only if explicitly requested
       if (employeeCategory === "WHITE_COLLAR" || operationType === "WHITE_COLLAR_STRICT") {
         if (emp.employeeCategory !== "WHITE_COLLAR") return false;

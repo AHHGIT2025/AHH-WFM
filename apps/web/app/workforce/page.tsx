@@ -5,6 +5,7 @@ import { Employee, Department } from "@ahh-wfm/types";
 import { Card, Badge, Input, Button, Modal } from "@ahh-wfm/ui/src";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
+import { canViewWorkforceDirectory } from "@/lib/permissions";
 
 const countriesList = [
   "Qatar",
@@ -311,7 +312,7 @@ export default function WorkforcePage() {
   // Validation errors state
   const [validationError, setValidationError] = useState<string | null>(null);
 
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
   const sessionRole = (session?.user as any)?.role;
   const isSessionAdminOrHR = sessionRole === "ADMIN" || sessionRole === "HR" || sessionRole === "HR_MANAGER";
 
@@ -1307,6 +1308,19 @@ export default function WorkforcePage() {
     );
   });
 
+  if (status !== "loading" && session?.user && !canViewWorkforceDirectory(session.user as any)) {
+    return (
+      <div className="flex h-96 items-center justify-center">
+        <div className="text-center max-w-md p-6 bg-status-error/10 border border-status-error/20 rounded-2xl">
+          <span className="material-symbols-outlined text-status-error text-5xl">gpp_bad</span>
+          <h2 className="text-lg font-bold text-primary mt-2">Access Denied</h2>
+          <p className="text-xs text-on-surface-variant mt-1">
+            You do not have permission to access Workforce Directory.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@ahh-wfm/database";
 import { isDbConnected, readDb, writeDb, mockDb } from "@ahh-wfm/mock-data";
 import { checkApiAuth } from "@/lib/api-guards";
-import { isAdminUser } from "@/lib/permissions";
+import { hasPermission, isAdminUser } from "@/lib/permissions";
 
 const entityMap: Record<string, keyof typeof prisma> = {
   companies: "company",
@@ -199,6 +199,14 @@ function normalizeRecord(entity: string, record: any) {
 }
 
 export async function GET(request: Request, { params }: { params: { entity: string; id: string } }) {
+  const auth = await checkApiAuth();
+  if (auth.error) return auth.error;
+
+  const user = auth.session?.user as any;
+  if (!isAdminUser(user) && !hasPermission(user, "masterdata.view") && !hasPermission(user, "masters.view")) {
+    return NextResponse.json({ error: "Forbidden: Requires masterdata.view permission" }, { status: 403 });
+  }
+
   try {
     const { entity, id } = params;
 
@@ -250,6 +258,13 @@ export async function GET(request: Request, { params }: { params: { entity: stri
 }
 
 export async function PUT(request: Request, { params }: { params: { entity: string; id: string } }) {
+  const auth = await checkApiAuth();
+  if (auth.error) return auth.error;
+  const user = auth.session?.user as any;
+  if (!hasPermission(user, "masterdata.manage") && !hasPermission(user, "masters.manage")) {
+    return NextResponse.json({ error: "Forbidden: Requires masterdata.manage permission" }, { status: 403 });
+  }
+
   let body: any = {};
   let normalizedBody: any = {};
   const { entity, id } = params;
