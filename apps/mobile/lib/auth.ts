@@ -14,12 +14,9 @@ export function resolveNextAuthSecret(): string {
   if (configured && configured.trim().length > 0) {
     return configured.trim();
   }
-  if (process.env.NODE_ENV === "production") {
-    throw new Error(
-      "CRITICAL SECURITY ERROR: NEXTAUTH_SECRET environment variable must be explicitly configured in production."
-    );
-  }
-  return "foundation-secret-key-12345";
+  throw new Error(
+    "CRITICAL SECURITY ERROR: NEXTAUTH_SECRET environment variable must be explicitly configured."
+  );
 }
 
 // Hardcoded fallback grid for mobile reference
@@ -273,7 +270,9 @@ export async function fetchUserRBAC(
 }
 
 export const authOptions: NextAuthOptions = {
-  secret: resolveNextAuthSecret(),
+  get secret(): string {
+    return resolveNextAuthSecret();
+  },
   session: {
     strategy: "jwt",
     maxAge: 24 * 60 * 60, // 24 hours
@@ -587,3 +586,10 @@ export const authOptions: NextAuthOptions = {
     signIn: "/login",
   }
 };
+
+export function getAuthOptions(): NextAuthOptions {
+  return {
+    ...authOptions,
+    secret: resolveNextAuthSecret(),
+  };
+}
