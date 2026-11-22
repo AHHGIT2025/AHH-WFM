@@ -105,7 +105,8 @@ export async function POST(request: Request) {
           let missingCount = 0;
           
           keys.forEach(k => {
-            if (process.env[k]) {
+            const val = process.env[k];
+            if (val && val.trim().length > 0) {
               checkedKeys[k] = "PRESENT (MASKED)";
             } else {
               checkedKeys[k] = "MISSING";

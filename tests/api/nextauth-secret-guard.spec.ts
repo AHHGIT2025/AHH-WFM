@@ -26,6 +26,10 @@ describe("NEXTAUTH_SECRET Hardcoded Fallback Removal & Build-Safe Runtime Guard"
     jest.restoreAllMocks();
     mockGetServerSession.mockReset();
     jest.spyOn(mockDb, "getUserRoleAssignments").mockResolvedValue([] as any);
+    jest.spyOn(mockDb, "getSystemRoles").mockResolvedValue([] as any);
+    jest.spyOn(mockDb, "getRolePermissions").mockResolvedValue([] as any);
+    jest.spyOn(mockDb, "getSystemPermissions").mockResolvedValue([] as any);
+    jest.spyOn(mockDb, "getUserOperationAccess").mockResolvedValue(null as any);
     jest.spyOn(mockDb, "getEmployees").mockResolvedValue([
       {
         id: "emp-1",
@@ -80,8 +84,10 @@ describe("NEXTAUTH_SECRET Hardcoded Fallback Removal & Build-Safe Runtime Guard"
         expect(() => resolveMobileSecret()).toThrow(expectedMessage);
       }
     );
+  });
 
-    it("never includes a configured dummy secret or legacy fallback in thrown errors or console logs", () => {
+  describe("2. Secret leakage prevention across real JWT, guard, and handler paths", () => {
+    it("never leaks a configured dummy secret in logs or errors during JWT/guard/route execution", async () => {
       const dummySecret = "dummy-secret-should-never-appear-in-logs";
       const logSpy = jest.spyOn(console, "log").mockImplementation(() => {});
       const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
@@ -89,14 +95,55 @@ describe("NEXTAUTH_SECRET Hardcoded Fallback Removal & Build-Safe Runtime Guard"
 
       process.env = {
         ...originalEnv,
-        NODE_ENV: "production",
+        NODE_ENV: "development",
+        DEBUG: "true",
         NEXTAUTH_SECRET: dummySecret,
       };
 
-      expect(resolveWebSecret()).toBe(dummySecret);
-      expect(resolveMobileSecret()).toBe(dummySecret);
-      expect(getWebAuthOptions().secret).toBe(dummySecret);
-      expect(getMobileAuthOptions().secret).toBe(dummySecret);
+      // Exercise real JWT callbacks (triggers DB/RBAC sync)
+      const webToken = await webAuthOptions.callbacks!.jwt!({
+        token: {
+          id: "emp-1",
+          authPlatform: "WEB",
+          aud: WEB_SESSION_AUDIENCE,
+        } as any,
+        account: null,
+        trigger: "update",
+      } as any);
+      expect(webToken.isRevoked).toBe(false);
+
+      const mobileToken = await mobileAuthOptions.callbacks!.jwt!({
+        token: {
+          id: "emp-1",
+          authPlatform: "MOBILE",
+          aud: MOBILE_SESSION_AUDIENCE,
+        } as any,
+        account: null,
+        trigger: "update",
+      } as any);
+      expect(mobileToken.isRevoked).toBe(false);
+
+      // Exercise real checkApiAuth with debug logging enabled
+      mockGetServerSession.mockResolvedValue({
+        user: {
+          id: "emp-1",
+          role: "EMPLOYEE",
+          authPlatform: "WEB",
+          aud: WEB_SESSION_AUDIENCE,
+          webAccessEnabled: true,
+        },
+      });
+      const webAuthRes = await checkWebApiAuth();
+      expect(webAuthRes.error).toBeNull();
+
+      // Exercise missing-secret error path
+      delete process.env.NEXTAUTH_SECRET;
+      expect(() => getWebAuthOptions()).toThrow(
+        /NEXTAUTH_SECRET environment variable must be explicitly configured/
+      );
+      expect(() => getMobileAuthOptions()).toThrow(
+        /NEXTAUTH_SECRET environment variable must be explicitly configured/
+      );
 
       const allLoggedText = [
         ...logSpy.mock.calls,
@@ -108,26 +155,11 @@ describe("NEXTAUTH_SECRET Hardcoded Fallback Removal & Build-Safe Runtime Guard"
         .join(" ");
 
       expect(allLoggedText).not.toContain(dummySecret);
-
-      delete process.env.NEXTAUTH_SECRET;
-      expect(() => resolveWebSecret()).toThrow(expectedMessage);
-      expect(() => resolveMobileSecret()).toThrow(expectedMessage);
-
-      const postThrowLoggedText = [
-        ...logSpy.mock.calls,
-        ...warnSpy.mock.calls,
-        ...errorSpy.mock.calls,
-      ]
-        .flat()
-        .map((v) => String(v))
-        .join(" ");
-
-      expect(postThrowLoggedText).not.toContain(dummySecret);
-      expect(postThrowLoggedText).not.toContain("foundation-secret-key");
+      expect(allLoggedText).not.toContain("foundation-secret-key");
     });
   });
 
-  describe("2. Configured NEXTAUTH_SECRET is trimmed and accepted", () => {
+  describe("3. Configured NEXTAUTH_SECRET is trimmed and accepted", () => {
     it("returns trimmed secret for both Web and Mobile", () => {
       process.env = {
         ...originalEnv,
@@ -144,7 +176,7 @@ describe("NEXTAUTH_SECRET Hardcoded Fallback Removal & Build-Safe Runtime Guard"
     });
   });
 
-  describe("3. Module import safety without runtime secrets (distinct from full next build)", () => {
+  describe("4. Module import safety without runtime secrets (not a substitute for next build)", () => {
     it("allows importing auth modules and NextAuth route handlers when NEXTAUTH_SECRET is unset, and fails closed on request invocation", async () => {
       process.env = { ...originalEnv, NODE_ENV: "production" };
       delete process.env.NEXTAUTH_SECRET;
@@ -173,20 +205,36 @@ describe("NEXTAUTH_SECRET Hardcoded Fallback Removal & Build-Safe Runtime Guard"
 
       await expect(
         Promise.resolve().then(() =>
-          mobileRoute.POST(new Request("http://localhost/api/auth/callback/credentials", { method: "POST" }), {
-            params: { nextauth: ["callback", "credentials"] },
-          })
+          mobileRoute.POST(
+            new Request("http://localhost/api/auth/callback/credentials", { method: "POST" }),
+            { params: { nextauth: ["callback", "credentials"] } }
+          )
         )
       ).rejects.toThrow(/NEXTAUTH_SECRET environment variable must be explicitly configured/);
     });
   });
 
-  describe("4. Real Web and Mobile JWT callbacks & checkApiAuth session/audience isolation", () => {
-    it("Web JWT callback revokes tokens carrying MOBILE authPlatform or audience", async () => {
-      const jwtCallback = webAuthOptions.callbacks?.jwt;
-      expect(typeof jwtCallback).toBe("function");
+  describe("5. Positive & Negative Web/Mobile JWT callbacks and checkApiAuth isolation", () => {
+    it("Web JWT callback keeps valid WEB token authorized and revokes MOBILE platform or aud", async () => {
+      const jwtCallback = webAuthOptions.callbacks!.jwt!;
 
-      const rejectedByPlatform = await jwtCallback!({
+      const validWeb = await jwtCallback({
+        token: {
+          id: "emp-1",
+          authPlatform: "WEB",
+          aud: WEB_SESSION_AUDIENCE,
+        } as any,
+        account: null,
+        trigger: "update",
+      } as any);
+      expect(validWeb.isRevoked).toBe(false);
+      expect(validWeb.authVerifyError).toBe(false);
+      expect(validWeb.aud).toBe(WEB_SESSION_AUDIENCE);
+      expect(validWeb.authPlatform).toBe("WEB");
+      expect(Array.isArray(validWeb.permissions)).toBe(true);
+      expect((validWeb.permissions as string[]).length).toBeGreaterThan(0);
+
+      const wrongPlatform = await jwtCallback({
         token: {
           id: "emp-1",
           authPlatform: "MOBILE",
@@ -196,11 +244,10 @@ describe("NEXTAUTH_SECRET Hardcoded Fallback Removal & Build-Safe Runtime Guard"
         account: null,
         trigger: "update",
       } as any);
+      expect(wrongPlatform.isRevoked).toBe(true);
+      expect(wrongPlatform.permissions).toEqual([]);
 
-      expect(rejectedByPlatform.isRevoked).toBe(true);
-      expect(rejectedByPlatform.permissions).toEqual([]);
-
-      const rejectedByAudience = await jwtCallback!({
+      const wrongAudience = await jwtCallback({
         token: {
           id: "emp-1",
           authPlatform: "WEB",
@@ -210,16 +257,30 @@ describe("NEXTAUTH_SECRET Hardcoded Fallback Removal & Build-Safe Runtime Guard"
         account: null,
         trigger: "update",
       } as any);
-
-      expect(rejectedByAudience.isRevoked).toBe(true);
-      expect(rejectedByAudience.permissions).toEqual([]);
+      expect(wrongAudience.isRevoked).toBe(true);
+      expect(wrongAudience.permissions).toEqual([]);
     });
 
-    it("Mobile JWT callback revokes tokens carrying WEB authPlatform or audience", async () => {
-      const jwtCallback = mobileAuthOptions.callbacks?.jwt;
-      expect(typeof jwtCallback).toBe("function");
+    it("Mobile JWT callback keeps valid MOBILE token authorized and revokes WEB platform or aud", async () => {
+      const jwtCallback = mobileAuthOptions.callbacks!.jwt!;
 
-      const rejectedByPlatform = await jwtCallback!({
+      const validMobile = await jwtCallback({
+        token: {
+          id: "emp-1",
+          authPlatform: "MOBILE",
+          aud: MOBILE_SESSION_AUDIENCE,
+        } as any,
+        account: null,
+        trigger: "update",
+      } as any);
+      expect(validMobile.isRevoked).toBe(false);
+      expect(validMobile.authVerifyError).toBe(false);
+      expect(validMobile.aud).toBe(MOBILE_SESSION_AUDIENCE);
+      expect(validMobile.authPlatform).toBe("MOBILE");
+      expect(Array.isArray(validMobile.permissions)).toBe(true);
+      expect((validMobile.permissions as string[]).length).toBeGreaterThan(0);
+
+      const wrongPlatform = await jwtCallback({
         token: {
           id: "emp-1",
           authPlatform: "WEB",
@@ -229,11 +290,10 @@ describe("NEXTAUTH_SECRET Hardcoded Fallback Removal & Build-Safe Runtime Guard"
         account: null,
         trigger: "update",
       } as any);
+      expect(wrongPlatform.isRevoked).toBe(true);
+      expect(wrongPlatform.permissions).toEqual([]);
 
-      expect(rejectedByPlatform.isRevoked).toBe(true);
-      expect(rejectedByPlatform.permissions).toEqual([]);
-
-      const rejectedByAudience = await jwtCallback!({
+      const wrongAudience = await jwtCallback({
         token: {
           id: "emp-1",
           authPlatform: "MOBILE",
@@ -243,41 +303,90 @@ describe("NEXTAUTH_SECRET Hardcoded Fallback Removal & Build-Safe Runtime Guard"
         account: null,
         trigger: "update",
       } as any);
-
-      expect(rejectedByAudience.isRevoked).toBe(true);
-      expect(rejectedByAudience.permissions).toEqual([]);
+      expect(wrongAudience.isRevoked).toBe(true);
+      expect(wrongAudience.permissions).toEqual([]);
     });
 
-    it("Web checkApiAuth rejects Mobile-audience or Mobile-platform sessions with 403", async () => {
+    it("Web checkApiAuth allows valid WEB session and rejects MOBILE platform or aud with 403", async () => {
+      mockGetServerSession.mockResolvedValueOnce({
+        user: {
+          id: "emp-1",
+          role: "EMPLOYEE",
+          authPlatform: "WEB",
+          aud: WEB_SESSION_AUDIENCE,
+          webAccessEnabled: true,
+        },
+      });
+      const okRes = await checkWebApiAuth();
+      expect(okRes.error).toBeNull();
+      expect((okRes.session?.user as any)?.id).toBe("emp-1");
+
       mockGetServerSession.mockResolvedValueOnce({
         user: {
           id: "emp-1",
           role: "EMPLOYEE",
           authPlatform: "MOBILE",
+          aud: WEB_SESSION_AUDIENCE,
+          webAccessEnabled: true,
+        },
+      });
+      const badPlatformRes = await checkWebApiAuth();
+      expect(badPlatformRes.session).toBeNull();
+      expect(badPlatformRes.error?.status).toBe(403);
+
+      mockGetServerSession.mockResolvedValueOnce({
+        user: {
+          id: "emp-1",
+          role: "EMPLOYEE",
+          authPlatform: "WEB",
           aud: MOBILE_SESSION_AUDIENCE,
           webAccessEnabled: true,
         },
       });
-
-      const res = await checkWebApiAuth();
-      expect(res.session).toBeNull();
-      expect(res.error?.status).toBe(403);
+      const badAudRes = await checkWebApiAuth();
+      expect(badAudRes.session).toBeNull();
+      expect(badAudRes.error?.status).toBe(403);
     });
 
-    it("Mobile checkApiAuth rejects Web-audience or Web-platform sessions with 403", async () => {
+    it("Mobile checkApiAuth allows valid MOBILE session and rejects WEB platform or aud with 403", async () => {
+      mockGetServerSession.mockResolvedValueOnce({
+        user: {
+          id: "emp-1",
+          role: "EMPLOYEE",
+          authPlatform: "MOBILE",
+          aud: MOBILE_SESSION_AUDIENCE,
+          mobileAccessEnabled: true,
+        },
+      });
+      const okRes = await checkMobileApiAuth();
+      expect(okRes.error).toBeNull();
+      expect((okRes.session?.user as any)?.id).toBe("emp-1");
+
       mockGetServerSession.mockResolvedValueOnce({
         user: {
           id: "emp-1",
           role: "EMPLOYEE",
           authPlatform: "WEB",
+          aud: MOBILE_SESSION_AUDIENCE,
+          mobileAccessEnabled: true,
+        },
+      });
+      const badPlatformRes = await checkMobileApiAuth();
+      expect(badPlatformRes.session).toBeNull();
+      expect(badPlatformRes.error?.status).toBe(403);
+
+      mockGetServerSession.mockResolvedValueOnce({
+        user: {
+          id: "emp-1",
+          role: "EMPLOYEE",
+          authPlatform: "MOBILE",
           aud: WEB_SESSION_AUDIENCE,
           mobileAccessEnabled: true,
         },
       });
-
-      const res = await checkMobileApiAuth();
-      expect(res.session).toBeNull();
-      expect(res.error?.status).toBe(403);
+      const badAudRes = await checkMobileApiAuth();
+      expect(badAudRes.session).toBeNull();
+      expect(badAudRes.error?.status).toBe(403);
     });
   });
 });
