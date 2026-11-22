@@ -51,6 +51,34 @@ describe("Real getServerSession + next-auth/jwt Cookie Round-Trip & Secret Enfor
         webAccessEnabled: true,
         mobileAccessEnabled: true,
       },
+      {
+        id: "emp-web",
+        name: "Web User",
+        email: "web@ahh.com",
+        role: "EMPLOYEE",
+        companyId: "comp-1",
+        departmentId: "dept-1",
+        isActive: true,
+        employmentStatus: "ACTIVE",
+        isLoginEnabled: true,
+        isLocked: false,
+        webAccessEnabled: true,
+        mobileAccessEnabled: true,
+      },
+      {
+        id: "emp-mobile",
+        name: "Mobile User",
+        email: "mobile@ahh.com",
+        role: "EMPLOYEE",
+        companyId: "comp-1",
+        departmentId: "dept-1",
+        isActive: true,
+        employmentStatus: "ACTIVE",
+        isLoginEnabled: true,
+        isLocked: false,
+        webAccessEnabled: true,
+        mobileAccessEnabled: true,
+      },
     ] as any);
   });
 
@@ -108,7 +136,7 @@ describe("Real getServerSession + next-auth/jwt Cookie Round-Trip & Secret Enfor
     });
   });
 
-  describe("2. Real next-auth/jwt cookie round-trip & cross-app isolation", () => {
+  describe("2. Real next-auth/jwt cookie round-trip & cross-app isolation (F4)", () => {
     const testSecret = "roundtrip-test-only-nextauth-secret-987654321";
 
     beforeEach(() => {
@@ -143,30 +171,6 @@ describe("Real getServerSession + next-auth/jwt Cookie Round-Trip & Secret Enfor
       expect((res.session?.user as any)?.id).toBe("emp-1");
     });
 
-    it("rejects a Web token presented under the Mobile cookie on Mobile", async () => {
-      const jwt = await encode({
-        secret: testSecret,
-        token: {
-          id: "emp-1",
-          sub: "emp-1",
-          role: "EMPLOYEE",
-          authPlatform: "WEB",
-          aud: WEB_SESSION_AUDIENCE,
-          isActive: true,
-          isLoginEnabled: true,
-          isLocked: false,
-          isRevoked: false,
-          webAccessEnabled: true,
-          mobileAccessEnabled: true,
-        },
-      });
-      mockCookieStore = [{ name: MOBILE_SESSION_COOKIE_NAME, value: jwt }];
-
-      const res = await checkMobileApiAuth();
-      expect(res.session).toBeNull();
-      expect(res.error?.status).toBe(401);
-    });
-
     it("accepts a valid Mobile token under the Mobile cookie on Mobile (positive control)", async () => {
       const jwt = await encode({
         secret: testSecret,
@@ -191,7 +195,79 @@ describe("Real getServerSession + next-auth/jwt Cookie Round-Trip & Secret Enfor
       expect((res.session?.user as any)?.id).toBe("emp-1");
     });
 
-    it("rejects a Mobile token presented under the Web cookie on Web", async () => {
+    it("rejects Web token under only the Mobile cookie name sent to Web (401)", async () => {
+      const jwt = await encode({
+        secret: testSecret,
+        token: {
+          id: "emp-web",
+          sub: "emp-web",
+          role: "EMPLOYEE",
+          authPlatform: "WEB",
+          aud: WEB_SESSION_AUDIENCE,
+          isActive: true,
+          isLoginEnabled: true,
+          isLocked: false,
+          isRevoked: false,
+          webAccessEnabled: true,
+          mobileAccessEnabled: true,
+        },
+      });
+      mockCookieStore = [{ name: MOBILE_SESSION_COOKIE_NAME, value: jwt }];
+
+      const res = await checkWebApiAuth();
+      expect(res.session).toBeNull();
+      expect(res.error?.status).toBe(401);
+    });
+
+    it("rejects Mobile token under only the Web cookie name sent to Mobile (401)", async () => {
+      const jwt = await encode({
+        secret: testSecret,
+        token: {
+          id: "emp-mobile",
+          sub: "emp-mobile",
+          role: "EMPLOYEE",
+          authPlatform: "MOBILE",
+          aud: MOBILE_SESSION_AUDIENCE,
+          isActive: true,
+          isLoginEnabled: true,
+          isLocked: false,
+          isRevoked: false,
+          webAccessEnabled: true,
+          mobileAccessEnabled: true,
+        },
+      });
+      mockCookieStore = [{ name: WEB_SESSION_COOKIE_NAME, value: jwt }];
+
+      const res = await checkMobileApiAuth();
+      expect(res.session).toBeNull();
+      expect(res.error?.status).toBe(401);
+    });
+
+    it("rejects Web token presented under the Mobile cookie on Mobile (401)", async () => {
+      const jwt = await encode({
+        secret: testSecret,
+        token: {
+          id: "emp-1",
+          sub: "emp-1",
+          role: "EMPLOYEE",
+          authPlatform: "WEB",
+          aud: WEB_SESSION_AUDIENCE,
+          isActive: true,
+          isLoginEnabled: true,
+          isLocked: false,
+          isRevoked: false,
+          webAccessEnabled: true,
+          mobileAccessEnabled: true,
+        },
+      });
+      mockCookieStore = [{ name: MOBILE_SESSION_COOKIE_NAME, value: jwt }];
+
+      const res = await checkMobileApiAuth();
+      expect(res.session).toBeNull();
+      expect(res.error?.status).toBe(401);
+    });
+
+    it("rejects Mobile token presented under the Web cookie on Web (401)", async () => {
       const jwt = await encode({
         secret: testSecret,
         token: {
@@ -213,6 +289,56 @@ describe("Real getServerSession + next-auth/jwt Cookie Round-Trip & Secret Enfor
       const res = await checkWebApiAuth();
       expect(res.session).toBeNull();
       expect(res.error?.status).toBe(401);
+    });
+
+    it("when both cookies are present, each guard accepts only its own app's token", async () => {
+      const webJwt = await encode({
+        secret: testSecret,
+        token: {
+          id: "emp-web",
+          sub: "emp-web",
+          role: "EMPLOYEE",
+          authPlatform: "WEB",
+          aud: WEB_SESSION_AUDIENCE,
+          isActive: true,
+          isLoginEnabled: true,
+          isLocked: false,
+          isRevoked: false,
+          webAccessEnabled: true,
+          mobileAccessEnabled: true,
+        },
+      });
+      const mobileJwt = await encode({
+        secret: testSecret,
+        token: {
+          id: "emp-mobile",
+          sub: "emp-mobile",
+          role: "EMPLOYEE",
+          authPlatform: "MOBILE",
+          aud: MOBILE_SESSION_AUDIENCE,
+          isActive: true,
+          isLoginEnabled: true,
+          isLocked: false,
+          isRevoked: false,
+          webAccessEnabled: true,
+          mobileAccessEnabled: true,
+        },
+      });
+
+      mockCookieStore = [
+        { name: WEB_SESSION_COOKIE_NAME, value: webJwt },
+        { name: MOBILE_SESSION_COOKIE_NAME, value: mobileJwt },
+      ];
+
+      const webRes = await checkWebApiAuth();
+      expect(webRes.error).toBeNull();
+      expect((webRes.session?.user as any)?.id).toBe("emp-web");
+      expect((webRes.session?.user as any)?.authPlatform).toBe("WEB");
+
+      const mobileRes = await checkMobileApiAuth();
+      expect(mobileRes.error).toBeNull();
+      expect((mobileRes.session?.user as any)?.id).toBe("emp-mobile");
+      expect((mobileRes.session?.user as any)?.authPlatform).toBe("MOBILE");
     });
 
     it("rejects a token encoded with a different secret on both Web and Mobile", async () => {
@@ -245,8 +371,8 @@ describe("Real getServerSession + next-auth/jwt Cookie Round-Trip & Secret Enfor
     });
   });
 
-  describe("3. Secret leakage check on real session + guard execution", () => {
-    it("never logs or prints the configured dummy secret during real getServerSession + checkWebApiAuth", async () => {
+  describe("3. Secret leakage check on real wrong-secret & malformed cookie failure paths (F3)", () => {
+    it("never logs or prints the configured dummy secret during wrong-secret or malformed cookie failures", async () => {
       const dummySecret = "dummy-real-session-secret-must-not-leak-999";
       const logSpy = jest.spyOn(console, "log").mockImplementation(() => {});
       const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
@@ -254,31 +380,23 @@ describe("Real getServerSession + next-auth/jwt Cookie Round-Trip & Secret Enfor
 
       process.env = {
         ...originalEnv,
-        NODE_ENV: "development",
-        DEBUG: "true",
+        NODE_ENV: "production",
         NEXTAUTH_SECRET: dummySecret,
       };
 
-      const jwt = await encode({
-        secret: dummySecret,
-        token: {
-          id: "emp-1",
-          sub: "emp-1",
-          role: "EMPLOYEE",
-          authPlatform: "WEB",
-          aud: WEB_SESSION_AUDIENCE,
-          isActive: true,
-          isLoginEnabled: true,
-          isLocked: false,
-          isRevoked: false,
-          webAccessEnabled: true,
-          mobileAccessEnabled: true,
-        },
+      // Failure path A: wrong-secret cookie
+      const wrongSecretJwt = await encode({
+        secret: "wrong-secret-000000000",
+        token: { id: "emp-1", sub: "emp-1", authPlatform: "WEB", aud: WEB_SESSION_AUDIENCE },
       });
-      mockCookieStore = [{ name: WEB_SESSION_COOKIE_NAME, value: jwt }];
+      mockCookieStore = [{ name: WEB_SESSION_COOKIE_NAME, value: wrongSecretJwt }];
+      const wrongRes = await checkWebApiAuth();
+      expect(wrongRes.error?.status).toBe(401);
 
-      const res = await checkWebApiAuth();
-      expect(res.error).toBeNull();
+      // Failure path B: malformed cookie
+      mockCookieStore = [{ name: WEB_SESSION_COOKIE_NAME, value: "not-a-valid-jwe-token" }];
+      const malformedRes = await checkWebApiAuth();
+      expect(malformedRes.error?.status).toBe(401);
 
       const allLoggedText = [
         ...logSpy.mock.calls,

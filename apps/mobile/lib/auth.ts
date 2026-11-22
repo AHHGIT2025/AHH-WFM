@@ -11,12 +11,17 @@ export const MOBILE_SESSION_AUDIENCE = "ahh-wfm-mobile";
 
 export function resolveNextAuthSecret(): string {
   const configured = process.env.NEXTAUTH_SECRET;
-  if (configured && configured.trim().length > 0) {
-    return configured.trim();
+  if (!configured || configured.trim().length === 0) {
+    throw new Error(
+      "CRITICAL SECURITY ERROR: NEXTAUTH_SECRET environment variable must be explicitly configured."
+    );
   }
-  throw new Error(
-    "CRITICAL SECURITY ERROR: NEXTAUTH_SECRET environment variable must be explicitly configured."
-  );
+  if (configured !== configured.trim()) {
+    throw new Error(
+      "CRITICAL SECURITY ERROR: NEXTAUTH_SECRET must not contain leading or trailing whitespace."
+    );
+  }
+  return configured;
 }
 
 // Hardcoded fallback grid for mobile reference

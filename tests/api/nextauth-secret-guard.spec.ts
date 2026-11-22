@@ -30,6 +30,7 @@ describe("NEXTAUTH_SECRET Hardcoded Fallback Removal & Build-Safe Runtime Guard"
     jest.spyOn(mockDb, "getRolePermissions").mockResolvedValue([] as any);
     jest.spyOn(mockDb, "getSystemPermissions").mockResolvedValue([] as any);
     jest.spyOn(mockDb, "getUserOperationAccess").mockResolvedValue(null as any);
+    jest.spyOn(mockDb, "updateEmployee").mockResolvedValue(null as any);
     jest.spyOn(mockDb, "getEmployees").mockResolvedValue([
       {
         id: "emp-1",
@@ -44,6 +45,8 @@ describe("NEXTAUTH_SECRET Hardcoded Fallback Removal & Build-Safe Runtime Guard"
         isLocked: false,
         webAccessEnabled: true,
         mobileAccessEnabled: true,
+        passwordHash: "$2a$10$invalidhashforfailurepath00000000000000000000000000000",
+        failedLoginAttempts: 0,
       },
     ] as any);
   });
@@ -52,9 +55,11 @@ describe("NEXTAUTH_SECRET Hardcoded Fallback Removal & Build-Safe Runtime Guard"
     process.env = originalEnv;
   });
 
-  describe("1. Missing or blank NEXTAUTH_SECRET fails closed across all NODE_ENV values", () => {
-    const expectedMessage =
+  describe("1. Missing, blank, or whitespace-padded NEXTAUTH_SECRET fails closed", () => {
+    const missingMessage =
       "CRITICAL SECURITY ERROR: NEXTAUTH_SECRET environment variable must be explicitly configured.";
+    const paddedMessage =
+      "CRITICAL SECURITY ERROR: NEXTAUTH_SECRET must not contain leading or trailing whitespace.";
 
     it.each(["production", "development", "test"] as const)(
       "throws when NEXTAUTH_SECRET is missing in NODE_ENV=%s",
@@ -62,12 +67,12 @@ describe("NEXTAUTH_SECRET Hardcoded Fallback Removal & Build-Safe Runtime Guard"
         process.env = { ...originalEnv, NODE_ENV: nodeEnv };
         delete process.env.NEXTAUTH_SECRET;
 
-        expect(() => resolveWebSecret()).toThrow(expectedMessage);
-        expect(() => resolveMobileSecret()).toThrow(expectedMessage);
-        expect(() => getWebAuthOptions()).toThrow(expectedMessage);
-        expect(() => getMobileAuthOptions()).toThrow(expectedMessage);
-        expect(() => webAuthOptions.secret).toThrow(expectedMessage);
-        expect(() => mobileAuthOptions.secret).toThrow(expectedMessage);
+        expect(() => resolveWebSecret()).toThrow(missingMessage);
+        expect(() => resolveMobileSecret()).toThrow(missingMessage);
+        expect(() => getWebAuthOptions()).toThrow(missingMessage);
+        expect(() => getMobileAuthOptions()).toThrow(missingMessage);
+        expect(() => webAuthOptions.secret).toThrow(missingMessage);
+        expect(() => mobileAuthOptions.secret).toThrow(missingMessage);
       }
     );
 
@@ -80,14 +85,32 @@ describe("NEXTAUTH_SECRET Hardcoded Fallback Removal & Build-Safe Runtime Guard"
           NEXTAUTH_SECRET: blankValue,
         };
 
-        expect(() => resolveWebSecret()).toThrow(expectedMessage);
-        expect(() => resolveMobileSecret()).toThrow(expectedMessage);
+        expect(() => resolveWebSecret()).toThrow(missingMessage);
+        expect(() => resolveMobileSecret()).toThrow(missingMessage);
+      }
+    );
+
+    it.each([" leading-space-secret", "trailing-space-secret ", "  both-padded-secret  "])(
+      "rejects whitespace-padded NEXTAUTH_SECRET (%j) so handlers and middleware never diverge",
+      (paddedValue) => {
+        process.env = {
+          ...originalEnv,
+          NODE_ENV: "production",
+          NEXTAUTH_SECRET: paddedValue,
+        };
+
+        expect(() => resolveWebSecret()).toThrow(paddedMessage);
+        expect(() => resolveMobileSecret()).toThrow(paddedMessage);
+        expect(() => getWebAuthOptions()).toThrow(paddedMessage);
+        expect(() => getMobileAuthOptions()).toThrow(paddedMessage);
+        expect(() => webAuthOptions.secret).toThrow(paddedMessage);
+        expect(() => mobileAuthOptions.secret).toThrow(paddedMessage);
       }
     );
   });
 
-  describe("2. Secret leakage prevention across real JWT, guard, and handler paths", () => {
-    it("never leaks a configured dummy secret in logs or errors during JWT/guard/route execution", async () => {
+  describe("2. Secret leakage prevention across real failure paths", () => {
+    it("never leaks a configured dummy secret during rejected getEmployees in JWT callback or failed authorize", async () => {
       const dummySecret = "dummy-secret-should-never-appear-in-logs";
       const logSpy = jest.spyOn(console, "log").mockImplementation(() => {});
       const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
@@ -95,55 +118,40 @@ describe("NEXTAUTH_SECRET Hardcoded Fallback Removal & Build-Safe Runtime Guard"
 
       process.env = {
         ...originalEnv,
-        NODE_ENV: "development",
-        DEBUG: "true",
+        NODE_ENV: "production",
         NEXTAUTH_SECRET: dummySecret,
       };
 
-      // Exercise real JWT callbacks (triggers DB/RBAC sync)
-      const webToken = await webAuthOptions.callbacks!.jwt!({
-        token: {
-          id: "emp-1",
-          authPlatform: "WEB",
-          aud: WEB_SESSION_AUDIENCE,
-        } as any,
+      // Failure path 1: rejected getEmployees() inside Web & Mobile JWT callbacks
+      jest.spyOn(mockDb, "getEmployees").mockRejectedValueOnce(new Error("Simulated DB outage (Web JWT)"));
+      const webErrToken = await webAuthOptions.callbacks!.jwt!({
+        token: { id: "emp-1", authPlatform: "WEB", aud: WEB_SESSION_AUDIENCE } as any,
         account: null,
         trigger: "update",
       } as any);
-      expect(webToken.isRevoked).toBe(false);
+      expect(webErrToken.authVerifyError).toBe(true);
 
-      const mobileToken = await mobileAuthOptions.callbacks!.jwt!({
-        token: {
-          id: "emp-1",
-          authPlatform: "MOBILE",
-          aud: MOBILE_SESSION_AUDIENCE,
-        } as any,
+      jest.spyOn(mockDb, "getEmployees").mockRejectedValueOnce(new Error("Simulated DB outage (Mobile JWT)"));
+      const mobileErrToken = await mobileAuthOptions.callbacks!.jwt!({
+        token: { id: "emp-1", authPlatform: "MOBILE", aud: MOBILE_SESSION_AUDIENCE } as any,
         account: null,
         trigger: "update",
       } as any);
-      expect(mobileToken.isRevoked).toBe(false);
+      expect(mobileErrToken.authVerifyError).toBe(true);
 
-      // Exercise real checkApiAuth with debug logging enabled
-      mockGetServerSession.mockResolvedValue({
-        user: {
-          id: "emp-1",
-          role: "EMPLOYEE",
-          authPlatform: "WEB",
-          aud: WEB_SESSION_AUDIENCE,
-          webAccessEnabled: true,
-        },
-      });
-      const webAuthRes = await checkWebApiAuth();
-      expect(webAuthRes.error).toBeNull();
+      // Failure path 2: failed CredentialsProvider authorize()
+      const webCredsProvider = webAuthOptions.providers.find((p: any) => p.id === "credentials") as any;
+      const mobileCredsProvider = mobileAuthOptions.providers.find((p: any) => p.id === "credentials") as any;
 
-      // Exercise missing-secret error path
-      delete process.env.NEXTAUTH_SECRET;
-      expect(() => getWebAuthOptions()).toThrow(
-        /NEXTAUTH_SECRET environment variable must be explicitly configured/
-      );
-      expect(() => getMobileAuthOptions()).toThrow(
-        /NEXTAUTH_SECRET environment variable must be explicitly configured/
-      );
+      await expect(
+        webCredsProvider.authorize({ email: "emp-1@ahh.com", password: "wrong-password" }, {} as any)
+      ).rejects.toThrow(/Invalid credentials/);
+
+      await expect(
+        mobileCredsProvider.authorize({ email: "emp-1@ahh.com", password: "wrong-password" }, {} as any)
+      ).rejects.toThrow(/Invalid credentials/);
+
+      expect(errorSpy).toHaveBeenCalled();
 
       const allLoggedText = [
         ...logSpy.mock.calls,
@@ -159,12 +167,12 @@ describe("NEXTAUTH_SECRET Hardcoded Fallback Removal & Build-Safe Runtime Guard"
     });
   });
 
-  describe("3. Configured NEXTAUTH_SECRET is trimmed and accepted", () => {
-    it("returns trimmed secret for both Web and Mobile", () => {
+  describe("3. Exact configured NEXTAUTH_SECRET is accepted", () => {
+    it("returns exact secret for both Web and Mobile when unpadded", () => {
       process.env = {
         ...originalEnv,
         NODE_ENV: "production",
-        NEXTAUTH_SECRET: "  configured-runtime-secret-abc-123456  ",
+        NEXTAUTH_SECRET: "configured-runtime-secret-abc-123456",
       };
 
       expect(resolveWebSecret()).toBe("configured-runtime-secret-abc-123456");
