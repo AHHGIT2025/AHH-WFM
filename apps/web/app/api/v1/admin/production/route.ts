@@ -106,11 +106,17 @@ export async function POST(request: Request) {
           
           keys.forEach(k => {
             const val = process.env[k];
-            if (val && val.trim().length > 0) {
-              checkedKeys[k] = "PRESENT (MASKED)";
-            } else {
+            if (!val || val.trim().length === 0) {
               checkedKeys[k] = "MISSING";
               missingCount++;
+            } else if (k === "NEXTAUTH_SECRET" && val !== val.trim()) {
+              checkedKeys[k] = "INVALID (WHITESPACE PADDING)";
+              missingCount++;
+            } else if (k === "NEXTAUTH_SECRET" && val.length < 32) {
+              checkedKeys[k] = "INVALID (TOO SHORT)";
+              missingCount++;
+            } else {
+              checkedKeys[k] = "PRESENT (MASKED)";
             }
           });
           

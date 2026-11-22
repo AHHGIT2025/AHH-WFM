@@ -60,6 +60,8 @@ describe("NEXTAUTH_SECRET Hardcoded Fallback Removal & Build-Safe Runtime Guard"
       "CRITICAL SECURITY ERROR: NEXTAUTH_SECRET environment variable must be explicitly configured.";
     const paddedMessage =
       "CRITICAL SECURITY ERROR: NEXTAUTH_SECRET must not contain leading or trailing whitespace.";
+    const shortMessage =
+      "CRITICAL SECURITY ERROR: NEXTAUTH_SECRET must be at least 32 characters.";
 
     it.each(["production", "development", "test"] as const)(
       "throws when NEXTAUTH_SECRET is missing in NODE_ENV=%s",
@@ -90,8 +92,18 @@ describe("NEXTAUTH_SECRET Hardcoded Fallback Removal & Build-Safe Runtime Guard"
       }
     );
 
-    it.each([" leading-space-secret", "trailing-space-secret ", "  both-padded-secret  "])(
-      "rejects whitespace-padded NEXTAUTH_SECRET (%j) so handlers and middleware never diverge",
+    it.each([
+      " leading-space-secret-32-chars-minimum",
+      "trailing-space-secret-32-chars-minimum ",
+      "  both-padded-secret-32-chars-minimum  ",
+      "\tleading-tab-secret-32-chars-minimum",
+      "trailing-tab-secret-32-chars-minimum\t",
+      "\nleading-lf-secret-32-chars-minimum",
+      "trailing-lf-secret-32-chars-minimum\n",
+      "\r\nleading-crlf-secret-32-chars-minimum",
+      "trailing-crlf-secret-32-chars-minimum\r\n",
+    ])(
+      "rejects whitespace-padded NEXTAUTH_SECRET (%j) across resolver, getAuthOptions, and secret getter",
       (paddedValue) => {
         process.env = {
           ...originalEnv,
@@ -107,6 +119,24 @@ describe("NEXTAUTH_SECRET Hardcoded Fallback Removal & Build-Safe Runtime Guard"
         expect(() => mobileAuthOptions.secret).toThrow(paddedMessage);
       }
     );
+
+    it("rejects the legacy hardcoded fallback literal and secrets shorter than 32 characters", () => {
+      const legacyLiteral = ["foundation", "secret", "key", "12345"].join("-");
+      for (const weakSecret of [legacyLiteral, "short-secret-31-chars-123456789"]) {
+        process.env = {
+          ...originalEnv,
+          NODE_ENV: "production",
+          NEXTAUTH_SECRET: weakSecret,
+        };
+
+        expect(() => resolveWebSecret()).toThrow(shortMessage);
+        expect(() => resolveMobileSecret()).toThrow(shortMessage);
+        expect(() => getWebAuthOptions()).toThrow(shortMessage);
+        expect(() => getMobileAuthOptions()).toThrow(shortMessage);
+        expect(() => webAuthOptions.secret).toThrow(shortMessage);
+        expect(() => mobileAuthOptions.secret).toThrow(shortMessage);
+      }
+    });
   });
 
   describe("2. Secret leakage prevention across real failure paths", () => {

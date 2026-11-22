@@ -22,6 +22,11 @@ export function resolveNextAuthSecret(): string {
       "CRITICAL SECURITY ERROR: NEXTAUTH_SECRET must not contain leading or trailing whitespace."
     );
   }
+  if (configured.length < 32) {
+    throw new Error(
+      "CRITICAL SECURITY ERROR: NEXTAUTH_SECRET must be at least 32 characters."
+    );
+  }
   return configured;
 }
 

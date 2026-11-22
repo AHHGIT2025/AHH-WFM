@@ -371,8 +371,8 @@ describe("Real getServerSession + next-auth/jwt Cookie Round-Trip & Secret Enfor
     });
   });
 
-  describe("3. Secret leakage check on real wrong-secret & malformed cookie failure paths (F3)", () => {
-    it("never logs or prints the configured dummy secret during wrong-secret or malformed cookie failures", async () => {
+  describe("3. Secret leakage check on real session & failure paths (F3)", () => {
+    it("never logs or prints the configured dummy secret during real auth/failure logging paths", async () => {
       const dummySecret = "dummy-real-session-secret-must-not-leak-999";
       const logSpy = jest.spyOn(console, "log").mockImplementation(() => {});
       const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
@@ -380,23 +380,47 @@ describe("Real getServerSession + next-auth/jwt Cookie Round-Trip & Secret Enfor
 
       process.env = {
         ...originalEnv,
-        NODE_ENV: "production",
+        NODE_ENV: "development",
         NEXTAUTH_SECRET: dummySecret,
       };
 
-      // Failure path A: wrong-secret cookie
+      // Path A: valid cookie in development triggers real console.log("[API Auth Debug] ...")
+      const validJwt = await encode({
+        secret: dummySecret,
+        token: {
+          id: "emp-1",
+          sub: "emp-1",
+          role: "EMPLOYEE",
+          authPlatform: "WEB",
+          aud: WEB_SESSION_AUDIENCE,
+          isActive: true,
+          isLoginEnabled: true,
+          isLocked: false,
+          isRevoked: false,
+          webAccessEnabled: true,
+          mobileAccessEnabled: true,
+        },
+      });
+      mockCookieStore = [{ name: WEB_SESSION_COOKIE_NAME, value: validJwt }];
+      const okRes = await checkWebApiAuth();
+      expect(okRes.error).toBeNull();
+
+      // Path B: wrong-secret cookie
       const wrongSecretJwt = await encode({
-        secret: "wrong-secret-000000000",
+        secret: "wrong-secret-0000000000000000000000000",
         token: { id: "emp-1", sub: "emp-1", authPlatform: "WEB", aud: WEB_SESSION_AUDIENCE },
       });
       mockCookieStore = [{ name: WEB_SESSION_COOKIE_NAME, value: wrongSecretJwt }];
       const wrongRes = await checkWebApiAuth();
       expect(wrongRes.error?.status).toBe(401);
 
-      // Failure path B: malformed cookie
+      // Path C: malformed cookie
       mockCookieStore = [{ name: WEB_SESSION_COOKIE_NAME, value: "not-a-valid-jwe-token" }];
       const malformedRes = await checkWebApiAuth();
       expect(malformedRes.error?.status).toBe(401);
+
+      // Non-vacuous guarantee: verify logging actually occurred before checking absence of secret
+      expect(logSpy.mock.calls.length + warnSpy.mock.calls.length + errorSpy.mock.calls.length).toBeGreaterThan(0);
 
       const allLoggedText = [
         ...logSpy.mock.calls,
