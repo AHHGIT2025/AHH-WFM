@@ -120,77 +120,82 @@ export async function POST(
       }
       const template = templateResolution.template;
 
-      if (workflowInstance) {
-        workflowInstance = await prisma.workflowInstance.update({
-          where: { id: workflowInstance.id },
+      const { savedInstance, updatedEstimate } = await prisma.$transaction(async (tx) => {
+        let inst;
+        if (workflowInstance) {
+          inst = await tx.workflowInstance.update({
+            where: { id: workflowInstance.id },
+            data: {
+              templateId: template.id,
+              status: "IN_PROGRESS",
+              currentLevelNumber: 1,
+              updatedAt: new Date()
+            },
+            include: { history: true }
+          });
+        } else {
+          inst = await tx.workflowInstance.create({
+            data: {
+              templateId: template.id,
+              moduleType: "PRE_CONTRACT_COSTING",
+              referenceId: estimateId,
+              status: "IN_PROGRESS",
+              currentLevelNumber: 1,
+              companyId: estimate.companyId,
+              operationScope: estimate.operationType
+            },
+            include: { history: true }
+          });
+        }
+
+        // Log SUBMIT action
+        await tx.workflowActionHistory.create({
           data: {
-            templateId: template.id,
-            status: "IN_PROGRESS",
-            currentLevelNumber: 1,
+            instanceId: inst.id,
+            levelNumber: 1,
+            action: "SUBMIT",
+            actedBy: user?.name || user?.email || user?.id || "USER",
+            remarks: remarks?.trim() || "Submitted for commercial costing approval."
+          }
+        });
+
+        // Update version & header projection atomically
+        await tx.preContractCostEstimateVersion.update({
+          where: { id: currentVersion.id },
+          data: {
+            status: "SUBMITTED",
+            workflowTemplateId: template.id,
+            workflowInstanceId: inst.id,
+            updatedAt: new Date()
+          }
+        });
+
+        const updEst = await tx.preContractCostEstimate.update({
+          where: { id: estimateId },
+          data: {
+            status: "IN_WORKFLOW",
             updatedAt: new Date()
           },
-          include: { history: true }
-        });
-      } else {
-        workflowInstance = await prisma.workflowInstance.create({
-          data: {
-            templateId: template.id,
-            moduleType: "PRE_CONTRACT_COSTING",
-            referenceId: estimateId,
-            status: "IN_PROGRESS",
-            currentLevelNumber: 1,
-            companyId: estimate.companyId,
-            operationScope: estimate.operationType
-          },
-          include: { history: true }
-        });
-      }
-
-      // Log SUBMIT action
-      await prisma.workflowActionHistory.create({
-        data: {
-          instanceId: workflowInstance.id,
-          levelNumber: 1,
-          action: "SUBMIT",
-          actedBy: user?.name || user?.email || user?.id || "USER",
-          remarks: remarks?.trim() || "Submitted for commercial costing approval."
-        }
-      });
-
-      // Update version & header projection
-      await prisma.preContractCostEstimateVersion.update({
-        where: { id: currentVersion.id },
-        data: {
-          status: "SUBMITTED",
-          workflowTemplateId: template.id,
-          workflowInstanceId: workflowInstance.id,
-          updatedAt: new Date()
-        }
-      });
-
-      const updatedEstimate = await prisma.preContractCostEstimate.update({
-        where: { id: estimateId },
-        data: {
-          status: "IN_WORKFLOW",
-          updatedAt: new Date()
-        },
-        include: {
-          case: { include: { prospectClient: true } },
-          survey: { include: { prospectiveSite: true } },
-          versions: {
-            orderBy: { versionNumber: "desc" },
-            include: {
-              items: true,
-              overrides: { orderBy: { overriddenAt: "desc" } }
+          include: {
+            case: { include: { prospectClient: true } },
+            survey: { include: { prospectiveSite: true } },
+            versions: {
+              orderBy: { versionNumber: "desc" },
+              include: {
+                items: true,
+                overrides: { orderBy: { overriddenAt: "desc" } }
+              }
             }
           }
-        }
+        });
+
+        return { savedInstance: inst, updatedEstimate: updEst };
       });
 
       return NextResponse.json({
         estimate: serializeCostingEstimate(updatedEstimate),
         workflow: {
-          instanceId: workflowInstance.id,
+          instanceId: savedInstance.id,
           action: "SUBMIT",
           status: "IN_PROGRESS",
           currentLevelNumber: 1
@@ -200,9 +205,10 @@ export async function POST(
 
     // Processing APPROVE / REJECT / RETURN
     if (!workflowInstance || workflowInstance.status !== "IN_PROGRESS") {
+      const isClosed = workflowInstance && workflowInstance.status !== "IN_PROGRESS";
       return NextResponse.json(
         { error: "Invalid Action: No active workflow instance in progress for this costing estimate." },
-        { status: 400 }
+        { status: isClosed ? 409 : 400 }
       );
     }
 
@@ -218,6 +224,13 @@ export async function POST(
 
     const levels = template?.levels || [];
     const currentLevel = levels.find((l) => l.levelNumber === workflowInstance.currentLevelNumber);
+
+    if (currentLevel?.approvalRule === "ALL_REQUIRED") {
+      return NextResponse.json(
+        { error: "UNSUPPORTED_WORKFLOW_RULE: ALL_REQUIRED parallel signoff is not supported." },
+        { status: 400 }
+      );
+    }
 
     // Approver Eligibility
     let isLevelApprover = false;

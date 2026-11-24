@@ -79,68 +79,73 @@ export async function POST(
       }
       const template = templateResolution.template;
 
-      if (workflowInstance) {
-        workflowInstance = await prisma.workflowInstance.update({
-          where: { id: workflowInstance.id },
+      const { savedInstance, updatedProposal } = await prisma.$transaction(async (tx) => {
+        let inst;
+        if (workflowInstance) {
+          inst = await tx.workflowInstance.update({
+            where: { id: workflowInstance.id },
+            data: {
+              templateId: template.id,
+              status: "IN_PROGRESS",
+              currentLevelNumber: 1,
+              updatedAt: new Date()
+            },
+            include: { history: true }
+          });
+        } else {
+          inst = await tx.workflowInstance.create({
+            data: {
+              templateId: template.id,
+              moduleType: "PRE_CONTRACT_PROPOSAL",
+              referenceId: proposalId,
+              status: "IN_PROGRESS",
+              currentLevelNumber: 1,
+              companyId: proposal.companyId,
+              operationScope: proposal.operationType
+            },
+            include: { history: true }
+          });
+        }
+
+        await tx.workflowActionHistory.create({
           data: {
-            templateId: template.id,
-            status: "IN_PROGRESS",
-            currentLevelNumber: 1,
+            instanceId: inst.id,
+            levelNumber: 1,
+            action: "SUBMIT",
+            actedBy: user?.name || user?.email || user?.id || "USER",
+            remarks: remarks?.trim() || "Submitted for commercial proposal approval."
+          }
+        });
+
+        await tx.preContractProposalVersion.update({
+          where: { id: currentVersion.id },
+          data: {
+            status: "IN_WORKFLOW",
+            workflowTemplateId: template.id,
+            workflowInstanceId: inst.id,
+            updatedAt: new Date()
+          }
+        });
+
+        const updProp = await tx.preContractProposal.update({
+          where: { id: proposalId },
+          data: {
+            status: "IN_WORKFLOW",
             updatedAt: new Date()
           },
-          include: { history: true }
+          include: {
+            case: { include: { prospectClient: true } },
+            versions: { orderBy: { versionNumber: "desc" }, take: 1 }
+          }
         });
-      } else {
-        workflowInstance = await prisma.workflowInstance.create({
-          data: {
-            templateId: template.id,
-            moduleType: "PRE_CONTRACT_PROPOSAL",
-            referenceId: proposalId,
-            status: "IN_PROGRESS",
-            currentLevelNumber: 1,
-            companyId: proposal.companyId,
-            operationScope: proposal.operationType
-          },
-          include: { history: true }
-        });
-      }
 
-      await prisma.workflowActionHistory.create({
-        data: {
-          instanceId: workflowInstance.id,
-          levelNumber: 1,
-          action: "SUBMIT",
-          actedBy: user?.name || user?.email || user?.id || "USER",
-          remarks: remarks?.trim() || "Submitted for commercial proposal approval."
-        }
-      });
-
-      await prisma.preContractProposalVersion.update({
-        where: { id: currentVersion.id },
-        data: {
-          status: "IN_WORKFLOW",
-          workflowTemplateId: template.id,
-          workflowInstanceId: workflowInstance.id,
-          updatedAt: new Date()
-        }
-      });
-
-      const updatedProposal = await prisma.preContractProposal.update({
-        where: { id: proposalId },
-        data: {
-          status: "IN_WORKFLOW",
-          updatedAt: new Date()
-        },
-        include: {
-          case: { include: { prospectClient: true } },
-          versions: { orderBy: { versionNumber: "desc" }, take: 1 }
-        }
+        return { savedInstance: inst, updatedProposal: updProp };
       });
 
       return NextResponse.json({
         proposal: updatedProposal,
         workflow: {
-          instanceId: workflowInstance.id,
+          instanceId: savedInstance.id,
           action,
           status: "IN_PROGRESS",
           currentLevelNumber: 1
@@ -168,6 +173,13 @@ export async function POST(
 
     const levels = template?.levels || [];
     const currentLevel = levels.find((l) => l.levelNumber === workflowInstance.currentLevelNumber);
+
+    if (currentLevel?.approvalRule === "ALL_REQUIRED") {
+      return NextResponse.json(
+        { error: "UNSUPPORTED_WORKFLOW_RULE: ALL_REQUIRED parallel signoff is not supported." },
+        { status: 400 }
+      );
+    }
 
     let isLevelApprover = false;
     if (!currentLevel || currentLevel.approvers.length === 0) {
