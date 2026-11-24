@@ -4,7 +4,7 @@ import { checkApiAuth } from "@/lib/api-guards";
 import { WorkflowEngine } from "@/lib/workflow-engine";
 import { WorkflowAdapterRegistry } from "@/lib/workflow/adapters/registry";
 import { executeClearanceApprove, executeClearanceReject, executeClearanceReturn, executeClearanceMarkNotApplicable } from "@/lib/clearance-execution";
-import { assessCostingValidation } from "@/lib/precontract-costing";
+import { assessCostingValidation, formatCostingValidationBlockError } from "@/lib/precontract-costing";
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -88,7 +88,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
             return NextResponse.json(
               {
                 success: false,
-                error: `DEF-104 Costing Validation Guard: Survey captured unmapped manpower fields (${validationSummary.unmappedSurveyManpowerFields.join(", ")}) while costing defaulted to assumed headcount = 1. Authorized estimator override is required before approval.`,
+                error: formatCostingValidationBlockError(validationSummary, "approval"),
                 validationSummary
               },
               { status: 400 }

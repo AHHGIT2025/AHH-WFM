@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@ahh-wfm/database";
 import { checkApiAuth } from "@/lib/api-guards";
 import { hasPermission, isAdminUser } from "@/lib/permissions";
-import { assessCostingValidation, generateCostingSnapshot, serializeCostingEstimate } from "@/lib/precontract-costing";
+import { assessCostingValidation, formatCostingValidationBlockError, generateCostingSnapshot, serializeCostingEstimate } from "@/lib/precontract-costing";
 
 export async function POST(
   request: Request,
@@ -86,7 +86,7 @@ export async function POST(
       if (validationSummary.blocksCommercialSubmission) {
         return NextResponse.json(
           {
-            error: `DEF-104 Costing Validation Guard: Survey captured unmapped manpower fields (${validationSummary.unmappedSurveyManpowerFields.join(", ")}) while costing defaulted to assumed headcount = 1. Authorized estimator override is required before ${action.toLowerCase()}.`,
+            error: formatCostingValidationBlockError(validationSummary, action.toLowerCase()),
             validationSummary
           },
           { status: 400 }

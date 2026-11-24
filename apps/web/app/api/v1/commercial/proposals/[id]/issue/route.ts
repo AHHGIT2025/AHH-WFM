@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@ahh-wfm/database";
 import { checkApiAuth } from "../../../../../../../lib/api-guards";
 import { toClientSafeProposalDTO } from "../../../../../../../lib/precontract-proposal";
-import { assessCostingValidation } from "../../../../../../../lib/precontract-costing";
+import { assessCostingValidation, formatCostingValidationBlockError } from "../../../../../../../lib/precontract-costing";
 
 export async function POST(
   req: NextRequest,
@@ -68,7 +68,7 @@ export async function POST(
       if (validationSummary.blocksCommercialSubmission) {
         return NextResponse.json(
           {
-            error: `DEF-104 Issuance Guard: Cannot issue proposal to client because linked costing relies on unmapped survey manpower fields (${validationSummary.unmappedSurveyManpowerFields.join(", ")}) with assumed headcount = 1 and no authorized estimator override.`,
+            error: formatCostingValidationBlockError(validationSummary, "issuing proposal to client", "DEF-104 Issuance Guard"),
             validationSummary
           },
           { status: 400 }

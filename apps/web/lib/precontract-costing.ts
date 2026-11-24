@@ -32,8 +32,10 @@ export interface CostingValidationSummary {
   requiresValidation: boolean;
   blocksCommercialSubmission: boolean;
   hasMappedSurveyHeadcount: boolean;
+  hasMappedReliefDriver: boolean;
   assumedFallbackHeadcount: boolean;
   unmappedSurveyManpowerFields: string[];
+  missingMandatoryFields: string[];
   hasActiveCostConfig: boolean;
   usesFallbackRates: boolean;
   fallbackRateItems: string[];
@@ -121,8 +123,8 @@ export function assessCostingValidation(
 
   const hasMappedReliefDriver = responses.some(
     (r) =>
-      (r.elementCode === "RELIEVER_REQUIRED" || r.elementCode === "COVERAGE_TYPE") &&
-      (Boolean(r.booleanValue) || (typeof r.textValue === "string" && r.textValue.trim().length > 0))
+      (r.elementCode === "RELIEVER_REQUIRED" && typeof r.booleanValue === "boolean") ||
+      (r.elementCode === "COVERAGE_TYPE" && typeof r.textValue === "string" && r.textValue.trim().length > 0)
   );
   const unmappedShiftPattern = !hasMappedReliefDriver
     ? responses.some((r) => {
@@ -201,6 +203,14 @@ export function assessCostingValidation(
     (!fallbackRateItems.includes("BASIC_PAY") || hasBasicPayRateOverride) &&
     (!fallbackRateItems.includes("ALLOWANCES") || hasAllowanceOverride);
 
+  const missingMandatoryFields: string[] = [];
+  if (!hasMappedSurveyHeadcount) {
+    missingMandatoryFields.push("HEADCOUNT");
+  }
+  if (!hasMappedReliefDriver) {
+    missingMandatoryFields.push("RELIEVER_REQUIRED / COVERAGE_TYPE");
+  }
+
   const warnings: string[] = [];
   if (unmappedPostCount && !hasBasicPayQuantityOverride) {
     warnings.push(
@@ -209,6 +219,11 @@ export function assessCostingValidation(
   } else if (assumedFallbackHeadcount) {
     warnings.push(
       "Survey lacks mapped headcount drivers (HEADCOUNT / GUARDS_REQUIRED / STAFF_COUNT); costing defaulted to assumed headcount = 1."
+    );
+  }
+  if (!hasMappedReliefDriver) {
+    warnings.push(
+      "Survey lacks required relief/coverage driver (RELIEVER_REQUIRED or COVERAGE_TYPE)."
     );
   }
   if (unmappedShiftPattern) {
@@ -226,7 +241,7 @@ export function assessCostingValidation(
   }
 
   let validationStatus: CostingValidationSummary["validationStatus"] = "UNVALIDATED_FALLBACK";
-  if (hasMappedSurveyHeadcount && !unmappedShiftPattern && hasActiveCostConfig && !usesFallbackRates) {
+  if (hasMappedSurveyHeadcount && hasMappedReliefDriver && !unmappedShiftPattern && hasActiveCostConfig && !usesFallbackRates) {
     validationStatus = "VALIDATED_CONFIGURED";
   } else if (overrides.length > 0 && hasAllFallbacksOverridden) {
     validationStatus = "VALIDATED_BY_OVERRIDE";
@@ -241,6 +256,7 @@ export function assessCostingValidation(
     (hasBasicPayRateOverride && hasAllowanceOverride);
   const blocksCommercialSubmission =
     !hasMappedSurveyHeadcount ||
+    !hasMappedReliefDriver ||
     unmappedPostCount ||
     unmappedShiftPattern ||
     !ratesValidated;
@@ -251,14 +267,57 @@ export function assessCostingValidation(
     requiresValidation: !isValidated,
     blocksCommercialSubmission,
     hasMappedSurveyHeadcount,
+    hasMappedReliefDriver,
     assumedFallbackHeadcount,
     unmappedSurveyManpowerFields,
+    missingMandatoryFields,
     hasActiveCostConfig,
     usesFallbackRates,
     fallbackRateItems,
     overrideAuditCount: overrides.length,
     warnings,
   };
+}
+
+/**
+ * Formats an actionable, non-contradictory DEF-104 guard error message from the
+ * actual blocking conditions in CostingValidationSummary.
+ */
+export function formatCostingValidationBlockError(
+  summary: CostingValidationSummary,
+  actionLabel: string,
+  guardTitle: string = "DEF-104 Costing Validation Guard"
+): string {
+  const reasons: string[] = [];
+
+  if (summary.unmappedSurveyManpowerFields.length > 0) {
+    reasons.push(
+      `Survey captured unmapped manpower fields (${summary.unmappedSurveyManpowerFields.join(", ")})` +
+        (summary.assumedFallbackHeadcount ? " while costing defaulted to assumed headcount = 1" : "")
+    );
+  } else if (!summary.hasMappedSurveyHeadcount) {
+    reasons.push(
+      "Survey is missing Operations-approved headcount (HEADCOUNT / GUARDS_REQUIRED / STAFF_COUNT)"
+    );
+  }
+
+  if (!summary.hasMappedReliefDriver) {
+    reasons.push("Survey is missing required relief/coverage driver (RELIEVER_REQUIRED or COVERAGE_TYPE)");
+  }
+
+  if (!summary.hasActiveCostConfig || summary.usesFallbackRates) {
+    const fallbackNote =
+      summary.fallbackRateItems.length > 0
+        ? ` (fallback rates active on: ${summary.fallbackRateItems.join(", ")})`
+        : "";
+    reasons.push(`No approved ACTIVE PC-2A Rate Card / Cost Configuration is active${fallbackNote}`);
+  }
+
+  if (reasons.length === 0) {
+    reasons.push("Costing validation requirements are incomplete");
+  }
+
+  return `${guardTitle}: ${reasons.join("; ")}. Resolve before ${actionLabel}.`;
 }
 
 /**
