@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@ahh-wfm/database";
-import { checkApiAuth } from "@/lib/api-guards";
+import { checkApiAuth, checkRecordCompanyAccess, resolveCompanyScope } from "@/lib/api-guards";
 import { isUserEligibleApprover } from "@/lib/workflow/approver-resolution";
 import { WorkflowAdapterRegistry } from "@/lib/workflow/adapters/registry";
 
@@ -11,6 +11,8 @@ export async function GET(request: NextRequest) {
 
     const user = auth.session.user;
     const isSuperAdmin = user.role === "SUPER_ADMIN";
+    const companyScope = resolveCompanyScope(user, { allowSuperAdminOnly: true });
+    if (companyScope.error) return companyScope.error;
     const { searchParams } = new URL(request.url);
 
     const tab = searchParams.get("tab") || "inbox"; // "inbox" | "outbox"
@@ -56,7 +58,7 @@ export async function GET(request: NextRequest) {
         seenInstances.add(h.instance.id);
 
         const inst = h.instance;
-        if (user.companyId && !isSuperAdmin && inst.companyId && inst.companyId !== user.companyId) {
+        if (checkRecordCompanyAccess(user, inst.companyId, { allowSuperAdminOnly: true })) {
           continue;
         }
 
@@ -112,7 +114,7 @@ export async function GET(request: NextRequest) {
           if (!req || seenClearances.has(req.id)) continue;
           seenClearances.add(req.id);
 
-          if (user.companyId && !isSuperAdmin && req.companyId && req.companyId !== user.companyId) {
+          if (checkRecordCompanyAccess(user, req.companyId, { allowSuperAdminOnly: true })) {
             continue;
           }
 
@@ -188,7 +190,7 @@ export async function GET(request: NextRequest) {
     const inProgressInstances = await prisma.workflowInstance.findMany({
       where: {
         status: "IN_PROGRESS",
-        ...(user.companyId && !isSuperAdmin ? { companyId: user.companyId } : {})
+        ...(companyScope.companyId ? { companyId: companyScope.companyId } : {})
       },
       include: {
         template: {
@@ -254,7 +256,7 @@ export async function GET(request: NextRequest) {
           status: "PENDING",
           clearanceRequest: {
             status: "IN_PROGRESS",
-            ...(user.companyId && !isSuperAdmin ? { companyId: user.companyId } : {})
+            ...(companyScope.companyId ? { companyId: companyScope.companyId } : {})
           },
           OR: [
             { assignedApproverId: user.id },

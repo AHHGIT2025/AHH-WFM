@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@ahh-wfm/database";
-import { checkApiAuth } from "@/lib/api-guards";
+import { checkApiAuth, checkRecordCompanyAccess, resolveCompanyScope } from "@/lib/api-guards";
 import { isUserEligibleApprover } from "@/lib/workflow/approver-resolution";
 
 export async function GET(request: NextRequest) {
@@ -10,12 +10,14 @@ export async function GET(request: NextRequest) {
 
     const user = auth.session.user;
     const isSuperAdmin = user.role === "SUPER_ADMIN";
+    const companyScope = resolveCompanyScope(user, { allowSuperAdminOnly: true });
+    if (companyScope.error) return companyScope.error;
 
     // 1. Count Central Workflow Instances pending for this user
     const pendingInstances = await prisma.workflowInstance.findMany({
       where: {
         status: "IN_PROGRESS",
-        ...(user.companyId && !isSuperAdmin ? { companyId: user.companyId } : {})
+        ...(companyScope.companyId ? { companyId: companyScope.companyId } : {})
       },
       include: {
         template: {
@@ -51,7 +53,7 @@ export async function GET(request: NextRequest) {
           status: "PENDING",
           clearanceRequest: {
             status: "IN_PROGRESS",
-            ...(user.companyId && !isSuperAdmin ? { companyId: user.companyId } : {})
+            ...(companyScope.companyId ? { companyId: companyScope.companyId } : {})
           },
           OR: [
             { assignedApproverId: user.id },
@@ -84,7 +86,7 @@ export async function GET(request: NextRequest) {
     const seenOutboxInstances = new Set<string>();
     for (const h of centralOutboxHistories) {
       if (!h.instance || seenOutboxInstances.has(h.instance.id)) continue;
-      if (user.companyId && !isSuperAdmin && h.instance.companyId && h.instance.companyId !== user.companyId) {
+      if (checkRecordCompanyAccess(user, h.instance.companyId, { allowSuperAdminOnly: true })) {
         continue;
       }
       seenOutboxInstances.add(h.instance.id);

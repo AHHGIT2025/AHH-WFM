@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@ahh-wfm/database";
-import { checkApiAuth } from "../../../../../../lib/api-guards";
+import { checkApiAuth, checkRecordCompanyAccess } from "../../../../../../lib/api-guards";
 
 export async function PATCH(
   req: NextRequest,
@@ -28,9 +28,8 @@ export async function PATCH(
       return NextResponse.json({ error: "Task not found." }, { status: 404 });
     }
 
-    if (user.role !== "SUPER_ADMIN" && user.companyId && existingTask.companyId && existingTask.companyId !== user.companyId) {
-      return NextResponse.json({ error: "Forbidden cross-company task update." }, { status: 403 });
-    }
+    const companyErr = checkRecordCompanyAccess(user, existingTask.companyId, { allowSuperAdminOnly: true });
+    if (companyErr) return companyErr;
 
     const updateData: any = {};
     if (status) {

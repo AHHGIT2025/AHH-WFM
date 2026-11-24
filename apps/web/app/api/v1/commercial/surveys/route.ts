@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma, PreContractLifecycle } from "@ahh-wfm/database";
-import { checkApiAuth } from "@/lib/api-guards";
+import { checkApiAuth, checkRecordCompanyAccess, resolveCompanyScope } from "@/lib/api-guards";
 import { hasPermission, isAdminUser } from "@/lib/permissions";
 import { findConflictingActiveSurvey, formatDuplicateSurveyMessage } from "@/lib/survey-uniqueness";
 import { checkOpportunityEligibilityForSurvey } from "@/lib/survey-eligibility";
@@ -32,10 +32,13 @@ export async function GET(request: Request) {
   let companyId = searchParams.get("companyId") || undefined;
   let operationType = searchParams.get("operationType") || undefined;
 
-  // Company Isolation
-  if (user?.companyId && !isAdminUser(user) && !hasPermission(user, "commercial.commandCenter.crossCompany")) {
-    companyId = user.companyId;
-  }
+  // Company Isolation (fail closed)
+  const companyScope = resolveCompanyScope(user, {
+    crossCompanyPermissions: ["commercial.commandCenter.crossCompany"],
+    requestedCompanyId: companyId,
+  });
+  if (companyScope.error) return companyScope.error;
+  companyId = companyScope.companyId || undefined;
 
   // SG / FM Scope Isolation
   if (!isAdminUser(user) && !hasPermission(user, "manpower.admin.full_access")) {
@@ -189,16 +192,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Commercial opportunity case not found." }, { status: 404 });
     }
 
-    // Company Boundary Check (prevents cross-company probing or survey creation)
-    if (
-      user?.companyId &&
-      !isAdminUser(user) &&
-      !hasPermission(user, "commercial.commandCenter.crossCompany") &&
-      opportunityCase.companyId &&
-      opportunityCase.companyId !== user.companyId
-    ) {
-      return NextResponse.json({ error: "Forbidden: Company boundary violation." }, { status: 403 });
-    }
+    // Company Boundary Check (fail closed; prevents cross-company probing or survey creation)
+    const companyErr = checkRecordCompanyAccess(user, opportunityCase.companyId, {
+      crossCompanyPermissions: ["commercial.commandCenter.crossCompany"],
+    });
+    if (companyErr) return companyErr;
 
     // Issue #6 Opportunity Eligibility Rule: Only approved (COMPLETED, non-LOST) opportunities are eligible
     const eligibility = checkOpportunityEligibilityForSurvey(opportunityCase);

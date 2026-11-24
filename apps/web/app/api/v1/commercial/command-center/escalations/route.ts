@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@ahh-wfm/database";
-import { checkApiAuth } from "@/lib/api-guards";
+import { checkApiAuth, resolveCompanyScope } from "@/lib/api-guards";
 import { hasPermission, isAdminUser } from "@/lib/permissions";
 import { getQatarDate, getQatarDateString } from "@/lib/roster-engine";
 import { getEscalationAggregations } from "@/lib/escalation-helpers";
@@ -57,10 +57,13 @@ export async function GET(request: Request) {
   const page = parseInt(searchParams.get("page") || "1", 10);
   const limit = Math.min(parseInt(searchParams.get("limit") || "50", 10), 100);
 
-  // Company Isolation — applied at user level
-  if (user?.companyId && !isAdminUser(user) && !hasPermission(user, "commercial.commandCenter.crossCompany")) {
-    companyId = user.companyId;
-  }
+  // Company Isolation — fail closed
+  const companyScope = resolveCompanyScope(user, {
+    crossCompanyPermissions: ["commercial.commandCenter.crossCompany"],
+    requestedCompanyId: companyId,
+  });
+  if (companyScope.error) return companyScope.error;
+  companyId = companyScope.companyId || undefined;
 
   // SG / FM Scope Isolation Check
   if (!isAdminUser(user) && !hasPermission(user, "manpower.admin.full_access")) {

@@ -2,6 +2,7 @@ import { NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import AzureADProvider from "next-auth/providers/azure-ad";
 import { mockDb } from "@ahh-wfm/mock-data";
+import { prisma } from "@ahh-wfm/database";
 import * as bcrypt from "bcryptjs";
 import { DEFAULT_ROLE_PERMISSIONS } from "./permissions";
 
@@ -162,6 +163,10 @@ export const authOptions: NextAuthOptions = {
         }
 
         try {
+          if (process.env.NODE_ENV === "production" && !process.env.DATABASE_URL) {
+            console.error("Production authentication blocked: DATABASE_URL is not configured.");
+            return null;
+          }
           const employees = await mockDb.getEmployees();
           const employee = employees.find(
             (e) => e.email.toLowerCase() === credentials.email.toLowerCase() || 
@@ -209,6 +214,7 @@ export const authOptions: NextAuthOptions = {
                   name: employee.name,
                   email: employee.email,
                   role: employee.role,
+                  companyId: (employee as any).companyId || null,
                   mustChangePassword: employee.mustChangePassword,
                   image: employee.profilePhotoUrl || null,
                   profilePhotoUpdatedAt: employee.profilePhotoUpdatedAt ? new Date(employee.profilePhotoUpdatedAt).toISOString() : null,
@@ -243,6 +249,10 @@ export const authOptions: NextAuthOptions = {
     async signIn({ user, account }) {
       if (account?.provider === "azure-ad") {
         try {
+          if (process.env.NODE_ENV === "production" && !process.env.DATABASE_URL) {
+            console.error("Production authentication blocked: DATABASE_URL is not configured.");
+            return "/login?error=Authentication failed";
+          }
           const employees = await mockDb.getEmployees();
           const employee = employees.find(
             (e) => e.email.toLowerCase() === user.email?.toLowerCase()
@@ -269,6 +279,7 @@ export const authOptions: NextAuthOptions = {
       if (user) {
         token.role = (user as any).role || "EMPLOYEE";
         token.id = user.id;
+        token.companyId = (user as any).companyId || null;
         token.mustChangePassword = (user as any).mustChangePassword || false;
         token.image = (user as any).image || null;
         token.profilePhotoUpdatedAt = (user as any).profilePhotoUpdatedAt || null;
@@ -279,10 +290,30 @@ export const authOptions: NextAuthOptions = {
       const userId = token.id as string;
       if (userId) {
         try {
-          const employees = await mockDb.getEmployees();
-          const employee = employees.find((e) => e.id === userId);
-          if (employee) {
+          let employee: any = null;
+          if (process.env.DATABASE_URL) {
+            employee = await prisma.employee.findUnique({
+              where: { id: userId },
+              select: {
+                id: true,
+                role: true,
+                companyId: true,
+                mustChangePassword: true,
+                email: true,
+                profilePhotoUrl: true,
+                profilePhotoUpdatedAt: true,
+                isActive: true,
+                webAccessEnabled: true,
+              },
+            });
+          } else if (process.env.NODE_ENV !== "production") {
+            const employees = await mockDb.getEmployees();
+            employee = employees.find((e) => e.id === userId) || null;
+          }
+          if (employee && employee.isActive !== false && employee.webAccessEnabled !== false) {
+            token.isDisabled = false;
             token.role = employee.role;
+            token.companyId = employee.companyId || null;
             token.mustChangePassword = employee.mustChangePassword || false;
             token.email = employee.email;
             token.image = employee.profilePhotoUrl || null;
@@ -293,12 +324,21 @@ export const authOptions: NextAuthOptions = {
             token.permissions = rbac.permissions;
             token.operationAccess = rbac.operationAccess;
 
-            if ((employee as any).employeeCode) {
-              token.employeeCode = (employee as any).employeeCode;
+            if (employee.employeeCode) {
+              token.employeeCode = employee.employeeCode;
             }
+          } else {
+            token.isDisabled = true;
+            token.companyId = null;
+            token.permissions = [];
+            token.role = "EMPLOYEE";
           }
         } catch (e) {
           console.error("Error updating JWT token from DB:", e);
+          token.isDisabled = true;
+          token.companyId = null;
+          token.permissions = [];
+          token.role = "EMPLOYEE";
         }
       }
 
@@ -308,6 +348,8 @@ export const authOptions: NextAuthOptions = {
       if (session.user) {
         (session.user as any).role = token.role;
         (session.user as any).id = token.id;
+        (session.user as any).companyId = (token.companyId as string) || null;
+        (session.user as any).isDisabled = Boolean((token as any).isDisabled);
         (session.user as any).mustChangePassword = token.mustChangePassword;
         (session.user as any).permissions = token.permissions;
         (session.user as any).operationAccess = token.operationAccess;

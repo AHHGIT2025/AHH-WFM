@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@ahh-wfm/database";
-import { checkApiAuth } from "@/lib/api-guards";
+import { checkApiAuth, checkRecordCompanyAccess } from "@/lib/api-guards";
 import { isUserEligibleApprover } from "@/lib/workflow/approver-resolution";
 import { WorkflowAdapterRegistry } from "@/lib/workflow/adapters/registry";
 
@@ -51,8 +51,9 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     }
 
     if (instance) {
-      if (user.companyId && !isSuperAdmin && instance.companyId && instance.companyId !== user.companyId) {
-        return NextResponse.json({ success: false, error: "Forbidden: Company boundary violation" }, { status: 403 });
+      const companyErr = checkRecordCompanyAccess(user, instance.companyId, { allowSuperAdminOnly: true });
+      if (companyErr) {
+        return companyErr;
       }
 
       const adapter = WorkflowAdapterRegistry.getOrDefault(instance.moduleType);
@@ -182,8 +183,9 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     });
 
     if (clearance) {
-      if (user.companyId && !isSuperAdmin && clearance.companyId && clearance.companyId !== user.companyId) {
-        return NextResponse.json({ success: false, error: "Forbidden: Company boundary violation" }, { status: 403 });
+      const clearanceCompanyErr = checkRecordCompanyAccess(user, clearance.companyId, { allowSuperAdminOnly: true });
+      if (clearanceCompanyErr) {
+        return clearanceCompanyErr;
       }
 
       const activeStep = clearance.approvalSteps.find(s => s.status === "PENDING");

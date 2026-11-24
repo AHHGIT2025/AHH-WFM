@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@ahh-wfm/database";
-import { checkApiAuth } from "@/lib/api-guards";
+import { checkApiAuth, checkRecordCompanyAccess } from "@/lib/api-guards";
 import { WorkflowEngine } from "@/lib/workflow-engine";
 import { WorkflowAdapterRegistry } from "@/lib/workflow/adapters/registry";
 import { executeClearanceApprove, executeClearanceReject, executeClearanceReturn, executeClearanceMarkNotApplicable } from "@/lib/clearance-execution";
@@ -42,9 +42,10 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         return NextResponse.json({ success: false, error: "MARK_NOT_APPLICABLE is not supported for generic central workflows." }, { status: 400 });
       }
 
-      // Company boundary check
-      if (user.companyId && !isSuperAdmin && instance.companyId && instance.companyId !== user.companyId) {
-        return NextResponse.json({ success: false, error: "Forbidden: Company boundary violation" }, { status: 403 });
+      // Company boundary check (fail closed)
+      const companyErr = checkRecordCompanyAccess(user, instance.companyId, { allowSuperAdminOnly: true });
+      if (companyErr) {
+        return companyErr;
       }
 
       if (instance.status !== "IN_PROGRESS") {
@@ -204,8 +205,9 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     });
 
     if (clearance) {
-      if (user.companyId && !isSuperAdmin && clearance.companyId && clearance.companyId !== user.companyId) {
-        return NextResponse.json({ success: false, error: "Forbidden: Company boundary violation" }, { status: 403 });
+      const clearanceCompanyErr = checkRecordCompanyAccess(user, clearance.companyId, { allowSuperAdminOnly: true });
+      if (clearanceCompanyErr) {
+        return clearanceCompanyErr;
       }
 
       let res;

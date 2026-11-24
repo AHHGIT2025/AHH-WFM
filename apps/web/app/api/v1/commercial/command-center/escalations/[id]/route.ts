@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@ahh-wfm/database";
-import { checkApiAuth } from "@/lib/api-guards";
+import { checkApiAuth, checkRecordCompanyAccess } from "@/lib/api-guards";
 import { hasPermission, isAdminUser } from "@/lib/permissions";
 
 export async function GET(
@@ -69,9 +69,10 @@ export async function GET(
       sourceRecord?.attendanceRecord?.companyId ||
       sourceRecord?.attendanceRecord?.employee?.companyId ||
       null;
-    if (user?.companyId && !isAdminUser(user) && recordCompanyId && recordCompanyId !== user.companyId) {
-      return NextResponse.json({ error: "Forbidden: Company boundary violation." }, { status: 403 });
-    }
+    const companyErr = checkRecordCompanyAccess(user, recordCompanyId, {
+      crossCompanyPermissions: ["commercial.commandCenter.crossCompany"],
+    });
+    if (companyErr) return companyErr;
 
     // Fetch central workflow instance if attached
     workflowInstance = await prisma.workflowInstance.findFirst({
@@ -138,6 +139,32 @@ export async function PATCH(
     const parts = escalationId.split(":");
     const sourceType = parts[0];
     const sourceId = parts[1];
+
+    // Company Boundary Check on PATCH (fail closed)
+    let patchRecordCompanyId: string | null = null;
+    if (sourceType === "ROSTER_PLANNING_EXCEPTION") {
+      const exc = await prisma.rosterPlanningException.findUnique({
+        where: { id: sourceId },
+        select: { employee: { select: { companyId: true } } },
+      });
+      patchRecordCompanyId = exc?.employee?.companyId || null;
+    } else if (sourceType === "UNEXCUSED_RECONCILIATION") {
+      const rec = await prisma.attendanceRosterReconciliation.findUnique({
+        where: { id: sourceId },
+        select: { expectedEmployee: { select: { companyId: true } } },
+      });
+      patchRecordCompanyId = rec?.expectedEmployee?.companyId || null;
+    } else if (sourceType === "ATTENDANCE_CORRECTION_PENDING") {
+      const corr = await prisma.attendanceCorrection.findUnique({
+        where: { id: sourceId },
+        include: { attendanceRecord: { include: { employee: { select: { companyId: true } } } } },
+      });
+      patchRecordCompanyId = (corr as any)?.attendanceRecord?.companyId || (corr as any)?.attendanceRecord?.employee?.companyId || null;
+    }
+    const patchCompanyErr = checkRecordCompanyAccess(user, patchRecordCompanyId, {
+      crossCompanyPermissions: ["commercial.commandCenter.crossCompany"],
+    });
+    if (patchCompanyErr) return patchCompanyErr;
 
     // AUTHORITATIVE SOURCE PROTECTION RULE:
     // Resolving a CCC-3 escalation DOES NOT approve an AttendanceCorrection record!

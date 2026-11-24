@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@ahh-wfm/database";
-import { checkApiAuth } from "@/lib/api-guards";
+import { checkApiAuth, resolveCompanyScope } from "@/lib/api-guards";
 import { hasPermission, isAdminUser } from "@/lib/permissions";
 import { getQatarDate, getQatarDateString } from "@/lib/roster-engine";
 import { getRelieverEligibilityWhere } from "@/lib/contract-helpers";
@@ -64,10 +64,13 @@ export async function GET(request: Request) {
     );
   }
 
-  // Company Isolation
-  if (user?.companyId && !isAdminUser(user) && !hasPermission(user, "commercial.commandCenter.crossCompany")) {
-    companyId = user.companyId;
-  }
+  // Company Isolation (fail closed)
+  const companyScope = resolveCompanyScope(user, {
+    crossCompanyPermissions: ["commercial.commandCenter.crossCompany"],
+    requestedCompanyId: companyId,
+  });
+  if (companyScope.error) return companyScope.error;
+  companyId = companyScope.companyId || undefined;
 
   // Operation Scope (SG / FM) Isolation
   if (!isAdminUser(user) && !hasPermission(user, "manpower.admin.full_access")) {

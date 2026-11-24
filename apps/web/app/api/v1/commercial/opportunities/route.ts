@@ -55,8 +55,28 @@ export async function GET(request: Request) {
     hasPermission(user, "commercial.commandCenter.crossCompany") ||
     (forProposal && hasPermission(user, "precontract.proposal.crossCompany"));
 
-  if (!canCrossCompany && user?.companyId) {
-    companyId = user.companyId;
+  const allowedCompanyIds = Array.isArray(user?.allowedCompanyIds)
+    ? user.allowedCompanyIds.filter((id: unknown): id is string => typeof id === "string" && id.trim().length > 0)
+    : [];
+  const sessionCompanyId =
+    typeof user?.companyId === "string" && user.companyId.trim().length > 0 ? user.companyId.trim() : null;
+
+  if (!canCrossCompany) {
+    if (sessionCompanyId) {
+      companyId = sessionCompanyId;
+    } else if (allowedCompanyIds.length > 0) {
+      if (companyId && !allowedCompanyIds.includes(companyId)) {
+        return NextResponse.json(
+          { error: "Forbidden: Company boundary violation." },
+          { status: 403 }
+        );
+      }
+    } else {
+      return NextResponse.json(
+        { error: "Forbidden: Company identity is required to access commercial opportunity cases." },
+        { status: 403 }
+      );
+    }
   }
 
   // SG / FM Scope Isolation
@@ -97,8 +117,8 @@ export async function GET(request: Request) {
   try {
     const where: any = {};
 
-    if (!canCrossCompany && user?.allowedCompanyIds && Array.isArray(user.allowedCompanyIds) && user.allowedCompanyIds.length > 0 && !companyId) {
-      where.companyId = { in: user.allowedCompanyIds };
+    if (!canCrossCompany && !sessionCompanyId && allowedCompanyIds.length > 0 && !companyId) {
+      where.companyId = { in: allowedCompanyIds };
     } else if (companyId) {
       where.companyId = companyId;
     }
@@ -375,8 +395,14 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: "Commercial opportunity case not found." }, { status: 404 });
     }
 
-    // Company boundary check
-    if (user?.companyId && !isAdminUser(user) && existing.companyId && existing.companyId !== user.companyId) {
+    // Company boundary check (fail closed when companyId is missing for non-cross-company actors)
+    const canCrossCompanyDelete =
+      isAdminUser(user) ||
+      hasPermission(user, "manpower.admin.full_access") ||
+      hasPermission(user, "commercial.commandCenter.crossCompany");
+    const deleteSessionCompanyId =
+      typeof user?.companyId === "string" && user.companyId.trim().length > 0 ? user.companyId.trim() : null;
+    if (!canCrossCompanyDelete && (!deleteSessionCompanyId || (existing.companyId && existing.companyId !== deleteSessionCompanyId))) {
       return NextResponse.json({ error: "Forbidden: Company boundary violation." }, { status: 403 });
     }
 

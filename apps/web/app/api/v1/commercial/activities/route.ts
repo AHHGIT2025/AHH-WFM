@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@ahh-wfm/database";
-import { checkApiAuth } from "../../../../../lib/api-guards";
+import { checkApiAuth, checkRecordCompanyAccess, resolveCompanyScope } from "../../../../../lib/api-guards";
 
 export async function GET(req: NextRequest) {
   const { session, error } = await checkApiAuth(undefined, {
@@ -25,10 +25,9 @@ export async function GET(req: NextRequest) {
     const page = parseInt(searchParams.get("page") || "1", 10);
     const limit = parseInt(searchParams.get("limit") || "20", 10);
 
-    let companyId = user.companyId || undefined;
-    if (user.role === "SUPER_ADMIN") {
-      companyId = undefined;
-    }
+    const companyScope = resolveCompanyScope(user, { allowSuperAdminOnly: true });
+    if (companyScope.error) return companyScope.error;
+    const companyId = companyScope.companyId || undefined;
 
     const where: any = {};
     if (companyId) where.companyId = companyId;
@@ -188,8 +187,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "subject is required." }, { status: 400 });
     }
 
-    // Related Entity Ownership & Company Validation
-    let targetCompanyId = user.companyId || null;
+    // Related Entity Ownership & Company Validation (fail closed)
+    const companyScope = resolveCompanyScope(user, { allowSuperAdminOnly: true });
+    if (companyScope.error) return companyScope.error;
+    let targetCompanyId = companyScope.companyId || null;
     let targetOperationType = operationType || "SECURITY_GUARDING";
 
     if (contractId) {
@@ -203,9 +204,8 @@ export async function POST(req: NextRequest) {
     } else if (preContractCaseId) {
       const pcase = await prisma.preContractCase.findUnique({ where: { id: preContractCaseId } });
       if (!pcase) return NextResponse.json({ error: "Referenced pre-contract case not found." }, { status: 404 });
-      if (user.companyId && pcase.companyId && pcase.companyId !== user.companyId) {
-        return NextResponse.json({ error: "Cross-company entity linkage prohibited." }, { status: 403 });
-      }
+      const companyErr = checkRecordCompanyAccess(user, pcase.companyId, { allowSuperAdminOnly: true });
+      if (companyErr) return companyErr;
       targetCompanyId = pcase.companyId || targetCompanyId;
       if (pcase.operationType) targetOperationType = pcase.operationType;
     }

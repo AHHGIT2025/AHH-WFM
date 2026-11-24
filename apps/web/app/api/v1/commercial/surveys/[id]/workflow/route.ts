@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma, PreContractLifecycle } from "@ahh-wfm/database";
-import { checkApiAuth } from "@/lib/api-guards";
+import { checkApiAuth, checkRecordCompanyAccess } from "@/lib/api-guards";
 import { hasPermission, isAdminUser } from "@/lib/permissions";
 import { validateSurveyStaffingForSubmission } from "@/lib/survey-validation";
 import { findConflictingActiveSurvey, formatDuplicateSurveyMessage } from "@/lib/survey-uniqueness";
@@ -51,10 +51,11 @@ export async function POST(
       return NextResponse.json({ error: "Commercial site survey not found." }, { status: 404 });
     }
 
-    // Company Boundary Check
-    if (user?.companyId && !isAdminUser(user) && survey.companyId && survey.companyId !== user.companyId) {
-      return NextResponse.json({ error: "Forbidden: Company boundary violation." }, { status: 403 });
-    }
+    // Company Boundary Check (fail closed)
+    const companyErr = checkRecordCompanyAccess(user, survey.companyId, {
+      crossCompanyPermissions: ["commercial.commandCenter.crossCompany"],
+    });
+    if (companyErr) return companyErr;
 
     // SG / FM Scope Isolation Check
     if (!isAdminUser(user) && !hasPermission(user, "manpower.admin.full_access")) {

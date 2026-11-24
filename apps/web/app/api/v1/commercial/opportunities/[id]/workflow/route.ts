@@ -51,8 +51,14 @@ export async function POST(
       );
     }
 
-    // 2. Company Boundary Check
-    if (user?.companyId && !isAdminUser(user) && opportunityCase.companyId && opportunityCase.companyId !== user.companyId) {
+    // 2. Company Boundary Check (fail closed when companyId is missing for non-cross-company actors)
+    const canCrossCompany =
+      isAdminUser(user) ||
+      hasPermission(user, "manpower.admin.full_access") ||
+      hasPermission(user, "commercial.commandCenter.crossCompany");
+    const sessionCompanyId =
+      typeof user?.companyId === "string" && user.companyId.trim().length > 0 ? user.companyId.trim() : null;
+    if (!canCrossCompany && (!sessionCompanyId || (opportunityCase.companyId && opportunityCase.companyId !== sessionCompanyId))) {
       return NextResponse.json({ error: "Forbidden: Company boundary violation." }, { status: 403 });
     }
 

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { Card, Badge, Button, Input } from "@ahh-wfm/ui/src";
@@ -49,8 +49,10 @@ export default function OpportunitiesPage() {
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
-  // Workflow Action Modal State
+  // Workflow Action & Detail Modal State
   const [selectedCase, setSelectedCase] = useState<OpportunityCase | null>(null);
+  const [detailCase, setDetailCase] = useState<OpportunityCase | null>(null);
+  const handledDeepLinkRef = useRef<string | null>(null);
   const [showWorkflowModal, setShowWorkflowModal] = useState<boolean>(false);
   const [workflowAction, setWorkflowAction] = useState<"SUBMIT" | "APPROVE" | "REJECT" | "RETURN">("SUBMIT");
   const [workflowRemarks, setWorkflowRemarks] = useState<string>("");
@@ -74,7 +76,22 @@ export default function OpportunitiesPage() {
       if (!resCases.ok) throw new Error("Failed to fetch commercial deal opportunities");
 
       const dataCases = await resCases.json();
-      setCases(dataCases.cases || []);
+      const loadedCases: OpportunityCase[] = dataCases.cases || [];
+      setCases(loadedCases);
+
+      if (typeof window !== "undefined") {
+        const deepLinkId = new URLSearchParams(window.location.search).get("id");
+        if (deepLinkId && handledDeepLinkRef.current !== deepLinkId) {
+          handledDeepLinkRef.current = deepLinkId;
+          const target = loadedCases.find((c) => c.id === deepLinkId);
+          if (target) {
+            setDetailCase(target);
+          } else {
+            setDetailCase(null);
+            setError("Requested opportunity record was not found or you do not have permission to view it.");
+          }
+        }
+      }
 
       if (resProspects.ok) {
         const dataProspects = await resProspects.json();
@@ -148,6 +165,7 @@ export default function OpportunitiesPage() {
 
       setShowWorkflowModal(false);
       setSelectedCase(null);
+      setDetailCase(null);
       setWorkflowRemarks("");
       setWorkflowError(null);
       fetchData();
@@ -565,6 +583,93 @@ export default function OpportunitiesPage() {
                 </Button>
               </div>
             </form>
+          </Card>
+        </div>
+      )}
+
+      {/* Opportunity Detail Modal (Deep Link / Direct Inspection) */}
+      {detailCase && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/50 p-4">
+          <Card className="w-full max-w-lg bg-surface-container-lowest p-6 space-y-4 shadow-xl" role="dialog" aria-label="Opportunity Details">
+            <div className="flex items-start justify-between gap-3 border-b border-outline-variant pb-3">
+              <div>
+                <div className="text-[10px] font-mono text-on-surface-variant uppercase">
+                  CASE-{detailCase.id.substring(0, 8).toUpperCase()}
+                </div>
+                <h3 className="text-base font-bold text-on-surface">{detailCase.title}</h3>
+              </div>
+              <div className="flex items-center gap-2">
+                {getLifecycleBadge(detailCase.lifecycle)}
+                <button
+                  onClick={() => setDetailCase(null)}
+                  className="text-on-surface-variant hover:text-on-surface"
+                  aria-label="Close opportunity detail modal"
+                >
+                  <span className="material-symbols-outlined text-[18px]">close</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 text-xs bg-surface-container-low p-3 rounded-lg border border-outline-variant/40">
+              <div>
+                <div className="text-[10px] font-bold text-on-surface-variant uppercase">Prospect Client</div>
+                <div className="font-semibold text-on-surface">{detailCase.prospectClient?.name || "Existing / Direct Client"}</div>
+              </div>
+              <div>
+                <div className="text-[10px] font-bold text-on-surface-variant uppercase">Operation Scope</div>
+                <div className="font-semibold text-on-surface">{detailCase.operationType || "SECURITY_GUARDING"}</div>
+              </div>
+              <div>
+                <div className="text-[10px] font-bold text-on-surface-variant uppercase">Business Outcome</div>
+                <div className="font-semibold text-on-surface">{detailCase.businessOutcome || "IN_PROGRESS"}</div>
+              </div>
+              <div>
+                <div className="text-[10px] font-bold text-on-surface-variant uppercase">Created By</div>
+                <div className="font-semibold text-on-surface">{detailCase.createdBy}</div>
+              </div>
+              <div>
+                <div className="text-[10px] font-bold text-on-surface-variant uppercase">Site Surveys</div>
+                <div className="font-semibold text-on-surface">{detailCase.surveys?.length || 0}</div>
+              </div>
+              <div>
+                <div className="text-[10px] font-bold text-on-surface-variant uppercase">Created At</div>
+                <div className="font-semibold text-on-surface">{new Date(detailCase.createdAt).toLocaleDateString()}</div>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-end gap-2 pt-3 border-t border-outline-variant">
+              {detailCase.lifecycle === "DRAFT" && canSubmitOpportunity(user, detailCase) && (
+                <Button variant="primary" size="sm" onClick={() => openWorkflowModal(detailCase, "SUBMIT")} className="text-xs">
+                  Submit to Workflow
+                </Button>
+              )}
+              {detailCase.lifecycle === "IN_WORKFLOW" && canApproveOpportunity(user, detailCase) && (
+                <>
+                  <Button variant="success" size="sm" onClick={() => openWorkflowModal(detailCase, "APPROVE")} className="text-xs">
+                    Approve
+                  </Button>
+                  <Button variant="warning" size="sm" onClick={() => openWorkflowModal(detailCase, "RETURN")} className="text-xs">
+                    Return
+                  </Button>
+                  <Button variant="error" size="sm" onClick={() => openWorkflowModal(detailCase, "REJECT")} className="text-xs">
+                    Reject
+                  </Button>
+                </>
+              )}
+              {detailCase.lifecycle === "COMPLETED" && (
+                <>
+                  <Link href="/commercial/surveys">
+                    <Button variant="secondary" size="sm" className="text-xs">Site Surveys</Button>
+                  </Link>
+                  <Link href="/commercial/costing">
+                    <Button variant="primary" size="sm" className="text-xs">Costing</Button>
+                  </Link>
+                </>
+              )}
+              <Button variant="ghost" size="sm" onClick={() => setDetailCase(null)} className="text-xs">
+                Close
+              </Button>
+            </div>
           </Card>
         </div>
       )}

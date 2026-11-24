@@ -17,6 +17,9 @@ export async function checkApiAuth(
   }
   
   const user = session.user as any;
+  if (user.isDisabled === true) {
+    return { error: NextResponse.json({ error: "Unauthorized: Account is inactive or disabled" }, { status: 401 }), session: null };
+  }
   const userRole = user.role;
   const userPermissions = user.permissions || [];
   const operationAccess = user.operationAccess || {};
@@ -82,4 +85,94 @@ export async function checkApiAuth(
   }
 
   return { error: null, session: { ...session, user: { ...user, isSelfServiceOnly } } };
+}
+
+export function resolveCompanyScope(
+  user: any,
+  options?: {
+    crossCompanyPermissions?: string[];
+    requestedCompanyId?: string | null;
+    allowSuperAdminOnly?: boolean;
+  }
+): {
+  canCrossCompany: boolean;
+  companyId: string | null;
+  allowedCompanyIds: string[];
+  error: NextResponse | null;
+} {
+  const canCrossCompany = options?.allowSuperAdminOnly
+    ? user?.role === "SUPER_ADMIN"
+    : isAdminUser(user) ||
+      hasPermission(user, "manpower.admin.full_access") ||
+      (options?.crossCompanyPermissions || []).some((p) => hasPermission(user, p));
+
+  const sessionCompanyId =
+    typeof user?.companyId === "string" && user.companyId.trim().length > 0 ? user.companyId.trim() : null;
+  const allowedCompanyIds = Array.isArray(user?.allowedCompanyIds)
+    ? user.allowedCompanyIds.filter((id: unknown): id is string => typeof id === "string" && id.trim().length > 0)
+    : [];
+  const requested =
+    typeof options?.requestedCompanyId === "string" && options.requestedCompanyId.trim().length > 0
+      ? options.requestedCompanyId.trim()
+      : null;
+
+  if (canCrossCompany) {
+    return { canCrossCompany: true, companyId: requested, allowedCompanyIds, error: null };
+  }
+
+  if (sessionCompanyId) {
+    return { canCrossCompany: false, companyId: sessionCompanyId, allowedCompanyIds, error: null };
+  }
+
+  if (allowedCompanyIds.length > 0) {
+    if (requested && !allowedCompanyIds.includes(requested)) {
+      return {
+        canCrossCompany: false,
+        companyId: null,
+        allowedCompanyIds,
+        error: NextResponse.json({ error: "Forbidden: Company boundary violation." }, { status: 403 }),
+      };
+    }
+    return { canCrossCompany: false, companyId: requested, allowedCompanyIds, error: null };
+  }
+
+  return {
+    canCrossCompany: false,
+    companyId: null,
+    allowedCompanyIds: [],
+    error: NextResponse.json(
+      { error: "Forbidden: Company identity is required." },
+      { status: 403 }
+    ),
+  };
+}
+
+export function checkRecordCompanyAccess(
+  user: any,
+  recordCompanyId: string | null | undefined,
+  options?: {
+    crossCompanyPermissions?: string[];
+    allowSuperAdminOnly?: boolean;
+  }
+): NextResponse | null {
+  const scope = resolveCompanyScope(user, options);
+  if (scope.error) return scope.error;
+  if (scope.canCrossCompany) return null;
+
+  const recComp = typeof recordCompanyId === "string" && recordCompanyId.trim().length > 0 ? recordCompanyId.trim() : null;
+  if (scope.companyId) {
+    if (recComp && recComp !== scope.companyId) {
+      return NextResponse.json({ error: "Forbidden: Company boundary violation." }, { status: 403 });
+    }
+    return null;
+  }
+
+  if (scope.allowedCompanyIds.length > 0) {
+    if (recComp && !scope.allowedCompanyIds.includes(recComp)) {
+      return NextResponse.json({ error: "Forbidden: Company boundary violation." }, { status: 403 });
+    }
+    return null;
+  }
+
+  return NextResponse.json({ error: "Forbidden: Company identity is required." }, { status: 403 });
 }
