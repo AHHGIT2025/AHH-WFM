@@ -5,6 +5,7 @@ import { prisma } from "@ahh-wfm/database";
 
 const WORKER_ID = `secfac-evaluation-worker-${process.pid}`;
 const EVALUATION_INTERVAL_MS = Number(process.env.SECFAC_EVALUATION_INTERVAL_MS) || 300000; // 5 minutes
+const HEARTBEAT_INTERVAL_MS = Math.min(60000, EVALUATION_INTERVAL_MS); // 60 seconds
 let isShuttingDown = false;
 
 // ─── Pilot scope: SECURITY_GUARDING only ─────────────────────────────────────
@@ -60,11 +61,13 @@ async function runEvaluationCycleForScope(opType: OperationType): Promise<void> 
   try {
     const result = await evaluateOperationEscalations(opType);
 
+    const now = new Date();
     await prisma.secFacWorkerJob.update({
       where: { id: job.id },
       data: {
         status: "COMPLETED",
-        completedAt: new Date(),
+        completedAt: now,
+        heartbeatAt: now,
         processedCount: result.alertsEvaluated,
         successCount: result.escalatedCount,
         errorSummary: result.warnings.length > 0 ? result.warnings.join("; ") : null
@@ -103,6 +106,44 @@ async function runFullEvaluationCycle(): Promise<void> {
   }
 }
 
+/**
+ * Keeps the idle worker heartbeat fresh during the 5-minute sleep interval
+ * without masking FAILED jobs as healthy.
+ */
+export async function recordEvaluationIdleHeartbeat(opType: OperationType): Promise<boolean> {
+  if (process.env.SECFAC_EVALUATION_WORKER_ENABLED !== "true") return false;
+  const lockKey = `secfac:worker:evaluation:${opType.toLowerCase()}`;
+  const lastJob = await prisma.secFacWorkerJob.findFirst({
+    where: { lockKey, operationType: opType },
+    orderBy: { startedAt: "desc" },
+    select: { id: true, status: true }
+  });
+  if (!lastJob || lastJob.status !== "COMPLETED") {
+    return false;
+  }
+  await prisma.secFacWorkerJob.update({
+    where: { id: lastJob.id },
+    data: { heartbeatAt: new Date() }
+  });
+  return true;
+}
+
+async function sleepWithEvaluationHeartbeat(intervalMs: number): Promise<void> {
+  let remainingMs = intervalMs;
+  while (remainingMs > 0 && !isShuttingDown) {
+    const stepMs = Math.min(HEARTBEAT_INTERVAL_MS, remainingMs);
+    await new Promise((resolve) => setTimeout(resolve, stepMs));
+    remainingMs -= stepMs;
+    if (remainingMs > 0 && !isShuttingDown) {
+      for (const scope of PILOT_SCOPE) {
+        await recordEvaluationIdleHeartbeat(scope).catch((err) => {
+          console.error(`[SecFac Evaluation Worker] Heartbeat error for '${scope}':`, err?.message || String(err));
+        });
+      }
+    }
+  }
+}
+
 async function startWorkerLoop(): Promise<void> {
   // Fail fast on a broken Prisma client — never silently continue.
   assertPrismaClient();
@@ -116,7 +157,7 @@ async function startWorkerLoop(): Promise<void> {
 
   while (!isShuttingDown) {
     await runFullEvaluationCycle();
-    await new Promise(resolve => setTimeout(resolve, EVALUATION_INTERVAL_MS));
+    await sleepWithEvaluationHeartbeat(EVALUATION_INTERVAL_MS);
   }
 
   console.log(`[SecFac Evaluation Worker] Gracefully stopped.`);

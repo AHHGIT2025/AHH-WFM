@@ -1,6 +1,6 @@
 import { prisma } from "@ahh-wfm/database";
 import { acquireWorkerLock, renewWorkerLock, releaseWorkerLock, WorkerDatabaseError } from "../lib/secfac-worker-lock";
-import { captureMonitoringSnapshot, getQueueHealth, getWorkerHealth, createMonitoringAlertIfBreached } from "../lib/secfac-monitoring";
+import { captureMonitoringSnapshot, getQueueHealth, getWorkerHealth, createMonitoringAlertIfBreached, resolveMonitoringAlertsOnRecovery } from "../lib/secfac-monitoring";
 
 /**
  * Startup assertion — fails fast if Prisma client is broken.
@@ -80,6 +80,12 @@ export async function runMonitoringWorkerCycle(
         evalHealth.healthReason,
         operationType
       );
+    } else if (evalHealth.healthStatus === "HEALTHY") {
+      await resolveMonitoringAlertsOnRecovery(
+        "WORKER_EVAL_UNHEALTHY",
+        operationType,
+        "Auto-resolved: Evaluation Worker heartbeat and job status returned to HEALTHY."
+      );
     }
 
     if (notifHealth.healthStatus === "UNHEALTHY" || notifHealth.healthStatus === "DEGRADED") {
@@ -90,6 +96,12 @@ export async function runMonitoringWorkerCycle(
         notifHealth.healthReason,
         operationType
       );
+    } else if (notifHealth.healthStatus === "HEALTHY") {
+      await resolveMonitoringAlertsOnRecovery(
+        "WORKER_NOTIF_UNHEALTHY",
+        operationType,
+        "Auto-resolved: Notification Worker heartbeat and job status returned to HEALTHY."
+      );
     }
 
     if (queueHealth.healthStatus !== "HEALTHY") {
@@ -99,6 +111,12 @@ export async function runMonitoringWorkerCycle(
         `Queue Health ${queueHealth.healthStatus}`,
         queueHealth.warnings.join(" "),
         operationType
+      );
+    } else {
+      await resolveMonitoringAlertsOnRecovery(
+        "QUEUE_HEALTH_WARNING",
+        operationType,
+        "Auto-resolved: Notification Queue health returned to HEALTHY."
       );
     }
 

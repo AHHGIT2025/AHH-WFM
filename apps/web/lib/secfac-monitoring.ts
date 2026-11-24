@@ -551,6 +551,30 @@ export async function createMonitoringAlertIfBreached(
   const dateStr = businessDate.toISOString().split("T")[0];
   const deduplicationKey = `${operationType}:${monitoringCode}:${dateStr}:${severity}`;
 
+  // Reuse any existing open unresolved monitoring alert for the same operation + code
+  // so an ongoing condition does not accumulate duplicate OPEN alerts across days.
+  const openUnresolved = await prisma.secFacOperationalAlert.findFirst({
+    where: {
+      operationType,
+      alertCode: monitoringCode,
+      sourceType: "MONITORING_ENGINE",
+      status: { in: ["OPEN", "ACKNOWLEDGED", "IN_PROGRESS"] }
+    },
+    orderBy: { firstDetectedAt: "asc" }
+  });
+
+  if (openUnresolved) {
+    return prisma.secFacOperationalAlert.update({
+      where: { id: openUnresolved.id },
+      data: {
+        lastDetectedAt: businessDate,
+        message,
+        severity: severity === "CRITICAL" ? "CRITICAL" : openUnresolved.severity,
+        title
+      }
+    });
+  }
+
   const existingAlert = await prisma.secFacOperationalAlert.findUnique({
     where: {
       operationType_deduplicationKey: {
@@ -580,4 +604,26 @@ export async function createMonitoringAlertIfBreached(
   });
 
   return newAlert;
+}
+
+export async function resolveMonitoringAlertsOnRecovery(
+  monitoringCode: string,
+  operationType: string = "SECURITY_GUARDING",
+  resolutionNote: string = "Auto-resolved: health returned to HEALTHY."
+) {
+  const now = new Date();
+  return prisma.secFacOperationalAlert.updateMany({
+    where: {
+      operationType,
+      alertCode: monitoringCode,
+      sourceType: "MONITORING_ENGINE",
+      status: { in: ["OPEN", "ACKNOWLEDGED", "IN_PROGRESS"] }
+    },
+    data: {
+      status: "RESOLVED",
+      resolvedAt: now,
+      resolutionNote,
+      updatedAt: now
+    }
+  });
 }
