@@ -141,6 +141,7 @@ export function assessCostingValidation(
 
   const basicItem = items.find((i) => i.elementCode === "BASIC_PAY");
   const allowanceItem = items.find((i) => i.elementCode === "ALLOWANCES");
+  const relieverItem = items.find((i) => i.elementCode === "RELIEVER_COST");
 
   const parseOverrideAudit = (fieldPath: string) =>
     overrides.filter(
@@ -154,6 +155,7 @@ export function assessCostingValidation(
 
   const basicOverrideLogs = parseOverrideAudit("items[BASIC_PAY]");
   const allowanceOverrideLogs = parseOverrideAudit("items[ALLOWANCES]");
+  const relieverOverrideLogs = parseOverrideAudit("items[RELIEVER_COST]");
 
   const hasBasicPayQuantityOverride =
     basicItem?.calculationBasis === "OVERRIDE" &&
@@ -170,6 +172,10 @@ export function assessCostingValidation(
   const hasAllowanceRateOverride =
     allowanceItem?.calculationBasis === "OVERRIDE" &&
     allowanceOverrideLogs.some((o) => /rate=([0-9]*\.?[0-9]+)/.test((o as any).newValue || "") && Number(RegExp.$1) > 0);
+
+  const hasRelieverRateOverride =
+    relieverItem?.calculationBasis === "OVERRIDE" &&
+    relieverOverrideLogs.some((o) => /rate=([0-9]*\.?[0-9]+)/.test((o as any).newValue || "") && Number(RegExp.$1) >= 0);
 
   const hasAllowanceOverride = hasAllowanceQuantityOverride || hasAllowanceRateOverride;
 
@@ -195,13 +201,21 @@ export function assessCostingValidation(
   ) {
     fallbackRateItems.push("ALLOWANCES");
   }
+  if (
+    relieverItem &&
+    !hasRelieverRateOverride &&
+    (relieverItem.calculationBasis === "FALLBACK" || relieverItem.calculationBasis === "SURVEY_REQUIREMENT" || !hasActiveCostConfig)
+  ) {
+    fallbackRateItems.push("RELIEVER_COST");
+  }
 
   const usesFallbackRates = fallbackRateItems.length > 0;
   const hasAllFallbacksOverridden =
     (!assumedFallbackHeadcount || hasBasicPayQuantityOverride) &&
     (!unmappedShiftPattern) &&
     (!fallbackRateItems.includes("BASIC_PAY") || hasBasicPayRateOverride) &&
-    (!fallbackRateItems.includes("ALLOWANCES") || hasAllowanceOverride);
+    (!fallbackRateItems.includes("ALLOWANCES") || hasAllowanceOverride) &&
+    (!fallbackRateItems.includes("RELIEVER_COST") || hasRelieverRateOverride);
 
   const missingMandatoryFields: string[] = [];
   if (!hasMappedSurveyHeadcount) {
@@ -239,6 +253,18 @@ export function assessCostingValidation(
       `Hardcoded fallback unit rates are active on: ${fallbackRateItems.join(", ")}.`
     );
   }
+  if (relieverItem && relieverItem.calculationBasis !== "OVERRIDE") {
+    warnings.push(
+      "RELIEVER_COST quantity uses the 15% baseline formula (ceil(headcount * 0.15)); rate source is independent and quantity policy remains pending Operations approval."
+    );
+  }
+  const relieverReqRespVal = responses.find((r) => r.elementCode === "RELIEVER_REQUIRED");
+  const coverageRespVal = responses.find((r) => r.elementCode === "COVERAGE_TYPE");
+  if (relieverReqRespVal?.booleanValue === false && coverageRespVal?.textValue?.includes("24/7")) {
+    warnings.push(
+      "Survey specifies RELIEVER_REQUIRED=false alongside 24/7 COVERAGE_TYPE; confirm Operations policy approval."
+    );
+  }
 
   let validationStatus: CostingValidationSummary["validationStatus"] = "UNVALIDATED_FALLBACK";
   if (hasMappedSurveyHeadcount && hasMappedReliefDriver && !unmappedShiftPattern && hasActiveCostConfig && !usesFallbackRates) {
@@ -253,7 +279,9 @@ export function assessCostingValidation(
     validationStatus === "VALIDATED_CONFIGURED" || validationStatus === "VALIDATED_BY_OVERRIDE";
   const ratesValidated =
     (!usesFallbackRates && hasActiveCostConfig) ||
-    (hasBasicPayRateOverride && hasAllowanceOverride);
+    (hasBasicPayRateOverride &&
+      hasAllowanceOverride &&
+      (!relieverItem || !fallbackRateItems.includes("RELIEVER_COST") || hasRelieverRateOverride));
   const blocksCommercialSubmission =
     !hasMappedSurveyHeadcount ||
     !hasMappedReliefDriver ||
@@ -607,12 +635,51 @@ export async function calculateCostingEstimate(
     overrideReason: allowanceOverrideReason
   });
 
-  // Check Reliever Cost Line if 24/7 or relief required from survey
-  const reliefResponse = survey.responses.find((r) => r.elementCode === "RELIEVER_REQUIRED" || r.elementCode === "COVERAGE_TYPE");
-  const requiresRelief = reliefResponse?.booleanValue || reliefResponse?.textValue?.includes("24/7");
+  // Check Reliever Cost Line: explicit RELIEVER_REQUIRED=false disables reliever; otherwise RELIEVER_REQUIRED=true or 24/7 coverage triggers reliever line
+  const relieverReqResponse = survey.responses.find((r) => r.elementCode === "RELIEVER_REQUIRED");
+  const coverageTypeResponse = survey.responses.find((r) => r.elementCode === "COVERAGE_TYPE");
+  const explicitNoRelief = relieverReqResponse?.booleanValue === false;
+  const requiresRelief =
+    !explicitNoRelief &&
+    Boolean(relieverReqResponse?.booleanValue === true || coverageTypeResponse?.textValue?.includes("24/7"));
   if (requiresRelief) {
-    const relieverQty = new Decimal(Math.max(1, Math.ceil(totalHeadcount * 0.15)));
-    const relieverUnitRate = basicUnitRate.add(allowanceUnitRate);
+    let relieverHeadcount = Math.max(1, Math.ceil(totalHeadcount * 0.15));
+    const pc2aRelieverRate =
+      pc2aRatesMap &&
+      pc2aRatesMap["RELIEVER_COST"] !== undefined &&
+      Number.isFinite(Number(pc2aRatesMap["RELIEVER_COST"])) &&
+      Number(pc2aRatesMap["RELIEVER_COST"]) >= 0
+        ? Number(pc2aRatesMap["RELIEVER_COST"])
+        : null;
+    const relieverRateRow = activeVersion?.rates?.find((r: any) => r.elementCode === "RELIEVER_COST");
+    const configuredRelieverRate =
+      pc2aRelieverRate !== null
+        ? pc2aRelieverRate
+        : relieverRateRow && Number.isFinite(Number(relieverRateRow.rateValue)) && Number(relieverRateRow.rateValue) >= 0
+          ? Number(relieverRateRow.rateValue)
+          : null;
+    const hasConfiguredRelieverRate = configuredRelieverRate !== null;
+    let relieverUnitRate = basicUnitRate.add(allowanceUnitRate);
+    if (hasConfiguredRelieverRate) {
+      relieverUnitRate = new Decimal(configuredRelieverRate!.toString());
+    }
+    const relieverOverride = overrides.find((o) => o.elementCode === "RELIEVER_COST");
+    let relieverCalcBasis =
+      hasMappedHeadcount && hasConfiguredRelieverRate ? "CONFIGURED" : "FALLBACK";
+    let relieverOverrideReason: string | null = hasConfiguredRelieverRate
+      ? "Rate: configured PC-2A/CostConfig; Qty: 15% baseline formula (pending Operations policy approval)"
+      : "Rate: fallback baseline; Qty: 15% baseline formula (pending Operations policy approval)";
+    if (relieverOverride && (relieverOverride.unitRate !== undefined || relieverOverride.quantity !== undefined)) {
+      if (relieverOverride.unitRate !== undefined) {
+        relieverUnitRate = new Decimal(relieverOverride.unitRate);
+      }
+      if (relieverOverride.quantity !== undefined && relieverOverride.quantity > 0) {
+        relieverHeadcount = relieverOverride.quantity;
+      }
+      relieverCalcBasis = "OVERRIDE";
+      relieverOverrideReason = relieverOverride.reason || "Manual reliever override";
+    }
+    const relieverQty = new Decimal(relieverHeadcount);
     const relieverTotal = relieverQty.mul(relieverUnitRate);
     items.push({
       elementCode: "RELIEVER_COST",
@@ -623,8 +690,8 @@ export async function calculateCostingEstimate(
       quantity: relieverQty,
       unitRate: relieverUnitRate,
       totalAmount: relieverTotal,
-      calculationBasis: "SURVEY_REQUIREMENT",
-      overrideReason: null
+      calculationBasis: relieverCalcBasis,
+      overrideReason: relieverOverrideReason
     });
   }
 

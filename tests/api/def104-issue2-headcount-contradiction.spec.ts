@@ -34,7 +34,7 @@ describe("Issue #2 â€” DEF-104 Headcount Validation Contradiction (Scenarios Aâ€
           approvedBy: "emp-checker",
           effectiveFrom: new Date("2026-01-01T00:00:00Z"),
           effectiveTo: null,
-          ratesJson: { BASIC_PAY: 2400, ALLOWANCES: 900 },
+          ratesJson: { BASIC_PAY: 2400, ALLOWANCES: 900, RELIEVER_COST: 3300 },
         },
       ],
     },

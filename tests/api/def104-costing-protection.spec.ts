@@ -415,7 +415,9 @@ describe("DEF-104 Commercial Costing Protection (TEST DATABASE)", () => {
     );
     expect(validPatch.status).toBe(200);
     const patched = await validPatch.json();
-    expect(patched.estimate.validationSummary.validationStatus).toBe("VALIDATED_BY_OVERRIDE");
+    // RELIEVER_COST remains FALLBACK because RELIEVER_REQUIRED=true and only BASIC_PAY + ALLOWANCES were overridden
+    expect(patched.estimate.validationSummary.validationStatus).toBe("UNVALIDATED_FALLBACK");
+    expect(patched.estimate.validationSummary.fallbackRateItems).toContain("RELIEVER_COST");
     expect(patched.estimate.validationSummary.blocksCommercialSubmission).toBe(true);
     expect(patched.estimate.versions[0].overrides.length).toBe(2);
 
