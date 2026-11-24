@@ -5,6 +5,7 @@ import { hasPermission, isAdminUser } from "@/lib/permissions";
 import { validateSurveyStaffingForSubmission } from "@/lib/survey-validation";
 import { findConflictingActiveSurvey, formatDuplicateSurveyMessage } from "@/lib/survey-uniqueness";
 import { checkOpportunityEligibilityForSurvey } from "@/lib/survey-eligibility";
+import { resolveCommercialWorkflowTemplate } from "@/lib/commercial-workflow-template";
 
 export async function POST(
   request: Request,
@@ -129,35 +130,14 @@ export async function POST(
 
       // Mandatory Centralized Workflow Resolution from Settings > Workflow Setup
       // Only SITE_SURVEY or compatible legacy PRE_CONTRACT_SURVEY allowed (never PRE_CONTRACT_CASE)
-      const templateInclude = {
-        levels: {
-          orderBy: { levelNumber: "asc" as const },
-          include: { approvers: true }
-        }
-      };
-      const templateOrderBy = [
-        { isDefault: "desc" as const },
-        { createdAt: "desc" as const }
-      ];
-      const template =
-        (await prisma.workflowTemplate.findFirst({
-          where: { isActive: true, moduleType: "SITE_SURVEY", levels: { some: {} } },
-          include: templateInclude,
-          orderBy: templateOrderBy
-        })) ||
-        (await prisma.workflowTemplate.findFirst({
-          where: { isActive: true, moduleType: "PRE_CONTRACT_SURVEY", levels: { some: {} } },
-          include: templateInclude,
-          orderBy: templateOrderBy
-        }));
-
-      // Reject submission if no active workflow template is configured
-      if (!template || !template.levels || template.levels.length === 0) {
+      const templateResolution = await resolveCommercialWorkflowTemplate(prisma, "SITE_SURVEY");
+      if (!templateResolution.ok) {
         return NextResponse.json(
-          { error: "Missing Workflow Configuration: No active workflow template configured under Settings > Workflow Setup for commercial site surveys." },
+          { error: templateResolution.error },
           { status: 400 }
         );
       }
+      const template = templateResolution.template;
 
       const { savedInstance, updatedSurvey } = await prisma.$transaction(async (tx) => {
         let savedInst;

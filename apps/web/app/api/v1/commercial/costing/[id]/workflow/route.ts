@@ -3,6 +3,7 @@ import { prisma } from "@ahh-wfm/database";
 import { checkApiAuth } from "@/lib/api-guards";
 import { hasPermission, isAdminUser } from "@/lib/permissions";
 import { assessCostingValidation, formatCostingValidationBlockError, generateCostingSnapshot, serializeCostingEstimate } from "@/lib/precontract-costing";
+import { resolveCommercialWorkflowTemplate } from "@/lib/commercial-workflow-template";
 
 export async function POST(
   request: Request,
@@ -109,35 +110,15 @@ export async function POST(
       }
 
       // Mandatory Centralized Workflow Resolution from Settings > Workflow Setup
-      // Deterministic priority: PRE_CONTRACT_COSTING -> COMMERCIAL_COSTING (never PRE_CONTRACT_CASE)
-      const templateInclude = {
-        levels: {
-          orderBy: { levelNumber: "asc" as const },
-          include: { approvers: true }
-        }
-      };
-      const templateOrderBy = [
-        { isDefault: "desc" as const },
-        { createdAt: "desc" as const }
-      ];
-      const template =
-        (await prisma.workflowTemplate.findFirst({
-          where: { isActive: true, moduleType: "PRE_CONTRACT_COSTING", levels: { some: {} } },
-          include: templateInclude,
-          orderBy: templateOrderBy
-        })) ||
-        (await prisma.workflowTemplate.findFirst({
-          where: { isActive: true, moduleType: "COMMERCIAL_COSTING", levels: { some: {} } },
-          include: templateInclude,
-          orderBy: templateOrderBy
-        }));
-
-      if (!template || !template.levels || template.levels.length === 0) {
+      // Deterministic resolution across PRE_CONTRACT_COSTING / COMMERCIAL_COSTING / COSTING (never PRE_CONTRACT_CASE)
+      const templateResolution = await resolveCommercialWorkflowTemplate(prisma, "COSTING");
+      if (!templateResolution.ok) {
         return NextResponse.json(
-          { error: "Missing Workflow Configuration: No active workflow template configured under Settings > Workflow Setup for commercial costing." },
+          { error: templateResolution.error },
           { status: 400 }
         );
       }
+      const template = templateResolution.template;
 
       if (workflowInstance) {
         workflowInstance = await prisma.workflowInstance.update({

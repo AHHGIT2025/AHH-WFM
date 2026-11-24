@@ -3,6 +3,7 @@ import { prisma, PreContractLifecycle } from "@ahh-wfm/database";
 import { checkApiAuth } from "@/lib/api-guards";
 import { hasPermission, isAdminUser } from "@/lib/permissions";
 import { canSubmitOpportunity } from "@/lib/opportunity-workflow-helpers";
+import { resolveCommercialWorkflowTemplate } from "@/lib/commercial-workflow-template";
 
 export async function POST(
   request: Request,
@@ -101,34 +102,14 @@ export async function POST(
       }
 
       // Mandatory Centralized Workflow Resolution from Settings > Workflow Setup
-      const template = await prisma.workflowTemplate.findFirst({
-        where: {
-          isActive: true,
-          OR: [
-            { moduleType: "PRE_CONTRACT_CASE" },
-            { moduleType: "COMMERCIAL_OPPORTUNITY" }
-          ],
-          levels: { some: {} }
-        },
-        include: {
-          levels: {
-            orderBy: { levelNumber: "asc" },
-            include: { approvers: true }
-          }
-        },
-        orderBy: [
-          { isDefault: "desc" },
-          { createdAt: "desc" }
-        ]
-      });
-
-      // Reject submission if no active workflow template with levels is configured
-      if (!template || !template.levels || template.levels.length === 0) {
+      const templateResolution = await resolveCommercialWorkflowTemplate(prisma, "OPPORTUNITY");
+      if (!templateResolution.ok) {
         return NextResponse.json(
-          { error: "Missing Workflow Configuration: No active workflow template configured under Settings > Workflow Setup for commercial opportunity cases." },
+          { error: templateResolution.error },
           { status: 400 }
         );
       }
+      const template = templateResolution.template;
 
       const { savedInstance, updatedCase } = await prisma.$transaction(async (tx) => {
         let savedInst;

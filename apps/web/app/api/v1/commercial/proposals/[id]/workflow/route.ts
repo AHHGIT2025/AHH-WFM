@@ -3,6 +3,7 @@ import { prisma } from "@ahh-wfm/database";
 import { checkApiAuth } from "../../../../../../../lib/api-guards";
 import { hasPermission } from "../../../../../../../lib/permissions";
 import { generateProposalSnapshot } from "../../../../../../../lib/precontract-proposal";
+import { resolveCommercialWorkflowTemplate } from "../../../../../../../lib/commercial-workflow-template";
 
 export async function POST(
   req: NextRequest,
@@ -69,31 +70,14 @@ export async function POST(
         return NextResponse.json({ error: "Invalid Action: Approved or issued proposals cannot be resubmitted. Create a new revision." }, { status: 400 });
       }
 
-      const templateInclude = {
-        levels: {
-          orderBy: { levelNumber: "asc" as const },
-          include: { approvers: true }
-        }
-      };
-      const templateOrderBy = [{ isDefault: "desc" as const }, { createdAt: "desc" as const }];
-      const template =
-        (await prisma.workflowTemplate.findFirst({
-          where: { isActive: true, moduleType: "PRE_CONTRACT_PROPOSAL", levels: { some: {} } },
-          include: templateInclude,
-          orderBy: templateOrderBy
-        })) ||
-        (await prisma.workflowTemplate.findFirst({
-          where: { isActive: true, moduleType: "COMMERCIAL_PROPOSAL", levels: { some: {} } },
-          include: templateInclude,
-          orderBy: templateOrderBy
-        }));
-
-      if (!template || !template.levels || template.levels.length === 0) {
+      const templateResolution = await resolveCommercialWorkflowTemplate(prisma, "PROPOSAL");
+      if (!templateResolution.ok) {
         return NextResponse.json(
-          { error: "Missing Workflow Configuration: No active workflow template configured under Settings > Workflow Setup for commercial proposals." },
+          { error: templateResolution.error },
           { status: 400 }
         );
       }
+      const template = templateResolution.template;
 
       if (workflowInstance) {
         workflowInstance = await prisma.workflowInstance.update({

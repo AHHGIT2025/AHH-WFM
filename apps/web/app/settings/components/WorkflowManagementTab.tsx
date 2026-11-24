@@ -260,6 +260,20 @@ export function WorkflowManagementTab({ employees, onShowMessage }: WorkflowMana
     }
   };
 
+  const groupedActiveByModule: Record<string, any[]> = {};
+  for (const t of templates) {
+    if (!t.isActive) continue;
+    const key = String(t.moduleType || "UNKNOWN");
+    if (!groupedActiveByModule[key]) groupedActiveByModule[key] = [];
+    groupedActiveByModule[key].push(t);
+  }
+  const ambiguousModules = Object.entries(groupedActiveByModule)
+    .filter(([, list]) => {
+      const defaults = list.filter((t) => Boolean(t.isDefault));
+      return defaults.length > 1 || (defaults.length === 0 && list.length > 1);
+    })
+    .map(([mod, list]) => ({ moduleType: mod, count: list.length }));
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -272,6 +286,20 @@ export function WorkflowManagementTab({ employees, onShowMessage }: WorkflowMana
           Create Template
         </Button>
       </div>
+
+      {ambiguousModules.length > 0 && (
+        <div className="p-3 rounded-lg bg-status-warning/10 border border-status-warning text-xs space-y-1">
+          <div className="font-bold text-status-warning">
+            Ambiguous Active Workflow Configuration Detected
+          </div>
+          <p className="text-on-surface-variant">
+            The following modules have multiple active default templates or multiple active templates without a single Default selected. Workflow submission will fail closed until exactly one active Default is selected per module:{" "}
+            <span className="font-semibold text-on-surface">
+              {ambiguousModules.map((m) => `${m.moduleType} (${m.count} active)`).join(", ")}
+            </span>
+          </p>
+        </div>
+      )}
 
       {loading ? (
         <div className="flex justify-center items-center py-12">
@@ -303,7 +331,7 @@ export function WorkflowManagementTab({ employees, onShowMessage }: WorkflowMana
                 <div className="flex items-center gap-4 text-[11px] text-on-surface-variant">
                   <span className="flex items-center gap-1">
                     <span className="material-symbols-outlined text-sm">settings_input_component</span>
-                    {tpl.moduleType?.replace(/_/g, " ")}
+                    {tpl.moduleType?.replace(/_/g, " ")} <span className="font-mono text-[10px] opacity-75">({tpl.moduleType})</span>
                   </span>
                   <span className="flex items-center gap-1">
                     <span className="material-symbols-outlined text-sm">target</span>
