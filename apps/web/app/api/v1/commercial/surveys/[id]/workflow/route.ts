@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma, PreContractLifecycle } from "@ahh-wfm/database";
 import { checkApiAuth } from "@/lib/api-guards";
 import { hasPermission, isAdminUser } from "@/lib/permissions";
+import { validateSurveyStaffingForSubmission } from "@/lib/survey-validation";
 
 export async function POST(
   request: Request,
@@ -40,7 +41,7 @@ export async function POST(
 
     const survey = await prisma.preContractSurvey.findUnique({
       where: { id: surveyId },
-      include: { case: true }
+      include: { case: true, responses: true }
     });
 
     if (!survey) {
@@ -78,6 +79,19 @@ export async function POST(
       },
       include: { history: true }
     });
+
+    if (action === "SUBMIT" || action === "APPROVE") {
+      const staffingValidation = validateSurveyStaffingForSubmission(survey.responses);
+      if (!staffingValidation.valid) {
+        return NextResponse.json(
+          {
+            error: staffingValidation.errorMessage,
+            missingFields: staffingValidation.missingFields
+          },
+          { status: 400 }
+        );
+      }
+    }
 
     if (action === "SUBMIT") {
       if (survey.lifecycle === "IN_WORKFLOW") {

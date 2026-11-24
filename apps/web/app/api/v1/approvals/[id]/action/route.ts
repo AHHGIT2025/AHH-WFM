@@ -5,6 +5,7 @@ import { WorkflowEngine } from "@/lib/workflow-engine";
 import { WorkflowAdapterRegistry } from "@/lib/workflow/adapters/registry";
 import { executeClearanceApprove, executeClearanceReject, executeClearanceReturn, executeClearanceMarkNotApplicable } from "@/lib/clearance-execution";
 import { assessCostingValidation, formatCostingValidationBlockError } from "@/lib/precontract-costing";
+import { validateSurveyStaffingForSubmission } from "@/lib/survey-validation";
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -59,9 +60,22 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       } else if (instance.moduleType === "SITE_SURVEY" || instance.moduleType === "PRE_CONTRACT_SURVEY") {
         const srv = await prisma.preContractSurvey.findUnique({
           where: { id: instance.referenceId },
-          select: { conductedBy: true }
+          select: { conductedBy: true, responses: true }
         });
         creatorId = srv?.conductedBy || null;
+        if (action === "APPROVE" && srv) {
+          const staffingValidation = validateSurveyStaffingForSubmission(srv.responses);
+          if (!staffingValidation.valid) {
+            return NextResponse.json(
+              {
+                success: false,
+                error: staffingValidation.errorMessage,
+                missingFields: staffingValidation.missingFields
+              },
+              { status: 400 }
+            );
+          }
+        }
       } else if (instance.moduleType === "PRE_CONTRACT_COSTING" || instance.moduleType === "COMMERCIAL_COSTING" || instance.moduleType === "COSTING") {
         const est = await prisma.preContractCostEstimate.findUnique({
           where: { id: instance.referenceId },

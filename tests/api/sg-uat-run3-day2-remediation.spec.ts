@@ -520,6 +520,23 @@ describe("SG UAT Run 3 Day 2 Remediation Suite (TEST DATABASE)", () => {
     );
     expect(draftCostRes.status).toBe(400);
 
+    // Seed mandatory staffing responses (Issue #4) before Submit
+    const seedStaffing1Res = await patchSiteSurveyRoute(
+      new Request(`http://localhost:3100/api/v1/commercial/surveys/${survey1Id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          responses: [
+            { elementCode: "HEADCOUNT", numericValue: 8 },
+            { elementCode: "RELIEVER_REQUIRED", booleanValue: true },
+            { elementCode: "COVERAGE_TYPE", textValue: "12H_DAY" },
+          ],
+        }),
+      }),
+      { params: { id: survey1Id } }
+    );
+    expect(seedStaffing1Res.status).toBe(200);
+
     // Submit Survey
     const subRes = await surveyWorkflowRoute(
       new Request(`http://localhost:3100/api/v1/commercial/surveys/${survey1Id}/workflow`, {
@@ -618,6 +635,22 @@ describe("SG UAT Run 3 Day 2 Remediation Suite (TEST DATABASE)", () => {
     survey2Id = srv.id;
     if (srv.prospectiveSiteId) createdProspectiveSiteIds.push(srv.prospectiveSiteId);
 
+    const seedStaffing2Res = await patchSiteSurveyRoute(
+      new Request(`http://localhost:3100/api/v1/commercial/surveys/${survey2Id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          responses: [
+            { elementCode: "HEADCOUNT", numericValue: 8 },
+            { elementCode: "RELIEVER_REQUIRED", booleanValue: true },
+            { elementCode: "COVERAGE_TYPE", textValue: "12H_DAY" },
+          ],
+        }),
+      }),
+      { params: { id: survey2Id } }
+    );
+    expect(seedStaffing2Res.status).toBe(200);
+
     const sub1Res = await surveyWorkflowRoute(
       new Request(`http://localhost:3100/api/v1/commercial/surveys/${survey2Id}/workflow`, {
         method: "POST",
@@ -712,6 +745,22 @@ describe("SG UAT Run 3 Day 2 Remediation Suite (TEST DATABASE)", () => {
     const srv = (await createRes.json()).survey;
     surveyMultiId = srv.id;
     if (srv.prospectiveSiteId) createdProspectiveSiteIds.push(srv.prospectiveSiteId);
+
+    const seedStaffingMultiRes = await patchSiteSurveyRoute(
+      new Request(`http://localhost:3100/api/v1/commercial/surveys/${surveyMultiId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          responses: [
+            { elementCode: "HEADCOUNT", numericValue: 8 },
+            { elementCode: "RELIEVER_REQUIRED", booleanValue: true },
+            { elementCode: "COVERAGE_TYPE", textValue: "12H_DAY" },
+          ],
+        }),
+      }),
+      { params: { id: surveyMultiId } }
+    );
+    expect(seedStaffingMultiRes.status).toBe(200);
 
     const subRes = await surveyWorkflowRoute(
       new Request(`http://localhost:3100/api/v1/commercial/surveys/${surveyMultiId}/workflow`, {

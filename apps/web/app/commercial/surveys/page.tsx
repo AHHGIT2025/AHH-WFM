@@ -12,6 +12,7 @@ import {
   hasPermission,
   isAdminUser
 } from "@/lib/permissions";
+import { validateSurveyFormResponses } from "@/lib/survey-validation";
 
 interface ProspectClient {
   id: string;
@@ -138,6 +139,7 @@ export default function SiteSurveysPage() {
   const [editingConditions, setEditingConditions] = useState<SiteCondition[]>([]);
   const [savingWorkspace, setSavingWorkspace] = useState<boolean>(false);
   const [workspaceFeedback, setWorkspaceFeedback] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [missingStaffingFields, setMissingStaffingFields] = useState<string[]>([]);
 
   // Workflow Action Modal State
   const [showWorkflowModal, setShowWorkflowModal] = useState<boolean>(false);
@@ -260,7 +262,18 @@ export default function SiteSurveysPage() {
     }
 
     const authorizedActions = getAuthorizedSurveyWorkflowActions(user, surveyToUse, levelToUse);
-    setWorkflowAction(resolveInitialSurveyWorkflowAction(authorizedActions));
+    const initialAction = resolveInitialSurveyWorkflowAction(authorizedActions);
+    if (surveyToUse.lifecycle === "DRAFT" && initialAction === "SUBMIT" && selectedSurvey?.id === srv.id) {
+      const check = validateSurveyFormResponses(editingResponses);
+      if (!check.valid) {
+        setMissingStaffingFields(check.missingFields.map((m) => m.field));
+        setWorkspaceTab("FORM");
+        setWorkspaceFeedback({ type: "error", text: check.errorMessage });
+        return;
+      }
+      setMissingStaffingFields([]);
+    }
+    setWorkflowAction(initialAction);
     setShowWorkflowModal(true);
   };
 
@@ -405,8 +418,13 @@ export default function SiteSurveysPage() {
 
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
+        if (Array.isArray(data.missingFields) && data.missingFields.length > 0) {
+          setMissingStaffingFields(data.missingFields.map((m: any) => m.field));
+          setWorkspaceTab("FORM");
+        }
         throw new Error(data.error || "Workflow action failed.");
       }
+      setMissingStaffingFields([]);
 
       const completedAction = workflowAction;
       const updatedSurveyRecord = data.survey
@@ -979,17 +997,27 @@ export default function SiteSurveysPage() {
                       </div>
 
                       <div>
-                        <label className="block font-bold text-on-surface-variant mb-1">Approved Guard Headcount (HEADCOUNT)</label>
+                        <label className="block font-bold text-on-surface-variant mb-1">
+                          Approved Guard Headcount (HEADCOUNT) <span className="text-status-error">*</span>
+                        </label>
                         <Input
                           type="number"
                           min={0}
                           step={1}
                           value={editingResponses["HEADCOUNT"] || ""}
-                          onChange={(e) => setEditingResponses({ ...editingResponses, HEADCOUNT: e.target.value })}
+                          onChange={(e) => {
+                            setEditingResponses({ ...editingResponses, HEADCOUNT: e.target.value });
+                            setMissingStaffingFields((prev) => prev.filter((f) => f !== "HEADCOUNT"));
+                          }}
                           disabled={selectedSurvey.lifecycle === "COMPLETED" || selectedSurvey.lifecycle === "CANCELLED"}
-                          className="text-xs"
+                          className={`text-xs ${missingStaffingFields.includes("HEADCOUNT") ? "border-status-error ring-1 ring-status-error" : ""}`}
                           placeholder="Explicit Operations-approved guard headcount (e.g. 12)"
                         />
+                        {missingStaffingFields.includes("HEADCOUNT") && (
+                          <p className="text-[11px] text-status-error font-semibold mt-1">
+                            Required before submission: enter a positive Operations-approved headcount (&gt; 0).
+                          </p>
+                        )}
                         <p className="text-[10px] text-on-surface-variant mt-1">
                           Required for DEF-104 commercial costing validation. Must be explicitly approved by Operations (1 post does not equal 1 guard).
                         </p>
@@ -997,7 +1025,9 @@ export default function SiteSurveysPage() {
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <div>
-                          <label className="block font-bold text-on-surface-variant mb-1">Reliever Coverage Required (RELIEVER_REQUIRED)</label>
+                          <label className="block font-bold text-on-surface-variant mb-1">
+                            Reliever Coverage Required (RELIEVER_REQUIRED) <span className="text-status-error">*</span>
+                          </label>
                           <select
                             value={
                               editingResponses["RELIEVER_REQUIRED"] === true || editingResponses["RELIEVER_REQUIRED"] === "true"
@@ -1006,26 +1036,48 @@ export default function SiteSurveysPage() {
                                   ? "false"
                                   : ""
                             }
-                            onChange={(e) => setEditingResponses({ ...editingResponses, RELIEVER_REQUIRED: e.target.value })}
+                            onChange={(e) => {
+                              setEditingResponses({ ...editingResponses, RELIEVER_REQUIRED: e.target.value });
+                              setMissingStaffingFields((prev) => prev.filter((f) => f !== "RELIEVER_REQUIRED"));
+                            }}
                             disabled={selectedSurvey.lifecycle === "COMPLETED" || selectedSurvey.lifecycle === "CANCELLED"}
-                            className="w-full bg-surface-container-lowest border border-outline-variant text-on-surface rounded-lg p-2 text-xs"
+                            className={`w-full bg-surface-container-lowest border text-on-surface rounded-lg p-2 text-xs ${
+                              missingStaffingFields.includes("RELIEVER_REQUIRED")
+                                ? "border-status-error ring-1 ring-status-error"
+                                : "border-outline-variant"
+                            }`}
                           >
                             <option value="">-- Select Reliever Decision --</option>
                             <option value="true">Yes (Reliever Required)</option>
                             <option value="false">No (No Reliever Required)</option>
                           </select>
+                          {missingStaffingFields.includes("RELIEVER_REQUIRED") && (
+                            <p className="text-[11px] text-status-error font-semibold mt-1">
+                              Required before submission: select Yes or No.
+                            </p>
+                          )}
                         </div>
 
                         <div>
-                          <label className="block font-bold text-on-surface-variant mb-1">Coverage Type (COVERAGE_TYPE)</label>
+                          <label className="block font-bold text-on-surface-variant mb-1">
+                            Coverage Type (COVERAGE_TYPE) <span className="text-status-error">*</span>
+                          </label>
                           <Input
                             type="text"
                             value={editingResponses["COVERAGE_TYPE"] || ""}
-                            onChange={(e) => setEditingResponses({ ...editingResponses, COVERAGE_TYPE: e.target.value })}
+                            onChange={(e) => {
+                              setEditingResponses({ ...editingResponses, COVERAGE_TYPE: e.target.value });
+                              setMissingStaffingFields((prev) => prev.filter((f) => f !== "COVERAGE_TYPE"));
+                            }}
                             disabled={selectedSurvey.lifecycle === "COMPLETED" || selectedSurvey.lifecycle === "CANCELLED"}
-                            className="text-xs"
+                            className={`text-xs ${missingStaffingFields.includes("COVERAGE_TYPE") ? "border-status-error ring-1 ring-status-error" : ""}`}
                             placeholder="e.g., 24/7, 12H_DAY, STANDARD"
                           />
+                          {missingStaffingFields.includes("COVERAGE_TYPE") && (
+                            <p className="text-[11px] text-status-error font-semibold mt-1">
+                              Required before submission: enter coverage type (e.g. 12H_DAY, 24/7).
+                            </p>
+                          )}
                         </div>
                       </div>
 
