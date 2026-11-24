@@ -3,6 +3,7 @@ import { prisma, PreContractLifecycle } from "@ahh-wfm/database";
 import { checkApiAuth } from "@/lib/api-guards";
 import { hasPermission, isAdminUser } from "@/lib/permissions";
 import { validateSurveyStaffingForSubmission } from "@/lib/survey-validation";
+import { findConflictingActiveSurvey, formatDuplicateSurveyMessage } from "@/lib/survey-uniqueness";
 
 export async function POST(
   request: Request,
@@ -81,6 +82,22 @@ export async function POST(
     });
 
     if (action === "SUBMIT" || action === "APPROVE") {
+      const conflictingSurvey = await findConflictingActiveSurvey(prisma, {
+        caseId: survey.caseId,
+        prospectiveSiteId: survey.prospectiveSiteId,
+        excludeSurveyId: survey.id
+      });
+      if (conflictingSurvey) {
+        return NextResponse.json(
+          {
+            error: formatDuplicateSurveyMessage(conflictingSurvey.lifecycle),
+            existingSurveyId: conflictingSurvey.id,
+            existingLifecycle: conflictingSurvey.lifecycle
+          },
+          { status: 409 }
+        );
+      }
+
       const staffingValidation = validateSurveyStaffingForSubmission(survey.responses);
       if (!staffingValidation.valid) {
         return NextResponse.json(

@@ -93,10 +93,17 @@ describe("Issue #4 — Mandatory Site Survey Staffing Validation (TEST DATABASE)
     });
     caseId = opp.id;
 
+    const [site1, site2, site3] = await Promise.all([
+      prisma.preContractProspectiveSite.create({ data: { companyId, operationType: "SECURITY_GUARDING", name: `Iss4 Site1 ${rand}` } }),
+      prisma.preContractProspectiveSite.create({ data: { companyId, operationType: "SECURITY_GUARDING", name: `Iss4 Site2 ${rand}` } }),
+      prisma.preContractProspectiveSite.create({ data: { companyId, operationType: "SECURITY_GUARDING", name: `Iss4 Site3 ${rand}` } }),
+    ]);
+
     const draftSrv = await prisma.preContractSurvey.create({
       data: {
         caseId,
         companyId,
+        prospectiveSiteId: site1.id,
         operationType: "SECURITY_GUARDING",
         lifecycle: "DRAFT",
         conductedBy: makerId,
@@ -108,6 +115,7 @@ describe("Issue #4 — Mandatory Site Survey Staffing Validation (TEST DATABASE)
       data: {
         caseId,
         companyId,
+        prospectiveSiteId: site2.id,
         operationType: "SECURITY_GUARDING",
         lifecycle: "IN_WORKFLOW",
         conductedBy: makerId,
@@ -137,6 +145,7 @@ describe("Issue #4 — Mandatory Site Survey Staffing Validation (TEST DATABASE)
       data: {
         caseId,
         companyId,
+        prospectiveSiteId: site3.id,
         operationType: "SECURITY_GUARDING",
         lifecycle: "COMPLETED",
         conductedBy: makerId,
@@ -151,6 +160,7 @@ describe("Issue #4 — Mandatory Site Survey Staffing Validation (TEST DATABASE)
       await prisma.workflowInstance.deleteMany({ where: { referenceId: { in: [draftSurveyId, legacyInWorkflowSurveyId] } } });
       await prisma.surveyResponse.deleteMany({ where: { surveyId: { in: [draftSurveyId, legacyInWorkflowSurveyId, completedSurveyId] } } });
       await prisma.preContractSurvey.deleteMany({ where: { id: { in: [draftSurveyId, legacyInWorkflowSurveyId, completedSurveyId] } } });
+      await prisma.preContractProspectiveSite.deleteMany({ where: { companyId } });
       await prisma.preContractCase.deleteMany({ where: { id: caseId } });
       await prisma.workflowTemplate.deleteMany({ where: { id: surveyTplId } });
       await prisma.employee.deleteMany({ where: { id: { in: [makerId, checkerId] } } });

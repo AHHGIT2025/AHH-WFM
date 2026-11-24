@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma, PreContractLifecycle } from "@ahh-wfm/database";
 import { checkApiAuth } from "@/lib/api-guards";
 import { hasPermission, isAdminUser } from "@/lib/permissions";
+import { findConflictingActiveSurvey, formatDuplicateSurveyMessage } from "@/lib/survey-uniqueness";
 import crypto from "crypto";
 
 export async function GET(request: Request) {
@@ -187,6 +188,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Commercial opportunity case not found." }, { status: 404 });
     }
 
+    // Company Boundary Check (prevents cross-company probing or survey creation)
+    if (
+      user?.companyId &&
+      !isAdminUser(user) &&
+      !hasPermission(user, "commercial.commandCenter.crossCompany") &&
+      opportunityCase.companyId &&
+      opportunityCase.companyId !== user.companyId
+    ) {
+      return NextResponse.json({ error: "Forbidden: Company boundary violation." }, { status: 403 });
+    }
+
     // Opportunity Eligibility Rule: CANCELLED or SUPERSEDED cases cannot create a Site Survey
     if (opportunityCase.lifecycle === "CANCELLED" || opportunityCase.lifecycle === "SUPERSEDED") {
       return NextResponse.json(
@@ -221,9 +233,10 @@ export async function POST(request: Request) {
     let siteRecordId = prospectiveSiteId || null;
 
     if (!siteRecordId && siteName) {
+      const normalizedSiteName = siteName.trim().replace(/\s+/g, " ");
       const existingSite = await prisma.preContractProspectiveSite.findFirst({
         where: {
-          name: siteName.trim(),
+          name: normalizedSiteName,
           ...(effectiveCompanyId && { companyId: effectiveCompanyId })
         }
       });
@@ -233,7 +246,7 @@ export async function POST(request: Request) {
       } else {
         const newSite = await prisma.preContractProspectiveSite.create({
           data: {
-            name: siteName.trim(),
+            name: normalizedSiteName,
             address: siteAddress?.trim() || null,
             latitude: latitude ? parseFloat(latitude) : null,
             longitude: longitude ? parseFloat(longitude) : null,
@@ -367,23 +380,19 @@ export async function POST(request: Request) {
 
     // DEF-099: Prevent duplicate independent surveys for the same opportunity case and prospective site
     // Blocks DRAFT, IN_WORKFLOW, and COMPLETED (approved) surveys while allowing CANCELLED / SUPERSEDED.
-    // Transaction narrows concurrent creation race; residual limitation: no DB-level filtered unique index exists on PreContractSurvey.
+    // Locks the parent PreContractCase row FOR UPDATE inside the transaction to serialize concurrent creation requests per caseId.
     const snapshotContent = JSON.stringify(activeVersion);
     const checksum = crypto.createHash("sha256").update(snapshotContent).digest("hex");
 
     const txResult = await prisma.$transaction(async (tx) => {
-      if (siteRecordId) {
-        const existingSurvey = await tx.preContractSurvey.findFirst({
-          where: {
-            caseId,
-            prospectiveSiteId: siteRecordId,
-            lifecycle: { in: ["DRAFT", "IN_WORKFLOW", "COMPLETED"] }
-          },
-          select: { id: true, lifecycle: true }
-        });
-        if (existingSurvey) {
-          return { duplicate: existingSurvey } as const;
-        }
+      await tx.$queryRaw`SELECT id FROM PreContractCase WHERE id = ${caseId} FOR UPDATE`;
+
+      const existingSurvey = await findConflictingActiveSurvey(tx, {
+        caseId,
+        prospectiveSiteId: siteRecordId
+      });
+      if (existingSurvey) {
+        return { duplicate: existingSurvey } as const;
       }
 
       const createdSurvey = await tx.preContractSurvey.create({
@@ -419,8 +428,9 @@ export async function POST(request: Request) {
     if ("duplicate" in txResult && txResult.duplicate) {
       return NextResponse.json(
         {
-          error: `Duplicate Survey Blocked: A ${txResult.duplicate.lifecycle} site survey already exists for this opportunity case and prospective site.`,
-          existingSurveyId: txResult.duplicate.id
+          error: formatDuplicateSurveyMessage(txResult.duplicate.lifecycle),
+          existingSurveyId: txResult.duplicate.id,
+          existingLifecycle: txResult.duplicate.lifecycle
         },
         { status: 409 }
       );

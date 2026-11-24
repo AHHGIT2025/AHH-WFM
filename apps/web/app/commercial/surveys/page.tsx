@@ -117,6 +117,7 @@ export default function SiteSurveysPage() {
   const [operationTypeFilter, setOperationTypeFilter] = useState<string>("ALL");
 
   // Create Survey Modal State
+  const [allSurveys, setAllSurveys] = useState<PreContractSurvey[]>([]);
   const [showCreateModal, setShowCreateModal] = useState<boolean>(false);
   const [selectedCaseId, setSelectedCaseId] = useState<string>("");
   const [siteName, setSiteName] = useState<string>("");
@@ -125,6 +126,7 @@ export default function SiteSurveysPage() {
   const [longitude, setLongitude] = useState<string>("");
   const [approximateArea, setApproximateArea] = useState<string>("");
   const [conductedBy, setConductedBy] = useState<string>("");
+  const [confirmAdditionalSite, setConfirmAdditionalSite] = useState<boolean>(false);
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
@@ -163,15 +165,23 @@ export default function SiteSurveysPage() {
       if (lifecycleFilter && lifecycleFilter !== "ALL") params.set("lifecycle", lifecycleFilter);
       if (operationTypeFilter && operationTypeFilter !== "ALL") params.set("operationType", operationTypeFilter);
 
-      const [resSurveys, resOpps] = await Promise.all([
+      const hasActiveFilters = Boolean(search) || (lifecycleFilter && lifecycleFilter !== "ALL") || (operationTypeFilter && operationTypeFilter !== "ALL");
+      const [resSurveys, resOpps, resAllSurveys] = await Promise.all([
         fetch(`/api/v1/commercial/surveys?${params.toString()}`),
-        fetch(`/api/v1/commercial/opportunities`)
+        fetch(`/api/v1/commercial/opportunities`),
+        hasActiveFilters ? fetch(`/api/v1/commercial/surveys`) : Promise.resolve(null)
       ]);
 
       if (!resSurveys.ok) throw new Error("Failed to fetch commercial site surveys");
       const dataSurveys = await resSurveys.json();
       const loadedSurveys: PreContractSurvey[] = dataSurveys.surveys || [];
       setSurveys(loadedSurveys);
+      if (resAllSurveys && resAllSurveys.ok) {
+        const allData = await resAllSurveys.json();
+        setAllSurveys(allData.surveys || loadedSurveys);
+      } else {
+        setAllSurveys(loadedSurveys);
+      }
 
       if (typeof window !== "undefined") {
         const deepLinkId = new URLSearchParams(window.location.search).get("id");
@@ -277,12 +287,38 @@ export default function SiteSurveysPage() {
     setShowWorkflowModal(true);
   };
 
+  const activeSurveysForSelectedCase = selectedCaseId
+    ? allSurveys.filter(
+        (s) => s.caseId === selectedCaseId && ["DRAFT", "IN_WORKFLOW", "COMPLETED"].includes(s.lifecycle)
+      )
+    : [];
+
+  const normalizedEnteredSite = siteName.trim().replace(/\s+/g, " ").toLowerCase();
+  const matchingActiveSiteSurvey = normalizedEnteredSite
+    ? activeSurveysForSelectedCase.find(
+        (s) => (s.prospectiveSite?.name || "").trim().replace(/\s+/g, " ").toLowerCase() === normalizedEnteredSite
+      )
+    : undefined;
+
   // Handle Create Survey Submission
   const handleCreateSurvey = async (e: React.FormEvent) => {
     e.preventDefault();
     setCreateError(null);
     if (!selectedCaseId) {
       setCreateError("Please select an eligible opportunity case.");
+      return;
+    }
+    if (matchingActiveSiteSurvey) {
+      const statusLabel = matchingActiveSiteSurvey.lifecycle === "COMPLETED" ? "COMPLETED (Approved)" : matchingActiveSiteSurvey.lifecycle;
+      setCreateError(
+        `Duplicate Survey Blocked: A ${statusLabel} site survey already exists for this opportunity and site (${matchingActiveSiteSurvey.prospectiveSite?.name || matchingActiveSiteSurvey.id.substring(0, 8)}). Open the existing survey instead.`
+      );
+      return;
+    }
+    if (activeSurveysForSelectedCase.length > 0 && !confirmAdditionalSite) {
+      setCreateError(
+        "This opportunity already has an active or approved site survey. Open the existing survey, or confirm that this is a separate physical site."
+      );
       return;
     }
     if (!siteName.trim()) {
@@ -322,6 +358,7 @@ export default function SiteSurveysPage() {
       setLongitude("");
       setApproximateArea("");
       setConductedBy("");
+      setConfirmAdditionalSite(false);
       setFeedbackBanner({ type: "success", text: "Pre-contract site survey created successfully." });
       await fetchData();
     } catch (err: any) {
@@ -723,18 +760,83 @@ export default function SiteSurveysPage() {
                 <label className="block text-xs font-bold text-on-surface-variant mb-1">Eligible Commercial Opportunity *</label>
                 <select
                   value={selectedCaseId}
-                  onChange={(e) => setSelectedCaseId(e.target.value)}
+                  onChange={(e) => {
+                    setSelectedCaseId(e.target.value);
+                    setConfirmAdditionalSite(false);
+                    setCreateError(null);
+                  }}
                   className="w-full bg-surface-container-lowest border border-outline-variant rounded-lg px-3 py-1.5 text-xs text-on-surface"
                   required
                 >
                   <option value="">Select Opportunity Deal Case...</option>
-                  {opportunities.map((opp) => (
-                    <option key={opp.id} value={opp.id}>
-                      {opp.title} ({opp.prospectClient?.name || "Client"}) - [{opp.lifecycle}]
-                    </option>
-                  ))}
+                  {opportunities.map((opp) => {
+                    const existingActiveCount = allSurveys.filter(
+                      (s) => s.caseId === opp.id && ["DRAFT", "IN_WORKFLOW", "COMPLETED"].includes(s.lifecycle)
+                    ).length;
+                    return (
+                      <option key={opp.id} value={opp.id}>
+                        {opp.title} ({opp.prospectClient?.name || "Client"}) - [{opp.lifecycle}]
+                        {existingActiveCount > 0 ? ` — Already has ${existingActiveCount} Active/Approved Survey` : ""}
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
+
+              {activeSurveysForSelectedCase.length > 0 && (
+                <div className="p-3 rounded-lg bg-status-warning/10 border border-status-warning/50 text-xs space-y-2">
+                  <div className="font-bold text-status-warning">
+                    Existing Active / Approved Survey Detected for This Opportunity
+                  </div>
+                  <p className="text-[11px] text-on-surface-variant">
+                    A duplicate survey cannot be created for an already-covered site. Open the existing survey below, or explicitly confirm if you are adding a separate physical site.
+                  </p>
+                  <div className="space-y-1.5">
+                    {activeSurveysForSelectedCase.map((existingSrv) => (
+                      <div
+                        key={existingSrv.id}
+                        className="flex items-center justify-between gap-2 bg-surface-container-lowest border border-outline-variant/60 rounded px-2.5 py-1.5"
+                      >
+                        <div className="min-w-0">
+                          <div className="font-semibold text-on-surface truncate">
+                            {existingSrv.prospectiveSite?.name || `Survey ${existingSrv.id.substring(0, 8)}`}
+                          </div>
+                          <div className="text-[10px] text-on-surface-variant">
+                            Status: {existingSrv.lifecycle === "COMPLETED" ? "COMPLETED (Approved)" : existingSrv.lifecycle}
+                          </div>
+                        </div>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          type="button"
+                          onClick={() => {
+                            setShowCreateModal(false);
+                            setCreateError(null);
+                            openWorkspace(existingSrv);
+                          }}
+                        >
+                          Open Existing Survey
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                  {matchingActiveSiteSurvey ? (
+                    <div className="text-[11px] font-semibold text-status-error">
+                      Duplicate Blocked: &quot;{matchingActiveSiteSurvey.prospectiveSite?.name}&quot; already has an active/approved survey.
+                    </div>
+                  ) : (
+                    <label className="flex items-start gap-2 pt-1 cursor-pointer text-[11px] text-on-surface">
+                      <input
+                        type="checkbox"
+                        checked={confirmAdditionalSite}
+                        onChange={(e) => setConfirmAdditionalSite(e.target.checked)}
+                        className="mt-0.5 rounded border-outline-variant"
+                      />
+                      <span>Confirm this is a separate physical site for a multi-site opportunity.</span>
+                    </label>
+                  )}
+                </div>
+              )}
 
               <div>
                 <label className="block text-xs font-bold text-on-surface-variant mb-1">Prospective Site Name *</label>
@@ -810,7 +912,12 @@ export default function SiteSurveysPage() {
                 <Button variant="ghost" size="sm" type="button" onClick={() => setShowCreateModal(false)}>
                   Cancel
                 </Button>
-                <Button variant="primary" size="sm" type="submit" disabled={submitting}>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  type="submit"
+                  disabled={submitting || Boolean(matchingActiveSiteSurvey) || (activeSurveysForSelectedCase.length > 0 && !confirmAdditionalSite)}
+                >
                   {submitting ? "Creating..." : "Create Survey"}
                 </Button>
               </div>

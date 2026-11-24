@@ -6,6 +6,7 @@ import { WorkflowAdapterRegistry } from "@/lib/workflow/adapters/registry";
 import { executeClearanceApprove, executeClearanceReject, executeClearanceReturn, executeClearanceMarkNotApplicable } from "@/lib/clearance-execution";
 import { assessCostingValidation, formatCostingValidationBlockError } from "@/lib/precontract-costing";
 import { validateSurveyStaffingForSubmission } from "@/lib/survey-validation";
+import { findConflictingActiveSurvey, formatDuplicateSurveyMessage } from "@/lib/survey-uniqueness";
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -60,10 +61,27 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       } else if (instance.moduleType === "SITE_SURVEY" || instance.moduleType === "PRE_CONTRACT_SURVEY") {
         const srv = await prisma.preContractSurvey.findUnique({
           where: { id: instance.referenceId },
-          select: { conductedBy: true, responses: true }
+          select: { conductedBy: true, caseId: true, prospectiveSiteId: true, responses: true }
         });
         creatorId = srv?.conductedBy || null;
         if (action === "APPROVE" && srv) {
+          const conflictingSurvey = await findConflictingActiveSurvey(prisma, {
+            caseId: srv.caseId,
+            prospectiveSiteId: srv.prospectiveSiteId,
+            excludeSurveyId: instance.referenceId
+          });
+          if (conflictingSurvey) {
+            return NextResponse.json(
+              {
+                success: false,
+                error: formatDuplicateSurveyMessage(conflictingSurvey.lifecycle),
+                existingSurveyId: conflictingSurvey.id,
+                existingLifecycle: conflictingSurvey.lifecycle
+              },
+              { status: 409 }
+            );
+          }
+
           const staffingValidation = validateSurveyStaffingForSubmission(srv.responses);
           if (!staffingValidation.valid) {
             return NextResponse.json(
