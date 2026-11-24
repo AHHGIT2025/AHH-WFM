@@ -104,10 +104,21 @@ export async function PATCH(
     }
 
     // Permission & Company Boundary checks
+    if (overrides !== undefined && !Array.isArray(overrides)) {
+      return NextResponse.json({ error: "Invalid override payload: overrides must be an array." }, { status: 400 });
+    }
+
     const hasManage = isAdminUser(user) || hasPermission(user, "precontract.costing.manage") || hasPermission(user, "manpower.admin.full_access");
     const hasOverride = isAdminUser(user) || hasPermission(user, "precontract.costing.override") || hasPermission(user, "manpower.admin.full_access");
+    const hasNonOverrideEdits =
+      pricingBasis !== undefined ||
+      targetMarginPercentage !== undefined ||
+      targetMarkupPercentage !== undefined ||
+      manualSellingPrice !== undefined ||
+      revisionReason !== undefined ||
+      Boolean(createRevision);
 
-    if (!hasManage) {
+    if (!hasManage && !(overrides.length > 0 && hasOverride && !hasNonOverrideEdits)) {
       return NextResponse.json({ error: "Forbidden: You do not have permission to edit costing estimates." }, { status: 403 });
     }
 
@@ -117,6 +128,20 @@ export async function PATCH(
 
     if (overrides.length > 0 && !hasOverride) {
       return NextResponse.json({ error: "Forbidden: You do not have permission to override rate or cost line items." }, { status: 403 });
+    }
+
+    if (estimate.status === "IN_WORKFLOW" || currentVersion.status === "SUBMITTED") {
+      return NextResponse.json(
+        { error: "Invalid Action: Cannot edit or override a costing estimate while it is IN_WORKFLOW. Return it to DRAFT first." },
+        { status: 400 }
+      );
+    }
+
+    if (overrides.length > 0 && (estimate.status !== "DRAFT" || currentVersion.status !== "DRAFT")) {
+      return NextResponse.json(
+        { error: `Invalid Action: Line overrides are permitted only for DRAFT costing estimates (current status: ${estimate.status}/${currentVersion.status}).` },
+        { status: 400 }
+      );
     }
 
     if (overrides.length > 0) {

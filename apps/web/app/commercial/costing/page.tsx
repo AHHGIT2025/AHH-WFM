@@ -858,12 +858,12 @@ export default function CostingPage() {
 
               {/* Cost Line Items Breakdown */}
               <div className="space-y-3">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <h4 className="font-bold text-on-surface text-sm flex items-center gap-2">
                     <span className="material-symbols-outlined text-secondary text-base">list_alt</span>
                     Costing Line Items Breakdown
                   </h4>
-                  {selectedEstimate.status !== "APPROVED" && canOverrideCosting && (
+                  {selectedEstimate.status === "DRAFT" && canOverrideCosting && (
                     <Button
                       size="sm"
                       variant="warning"
@@ -875,6 +875,11 @@ export default function CostingPage() {
                     >
                       <span className="material-symbols-outlined text-[14px]">edit</span> Override Line Rate
                     </Button>
+                  )}
+                  {selectedEstimate.status === "DRAFT" && !canOverrideCosting && (
+                    <span className="text-[11px] text-on-surface-variant">
+                      Line overrides require <code className="font-mono">precontract.costing.override</code> (ADMIN / SUPER_ADMIN / COMMERCIAL_ADMIN). Standard estimators use active PC-2A Rate Cards and approved Survey inputs.
+                    </span>
                   )}
                 </div>
 
