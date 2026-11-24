@@ -2,6 +2,7 @@
 // POST /api/v1/settings/commercial-contract/cost-configurations/[entityType]
 import { NextResponse } from "next/server";
 import { prisma } from "@ahh-wfm/database";
+import { isAdminUser } from "@/lib/permissions";
 import {
   checkApiAuth, getTable, parseBody, writeAudit, safeError, PaginationSchema,
   CategoryMasterSchema, ElementMasterSchema, DriverMasterSchema,
@@ -35,7 +36,9 @@ export async function GET(
     const limit = q?.limit ?? 20;
 
     const where: any = {};
-    if (user.companyId) where.companyId = user.companyId;
+    if (user.companyId && !isAdminUser(user)) {
+      where.OR = [{ companyId: user.companyId }, { companyId: null }];
+    }
 
     const [total, records] = await Promise.all([
       (prisma as any)[tbl.master].count({ where }),

@@ -497,7 +497,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
   COMMERCIAL_FINANCE: [
     "dashboard.view", "reports.view", "reports.export", "sap.view",
     "precontract.case.view", "precontract.prospectClient.view", "precontract.prospectiveSite.view",
-    "precontract.surveyConfig.view", "precontract.siteConditionConfig.view", "precontract.costConfig.view", "precontract.formulaRuleConfig.view", "precontract.config.view",
+    "precontract.surveyConfig.view", "precontract.siteConditionConfig.view", "precontract.costConfig.view", "precontract.costConfig.manage", "precontract.formulaRuleConfig.view", "precontract.config.view",
     "precontract.costing.view", "precontract.proposal.view", "precontract.acceptance.view",
     "commercial.commandCenter.view", "commercial.commandCenter.contractHealth", "commercial.commandCenter.exceptions",
     "commercial.commandCenter.rosterCoverage", "commercial.commandCenter.relieverReadiness",

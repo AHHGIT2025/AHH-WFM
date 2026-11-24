@@ -81,11 +81,11 @@ const RateCardMasterSchema = z.object({
   name: z.string().min(1).max(200),
   description: z.string().max(2000).optional(),
   currency: z.string().length(3).optional(),
-  companyId: z.string().uuid().optional(),
+  companyId: z.string().min(1).max(100).optional(),
 }).strict();
 
 const RateCardVersionSchema = z.object({
-  masterId: z.string().uuid(),
+  masterId: z.string().min(1).max(100),
   effectiveFrom: z.coerce.date(),
   effectiveTo: z.coerce.date().optional().nullable(),
   ratesJson: z.record(SafeDecimal),

@@ -2,6 +2,7 @@
 // Handles: SUBMIT, APPROVE, REJECT, RETIRE, ACTIVATE, RESUBMIT
 import { NextResponse } from "next/server";
 import { prisma } from "@ahh-wfm/database";
+import { isAdminUser } from "@/lib/permissions";
 import {
   checkApiAuth, getTable, parseBody, writeAudit, safeError,
   assertValidTransition, actionToState, LifecycleActionSchema,
@@ -27,9 +28,15 @@ export async function POST(
 
     const { action, comment } = parsed.data;
 
-    const version = await (prisma as any)[tbl.version].findUnique({ where: { id: params.versionId } });
+    const version = await (prisma as any)[tbl.version].findUnique({
+      where: { id: params.versionId },
+      include: { master: { select: { companyId: true } } },
+    });
     if (!version || version.masterId !== params.id) {
       return NextResponse.json({ success: false, error: "Not found" }, { status: 404 });
+    }
+    if (version.master?.companyId && user.companyId && version.master.companyId !== user.companyId && !isAdminUser(user)) {
+      return NextResponse.json({ success: false, error: "Forbidden: Cross-company access denied" }, { status: 403 });
     }
 
     // ── RESUBMIT: Creates a new Draft cloned from the rejected version ───────
@@ -63,6 +70,12 @@ export async function POST(
 
     // ── ACTIVATE: concurrency-safe with FOR UPDATE ────────────────────────────
     if (action === "ACTIVATE") {
+      if (!version.approvedBy || version.approvedBy === version.createdBy) {
+        return NextResponse.json(
+          { success: false, error: "Maker/Checker approval by a different authorized user is required before activation." },
+          { status: 409 }
+        );
+      }
       try {
         const result = await prisma.$transaction(async (tx: any) => {
           // Ensure lock row exists
@@ -94,7 +107,7 @@ export async function POST(
 
           const activated = await (tx as any)[tbl.version].update({
             where: { id: params.versionId },
-            data: { status: "ACTIVE", approvedBy: user.id },
+            data: { status: "ACTIVE" },
           });
 
           await tx.$executeRaw`
