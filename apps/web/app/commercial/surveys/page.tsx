@@ -24,6 +24,7 @@ interface OpportunityCase {
   id: string;
   title: string;
   lifecycle: string;
+  businessOutcome?: string | null;
   operationType: string | null;
   prospectClient: ProspectClient | null;
 }
@@ -107,6 +108,7 @@ export default function SiteSurveysPage() {
 
   const [surveys, setSurveys] = useState<PreContractSurvey[]>([]);
   const [opportunities, setOpportunities] = useState<OpportunityCase[]>([]);
+  const [ineligibleOpportunityCount, setIneligibleOpportunityCount] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [feedbackBanner, setFeedbackBanner] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -199,10 +201,12 @@ export default function SiteSurveysPage() {
 
       if (resOpps.ok) {
         const dataOpps = await resOpps.json();
-        const eligible = (dataOpps.cases || []).filter(
-          (c: OpportunityCase) => c.lifecycle !== "CANCELLED" && c.lifecycle !== "SUPERSEDED"
+        const allCases: OpportunityCase[] = dataOpps.cases || [];
+        const eligible = allCases.filter(
+          (c: OpportunityCase) => c.lifecycle === "COMPLETED" && c.businessOutcome !== "LOST"
         );
         setOpportunities(eligible);
+        setIneligibleOpportunityCount(Math.max(0, allCases.length - eligible.length));
       }
     } catch (err: any) {
       setError(err.message || "Error loading commercial site surveys");
@@ -781,6 +785,14 @@ export default function SiteSurveysPage() {
                     );
                   })}
                 </select>
+                {(opportunities.length === 0 || ineligibleOpportunityCount > 0) && (
+                  <p className="text-[11px] text-on-surface-variant mt-1">
+                    Only approved (<span className="font-semibold">COMPLETED</span>) opportunities are eligible for Site Survey creation.
+                    {ineligibleOpportunityCount > 0
+                      ? ` ${ineligibleOpportunityCount} unapproved/ineligible opportunity(ies) are excluded until workflow approval completes.`
+                      : " No approved opportunities are currently available."}
+                  </p>
+                )}
               </div>
 
               {activeSurveysForSelectedCase.length > 0 && (

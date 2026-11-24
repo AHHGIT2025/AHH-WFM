@@ -4,6 +4,7 @@ import { checkApiAuth } from "@/lib/api-guards";
 import { hasPermission, isAdminUser } from "@/lib/permissions";
 import { validateSurveyStaffingForSubmission } from "@/lib/survey-validation";
 import { findConflictingActiveSurvey, formatDuplicateSurveyMessage } from "@/lib/survey-uniqueness";
+import { checkOpportunityEligibilityForSurvey } from "@/lib/survey-eligibility";
 
 export async function POST(
   request: Request,
@@ -82,6 +83,14 @@ export async function POST(
     });
 
     if (action === "SUBMIT" || action === "APPROVE") {
+      const eligibility = checkOpportunityEligibilityForSurvey(survey.case);
+      if (!eligibility.eligible) {
+        return NextResponse.json(
+          { error: eligibility.errorMessage },
+          { status: 400 }
+        );
+      }
+
       const conflictingSurvey = await findConflictingActiveSurvey(prisma, {
         caseId: survey.caseId,
         prospectiveSiteId: survey.prospectiveSiteId,

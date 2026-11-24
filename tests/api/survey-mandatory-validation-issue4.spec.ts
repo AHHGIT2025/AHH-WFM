@@ -87,7 +87,7 @@ describe("Issue #4 — Mandatory Site Survey Staffing Validation (TEST DATABASE)
         title: `Issue4 Opp ${rand}`,
         companyId,
         operationType: "SECURITY_GUARDING",
-        lifecycle: "DRAFT",
+        lifecycle: "COMPLETED",
         createdBy: makerId,
       },
     });

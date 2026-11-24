@@ -329,10 +329,10 @@ describe("SG UAT Run 3 Day 1 Targeted Remediation (DEF-089, DEF-057, DEF-091, DE
     expect(source).toContain("setSubmitting(false)");
   });
 
-  it("8. Existing Site Survey eligibility remains unchanged: DRAFT & IN_WORKFLOW allowed, CANCELLED rejected (DEF-059)", async () => {
+  it("8. Issue #6 Site Survey eligibility: only COMPLETED opportunities allowed; DRAFT, IN_WORKFLOW, and CANCELLED rejected (400)", async () => {
     (getServerSession as jest.Mock).mockResolvedValue({ user: adminSession() });
 
-    // DRAFT opportunity allowed
+    // DRAFT opportunity rejected (400)
     const draftReq = new Request("http://localhost:3100/api/v1/commercial/surveys", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -344,11 +344,9 @@ describe("SG UAT Run 3 Day 1 Targeted Remediation (DEF-089, DEF-057, DEF-091, DE
       }),
     });
     const draftRes = await createSiteSurveyRoute(draftReq);
-    expect(draftRes.status).toBe(201);
-    const draftData = await draftRes.json();
-    createdSurveyIds.push(draftData.survey.id);
+    expect(draftRes.status).toBe(400);
 
-    // IN_WORKFLOW opportunity allowed
+    // IN_WORKFLOW opportunity rejected (400)
     const wfReq = new Request("http://localhost:3100/api/v1/commercial/surveys", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -360,9 +358,7 @@ describe("SG UAT Run 3 Day 1 Targeted Remediation (DEF-089, DEF-057, DEF-091, DE
       }),
     });
     const wfRes = await createSiteSurveyRoute(wfReq);
-    expect(wfRes.status).toBe(201);
-    const wfData = await wfRes.json();
-    createdSurveyIds.push(wfData.survey.id);
+    expect(wfRes.status).toBe(400);
 
     // CANCELLED opportunity rejected (400)
     const cancelReq = new Request("http://localhost:3100/api/v1/commercial/surveys", {

@@ -3,6 +3,7 @@ import { prisma, PreContractLifecycle } from "@ahh-wfm/database";
 import { checkApiAuth } from "@/lib/api-guards";
 import { hasPermission, isAdminUser } from "@/lib/permissions";
 import { findConflictingActiveSurvey, formatDuplicateSurveyMessage } from "@/lib/survey-uniqueness";
+import { checkOpportunityEligibilityForSurvey } from "@/lib/survey-eligibility";
 import crypto from "crypto";
 
 export async function GET(request: Request) {
@@ -199,10 +200,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Forbidden: Company boundary violation." }, { status: 403 });
     }
 
-    // Opportunity Eligibility Rule: CANCELLED or SUPERSEDED cases cannot create a Site Survey
-    if (opportunityCase.lifecycle === "CANCELLED" || opportunityCase.lifecycle === "SUPERSEDED") {
+    // Issue #6 Opportunity Eligibility Rule: Only approved (COMPLETED, non-LOST) opportunities are eligible
+    const eligibility = checkOpportunityEligibilityForSurvey(opportunityCase);
+    if (!eligibility.eligible) {
       return NextResponse.json(
-        { error: `Ineligible Opportunity: Cannot create a Site Survey for an opportunity case in ${opportunityCase.lifecycle} status.` },
+        { error: eligibility.errorMessage },
         { status: 400 }
       );
     }
