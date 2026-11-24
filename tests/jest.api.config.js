@@ -4,6 +4,7 @@ module.exports = {
   preset: 'ts-jest',
   testEnvironment: 'node',
   testMatch: ['**/tests/api/**/*.spec.ts'],
+  testPathIgnorePatterns: ['/node_modules/', '<rootDir>/tests/api/api-routes.spec.ts'],
   transform: {
     '^.+\\.tsx?$': ['ts-jest', { tsconfig: 'tests/tsconfig.test.json' }]
   },

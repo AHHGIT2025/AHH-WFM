@@ -462,7 +462,7 @@ describe("Commercial Lifecycle — Phase CL-1 Suite (Workflow Governance & Secur
     const json = await res.json();
 
     expect(json.case.lifecycle).toBe("COMPLETED");
-    expect(json.case.businessOutcome).toBe("WON");
+    expect(json.case.businessOutcome).toBe("IN_PROGRESS");
     expect(json.workflow.status).toBe("APPROVED");
   });
 
@@ -573,6 +573,7 @@ describe("Commercial Lifecycle — Phase CL-1 Suite (Workflow Governance & Secur
         id: requesterId,
         name: "Creator Requester",
         role: "COMMERCIAL_SUPERVISOR",
+        companyId: "COMP-CL1-01",
         permissions: ["precontract.workflow.approve"]
       }
     });

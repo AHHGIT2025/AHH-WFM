@@ -122,7 +122,7 @@ describe("Issue #9: SECFAC Evaluation Worker Heartbeat & Monitoring Alert Lifecy
     expect(openCount).toBe(1);
   });
 
-  it("4. Monitoring cycle resolves open WORKER_EVAL_UNHEALTHY alerts when evaluation worker recovers to HEALTHY (preserving audit record)", async () => {
+  it("4. Historical WORKER_EVAL_UNHEALTHY alerts remain preserved on healthy cycles under default configuration", async () => {
     const openAlert = await createMonitoringAlertIfBreached(
       "WORKER_EVAL_UNHEALTHY",
       "HIGH",
@@ -160,16 +160,98 @@ describe("Issue #9: SECFAC Evaluation Worker Heartbeat & Monitoring Alert Lifecy
     const cycleRes = await runMonitoringWorkerCycle(opType, "test-mon-worker");
     expect(cycleRes.evalWorkerStatus).toBe("HEALTHY");
 
-    const resolvedAlert = await prisma.secFacOperationalAlert.findUnique({
+    const preservedAlert = await prisma.secFacOperationalAlert.findUnique({
       where: { id: openAlert.id },
     });
-    expect(resolvedAlert).toBeTruthy();
-    expect(resolvedAlert?.status).toBe("RESOLVED");
-    expect(resolvedAlert?.resolvedAt).toBeTruthy();
-    expect(resolvedAlert?.resolutionNote).toContain("HEALTHY");
+    expect(preservedAlert).toBeTruthy();
+    expect(preservedAlert?.status).toBe("OPEN");
+    expect(preservedAlert?.resolvedAt).toBeNull();
   });
 
-  it("5. resolveMonitoringAlertsOnRecovery is idempotent when no open alerts remain", async () => {
+  it("5. Auto-recovery requires explicit opt-in and eligibility cutoff, never resolving historical or acknowledged alerts", async () => {
+    const oldDate = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const cutoffDate = new Date(Date.now() - 60 * 1000);
+    const recentDate = new Date();
+
+    const historicalAlert = await prisma.secFacOperationalAlert.create({
+      data: {
+        operationType: opType,
+        alertCode: "WORKER_EVAL_UNHEALTHY",
+        sourceType: "MONITORING_ENGINE",
+        severity: "HIGH",
+        title: "Historical Alert",
+        message: "Pre-cutoff historical alert",
+        businessDate: oldDate,
+        deduplicationKey: `${opType}:WORKER_EVAL_UNHEALTHY:HIST:${Date.now()}`,
+        firstDetectedAt: oldDate,
+        lastDetectedAt: oldDate,
+        status: "OPEN",
+      },
+    });
+
+    const ackAlert = await prisma.secFacOperationalAlert.create({
+      data: {
+        operationType: opType,
+        alertCode: "WORKER_EVAL_UNHEALTHY",
+        sourceType: "MONITORING_ENGINE",
+        severity: "HIGH",
+        title: "Acknowledged Alert",
+        message: "Operator-owned alert",
+        businessDate: recentDate,
+        deduplicationKey: `${opType}:WORKER_EVAL_UNHEALTHY:ACK:${Date.now()}`,
+        firstDetectedAt: recentDate,
+        lastDetectedAt: recentDate,
+        status: "ACKNOWLEDGED",
+      },
+    });
+
+    const eligibleAlert = await prisma.secFacOperationalAlert.create({
+      data: {
+        operationType: opType,
+        alertCode: "WORKER_EVAL_UNHEALTHY",
+        sourceType: "MONITORING_ENGINE",
+        severity: "HIGH",
+        title: "Eligible New Alert",
+        message: "Post-cutoff open alert",
+        businessDate: recentDate,
+        deduplicationKey: `${opType}:WORKER_EVAL_UNHEALTHY:NEW:${Date.now()}`,
+        firstDetectedAt: recentDate,
+        lastDetectedAt: recentDate,
+        status: "OPEN",
+      },
+    });
+
+    try {
+      // Flag enabled WITHOUT cutoff fails closed
+      process.env.SECFAC_MONITORING_AUTO_RESOLVE_ENABLED = "true";
+      delete process.env.SECFAC_MONITORING_AUTO_RESOLVE_MIN_FIRST_DETECTED_AT;
+      const noCutoffRes = await resolveMonitoringAlertsOnRecovery("WORKER_EVAL_UNHEALTHY", opType);
+      expect(noCutoffRes.count).toBe(0);
+
+      // Flag + cutoff resolves ONLY eligibleAlert
+      process.env.SECFAC_MONITORING_AUTO_RESOLVE_MIN_FIRST_DETECTED_AT = cutoffDate.toISOString();
+      const res = await resolveMonitoringAlertsOnRecovery("WORKER_EVAL_UNHEALTHY", opType);
+      expect(res.count).toBeGreaterThanOrEqual(1);
+
+      const [histAfter, ackAfter, eligAfter] = await Promise.all([
+        prisma.secFacOperationalAlert.findUnique({ where: { id: historicalAlert.id } }),
+        prisma.secFacOperationalAlert.findUnique({ where: { id: ackAlert.id } }),
+        prisma.secFacOperationalAlert.findUnique({ where: { id: eligibleAlert.id } }),
+      ]);
+      expect(histAfter?.status).toBe("OPEN");
+      expect(ackAfter?.status).toBe("ACKNOWLEDGED");
+      expect(eligAfter?.status).toBe("RESOLVED");
+      expect(eligAfter?.resolutionNote).toContain("HEALTHY");
+    } finally {
+      delete process.env.SECFAC_MONITORING_AUTO_RESOLVE_ENABLED;
+      delete process.env.SECFAC_MONITORING_AUTO_RESOLVE_MIN_FIRST_DETECTED_AT;
+      await prisma.secFacOperationalAlert.deleteMany({
+        where: { id: { in: [historicalAlert.id, ackAlert.id, eligibleAlert.id] } },
+      });
+    }
+  });
+
+  it("6. resolveMonitoringAlertsOnRecovery is idempotent when disabled or no eligible alerts remain", async () => {
     const res = await resolveMonitoringAlertsOnRecovery("WORKER_EVAL_UNHEALTHY", opType);
     expect(res.count).toBe(0);
   });

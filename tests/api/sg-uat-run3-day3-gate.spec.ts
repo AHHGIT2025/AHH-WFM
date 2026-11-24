@@ -155,9 +155,36 @@ describe("SG UAT Run 3 Day 3 Final Release Gate (TEST DATABASE)", () => {
           operationType: "SECURITY_GUARDING",
           lifecycle: "COMPLETED",
           conductedBy: makerId,
+          responses: {
+            create: [
+              { elementCode: "HEADCOUNT", numericValue: 4 },
+              { elementCode: "RELIEVER_REQUIRED", booleanValue: false },
+              { elementCode: "COVERAGE_TYPE", textValue: "12H_DAY" },
+            ],
+          },
         },
       })
     ).id;
+
+    await (prisma as any).costRateCardMaster.create({
+      data: {
+        code: `RC-GATE3-${rand}`,
+        name: `Gate3 Synthetic Rate Card ${rand}`,
+        currency: "QAR",
+        companyId,
+        createdBy: makerId,
+        versions: {
+          create: {
+            versionNumber: 1,
+            status: "ACTIVE",
+            effectiveFrom: new Date(Date.now() - 86400000),
+            ratesJson: { BASIC_PAY: 2400, ALLOWANCES: 900, RELIEVER_COST: 2800 },
+            createdBy: makerId,
+            approvedBy: checkerId,
+          },
+        },
+      },
+    });
   });
 
   afterAll(async () => {
@@ -172,6 +199,8 @@ describe("SG UAT Run 3 Day 3 Final Release Gate (TEST DATABASE)", () => {
         await prisma.workflowInstance.deleteMany({ where: { referenceId: estimateId } });
         await prisma.preContractCostEstimate.deleteMany({ where: { id: estimateId } });
       }
+      await (prisma as any).costRateCardMaster.deleteMany({ where: { code: `RC-GATE3-${rand}` } });
+      await prisma.surveyResponse.deleteMany({ where: { surveyId } });
       await prisma.preContractSurvey.deleteMany({ where: { id: surveyId } });
       await prisma.preContractCase.deleteMany({ where: { id: oppId } });
       await prisma.workflowTemplate.deleteMany({ where: { id: { in: [costingTplId, proposalTplId] } } });

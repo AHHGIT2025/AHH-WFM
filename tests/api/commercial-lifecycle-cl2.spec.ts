@@ -144,14 +144,14 @@ describe("Commercial Lifecycle — Phase CL-2 Suite (Pre-Contract Site Surveys &
       }
     });
 
-    // 3. Setup Eligible Opportunity Case
+    // 3. Setup Eligible Opportunity Case (Issue #6: COMPLETED + WON)
     testCase = await prisma.preContractCase.create({
       data: {
         title: "Katara Cultural Village Security Audit 2026",
         companyId: "COMP-CL2-01",
         operationType: "SECURITY_GUARDING",
-        lifecycle: "DRAFT",
-        businessOutcome: "IN_PROGRESS",
+        lifecycle: "COMPLETED",
+        businessOutcome: "WON",
         createdBy: "EMP-SG-CL2"
       }
     });
@@ -306,6 +306,7 @@ describe("Commercial Lifecycle — Phase CL-2 Suite (Pre-Contract Site Surveys &
       body: JSON.stringify({
         caseId: testCancelledCase.id,
         siteName: "Ineligible Site Audit",
+        siteAddress: "Ineligible Site Address, Doha",
         operationType: "SECURITY_GUARDING"
       })
     });
@@ -317,14 +318,26 @@ describe("Commercial Lifecycle — Phase CL-2 Suite (Pre-Contract Site Surveys &
   });
 
   it("5. Prospective site reuse prevents duplicate PreContractProspectiveSite records", async () => {
+    const tempCaseForSiteReuse = await prisma.preContractCase.create({
+      data: {
+        title: "CL2 Site Reuse Second Opportunity",
+        companyId: "COMP-CL2-01",
+        operationType: "FACILITY_MANAGEMENT",
+        lifecycle: "COMPLETED",
+        businessOutcome: "IN_PROGRESS",
+        createdBy: "EMP-ADMIN-CL2"
+      }
+    });
+
     (getServerSession as jest.Mock).mockResolvedValue({ user: mockAdminUser });
     const req = new Request("http://localhost/api/v1/commercial/surveys", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        caseId: testCase.id,
+        caseId: tempCaseForSiteReuse.id,
         siteName: "Katara West Entrance Gate 1", // Matches existing site name created in test 3
-        operationType: "SECURITY_GUARDING"
+        siteAddress: "Building 12, Katara Cultural Village, Doha",
+        operationType: "FACILITY_MANAGEMENT"
       })
     });
 
@@ -334,13 +347,28 @@ describe("Commercial Lifecycle — Phase CL-2 Suite (Pre-Contract Site Surveys &
 
     expect(json.survey.prospectiveSiteId).toBe(testSurvey.prospectiveSiteId);
 
-    // Clean up second temporary survey
+    // Clean up second temporary survey & case
     await prisma.surveyConfigurationSnapshot.deleteMany({ where: { surveyId: json.survey.id } });
     await prisma.preContractSurvey.delete({ where: { id: json.survey.id } });
+    await prisma.preContractCase.delete({ where: { id: tempCaseForSiteReuse.id } });
   });
 
   it("6. Submitting survey resolves active central workflow template and binds WorkflowInstance", async () => {
     (getServerSession as jest.Mock).mockResolvedValue({ user: mockAdminUser });
+    const patchReq = new Request(`http://localhost/api/v1/commercial/surveys/${testSurvey.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        responses: [
+          { elementCode: "HEADCOUNT", numericValue: 6 },
+          { elementCode: "RELIEVER_REQUIRED", booleanValue: true },
+          { elementCode: "COVERAGE_TYPE", textValue: "24/7" }
+        ]
+      })
+    });
+    const patchRes = await patchSurveyById(patchReq, { params: { id: testSurvey.id } });
+    expect(patchRes.status).toBe(200);
+
     const req = new Request(`http://localhost/api/v1/commercial/surveys/${testSurvey.id}/workflow`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -372,7 +400,14 @@ describe("Commercial Lifecycle — Phase CL-2 Suite (Pre-Contract Site Surveys &
         operationType: "SECURITY_GUARDING",
         caseId: testCase.id,
         lifecycle: "DRAFT",
-        conductedBy: "EMP-SURVEYOR"
+        conductedBy: "EMP-SURVEYOR",
+        responses: {
+          create: [
+            { elementCode: "HEADCOUNT", numericValue: 2 },
+            { elementCode: "RELIEVER_REQUIRED", booleanValue: false },
+            { elementCode: "COVERAGE_TYPE", textValue: "STANDARD" }
+          ]
+        }
       }
     });
 
@@ -393,6 +428,7 @@ describe("Commercial Lifecycle — Phase CL-2 Suite (Pre-Contract Site Surveys &
       where: { id: testWorkflowTemplate.id },
       data: { isActive: true }
     });
+    await prisma.surveyResponse.deleteMany({ where: { surveyId: tempSurvey.id } });
     await prisma.preContractSurvey.delete({ where: { id: tempSurvey.id } });
   });
 
@@ -449,7 +485,14 @@ describe("Commercial Lifecycle — Phase CL-2 Suite (Pre-Contract Site Surveys &
         operationType: "SECURITY_GUARDING",
         caseId: testCase.id,
         lifecycle: "DRAFT",
-        conductedBy: "EMP-SURVEYOR-CREATOR"
+        conductedBy: "EMP-SURVEYOR-CREATOR",
+        responses: {
+          create: [
+            { elementCode: "HEADCOUNT", numericValue: 4 },
+            { elementCode: "RELIEVER_REQUIRED", booleanValue: false },
+            { elementCode: "COVERAGE_TYPE", textValue: "12H_DAY" }
+          ]
+        }
       }
     });
 
@@ -467,6 +510,7 @@ describe("Commercial Lifecycle — Phase CL-2 Suite (Pre-Contract Site Surveys &
         id: "EMP-SURVEYOR-CREATOR",
         name: "EMP-SURVEYOR-CREATOR",
         role: "COMMERCIAL_SUPERVISOR",
+        companyId: "COMP-CL2-01",
         permissions: ["precontract.workflow.approve"]
       }
     });
@@ -485,6 +529,7 @@ describe("Commercial Lifecycle — Phase CL-2 Suite (Pre-Contract Site Surveys &
     // Clean up
     await prisma.workflowActionHistory.deleteMany({ where: { instance: { referenceId: tempSurvey.id } } });
     await prisma.workflowInstance.deleteMany({ where: { referenceId: tempSurvey.id } });
+    await prisma.surveyResponse.deleteMany({ where: { surveyId: tempSurvey.id } });
     await prisma.preContractSurvey.delete({ where: { id: tempSurvey.id } });
   });
 
@@ -583,12 +628,29 @@ describe("Commercial Lifecycle — Phase CL-2 Suite (Pre-Contract Site Surveys &
 
   it("16. Re-survey / revision creates new survey record while preserving original approved survey", async () => {
     (getServerSession as jest.Mock).mockResolvedValue({ user: mockAdminUser });
-    const req = new Request("http://localhost/api/v1/commercial/surveys", {
+    // Same (caseId, prospectiveSiteId) is blocked by DEF-099 duplicate survey guard while COMPLETED
+    const dupReq = new Request("http://localhost/api/v1/commercial/surveys", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         caseId: testCase.id,
         prospectiveSiteId: testSurvey.prospectiveSiteId,
+        operationType: "SECURITY_GUARDING",
+        conductedBy: "EMP-SG-CL2",
+        remarks: "Duplicate active site check"
+      })
+    });
+    const dupRes = await postSurveys(dupReq);
+    expect(dupRes.status).toBe(409);
+
+    // Creating a survey for a new prospective site on the same case succeeds and preserves original COMPLETED survey
+    const req = new Request("http://localhost/api/v1/commercial/surveys", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        caseId: testCase.id,
+        siteName: "Katara East Gate Revision Site",
+        siteAddress: "East Gate, Katara Cultural Village, Doha",
         operationType: "SECURITY_GUARDING",
         conductedBy: "EMP-SG-CL2",
         remarks: "Revision survey 2"
@@ -606,9 +668,10 @@ describe("Commercial Lifecycle — Phase CL-2 Suite (Pre-Contract Site Surveys &
     expect(json.survey.id).not.toBe(testSurvey.id);
     expect(json.survey.lifecycle).toBe("DRAFT");
 
-    // Clean up revision survey
+    // Clean up revision survey & temporary prospective site
     await prisma.surveyConfigurationSnapshot.deleteMany({ where: { surveyId: json.survey.id } });
     await prisma.preContractSurvey.delete({ where: { id: json.survey.id } });
+    await prisma.preContractProspectiveSite.deleteMany({ where: { id: json.survey.prospectiveSiteId } });
   });
 
   it("17. WorkflowActionHistory is completely immutable and retains full action sequence", async () => {
@@ -762,8 +825,8 @@ describe("Commercial Lifecycle — Phase CL-2 Suite (Pre-Contract Site Surveys &
     const uatCaseTemplate = await prisma.workflowTemplate.create({
       data: {
         id: "WF-TMPL-CL2-UAT-CASE-FALLBACK",
-        workflowName: "UAT Legacy Pre-Contract Case Survey Template",
-        moduleType: "PRE_CONTRACT_CASE",
+        workflowName: "UAT Legacy Pre-Contract Survey Template",
+        moduleType: "PRE_CONTRACT_SURVEY",
         operationType: "SECURITY_GUARDING",
         appliesTo: "ACTIVATION",
         isDefault: true,

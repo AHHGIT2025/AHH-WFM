@@ -235,6 +235,22 @@ describe("Commercial Lifecycle — Phase CL-3 Comprehensive Test Suite (Pre-Cont
       await prisma.workflowTemplate.deleteMany({ where: { id: { in: staleIds } } });
     }
 
+    const prevDefaults = await prisma.workflowTemplate.findMany({
+      where: {
+        moduleType: { in: ["PRE_CONTRACT_COSTING", "COMMERCIAL_COSTING", "COSTING"] },
+        isActive: true,
+        isDefault: true
+      },
+      select: { id: true }
+    });
+    (globalThis as any).__cl3PrevDefaultCostingIds = prevDefaults.map((t: any) => t.id);
+    if (prevDefaults.length > 0) {
+      await prisma.workflowTemplate.updateMany({
+        where: { id: { in: prevDefaults.map((t: any) => t.id) } },
+        data: { isDefault: false }
+      });
+    }
+
     // Always create a fresh, correctly-structured single-level test template
     testWorkflowTemplate = await prisma.workflowTemplate.create({
       data: {
@@ -258,15 +274,44 @@ describe("Commercial Lifecycle — Phase CL-3 Comprehensive Test Suite (Pre-Cont
         }
       }
     });
+
+    await (prisma as any).costRateCardMaster.deleteMany({ where: { code: "RC-CL3-TEST" } });
+    await (prisma as any).costRateCardMaster.create({
+      data: {
+        code: "RC-CL3-TEST",
+        name: "CL3 Synthetic Rate Card",
+        currency: "QAR",
+        companyId: null,
+        createdBy: "EMP-CL3-ADMIN",
+        versions: {
+          create: {
+            versionNumber: 1,
+            status: "ACTIVE",
+            effectiveFrom: new Date(Date.now() - 86400000),
+            ratesJson: { BASIC_PAY: 2400, ALLOWANCES: 900, RELIEVER_COST: 2800 },
+            createdBy: "EMP-CL3-ADMIN",
+            approvedBy: "EMP-CL3-APPROVER",
+          },
+        },
+      },
+    });
   });
 
   afterAll(async () => {
+    await (prisma as any).costRateCardMaster.deleteMany({ where: { code: "RC-CL3-TEST" } });
     // Cleanup workflow template first (WorkflowInstances cascade from Section 7/8/11 workflow tests)
     if (testWorkflowTemplate) {
       await prisma.workflowInstance.deleteMany({ where: { templateId: testWorkflowTemplate.id } });
       await prisma.workflowTemplateApprover.deleteMany({ where: { level: { templateId: testWorkflowTemplate.id } } });
       await prisma.workflowTemplateLevel.deleteMany({ where: { templateId: testWorkflowTemplate.id } });
       await prisma.workflowTemplate.delete({ where: { id: testWorkflowTemplate.id } });
+    }
+    const prevIds: string[] = (globalThis as any).__cl3PrevDefaultCostingIds || [];
+    if (prevIds.length > 0) {
+      await prisma.workflowTemplate.updateMany({
+        where: { id: { in: prevIds } },
+        data: { isDefault: true }
+      });
     }
     // Cleanup costing data
     await prisma.preContractCostOverrideLog.deleteMany({
@@ -1190,7 +1235,47 @@ describe("Commercial Lifecycle — Phase CL-3 Comprehensive Test Suite (Pre-Cont
       operationAccess: { allowedSecurityGuarding: true, allowedFacilityManagement: false }
     };
 
+    let vibe14ProposalTplId: string | null = null;
+    let prevProposalDefaultIds: string[] = [];
+
     beforeAll(async () => {
+      const prevPropDefaults = await prisma.workflowTemplate.findMany({
+        where: {
+          moduleType: { in: ["PRE_CONTRACT_PROPOSAL", "COMMERCIAL_PROPOSAL"] },
+          isActive: true,
+          isDefault: true
+        },
+        select: { id: true }
+      });
+      prevProposalDefaultIds = prevPropDefaults.map((t: any) => t.id);
+      if (prevProposalDefaultIds.length > 0) {
+        await prisma.workflowTemplate.updateMany({
+          where: { id: { in: prevProposalDefaultIds } },
+          data: { isDefault: false }
+        });
+      }
+      const propTpl = await prisma.workflowTemplate.create({
+        data: {
+          workflowName: "CL3 VIBE14 Test Proposal Template",
+          moduleType: "PRE_CONTRACT_PROPOSAL",
+          appliesTo: "APPROVAL",
+          isActive: true,
+          isDefault: true,
+          levels: {
+            create: [
+              {
+                levelNumber: 1,
+                levelName: "Commercial Manager Review",
+                approvers: {
+                  create: [{ approverType: "ROLE_BASED", roleName: "COMMERCIAL_MANAGER" }]
+                }
+              }
+            ]
+          }
+        }
+      });
+      vibe14ProposalTplId = propTpl.id;
+
       vibe14Site = await prisma.preContractProspectiveSite.create({
         data: {
           name: "QP Tower A — VIBE14 Site",
@@ -1267,6 +1352,18 @@ describe("Commercial Lifecycle — Phase CL-3 Comprehensive Test Suite (Pre-Cont
       }
       if (vibe14Site?.id) {
         await prisma.preContractProspectiveSite.deleteMany({ where: { id: vibe14Site.id } });
+      }
+      if (vibe14ProposalTplId) {
+        await prisma.workflowInstance.deleteMany({ where: { templateId: vibe14ProposalTplId } });
+        await prisma.workflowTemplateApprover.deleteMany({ where: { level: { templateId: vibe14ProposalTplId } } });
+        await prisma.workflowTemplateLevel.deleteMany({ where: { templateId: vibe14ProposalTplId } });
+        await prisma.workflowTemplate.deleteMany({ where: { id: vibe14ProposalTplId } });
+      }
+      if (prevProposalDefaultIds.length > 0) {
+        await prisma.workflowTemplate.updateMany({
+          where: { id: { in: prevProposalDefaultIds } },
+          data: { isDefault: true }
+        });
       }
     });
 

@@ -14470,6 +14470,14 @@ export const mockDb = {
         await prismaClient.workflowInstance.deleteMany({
           where: { referenceId: id, moduleType: { in: ["SECURITY_GUARDING_CONTRACT", "FACILITY_MANAGEMENT_CONTRACT", "CONTRACT"] } }
         });
+        let resolvedCompanyId: string | null = (contract as any).companyId || null;
+        if (!resolvedCompanyId && submittedById) {
+          const submitter = await prismaClient.employee.findUnique({
+            where: { id: submittedById },
+            select: { companyId: true }
+          });
+          resolvedCompanyId = submitter?.companyId || null;
+        }
         await prismaClient.workflowInstance.create({
           data: {
             templateId: template.id,
@@ -14477,7 +14485,7 @@ export const mockDb = {
             referenceId: id,
             status: "IN_PROGRESS",
             currentLevelNumber: 1,
-            companyId: contract.companyId || null,
+            companyId: resolvedCompanyId,
             operationScope: contract.operationType,
             history: {
               create: {

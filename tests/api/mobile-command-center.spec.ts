@@ -123,9 +123,11 @@ describe("CCC-6 Mobile Command Suite BFF & Authorization Tests", () => {
     expect(hasPermission({ role: "ADMIN" }, "commercial.commandCenter.view")).toBe(true);
     expect(hasClientPermission({ role: "ADMIN" }, "commercial.commandCenter.view")).toBe(true);
 
-    // Centralized manpower.admin.full_access bypass
-    expect(hasPermission({ role: "MANAGER", permissions: ["manpower.admin.full_access"] }, "commercial.commandCenter.view")).toBe(true);
-    expect(hasClientPermission({ role: "MANAGER", permissions: ["manpower.admin.full_access"] }, "commercial.commandCenter.view")).toBe(true);
+    // Centralized manpower.admin.full_access implied permissions (scoped to manpower, not commercial.commandCenter.view)
+    expect(hasPermission({ role: "MANAGER", permissions: ["manpower.admin.full_access"] }, "manpower.view")).toBe(true);
+    expect(hasClientPermission({ role: "MANAGER", permissions: ["manpower.admin.full_access"] }, "manpower.view")).toBe(true);
+    expect(hasPermission({ role: "MANAGER", permissions: ["manpower.admin.full_access"] }, "commercial.commandCenter.view")).toBe(false);
+    expect(hasClientPermission({ role: "MANAGER", permissions: ["manpower.admin.full_access"] }, "commercial.commandCenter.view")).toBe(false);
 
     // Unauthorized user
     expect(hasPermission({ role: "EMPLOYEE", permissions: ["self.profile.view"] }, "commercial.commandCenter.view")).toBe(false);

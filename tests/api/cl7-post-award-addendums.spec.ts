@@ -666,9 +666,12 @@ describe("Commercial Lifecycle Phase CL-7 & Phase 1 Remediation: Post-Award Adde
       }
       for (const roleKey of ["COMMERCIAL_HR", "COMMERCIAL_FINANCE", "COMMERCIAL_APPROVER"]) {
         const perms = DEFAULT_ROLE_PERMISSIONS[roleKey];
-        expect(
-          perms.filter(p => p.endsWith(".manage") || p.endsWith(".create") || p.endsWith(".update") || p.endsWith(".submit"))
-        ).toEqual([]);
+        const unexpectedManagePerms = perms.filter(
+          (p) =>
+            (p.endsWith(".manage") || p.endsWith(".create") || p.endsWith(".update") || p.endsWith(".submit")) &&
+            !(roleKey === "COMMERCIAL_FINANCE" && p === "precontract.costConfig.manage")
+        );
+        expect(unexpectedManagePerms).toEqual([]);
       }
 
       // Gate C: Create an isolated test role in SystemRole with a single explicit DB RolePermission grant,

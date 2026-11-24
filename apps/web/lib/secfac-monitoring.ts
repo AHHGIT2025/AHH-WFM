@@ -611,13 +611,25 @@ export async function resolveMonitoringAlertsOnRecovery(
   operationType: string = "SECURITY_GUARDING",
   resolutionNote: string = "Auto-resolved: health returned to HEALTHY."
 ) {
+  if (process.env.SECFAC_MONITORING_AUTO_RESOLVE_ENABLED !== "true") {
+    return { count: 0, skipped: true, reason: "AUTO_RESOLVE_DISABLED" as const };
+  }
+
+  const cutoffRaw = process.env.SECFAC_MONITORING_AUTO_RESOLVE_MIN_FIRST_DETECTED_AT?.trim();
+  const cutoffDate = cutoffRaw ? new Date(cutoffRaw) : null;
+  if (!cutoffDate || Number.isNaN(cutoffDate.getTime())) {
+    return { count: 0, skipped: true, reason: "MISSING_ELIGIBILITY_CUTOFF" as const };
+  }
+
   const now = new Date();
   return prisma.secFacOperationalAlert.updateMany({
     where: {
       operationType,
       alertCode: monitoringCode,
       sourceType: "MONITORING_ENGINE",
-      status: { in: ["OPEN", "ACKNOWLEDGED", "IN_PROGRESS"] }
+      status: "OPEN",
+      acknowledgedById: null,
+      firstDetectedAt: { gte: cutoffDate }
     },
     data: {
       status: "RESOLVED",
