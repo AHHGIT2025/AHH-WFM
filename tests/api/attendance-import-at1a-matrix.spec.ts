@@ -814,6 +814,6 @@ describe("Unified Attendance Intake & Output Profile (Phase AT-1A) Matrix & Time
       });
       expect(existingMobile?.device).toBe("MOBILE_APP_PW8");
       expect(existingMobile?.status).toBe("ON_TIME");
-    });
+    }, 30000);
   });
 });

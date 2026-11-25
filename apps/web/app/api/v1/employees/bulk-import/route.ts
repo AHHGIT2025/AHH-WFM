@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { checkApiAuth } from "@/lib/api-guards";
+import { hasPermission, isAdminUser } from "@/lib/permissions";
 import { mockDb, isDbConnected, readDb, writeDb } from "@ahh-wfm/mock-data";
 import { prisma } from "@ahh-wfm/database";
 
@@ -18,13 +19,32 @@ export async function POST(request: Request) {
   if (auth.error) return auth.error;
 
   const session = auth.session;
-  const userId = (session?.user as any)?.id || "admin-system";
+  const user = session?.user as any;
+  if (!isAdminUser(user) && !hasPermission(user, "employees.bulkUpload")) {
+    return NextResponse.json({ error: "Forbidden: Requires employees.bulkUpload permission" }, { status: 403 });
+  }
+
+  const userId = user?.id || "admin-system";
+  const callerRole = (user?.role || "").trim().toUpperCase().replace(/\s+/g, "_");
 
   try {
     const body = await request.json();
     const { rows, fileName, updateExisting } = body;
     if (!rows || !Array.isArray(rows)) {
       return NextResponse.json({ error: "Missing rows array in payload" }, { status: 400 });
+    }
+
+    if (callerRole !== "SUPER_ADMIN") {
+      const hasUnauthorizedAdminRow = rows.some((row: any) => {
+        const rowRole = row?.role ? String(row.role).trim().toUpperCase().replace(/\s+/g, "_") : "EMPLOYEE";
+        return rowRole === "SUPER_ADMIN" || rowRole === "ADMIN";
+      });
+      if (hasUnauthorizedAdminRow) {
+        return NextResponse.json(
+          { error: "Forbidden: Only SUPER_ADMIN can import SUPER_ADMIN or ADMIN role accounts" },
+          { status: 403 }
+        );
+      }
     }
 
     const companies = await mockDb.getCompanies();
@@ -58,6 +78,16 @@ export async function POST(request: Request) {
       const empCode = row.employeeCode || row.employeeId;
       if (!empCode || !row.fullName || !row.companyCode || !row.department || !row.designation || !row.employeeCategory || !row.operationType || !row.defaultLocation || !row.dateOfJoining) {
         errors.push("Missing core required parameters");
+      }
+
+      const rowRole = row.role ? String(row.role).trim().toUpperCase().replace(/\s+/g, "_") : "EMPLOYEE";
+      if ((rowRole === "SUPER_ADMIN" || rowRole === "ADMIN") && callerRole !== "SUPER_ADMIN") {
+        errors.push("Forbidden: Only SUPER_ADMIN can import SUPER_ADMIN or ADMIN role accounts");
+      }
+
+      const matchedEmp = existingEmployees.find(e => e.id === empCode || (e as any).employeeCode === empCode);
+      if (matchedEmp && (matchedEmp.role || "").trim().toUpperCase() === "SUPER_ADMIN" && callerRole !== "SUPER_ADMIN") {
+        errors.push("Forbidden: Cannot overwrite a SUPER_ADMIN account via bulk import");
       }
 
       if (errors.length > 0) {
@@ -115,8 +145,6 @@ export async function POST(request: Request) {
           failures.push({ row: rowNum, errors });
           continue;
         }
-
-        const matchedEmp = existingEmployees.find(e => e.id === empCode || (e as any).employeeCode === empCode);
         
         // Define unified profile payload
         const payload: any = {
@@ -129,7 +157,7 @@ export async function POST(request: Request) {
           department: row.department,
           departmentId: departmentId || null,
           designationId: designationId || null,
-          role: row.role ? row.role.toUpperCase() : "EMPLOYEE",
+          role: rowRole,
           employeeCategory: row.employeeCategory ? row.employeeCategory.toUpperCase() : "WHITE_COLLAR",
           operationType: row.operationType ? row.operationType.toUpperCase() : "WHITE_COLLAR",
           defaultLocationId: defaultLocationId || null,

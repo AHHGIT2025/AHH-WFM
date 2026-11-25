@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import { mockDb } from "@ahh-wfm/mock-data";
+import { checkApiAuth } from "@/lib/api-guards";
+import { hasPermission, isAdminUser } from "@/lib/permissions";
 
 export async function GET(request: Request, { params }: { params: { id: string } }) {
+  const auth = await checkApiAuth(undefined, { employeeIdParam: params.id });
+  if (auth.error) return auth.error;
+
   try {
     const { id } = params;
     const locations = await mockDb.getEmployeeAllowedPunchLocations(id);
@@ -13,6 +18,23 @@ export async function GET(request: Request, { params }: { params: { id: string }
 }
 
 export async function POST(request: Request, { params }: { params: { id: string } }) {
+  const auth = await checkApiAuth();
+  if (auth.error) return auth.error;
+
+  const user = auth.session?.user as any;
+  if (
+    !isAdminUser(user) &&
+    !hasPermission(user, "employees.edit") &&
+    !hasPermission(user, "attendance.manage") &&
+    !hasPermission(user, "masters.manage") &&
+    !hasPermission(user, "masterdata.manage")
+  ) {
+    return NextResponse.json(
+      { error: "Forbidden: Requires employees.edit or attendance.manage permission" },
+      { status: 403 }
+    );
+  }
+
   try {
     const { id } = params;
     const body = await request.json();
@@ -39,6 +61,23 @@ export async function POST(request: Request, { params }: { params: { id: string 
 }
 
 export async function DELETE(request: Request, { params }: { params: { id: string } }) {
+  const auth = await checkApiAuth();
+  if (auth.error) return auth.error;
+
+  const user = auth.session?.user as any;
+  if (
+    !isAdminUser(user) &&
+    !hasPermission(user, "employees.edit") &&
+    !hasPermission(user, "attendance.manage") &&
+    !hasPermission(user, "masters.manage") &&
+    !hasPermission(user, "masterdata.manage")
+  ) {
+    return NextResponse.json(
+      { error: "Forbidden: Requires employees.edit or attendance.manage permission" },
+      { status: 403 }
+    );
+  }
+
   try {
     const { searchParams } = new URL(request.url);
     const assignmentId = searchParams.get("assignmentId");

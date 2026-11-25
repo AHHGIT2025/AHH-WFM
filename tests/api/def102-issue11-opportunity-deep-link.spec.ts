@@ -226,8 +226,8 @@ describe("Issue #11 (DEF-102): Opportunity Approval Deep Link (TEST DATABASE)", 
     const authSource = fs.readFileSync(authPath, "utf8");
     expect(authSource).toContain("companyId: (employee as any).companyId || null");
     expect(authSource).toContain("token.companyId = (user as any).companyId || null");
-    expect(authSource).toContain("token.companyId = employee.companyId || null");
-    expect(authSource).toContain("(session.user as any).companyId = (token.companyId as string) || null");
+    expect(authSource).toContain("(employee as any).companyId || null");
+    expect(authSource).toContain("(session.user as any).companyId = token.companyId ?? null");
   });
 
   it("7. Surveys, Activities, Tasks, Command Center, and Approval Center fail closed (403) when non-cross-company user lacks companyId", async () => {

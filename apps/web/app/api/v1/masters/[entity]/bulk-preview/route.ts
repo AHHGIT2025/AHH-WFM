@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { checkApiAuth } from "@/lib/api-guards";
+import { hasPermission, isAdminUser } from "@/lib/permissions";
 import { MASTER_SCHEMAS } from "@/lib/masters-schema";
 import { isDbConnected, readDb } from "@ahh-wfm/mock-data";
 import { prisma } from "@ahh-wfm/database";
@@ -42,6 +43,11 @@ function parseCSV(text: string) {
 export async function POST(request: Request, { params }: { params: { entity: string } }) {
   const auth = await checkApiAuth();
   if (auth.error) return auth.error;
+
+  const user = auth.session?.user as any;
+  if (!isAdminUser(user) && !hasPermission(user, "masters.manage") && !hasPermission(user, "masterdata.manage")) {
+    return NextResponse.json({ error: "Forbidden: Requires masters.manage permission" }, { status: 403 });
+  }
 
   const { entity } = params;
   const schema = MASTER_SCHEMAS[entity];

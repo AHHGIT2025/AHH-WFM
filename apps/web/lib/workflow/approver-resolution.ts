@@ -13,6 +13,10 @@ export interface UserSessionContext {
   employeeId?: string | null; // Employee.id
   role?: string | null;
   companyId?: string | null;
+  allowedCompanyIds?: string[] | null;
+  operationAccess?: {
+    allowedCompanyIds?: string[] | null;
+  } | null;
 }
 
 export interface ApproverEligibilityResult {
@@ -50,10 +54,31 @@ export async function isUserEligibleApprover(
   }
 
   // 1. Company boundary check
-  const isSuperAdmin = user.role === "SUPER_ADMIN";
-  if (options?.instanceCompanyId && user.companyId && !isSuperAdmin) {
-    if (user.companyId !== options.instanceCompanyId) {
-      return { isEligible: false, isExplicit: false, matchedBy: "NONE", reason: "Company boundary violation" };
+  const normalizedUserRole = user.role?.toUpperCase().replace(/\s+/g, "_") || "";
+  const isSuperAdmin = normalizedUserRole === "SUPER_ADMIN";
+  const isAdmin = isSuperAdmin || normalizedUserRole === "ADMIN";
+  if (options?.instanceCompanyId && !isAdmin) {
+    const allowedCompanies = new Set<string>();
+    if (typeof user.companyId === "string" && user.companyId.trim().length > 0) {
+      allowedCompanies.add(user.companyId.trim());
+    }
+    const extraAllowed = Array.isArray(user.allowedCompanyIds)
+      ? user.allowedCompanyIds
+      : Array.isArray(user.operationAccess?.allowedCompanyIds)
+        ? user.operationAccess!.allowedCompanyIds!
+        : [];
+    for (const cid of extraAllowed) {
+      if (typeof cid === "string" && cid.trim().length > 0) {
+        allowedCompanies.add(cid.trim());
+      }
+    }
+
+    if (allowedCompanies.size > 0) {
+      if (!allowedCompanies.has(options.instanceCompanyId.trim())) {
+        return { isEligible: false, isExplicit: false, matchedBy: "NONE", reason: "Company boundary violation" };
+      }
+    } else if (user.companyId === null) {
+      return { isEligible: false, isExplicit: false, matchedBy: "NONE", reason: "Company boundary violation: Approver has no assigned company" };
     }
   }
 

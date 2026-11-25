@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { mockDb } from "@ahh-wfm/mock-data";
-import { checkApiAuth } from "@/lib/api-guards";
+import { checkApiAuth, canAccessCompany } from "@/lib/api-guards";
 import {
   canAccessEmployeeRecord,
   canViewWorkforceDirectory,
@@ -119,7 +119,7 @@ export async function GET(request: Request) {
 
   if (!isAdminUser(user)) {
     const allowedCompanies = getAuthorizedCompanyIds(user);
-    if (companyId && !allowedCompanies.includes(companyId)) {
+    if ((companyId && !allowedCompanies.includes(companyId)) || (companyId && !canAccessCompany(user, companyId))) {
       return NextResponse.json({ error: "Forbidden: Company scope violation" }, { status: 403 });
     }
     const allowedOps = getAuthorizedEmployeeOperations(user);
@@ -170,8 +170,13 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const auth = await checkApiAuth(["ADMIN"]);
+  const auth = await checkApiAuth();
   if (auth.error) return auth.error;
+
+  const user = auth.session?.user as any;
+  if (!isAdminUser(user) && !hasPermission(user, "employees.create")) {
+    return NextResponse.json({ error: "Forbidden: Requires employees.create permission" }, { status: 403 });
+  }
 
   try {
     const payload = await request.json();
@@ -204,6 +209,41 @@ export async function POST(request: Request) {
     if (!role || role.trim() === "") {
       return NextResponse.json({ error: "Role is required" }, { status: 400 });
     }
+
+    const callerRole = (user.role || "").trim().toUpperCase().replace(/\s+/g, "_");
+    const requestedRole = role.trim().toUpperCase().replace(/\s+/g, "_");
+    if ((requestedRole === "SUPER_ADMIN" || requestedRole === "ADMIN") && callerRole !== "SUPER_ADMIN") {
+      return NextResponse.json(
+        { error: "Forbidden: Only SUPER_ADMIN can create SUPER_ADMIN or ADMIN accounts" },
+        { status: 403 }
+      );
+    }
+
+    const isPrivilegedRole = [
+      "SUPER_ADMIN",
+      "ADMIN",
+      "SYSTEM_ADMIN",
+      "IT_ADMIN",
+      "APPLICATION_ADMIN",
+      "SETTINGS_ADMIN",
+      "SECURITY_ADMIN",
+      "FM_ADMIN",
+      "HR_MANAGER",
+      "FINANCE_MANAGER",
+      "SAP_ADMIN"
+    ].includes(requestedRole);
+
+    if (isPrivilegedRole && !isAdminUser(user) && !hasPermission(user, "users.manage")) {
+      return NextResponse.json(
+        { error: "Forbidden: Assigning administrative or privileged roles requires users.manage permission" },
+        { status: 403 }
+      );
+    }
+
+    if (companyId && !canAccessCompany(user, companyId)) {
+      return NextResponse.json({ error: "Forbidden: Cross-company access denied" }, { status: 403 });
+    }
+
     if (!employeeCategory || (employeeCategory !== "WHITE_COLLAR" && employeeCategory !== "BLUE_COLLAR")) {
       return NextResponse.json({ error: "Valid Worker Category is required" }, { status: 400 });
     }

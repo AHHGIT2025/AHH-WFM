@@ -238,7 +238,6 @@ export async function GET(request: Request, { params }: { params: { entity: stri
 
   const user = auth.session?.user as any;
   const hasMasterRead = isAdminUser(user) || hasPermission(user, "masterdata.view") || hasPermission(user, "masters.view");
-
   try {
     const { entity } = params;
     if (!hasMasterRead && !REFERENCE_DROPDOWN_ENTITIES.has(entity)) {
@@ -321,8 +320,8 @@ export async function POST(request: Request, { params }: { params: { entity: str
   const auth = await checkApiAuth();
   if (auth.error) return auth.error;
   const user = auth.session?.user as any;
-  if (!hasPermission(user, "masterdata.manage") && !hasPermission(user, "masters.manage")) {
-    return NextResponse.json({ error: "Forbidden: Requires masterdata.manage permission" }, { status: 403 });
+  if (!isAdminUser(user) && !hasPermission(user, "masters.manage") && !hasPermission(user, "masterdata.manage")) {
+    return NextResponse.json({ error: "Forbidden: Requires masters.manage permission" }, { status: 403 });
   }
 
   let body: any = {};

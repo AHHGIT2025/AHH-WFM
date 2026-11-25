@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { mockDb } from "@ahh-wfm/mock-data";
 import { checkApiAuth } from "@/lib/api-guards";
+import { hasPermission, isAdminUser } from "@/lib/permissions";
 
 export async function POST(request: Request, { params }: { params: { id: string } }) {
   const auth = await checkApiAuth(undefined, { requiredOperation: "SECURITY_GUARDING" });
@@ -10,42 +11,79 @@ export async function POST(request: Request, { params }: { params: { id: string 
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  if (
+    !hasPermission(user, "manpower.admin.full_access") &&
+    !hasPermission(user, "manpower.security.manage") &&
+    !hasPermission(user, "manpower.security.contracts.manage") &&
+    !hasPermission(user, "precontract.workflow.reject") &&
+    !hasPermission(user, "precontract.workflow.approve")
+  ) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   try {
+    const payload = await request.json().catch(() => ({}));
+    const { levelId, employeeId, remarks } = payload;
+    const sessionEmployeeId = user.employeeId || user.id;
+    const isSuperAdmin = (user?.role || "").trim().toUpperCase().replace(/\s+/g, "_") === "SUPER_ADMIN";
+
+    if (!levelId) {
+      return NextResponse.json({ error: "Missing levelId" }, { status: 400 });
+    }
+    if (employeeId && employeeId !== sessionEmployeeId && !isSuperAdmin) {
+      return NextResponse.json(
+        { error: "Forbidden: Cannot spoof another employeeId for workflow rejection" },
+        { status: 403 }
+      );
+    }
+
+    const effectiveEmployeeId = sessionEmployeeId;
+    if (!effectiveEmployeeId) {
+      return NextResponse.json({ error: "Missing levelId or employeeId" }, { status: 400 });
+    }
+
     const existingContract = await mockDb.getManpowerContract(params.id);
     if (!existingContract) {
       return NextResponse.json({ error: "Contract not found" }, { status: 404 });
     }
     if (existingContract.operationType && existingContract.operationType !== "SECURITY_GUARDING") {
-      return NextResponse.json({ error: "Forbidden: Scope mismatch" }, { status: 403 });
+      return NextResponse.json(
+        { error: "Forbidden: Contract belongs to a different operation scope" },
+        { status: 403 }
+      );
     }
-    if (user.companyId && user.role !== "SUPER_ADMIN" && (existingContract as any).companyId && (existingContract as any).companyId !== user.companyId) {
+    if (user.companyId && !isSuperAdmin && (existingContract as any).companyId && (existingContract as any).companyId !== user.companyId) {
       return NextResponse.json({ error: "Forbidden: Company boundary violation" }, { status: 403 });
     }
-
-    const payload = await request.json().catch(() => ({}));
-    const { levelId, remarks } = payload;
-    if (!levelId) {
-      return NextResponse.json({ error: "Missing levelId" }, { status: 400 });
+    if (Array.isArray(existingContract.workflows) && existingContract.workflows.length > 0) {
+      const matchingWorkflow = existingContract.workflows.find((wf: any) =>
+        Array.isArray(wf.levels) && wf.levels.some((l: any) => l.id === levelId)
+      );
+      if (!matchingWorkflow) {
+        return NextResponse.json(
+          { error: "Forbidden: Workflow level does not belong to this contract" },
+          { status: 403 }
+        );
+      }
     }
-
-    // Resolve caller identity strictly from authenticated session; ignore client-supplied employeeId
-    const resolvedEmployeeId = user.employeeId || user.id;
 
     const contract = await mockDb.rejectContractWorkflowLevel(
       params.id,
       levelId,
-      resolvedEmployeeId,
+      effectiveEmployeeId,
       remarks,
       user
     );
     return NextResponse.json(contract);
   } catch (e: any) {
-    const isSoDError = e.message?.includes("Segregation of Duties");
-    const isAuthError = e.message?.includes("not authorized");
-    return NextResponse.json(
-      { error: e.message || "Failed to reject level" },
-      { status: isSoDError || isAuthError ? 403 : 500 }
-    );
+    const msg = e?.message || "Failed to reject level";
+    const lower = msg.toLowerCase();
+    const isSoDOrAuth = lower.includes("segregation of duties") || lower.includes("not authorized");
+    const status = isSoDOrAuth
+      ? 403
+      : lower.includes("not found")
+        ? 400
+        : 500;
+    return NextResponse.json({ error: msg }, { status });
   }
 }

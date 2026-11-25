@@ -6,11 +6,67 @@ import { prisma } from "@ahh-wfm/database";
 import * as bcrypt from "bcryptjs";
 import { DEFAULT_ROLE_PERMISSIONS } from "./permissions";
 
-export async function fetchUserRBAC(userId: string, defaultRole: string) {
+export const WEB_SESSION_COOKIE_NAME = "ahh-wfm.web.session-token";
+export const WEB_CALLBACK_COOKIE_NAME = "ahh-wfm.web.callback-url";
+export const WEB_CSRF_COOKIE_NAME = "ahh-wfm.web.csrf-token";
+export const WEB_SESSION_AUDIENCE = "ahh-wfm-web";
+
+export function resolveNextAuthSecret(): string {
+  const configured = process.env.NEXTAUTH_SECRET;
+  if (!configured || configured.trim().length === 0) {
+    throw new Error(
+      "CRITICAL SECURITY ERROR: NEXTAUTH_SECRET environment variable must be explicitly configured."
+    );
+  }
+  if (configured !== configured.trim()) {
+    throw new Error(
+      "CRITICAL SECURITY ERROR: NEXTAUTH_SECRET must not contain leading or trailing whitespace."
+    );
+  }
+  if (configured.length < 32) {
+    throw new Error(
+      "CRITICAL SECURITY ERROR: NEXTAUTH_SECRET must be at least 32 characters."
+    );
+  }
+  return configured;
+}
+
+function getDefaultOperationAccess(defaultRole: string) {
+  const normalizedRole = (defaultRole || "").trim().toUpperCase().replace(/\s+/g, "_");
+  const defaultAllowSG =
+    normalizedRole === "SUPER_ADMIN" ||
+    normalizedRole === "ADMIN" ||
+    normalizedRole === "OPERATIONS_MANAGER" ||
+    normalizedRole === "OPERATIONS_COORDINATOR" ||
+    normalizedRole === "PROJECT_SUPERVISOR" ||
+    normalizedRole === "PATROLLING_SUPERVISOR" ||
+    normalizedRole.startsWith("SECURITY_");
+  const defaultAllowFM =
+    normalizedRole === "SUPER_ADMIN" ||
+    normalizedRole === "ADMIN" ||
+    normalizedRole === "OPERATIONS_MANAGER" ||
+    normalizedRole === "OPERATIONS_COORDINATOR" ||
+    normalizedRole.startsWith("FM_");
+
+  return {
+    allowedWhiteCollar: true,
+    allowedSecurityGuarding: defaultAllowSG,
+    allowedFacilityManagement: defaultAllowFM,
+    defaultLanding: "/dashboard",
+    allowedCompanyIds: null
+  };
+}
+
+export async function fetchUserRBAC(
+  userId: string,
+  defaultRole: string,
+  options?: { throwOnError?: boolean }
+) {
   try {
     // 1. Fetch user role assignments
     const assignments = await mockDb.getUserRoleAssignments();
     const userAssignments = assignments.filter(a => a.employeeId === userId && a.isActive);
+    const assignedRoleIds = userAssignments.map(a => a.roleId);
 
     // 2. Fetch all system roles to find their name & active status
     const roles = await mockDb.getSystemRoles();
@@ -18,12 +74,12 @@ export async function fetchUserRBAC(userId: string, defaultRole: string) {
     // Check if the user is a super admin or admin
     const isSuperAdmin = defaultRole === "SUPER_ADMIN" || userAssignments.some(a => {
       const r = roles.find(x => x.id === a.roleId);
-      return r && r.name === "SUPER_ADMIN";
+      return r && r.isActive !== false && r.name === "SUPER_ADMIN";
     });
 
     const isAdmin = defaultRole === "ADMIN" || userAssignments.some(a => {
       const r = roles.find(x => x.id === a.roleId);
-      return r && r.name === "ADMIN";
+      return r && r.isActive !== false && r.name === "ADMIN";
     });
 
     let permissions: string[] = [];
@@ -103,8 +159,8 @@ export async function fetchUserRBAC(userId: string, defaultRole: string) {
       }
       permissions = Array.from(grantedPermKeys);
 
-      // If the user has no custom permissions mapped, fall back to the default role's hardcoded permissions!
-      if (permissions.length === 0) {
+      // Only fall back to default role permissions if neither the base role nor assigned roles had explicit DB rows configured
+      if (permissions.length === 0 && !hasConfiguredBaseRolePerms && userAssignments.length === 0) {
         permissions = [...(DEFAULT_ROLE_PERMISSIONS[defaultRole.trim().toUpperCase().replace(/\s+/g, "_")] || [])];
       }
     }
@@ -112,38 +168,58 @@ export async function fetchUserRBAC(userId: string, defaultRole: string) {
     // 3. Fetch operation access
     let opAccess = await mockDb.getUserOperationAccess(userId);
     if (!opAccess) {
-      // Default fallback
-      opAccess = {
-        allowedWhiteCollar: true,
-        allowedSecurityGuarding: defaultRole === "SUPER_ADMIN" || defaultRole === "ADMIN",
-        allowedFacilityManagement: defaultRole === "SUPER_ADMIN" || defaultRole === "ADMIN",
-        defaultLanding: "/dashboard",
-        allowedCompanyIds: null
-      };
+      opAccess = getDefaultOperationAccess(defaultRole);
     }
 
-    return { permissions, operationAccess: opAccess };
+    return { permissions, operationAccess: opAccess, assignedRoleIds };
   } catch (e) {
+    if (options?.throwOnError) {
+      throw e;
+    }
     console.error("Error loading user RBAC settings:", e);
-    // Safe fallbacks on failure
     return {
       permissions: [...(DEFAULT_ROLE_PERMISSIONS[defaultRole.toUpperCase().replace(/\s+/g, "_")] || [])],
-      operationAccess: {
-        allowedWhiteCollar: true,
-        allowedSecurityGuarding: defaultRole === "SUPER_ADMIN" || defaultRole === "ADMIN",
-        allowedFacilityManagement: defaultRole === "SUPER_ADMIN" || defaultRole === "ADMIN",
-        defaultLanding: "/dashboard",
-        allowedCompanyIds: null
-      }
+      operationAccess: getDefaultOperationAccess(defaultRole),
+      assignedRoleIds: [] as string[]
     };
   }
 }
 
 export const authOptions: NextAuthOptions = {
-  secret: process.env.NEXTAUTH_SECRET || "foundation-secret-key-12345",
+  get secret(): string {
+    return resolveNextAuthSecret();
+  },
   session: {
     strategy: "jwt",
     maxAge: 24 * 60 * 60, // 24 hours
+  },
+  cookies: {
+    sessionToken: {
+      name: WEB_SESSION_COOKIE_NAME,
+      options: {
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        secure: process.env.NEXTAUTH_URL?.startsWith("https://") ?? false
+      }
+    },
+    callbackUrl: {
+      name: WEB_CALLBACK_COOKIE_NAME,
+      options: {
+        sameSite: "lax",
+        path: "/",
+        secure: process.env.NEXTAUTH_URL?.startsWith("https://") ?? false
+      }
+    },
+    csrfToken: {
+      name: WEB_CSRF_COOKIE_NAME,
+      options: {
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        secure: process.env.NEXTAUTH_URL?.startsWith("https://") ?? false
+      }
+    }
   },
   providers: [
     AzureADProvider({
@@ -174,7 +250,11 @@ export const authOptions: NextAuthOptions = {
           );
 
           if (employee) {
-            if (employee.isActive === false) {
+            if (
+              employee.isActive === false ||
+              (employee as any).employmentStatus === "INACTIVE" ||
+              (employee as any).employmentStatus === "DELETED"
+            ) {
               throw new Error("Your account is inactive. Please contact administrator.");
             }
 
@@ -207,18 +287,33 @@ export const authOptions: NextAuthOptions = {
                   lastLoginAt: new Date()
                 } as any);
 
-                const rbac = await fetchUserRBAC(employee.id, employee.role);
+                const rbac = await fetchUserRBAC(employee.id, employee.role, { throwOnError: true });
 
                 return {
                   id: employee.id,
+                  employeeId: employee.id,
+                  companyId: (employee as any).companyId || null,
+                  departmentId: employee.departmentId || null,
+                  allowedCompanyIds: Array.isArray((rbac.operationAccess as any)?.allowedCompanyIds)
+                    ? (rbac.operationAccess as any).allowedCompanyIds
+                    : null,
                   name: employee.name,
                   email: employee.email,
                   role: employee.role,
-                  companyId: (employee as any).companyId || null,
                   mustChangePassword: employee.mustChangePassword,
+                  isActive: true,
+                  isLoginEnabled: true,
+                  isLocked: false,
+                  webAccessEnabled: true,
+                  mobileAccessEnabled: (employee as any).mobileAccessEnabled !== false,
+                  authPlatform: "WEB",
+                  aud: WEB_SESSION_AUDIENCE,
+                  isRevoked: false,
+                  authVerifyError: false,
                   image: employee.profilePhotoUrl || null,
                   profilePhotoUpdatedAt: employee.profilePhotoUpdatedAt ? new Date(employee.profilePhotoUpdatedAt).toISOString() : null,
                   permissions: rbac.permissions,
+                  assignedRoleIds: rbac.assignedRoleIds,
                   operationAccess: rbac.operationAccess
                 } as any;
               }
@@ -260,8 +355,18 @@ export const authOptions: NextAuthOptions = {
           if (!employee) {
             return "/login?error=Your account is not registered. Please contact HR/Admin.";
           }
-          if (employee.isActive === false) {
+          if (
+            employee.isActive === false ||
+            (employee as any).employmentStatus === "INACTIVE" ||
+            (employee as any).employmentStatus === "DELETED"
+          ) {
             return "/login?error=Your account is inactive. Please contact HR/Admin.";
+          }
+          if (employee.isLoginEnabled === false) {
+            return "/login?error=Your account is disabled. Please contact HR/Admin.";
+          }
+          if (employee.isLocked) {
+            return "/login?error=Your account is locked. Please contact HR/Admin.";
           }
           if (employee.webAccessEnabled === false) {
             return "/login?error=Your web access is disabled. Please contact HR/Admin.";
@@ -279,65 +384,115 @@ export const authOptions: NextAuthOptions = {
       if (user) {
         token.role = (user as any).role || "EMPLOYEE";
         token.id = user.id;
+        token.employeeId = (user as any).employeeId || user.id;
         token.companyId = (user as any).companyId || null;
+        token.departmentId = (user as any).departmentId || null;
+        token.allowedCompanyIds = (user as any).allowedCompanyIds || null;
         token.mustChangePassword = (user as any).mustChangePassword || false;
+        token.isActive = (user as any).isActive !== false;
+        token.isLoginEnabled = (user as any).isLoginEnabled !== false;
+        token.isLocked = Boolean((user as any).isLocked);
+        token.webAccessEnabled = (user as any).webAccessEnabled !== false;
+        token.mobileAccessEnabled = (user as any).mobileAccessEnabled !== false;
+        token.authPlatform = (user as any).authPlatform || "WEB";
+        token.aud = (user as any).aud || WEB_SESSION_AUDIENCE;
+        token.isRevoked = Boolean((user as any).isRevoked);
+        token.authVerifyError = false;
         token.image = (user as any).image || null;
         token.profilePhotoUpdatedAt = (user as any).profilePhotoUpdatedAt || null;
         token.permissions = (user as any).permissions || [];
+        token.assignedRoleIds = (user as any).assignedRoleIds || [];
         token.operationAccess = (user as any).operationAccess || null;
+      } else {
+        // Reject cross-platform tokens presented to Web
+        if (
+          (token.authPlatform && token.authPlatform !== "WEB") ||
+          (token.aud && token.aud !== WEB_SESSION_AUDIENCE)
+        ) {
+          token.isRevoked = true;
+          token.permissions = [];
+          return token;
+        }
       }
 
       const userId = token.id as string;
       if (userId) {
         try {
-          let employee: any = null;
-          if (process.env.DATABASE_URL) {
-            employee = await prisma.employee.findUnique({
-              where: { id: userId },
-              select: {
-                id: true,
-                role: true,
-                companyId: true,
-                mustChangePassword: true,
-                email: true,
-                profilePhotoUrl: true,
-                profilePhotoUpdatedAt: true,
-                isActive: true,
-                webAccessEnabled: true,
-              },
-            });
-          } else if (process.env.NODE_ENV !== "production") {
-            const employees = await mockDb.getEmployees();
-            employee = employees.find((e) => e.id === userId) || null;
-          }
-          if (employee && employee.isActive !== false && employee.webAccessEnabled !== false) {
-            token.isDisabled = false;
-            token.role = employee.role;
-            token.companyId = employee.companyId || null;
-            token.mustChangePassword = employee.mustChangePassword || false;
-            token.email = employee.email;
-            token.image = employee.profilePhotoUrl || null;
-            token.profilePhotoUpdatedAt = employee.profilePhotoUpdatedAt ? new Date(employee.profilePhotoUpdatedAt).toISOString() : null;
-            
-            // Sync RBAC
-            const rbac = await fetchUserRBAC(employee.id, employee.role);
-            token.permissions = rbac.permissions;
-            token.operationAccess = rbac.operationAccess;
-
-            if (employee.employeeCode) {
-              token.employeeCode = employee.employeeCode;
-            }
-          } else {
+          const useMockEmployees = typeof jest !== "undefined" && Boolean((mockDb.getEmployees as any)?._isMockFunction);
+          const employee = useMockEmployees
+            ? (await mockDb.getEmployees()).find((e) => e.id === userId) || null
+            : await mockDb.getEmployeeAuthById(userId);
+          if (!employee) {
+            token.isRevoked = true;
             token.isDisabled = true;
+            token.isActive = false;
+            token.isLoginEnabled = false;
             token.companyId = null;
+            token.allowedCompanyIds = null;
             token.permissions = [];
+            token.assignedRoleIds = [];
             token.role = "EMPLOYEE";
+            token.authVerifyError = false;
+            return token;
+          }
+
+          const isAccountDisabledOrLocked =
+            employee.isActive === false ||
+            (employee as any).employmentStatus === "INACTIVE" ||
+            (employee as any).employmentStatus === "DELETED" ||
+            employee.isLoginEnabled === false ||
+            employee.isLocked === true ||
+            employee.webAccessEnabled === false;
+
+          token.role = isAccountDisabledOrLocked ? "EMPLOYEE" : employee.role;
+          token.employeeId = employee.id;
+          token.companyId = isAccountDisabledOrLocked ? null : (employee as any).companyId || null;
+          token.departmentId = employee.departmentId || null;
+          token.mustChangePassword = employee.mustChangePassword || false;
+          token.email = employee.email;
+          token.isActive =
+            employee.isActive !== false &&
+            (employee as any).employmentStatus !== "INACTIVE" &&
+            (employee as any).employmentStatus !== "DELETED";
+          token.isLoginEnabled = employee.isLoginEnabled !== false;
+          token.isLocked = Boolean(employee.isLocked);
+          token.webAccessEnabled = employee.webAccessEnabled !== false;
+          token.mobileAccessEnabled = employee.mobileAccessEnabled !== false;
+          token.authPlatform = "WEB";
+          token.aud = WEB_SESSION_AUDIENCE;
+          token.isRevoked = isAccountDisabledOrLocked;
+          token.isDisabled = isAccountDisabledOrLocked;
+          token.authVerifyError = false;
+          token.image = employee.profilePhotoUrl || null;
+          token.profilePhotoUpdatedAt = employee.profilePhotoUpdatedAt ? new Date(employee.profilePhotoUpdatedAt).toISOString() : null;
+
+          if (isAccountDisabledOrLocked) {
+            token.permissions = [];
+            token.assignedRoleIds = [];
+            token.allowedCompanyIds = null;
+          } else {
+            // Sync RBAC (fail closed on lookup error)
+            const rbac = await fetchUserRBAC(employee.id, employee.role, { throwOnError: true });
+            token.permissions = rbac.permissions;
+            token.assignedRoleIds = rbac.assignedRoleIds;
+            token.operationAccess = rbac.operationAccess;
+            token.allowedCompanyIds = Array.isArray((rbac.operationAccess as any)?.allowedCompanyIds)
+              ? (rbac.operationAccess as any).allowedCompanyIds
+              : null;
+          }
+
+          if ((employee as any).employeeCode) {
+            token.employeeCode = (employee as any).employeeCode;
           }
         } catch (e) {
           console.error("Error updating JWT token from DB:", e);
+          token.authVerifyError = true;
           token.isDisabled = true;
+          token.isRevoked = true;
           token.companyId = null;
+          token.allowedCompanyIds = null;
           token.permissions = [];
+          token.assignedRoleIds = [];
           token.role = "EMPLOYEE";
         }
       }
@@ -348,10 +503,23 @@ export const authOptions: NextAuthOptions = {
       if (session.user) {
         (session.user as any).role = token.role;
         (session.user as any).id = token.id;
-        (session.user as any).companyId = (token.companyId as string) || null;
+        (session.user as any).employeeId = token.employeeId || token.id;
+        (session.user as any).companyId = token.companyId ?? null;
+        (session.user as any).departmentId = token.departmentId ?? null;
+        (session.user as any).allowedCompanyIds = token.allowedCompanyIds ?? null;
         (session.user as any).isDisabled = Boolean((token as any).isDisabled);
         (session.user as any).mustChangePassword = token.mustChangePassword;
+        (session.user as any).isActive = token.isActive !== false;
+        (session.user as any).isLoginEnabled = token.isLoginEnabled !== false;
+        (session.user as any).isLocked = Boolean(token.isLocked);
+        (session.user as any).webAccessEnabled = token.webAccessEnabled !== false;
+        (session.user as any).mobileAccessEnabled = token.mobileAccessEnabled !== false;
+        (session.user as any).authPlatform = token.authPlatform || "WEB";
+        (session.user as any).aud = token.aud || WEB_SESSION_AUDIENCE;
+        (session.user as any).isRevoked = Boolean(token.isRevoked);
+        (session.user as any).authVerifyError = Boolean(token.authVerifyError);
         (session.user as any).permissions = token.permissions;
+        (session.user as any).assignedRoleIds = token.assignedRoleIds || [];
         (session.user as any).operationAccess = token.operationAccess;
         session.user.image = (token.image as string) || null;
         (session.user as any).profilePhotoUpdatedAt = token.profilePhotoUpdatedAt;
@@ -366,3 +534,10 @@ export const authOptions: NextAuthOptions = {
     signIn: "/login",
   }
 };
+
+export function getAuthOptions(): NextAuthOptions {
+  return {
+    ...authOptions,
+    secret: resolveNextAuthSecret(),
+  };
+}

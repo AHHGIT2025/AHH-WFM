@@ -9,8 +9,22 @@ export default withAuth(
     }
   },
   {
+    cookies: {
+      sessionToken: {
+        name: "ahh-wfm.mobile.session-token",
+      },
+    },
     callbacks: {
-      authorized: ({ token }) => !!token,
+      authorized: ({ token }) =>
+        !!token &&
+        !(token as any).isRevoked &&
+        !(token as any).authVerifyError &&
+        (token as any).isLocked !== true &&
+        (token as any).isActive !== false &&
+        (token as any).isLoginEnabled !== false &&
+        (token as any).mobileAccessEnabled !== false &&
+        (token as any).authPlatform !== "WEB" &&
+        (!(token as any).aud || (token as any).aud === "ahh-wfm-mobile"),
     },
   }
 );

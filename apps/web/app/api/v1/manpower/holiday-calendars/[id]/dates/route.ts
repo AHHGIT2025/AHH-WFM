@@ -3,7 +3,7 @@ import { prisma } from "@ahh-wfm/database";
 import { checkApiAuth } from "@/lib/api-guards";
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
-  const auth = await checkApiAuth();
+  const auth = await checkApiAuth(undefined, { requiredPermission: "manpower.calendars.manage" });
   if (auth.error) return auth.error;
 
   const calendar = await prisma.manpowerHolidayCalendar.findUnique({
@@ -75,7 +75,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
-  const auth = await checkApiAuth();
+  const auth = await checkApiAuth(undefined, { requiredPermission: "manpower.calendars.manage" });
   if (auth.error) return auth.error;
 
   const { searchParams } = new URL(req.url);

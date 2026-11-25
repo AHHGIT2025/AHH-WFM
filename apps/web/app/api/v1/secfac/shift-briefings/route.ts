@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { checkApiAuth } from "@/lib/api-guards";
+import { checkApiAuth, canAccessCompany, getAuthorizedCompanyIds } from "@/lib/api-guards";
+import { hasPermission, isAdminUser } from "@/lib/permissions";
 import { prisma } from "@ahh-wfm/database";
 import {
   createOrUpdateBriefing,
@@ -9,10 +10,24 @@ import {
 } from "@/lib/secfac-shift-briefing-service";
 
 export async function GET(request: Request) {
-  const auth = await checkApiAuth();
+  const auth = await checkApiAuth(undefined, { requiredOperation: "SECURITY_GUARDING" });
   if (auth.error) return auth.error;
 
   const user = auth.session?.user as any;
+  const canView =
+    isAdminUser(user) ||
+    hasPermission(user, "secfac.briefings.view") ||
+    hasPermission(user, "secfac.briefings.manage") ||
+    hasPermission(user, "manpower.security.view") ||
+    hasPermission(user, "manpower.security.manage");
+
+  if (!canView) {
+    return NextResponse.json(
+      { success: false, error: "Forbidden: Missing permission secfac.briefings.view" },
+      { status: 403 }
+    );
+  }
+
   const { searchParams } = new URL(request.url);
   const id = searchParams.get("id");
 
@@ -21,10 +36,32 @@ export async function GET(request: Request) {
     if (!details) {
       return NextResponse.json({ success: false, error: `Shift Briefing '${id}' not found` }, { status: 404 });
     }
+    if ((details as any).companyId && !canAccessCompany(user, (details as any).companyId)) {
+      return NextResponse.json(
+        { success: false, error: "Forbidden: Cross-company access denied" },
+        { status: 403 }
+      );
+    }
     return NextResponse.json({ success: true, data: details });
   }
 
-  const companyId = searchParams.get("companyId") || user.companyId || "COMP001";
+  const requestedCompanyId = searchParams.get("companyId");
+  if (requestedCompanyId && !canAccessCompany(user, requestedCompanyId)) {
+    return NextResponse.json(
+      { success: false, error: "Forbidden: Cross-company access denied" },
+      { status: 403 }
+    );
+  }
+
+  const isAdmin = isAdminUser(user);
+  const authorizedCompanies = getAuthorizedCompanyIds(user);
+  const companyId = requestedCompanyId || user.companyId || authorizedCompanies?.[0] || (isAdmin ? "COMP001" : null);
+  if (!isAdmin && (!companyId || !canAccessCompany(user, companyId))) {
+    return NextResponse.json(
+      { success: false, error: "Forbidden: User account has no assigned company scope" },
+      { status: 403 }
+    );
+  }
   const siteId = searchParams.get("siteId");
 
   const whereClause: any = { companyId, operationType: "SECURITY_GUARDING" };
@@ -41,20 +78,47 @@ export async function GET(request: Request) {
     orderBy: { briefingDate: "desc" }
   });
 
-
   return NextResponse.json({ success: true, data: briefings });
 }
 
 export async function POST(request: Request) {
-  const auth = await checkApiAuth();
+  const auth = await checkApiAuth(undefined, { requiredOperation: "SECURITY_GUARDING" });
   if (auth.error) return auth.error;
 
   const user = auth.session?.user as any;
+  const canManage =
+    isAdminUser(user) ||
+    hasPermission(user, "secfac.briefings.manage") ||
+    hasPermission(user, "manpower.security.manage");
+
+  if (!canManage) {
+    return NextResponse.json(
+      { success: false, error: "Forbidden: Missing permission secfac.briefings.manage" },
+      { status: 403 }
+    );
+  }
 
   try {
     const body = await request.json();
+    if (body.companyId && !canAccessCompany(user, body.companyId)) {
+      return NextResponse.json(
+        { success: false, error: "Forbidden: Cross-company access denied" },
+        { status: 403 }
+      );
+    }
+
+    const isAdmin = isAdminUser(user);
+    const authorizedCompanies = getAuthorizedCompanyIds(user);
+    const resolvedCompanyId = body.companyId || user.companyId || authorizedCompanies?.[0] || (isAdmin ? "COMP001" : null);
+    if (!isAdmin && (!resolvedCompanyId || !canAccessCompany(user, resolvedCompanyId))) {
+      return NextResponse.json(
+        { success: false, error: "Forbidden: User account has no assigned company scope" },
+        { status: 403 }
+      );
+    }
+
     const briefing = await createOrUpdateBriefing({
-      companyId: body.companyId || user.companyId || "COMP001",
+      companyId: resolvedCompanyId,
       siteId: body.siteId,
       shiftId: body.shiftId,
       briefingDate: body.briefingDate,
@@ -77,10 +141,21 @@ export async function POST(request: Request) {
 }
 
 export async function PUT(request: Request) {
-  const auth = await checkApiAuth();
+  const auth = await checkApiAuth(undefined, { requiredOperation: "SECURITY_GUARDING" });
   if (auth.error) return auth.error;
 
   const user = auth.session?.user as any;
+  const canManage =
+    isAdminUser(user) ||
+    hasPermission(user, "secfac.briefings.manage") ||
+    hasPermission(user, "manpower.security.manage");
+
+  if (!canManage) {
+    return NextResponse.json(
+      { success: false, error: "Forbidden: Missing permission secfac.briefings.manage" },
+      { status: 403 }
+    );
+  }
 
   try {
     const body = await request.json();

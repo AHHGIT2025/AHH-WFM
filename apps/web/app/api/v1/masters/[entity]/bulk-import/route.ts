@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { checkApiAuth } from "@/lib/api-guards";
-import { hasPermission } from "@/lib/permissions";
+import { hasPermission, isAdminUser } from "@/lib/permissions";
 import { MASTER_SCHEMAS } from "@/lib/masters-schema";
 import { isDbConnected, readDb, writeDb } from "@ahh-wfm/mock-data";
 import { prisma } from "@ahh-wfm/database";
@@ -37,8 +37,8 @@ export async function POST(request: Request, { params }: { params: { entity: str
   const auth = await checkApiAuth();
   if (auth.error) return auth.error;
   const user = auth.session?.user as any;
-  if (!hasPermission(user, "masterdata.manage") && !hasPermission(user, "masters.manage")) {
-    return NextResponse.json({ error: "Forbidden: Requires masterdata.manage permission" }, { status: 403 });
+  if (!isAdminUser(user) && !hasPermission(user, "masters.manage") && !hasPermission(user, "masterdata.manage")) {
+    return NextResponse.json({ error: "Forbidden: Requires masters.manage permission" }, { status: 403 });
   }
 
   const { entity } = params;
@@ -50,7 +50,7 @@ export async function POST(request: Request, { params }: { params: { entity: str
     return NextResponse.json({ error: "Invalid master entity" }, { status: 400 });
   }
 
-  const userId = (auth.session?.user as any)?.id || "admin-system";
+  const userId = user?.id || "admin-system";
 
   try {
     const body = await request.json();

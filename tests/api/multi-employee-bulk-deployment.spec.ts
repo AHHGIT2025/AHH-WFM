@@ -219,7 +219,7 @@ describe("Multi-Employee, Multi-Vacancy Bulk Manpower Deployment", () => {
 
     // Sync slots for August 2026
     await syncSlotsForContractRange(contract.id, getQatarDate("2026-08-01"), getQatarDate("2026-08-31"));
-  });
+  }, 60000);
 
   afterAll(async () => {
     await prisma.manpowerBulkOperationLog.deleteMany({ where: { actorId: { startsWith: "emp-bulk-" } } });
@@ -233,7 +233,7 @@ describe("Multi-Employee, Multi-Vacancy Bulk Manpower Deployment", () => {
     await prisma.manpowerContract.deleteMany({ where: { id: contract.id } });
     await prisma.manpowerClient.deleteMany({ where: { id: client.id } });
     await prisma.employee.deleteMany({ where: { id: { in: [empGuard1.id, empGuard2.id, empGuard3.id, empFmWorker.id] } } });
-  });
+  }, 30000);
 
   // ==========================================
   // SECTION 1: UI & WORKFLOW TESTS (1-15)

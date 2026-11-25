@@ -2092,6 +2092,34 @@ function buildEmployeePrismaData(input: any, isUpdate: boolean) {
 // Database CRUD Actions API (All Async to support DB connection)
 export const mockDb = {
   // Employees
+  getEmployeeAuthById: async (id: string): Promise<any | null> => {
+    if (!id) return null;
+    if (isDbConnected()) {
+      return await prismaClient.employee.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          role: true,
+          companyId: true,
+          departmentId: true,
+          mustChangePassword: true,
+          profilePhotoUrl: true,
+          profilePhotoUpdatedAt: true,
+          isActive: true,
+          employmentStatus: true,
+          isLoginEnabled: true,
+          isLocked: true,
+          webAccessEnabled: true,
+          mobileAccessEnabled: true,
+        },
+      });
+    }
+    const db = readDb();
+    const idNorm = String(id).toLowerCase();
+    return (db.employees || []).find((e: any) => e.id === id || (typeof e.id === "string" && e.id.toLowerCase() === idNorm)) || null;
+  },
   getEmployees: async (): Promise<Employee[]> => {
     let emps: Employee[] = [];
     const includeOptions = {

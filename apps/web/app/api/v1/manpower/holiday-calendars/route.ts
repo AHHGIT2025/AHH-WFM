@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { checkApiAuth } from "@/lib/api-guards";
+import { checkApiAuth, canAccessCompany } from "@/lib/api-guards";
+import { hasPermission, isAdminUser } from "@/lib/permissions";
 import { prisma } from "@ahh-wfm/database";
 
 export async function GET(request: Request) {
@@ -23,21 +24,33 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const auth = await checkApiAuth();
+  const auth = await checkApiAuth(undefined, { requiredPermission: "manpower.calendars.manage" });
   if (auth.error) return auth.error;
 
+  const user = auth.session?.user;
   let body: any = {};
   try { body = await request.json(); } catch (e) {}
 
   const { year, name, scope, dates, approvalStatus, companyId, notes } = body;
-  const userId = auth.session?.user?.id || "AD-0001";
+  const userId = user?.id || "AD-0001";
 
   if (!year || !name) {
     return NextResponse.json({ success: false, error: "Missing required fields (year, name)" }, { status: 400 });
   }
 
+  if (companyId && !canAccessCompany(user, companyId)) {
+    return NextResponse.json({ success: false, error: "Forbidden: Cross-company access denied" }, { status: 403 });
+  }
+
   const holidayScope = scope || "BOTH";
   const targetStatus = approvalStatus || "DRAFT";
+
+  if (targetStatus === "APPROVED" && !isAdminUser(user) && !hasPermission(user, "manpower.calendars.approve")) {
+    return NextResponse.json(
+      { success: false, error: "Forbidden: Missing permission manpower.calendars.approve to create pre-approved calendar" },
+      { status: 403 }
+    );
+  }
 
   try {
     const calendar = await prisma.manpowerHolidayCalendar.create({

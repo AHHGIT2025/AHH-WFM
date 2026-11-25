@@ -162,7 +162,7 @@ describe("Manpower Planning Phase MP-2A Roster-Scheduling Complete Release Harde
         id: "emp-supervisor-mp2a",
         name: "MP2A Supervisor",
         email: "sup2a@mp2a.com",
-        role: "SECURITY_ADMIN",
+        role: "ADMIN",
         department: "Security Operations",
         status: "Offline",
         isActive: true

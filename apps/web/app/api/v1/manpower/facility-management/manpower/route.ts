@@ -4,8 +4,14 @@ import { checkApiAuth } from "@/lib/api-guards";
 import { hasPermission } from "@/lib/permissions";
 import { prisma } from "@ahh-wfm/database";
 
+function sanitizeEmployee(emp: any) {
+  if (!emp) return emp;
+  const { passwordHash, ...safe } = emp;
+  return safe;
+}
+
 export async function GET(request: Request) {
-  const auth = await checkApiAuth();
+  const auth = await checkApiAuth(undefined, { requiredOperation: "FACILITY_MANAGEMENT" });
   if (auth.error) return auth.error;
 
   if (!hasPermission(auth.session?.user, "manpower.admin.full_access") &&
@@ -54,14 +60,14 @@ export async function GET(request: Request) {
       employees = employees.filter(e => e.isActive === true || e.status === "Active" || e.employmentStatus === "ACTIVE");
     }
 
-    return NextResponse.json(employees);
+    return NextResponse.json(employees.map(sanitizeEmployee));
   } catch (e) {
     return NextResponse.json({ error: "Failed to fetch FM staff" }, { status: 500 });
   }
 }
 
 export async function POST(request: Request) {
-  const auth = await checkApiAuth();
+  const auth = await checkApiAuth(undefined, { requiredOperation: "FACILITY_MANAGEMENT" });
   if (auth.error) return auth.error;
 
   if (!hasPermission(auth.session?.user, "manpower.admin.full_access") &&
@@ -106,7 +112,7 @@ export async function POST(request: Request) {
         isActive: true,
         status: "Active"
       });
-      return NextResponse.json(updated);
+      return NextResponse.json(sanitizeEmployee(updated));
     } else {
       if (!payload.name || !payload.email) {
         return NextResponse.json({ error: "Name and Email are required for new employees" }, { status: 400 });
@@ -126,7 +132,7 @@ export async function POST(request: Request) {
         employmentStatus: "ACTIVE",
         dutyStatus: "OFF_DUTY"
       });
-      return NextResponse.json(employee);
+      return NextResponse.json(sanitizeEmployee(employee));
     }
   } catch (e: any) {
     return NextResponse.json({ error: e.message || "Failed to create FM employee" }, { status: 500 });

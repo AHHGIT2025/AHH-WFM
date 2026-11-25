@@ -329,12 +329,14 @@ describe("CL-5 Contract Conversion UAT Remediation (DEF-049, DEF-046, DEF-047, D
 
     // DEF-047: 2 direct staffing lines (BASIC_PAY=14 REGULAR, RELIEVER_COST=2 RELIEVER), excluding ALLOWANCES overlay & SITE_OVERHEAD indirect item
     expect(data.manpowerItems).toHaveLength(2);
-    expect(data.manpowerItems[0].position).toBe("Basic Pay / Manpower Wage");
-    expect(data.manpowerItems[0].quantity).toBe(14);
-    expect(data.manpowerItems[0].deploymentType).toBe("REGULAR");
-    expect(data.manpowerItems[1].position).toBe("Contractual Reliever Staffing");
-    expect(data.manpowerItems[1].quantity).toBe(2);
-    expect(data.manpowerItems[1].deploymentType).toBe("RELIEVER");
+    const basicItem = data.manpowerItems.find((i: any) => i.position === "Basic Pay / Manpower Wage");
+    const relieverItem = data.manpowerItems.find((i: any) => i.position === "Contractual Reliever Staffing");
+    expect(basicItem).toBeDefined();
+    expect(basicItem.quantity).toBe(14);
+    expect(basicItem.deploymentType).toBe("REGULAR");
+    expect(relieverItem).toBeDefined();
+    expect(relieverItem.quantity).toBe(2);
+    expect(relieverItem.deploymentType).toBe("RELIEVER");
 
     // Scope isolation in eligibleClients: SG proposal must include SG client and exclude FM client
     expect(data.eligibleClients.some((c: any) => c.id === sgClientId)).toBe(true);

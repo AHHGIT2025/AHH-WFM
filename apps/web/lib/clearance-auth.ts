@@ -1,4 +1,4 @@
-import { checkApiAuth } from "./api-guards";
+import { checkApiAuth, canAccessCompany } from "./api-guards";
 import { isAdminUser } from "./permissions";
 import { NextResponse } from "next/server";
 
@@ -19,8 +19,11 @@ export function validateClearanceCompanyAndAccess(
 ) {
   if (isAdminUser(user)) return null;
 
-  // 1. Company Isolation
-  if (user.companyId && clearance.companyId && clearance.companyId !== user.companyId) {
+  // 1. Company Isolation (supports multi-company operationAccess.allowedCompanyIds and rejects cross-company or null-company mismatch)
+  if (
+    clearance.companyId !== undefined &&
+    !canAccessCompany(user, clearance.companyId, { requireCompanyContext: true })
+  ) {
     return NextResponse.json(
       { success: false, error: "Forbidden: Access to specified company clearance is restricted" },
       { status: 403 }

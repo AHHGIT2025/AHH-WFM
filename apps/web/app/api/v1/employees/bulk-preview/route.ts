@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { checkApiAuth } from "@/lib/api-guards";
+import { hasPermission, isAdminUser } from "@/lib/permissions";
 import { mockDb } from "@ahh-wfm/mock-data";
 
 function parseCSV(text: string) {
@@ -46,6 +47,11 @@ function isValidDate(val?: string) {
 export async function POST(request: Request) {
   const auth = await checkApiAuth();
   if (auth.error) return auth.error;
+
+  const user = auth.session?.user as any;
+  if (!isAdminUser(user) && !hasPermission(user, "employees.bulkUpload")) {
+    return NextResponse.json({ error: "Forbidden: Requires employees.bulkUpload permission" }, { status: 403 });
+  }
 
   try {
     const body = await request.json();

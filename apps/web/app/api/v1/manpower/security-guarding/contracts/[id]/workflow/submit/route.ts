@@ -9,6 +9,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
 
   if (!hasPermission(auth.session?.user, "manpower.admin.full_access") &&
       !hasPermission(auth.session?.user, "manpower.security.manage") &&
+      !hasPermission(auth.session?.user, "manpower.security.contracts.manage") &&
       !hasPermission(auth.session?.user, "precontract.workflow.submit") &&
       !hasPermission(auth.session?.user, "precontract.contractConversion.execute") &&
       !hasPermission(auth.session?.user, "commercial.opportunities.manage")) {
@@ -22,7 +23,7 @@ export async function POST(request: Request, { params }: { params: { id: string 
       return NextResponse.json({ error: "Contract not found" }, { status: 404 });
     }
     if (existingContract.operationType && existingContract.operationType !== "SECURITY_GUARDING") {
-      return NextResponse.json({ error: "Forbidden: Scope mismatch" }, { status: 403 });
+      return NextResponse.json({ error: "Forbidden: Contract belongs to a different operation scope" }, { status: 403 });
     }
     if (user?.companyId && user?.role !== "SUPER_ADMIN" && (existingContract as any).companyId && (existingContract as any).companyId !== user.companyId) {
       return NextResponse.json({ error: "Forbidden: Company boundary violation" }, { status: 403 });
