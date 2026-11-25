@@ -966,11 +966,13 @@ describe('AHH WFM API Routes Verification', () => {
 
     const secSupCookie = await loginUser('sec.supervisor@alhattab.qa', false);
     const fmSupCookie = await loginUser('fm.supervisor@alhattab.qa', false);
-    const empCookie = await loginUser('sarah.kim@alhattab.qa', true);
+    const empCookie = await loginUser('sarah.kim@alhattab.qa', false);
+    const empMobileCookie = await loginUser('sarah.kim@alhattab.qa', true);
 
     const secSupHeaders = secSupCookie ? { Cookie: secSupCookie } : {};
     const fmSupHeaders = fmSupCookie ? { Cookie: fmSupCookie } : {};
     const empHeaders = empCookie ? { Cookie: empCookie } : {};
+    const empMobileHeaders = empMobileCookie ? { Cookie: empMobileCookie } : {};
 
     // 3. Create a checklist template (Security Guarding type)
     const tempRes = await axios.post(`${WEB_URL}/api/v1/secfac/checklists`, {
@@ -1019,7 +1021,14 @@ describe('AHH WFM API Routes Verification', () => {
     }, { validateStatus: () => true });
     expect(unauthReview.status).toBe(401);
 
-    // 7. POST review as standard field employee -> expect 403 (Forbidden)
+    // 6b. POST review using a Mobile-platform session on Web -> expect 401 (platform session isolation)
+    const mobilePlatformReview = await axios.post(`${WEB_URL}/api/v1/secfac/checklist-executions/${executionId}/review`, {
+      targetStatus: 'APPROVED',
+      remarks: 'Cross-platform attempt'
+    }, { headers: empMobileHeaders, validateStatus: () => true });
+    expect(mobilePlatformReview.status).toBe(401);
+
+    // 7. POST review as standard field employee (authenticated on Web) -> expect 403 (Forbidden)
     const empReview = await axios.post(`${WEB_URL}/api/v1/secfac/checklist-executions/${executionId}/review`, {
       targetStatus: 'APPROVED',
       remarks: 'Looks good'
@@ -1548,15 +1557,6 @@ describe('AHH WFM API Routes Verification', () => {
           data: { status: 'SUBMITTED' }
         });
       } catch (e) {}
-      try {
-        const { PrismaClient } = require("@ahh-wfm/database");
-        const devDbPrisma = new PrismaClient({ datasourceUrl: 'mysql://root:rootpassword@127.0.0.1:3306/ahh_wfm' });
-        await devDbPrisma.secfacChecklistExecution.update({
-          where: { id: execId },
-          data: { status: 'SUBMITTED' }
-        });
-        await devDbPrisma.$disconnect();
-      } catch (e) {}
     } else {
       const db = readDb();
       const idx = db.secfacChecklistExecutions.findIndex((x: any) => x.id === execId);
@@ -1573,15 +1573,6 @@ describe('AHH WFM API Routes Verification', () => {
           where: { id: execId },
           data: { status: 'DRAFT' }
         });
-      } catch (e) {}
-      try {
-        const { PrismaClient } = require("@ahh-wfm/database");
-        const devDbPrisma = new PrismaClient({ datasourceUrl: 'mysql://root:rootpassword@127.0.0.1:3306/ahh_wfm' });
-        await devDbPrisma.secfacChecklistExecution.update({
-          where: { id: execId },
-          data: { status: 'DRAFT' }
-        });
-        await devDbPrisma.$disconnect();
       } catch (e) {}
     } else {
       const db = readDb();
@@ -1817,12 +1808,6 @@ describe('AHH WFM API Routes Verification', () => {
       try {
         await prisma.secfacAssignment.update({ where: { id: assignId }, data: { isActive: false } });
       } catch (err) {}
-      try {
-        const { PrismaClient } = require("@ahh-wfm/database");
-        const devDbPrisma = new PrismaClient({ datasourceUrl: 'mysql://root:rootpassword@127.0.0.1:3306/ahh_wfm' });
-        await devDbPrisma.secfacAssignment.update({ where: { id: assignId }, data: { isActive: false } });
-        await devDbPrisma.$disconnect();
-      } catch (err) {}
     } else {
       const db = readDb();
       const a = db.secfacAssignments.find((x: any) => x.id === assignId);
@@ -1840,12 +1825,6 @@ describe('AHH WFM API Routes Verification', () => {
     if (prisma) {
       try {
         await prisma.secfacAssignment.update({ where: { id: assignId }, data: { isActive: true } });
-      } catch (err) {}
-      try {
-        const { PrismaClient } = require("@ahh-wfm/database");
-        const devDbPrisma = new PrismaClient({ datasourceUrl: 'mysql://root:rootpassword@127.0.0.1:3306/ahh_wfm' });
-        await devDbPrisma.secfacAssignment.update({ where: { id: assignId }, data: { isActive: true } });
-        await devDbPrisma.$disconnect();
       } catch (err) {}
     } else {
       const db = readDb();
@@ -1958,12 +1937,6 @@ describe('AHH WFM API Routes Verification', () => {
       try {
         await prisma.secfacChecklistTemplate.update({ where: { id: tempId }, data: { requiresGeoFence: false } });
       } catch (err) {}
-      try {
-        const { PrismaClient } = require("@ahh-wfm/database");
-        const devDbPrisma = new PrismaClient({ datasourceUrl: 'mysql://root:rootpassword@127.0.0.1:3306/ahh_wfm' });
-        await devDbPrisma.secfacChecklistTemplate.update({ where: { id: tempId }, data: { requiresGeoFence: false } });
-        await devDbPrisma.$disconnect();
-      } catch (err) {}
     } else {
       const db = readDb();
       const t = db.secfacChecklistTemplates.find((x: any) => x.id === tempId);
@@ -1985,12 +1958,6 @@ describe('AHH WFM API Routes Verification', () => {
     if (prisma) {
       try {
         await prisma.secfacChecklistTemplate.update({ where: { id: tempId }, data: { requiresGeoFence: true } });
-      } catch (err) {}
-      try {
-        const { PrismaClient } = require("@ahh-wfm/database");
-        const devDbPrisma = new PrismaClient({ datasourceUrl: 'mysql://root:rootpassword@127.0.0.1:3306/ahh_wfm' });
-        await devDbPrisma.secfacChecklistTemplate.update({ where: { id: tempId }, data: { requiresGeoFence: true } });
-        await devDbPrisma.$disconnect();
       } catch (err) {}
     } else {
       const db = readDb();
@@ -2755,18 +2722,12 @@ describe('AHH WFM API Routes Verification', () => {
     }, { headers: adminHeaders, validateStatus: () => true });
     const cancelAssignId = cancelAssignRes.data.data.id;
 
-    // Deactivate it in both Jest shadow DB and Dev Server DB to handle split database configurations
+    // Deactivate assignment in TEST DATABASE
     if (prisma) {
       try {
         await prisma.secfacAssignment.update({ where: { id: cancelAssignId }, data: { isActive: false } });
-      } catch (err) {}
-      try {
-        const { PrismaClient } = require("@ahh-wfm/database");
-        const devDbPrisma = new PrismaClient({ datasourceUrl: 'mysql://root:rootpassword@127.0.0.1:3306/ahh_wfm' });
-        await devDbPrisma.secfacAssignment.update({ where: { id: cancelAssignId }, data: { isActive: false } });
-        await devDbPrisma.$disconnect();
       } catch (err: any) {
-        console.error('Failed to update assignment in dev server DB:', err.message);
+        console.error('Failed to update assignment in test DB:', err.message);
       }
     } else {
       const db = require("@ahh-wfm/mock-data").readDb();
