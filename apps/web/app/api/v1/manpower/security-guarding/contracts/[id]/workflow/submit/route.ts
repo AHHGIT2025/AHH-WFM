@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { mockDb } from "@ahh-wfm/mock-data";
 import { checkApiAuth } from "@/lib/api-guards";
 import { hasPermission } from "@/lib/permissions";
+import { checkContractCompanyAccess } from "@/lib/contract-company-auth";
 
 export async function POST(request: Request, { params }: { params: { id: string } }) {
   const auth = await checkApiAuth(undefined, { requiredOperation: "SECURITY_GUARDING" });
@@ -25,9 +26,10 @@ export async function POST(request: Request, { params }: { params: { id: string 
     if (existingContract.operationType && existingContract.operationType !== "SECURITY_GUARDING") {
       return NextResponse.json({ error: "Forbidden: Contract belongs to a different operation scope" }, { status: 403 });
     }
-    if (user?.companyId && user?.role !== "SUPER_ADMIN" && (existingContract as any).companyId && (existingContract as any).companyId !== user.companyId) {
-      return NextResponse.json({ error: "Forbidden: Company boundary violation" }, { status: 403 });
-    }
+    const companyErr = checkContractCompanyAccess(user, existingContract, {
+      requireVerifiedOwnership: true,
+    });
+    if (companyErr) return companyErr;
 
     const submittedBy = user?.name || user?.email || "System";
     const submittedById = user?.id || user?.employeeId || null;

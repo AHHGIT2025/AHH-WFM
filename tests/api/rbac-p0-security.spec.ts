@@ -1140,6 +1140,7 @@ describe("UM-RBAC-1 P0 Security Remediation Regression Suite", () => {
     it("Gate 3C: enforces contract workflow approver eligibility, level-to-contract binding, scope isolation, and Maker/Checker SoD", async () => {
       const sgContractWithWorkflow = {
         id: "CON-SG-100",
+        companyId: "COMP-1",
         operationType: "SECURITY_GUARDING",
         status: "PENDING_APPROVAL",
         approvalStatus: "PENDING_APPROVAL",
@@ -1211,6 +1212,7 @@ describe("UM-RBAC-1 P0 Security Remediation Regression Suite", () => {
           id: "EMP-MAKER-001",
           employeeId: "EMP-MAKER-001",
           name: "EMP-MAKER-001",
+          companyId: "COMP-1",
           role: "OPERATIONS_MANAGER",
           permissions: ["manpower.security.manage"],
           operationAccess: ["SECURITY_GUARDING"]
@@ -1231,6 +1233,7 @@ describe("UM-RBAC-1 P0 Security Remediation Regression Suite", () => {
         user: {
           id: "EMP-NON-APPROVER",
           employeeId: "EMP-NON-APPROVER",
+          companyId: "COMP-1",
           role: "OPERATIONS_MANAGER",
           permissions: ["manpower.security.manage"],
           operationAccess: ["SECURITY_GUARDING"]
@@ -1254,6 +1257,7 @@ describe("UM-RBAC-1 P0 Security Remediation Regression Suite", () => {
         user: {
           id: "EMP-APPROVER-002",
           employeeId: "EMP-APPROVER-002",
+          companyId: "COMP-1",
           role: "OPERATIONS_MANAGER",
           permissions: ["manpower.security.manage"],
           operationAccess: ["SECURITY_GUARDING"]

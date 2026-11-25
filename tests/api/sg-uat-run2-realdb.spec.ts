@@ -175,6 +175,7 @@ describe("SG UAT Run 2 Real-DB Integration Gate (TEST DATABASE)", () => {
     const draftContract = await prisma.manpowerContract.create({
       data: {
         clientId: testClientId,
+        companyId: testCompanyId,
         contractNumber: `CON-SGR2-DRF-${rand}`,
         title: "SG Run2 Draft Contract",
         startDate: new Date("2026-09-01"),
@@ -190,6 +191,7 @@ describe("SG UAT Run 2 Real-DB Integration Gate (TEST DATABASE)", () => {
     const activeContract = await prisma.manpowerContract.create({
       data: {
         clientId: testClientId,
+        companyId: testCompanyId,
         contractNumber: `CON-SGR2-ACT-${rand}`,
         title: "SG Run2 Active Contract",
         startDate: new Date("2026-09-01"),

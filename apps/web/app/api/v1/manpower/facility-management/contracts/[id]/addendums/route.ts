@@ -2,9 +2,10 @@ import { NextResponse } from "next/server";
 import { mockDb } from "@ahh-wfm/mock-data";
 import { checkApiAuth } from "@/lib/api-guards";
 import { hasPermission } from "@/lib/permissions";
+import { checkContractCompanyAccess } from "@/lib/contract-company-auth";
 
 export async function GET(request: Request, { params }: { params: { id: string } }) {
-  const auth = await checkApiAuth();
+  const auth = await checkApiAuth(undefined, { requiredOperation: "FACILITY_MANAGEMENT" });
   if (auth.error) return auth.error;
 
   if (!hasPermission(auth.session?.user, "manpower.admin.full_access") &&
@@ -13,6 +14,18 @@ export async function GET(request: Request, { params }: { params: { id: string }
   }
 
   try {
+    const contract = await mockDb.getManpowerContract(params.id);
+    if (!contract) {
+      return NextResponse.json({ error: "Contract not found" }, { status: 404 });
+    }
+    if (contract.operationType && contract.operationType !== "FACILITY_MANAGEMENT") {
+      return NextResponse.json({ error: "Forbidden: Scope mismatch" }, { status: 403 });
+    }
+    const companyErr = checkContractCompanyAccess(auth.session?.user, contract, {
+      requireVerifiedOwnership: false,
+    });
+    if (companyErr) return companyErr;
+
     const addendums = await mockDb.getManpowerContractAddendums(params.id);
     return NextResponse.json(addendums);
   } catch (e) {
@@ -21,7 +34,7 @@ export async function GET(request: Request, { params }: { params: { id: string }
 }
 
 export async function POST(request: Request, { params }: { params: { id: string } }) {
-  const auth = await checkApiAuth();
+  const auth = await checkApiAuth(undefined, { requiredOperation: "FACILITY_MANAGEMENT" });
   if (auth.error) return auth.error;
 
   if (!hasPermission(auth.session?.user, "manpower.admin.full_access") &&
@@ -34,6 +47,13 @@ export async function POST(request: Request, { params }: { params: { id: string 
     if (!contract) {
       return NextResponse.json({ error: "Contract not found" }, { status: 404 });
     }
+    if (contract.operationType && contract.operationType !== "FACILITY_MANAGEMENT") {
+      return NextResponse.json({ error: "Forbidden: Scope mismatch" }, { status: 403 });
+    }
+    const companyErr = checkContractCompanyAccess(auth.session?.user, contract, {
+      requireVerifiedOwnership: true,
+    });
+    if (companyErr) return companyErr;
 
     if (contract.status !== "ACTIVE") {
       return NextResponse.json({ error: "Addendum can be created only for active contracts." }, { status: 400 });

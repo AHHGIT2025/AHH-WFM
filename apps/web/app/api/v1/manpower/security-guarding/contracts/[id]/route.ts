@@ -2,9 +2,10 @@ import { NextResponse } from "next/server";
 import { mockDb } from "@ahh-wfm/mock-data";
 import { checkApiAuth } from "@/lib/api-guards";
 import { hasPermission } from "@/lib/permissions";
+import { checkContractCompanyAccess } from "@/lib/contract-company-auth";
 
 export async function GET(request: Request, { params }: { params: { id: string } }) {
-  const auth = await checkApiAuth();
+  const auth = await checkApiAuth(undefined, { requiredOperation: "SECURITY_GUARDING" });
   if (auth.error) return auth.error;
 
   if (!hasPermission(auth.session?.user, "manpower.admin.full_access") &&
@@ -17,6 +18,14 @@ export async function GET(request: Request, { params }: { params: { id: string }
     if (!contract) {
       return NextResponse.json({ error: "Contract not found" }, { status: 404 });
     }
+    if (contract.operationType && contract.operationType !== "SECURITY_GUARDING") {
+      return NextResponse.json({ error: "Forbidden: Contract belongs to a different operation scope" }, { status: 403 });
+    }
+    const companyErr = checkContractCompanyAccess(auth.session?.user, contract, {
+      requireVerifiedOwnership: false,
+    });
+    if (companyErr) return companyErr;
+
     return NextResponse.json(contract);
   } catch (e) {
     return NextResponse.json({ error: "Failed to fetch contract details" }, { status: 500 });
@@ -24,7 +33,7 @@ export async function GET(request: Request, { params }: { params: { id: string }
 }
 
 export async function PUT(request: Request, { params }: { params: { id: string } }) {
-  const auth = await checkApiAuth();
+  const auth = await checkApiAuth(undefined, { requiredOperation: "SECURITY_GUARDING" });
   if (auth.error) return auth.error;
 
   if (!hasPermission(auth.session?.user, "manpower.admin.full_access") &&
@@ -37,6 +46,13 @@ export async function PUT(request: Request, { params }: { params: { id: string }
     if (!currentContract) {
       return NextResponse.json({ error: "Contract not found" }, { status: 404 });
     }
+    if (currentContract.operationType && currentContract.operationType !== "SECURITY_GUARDING") {
+      return NextResponse.json({ error: "Forbidden: Contract belongs to a different operation scope" }, { status: 403 });
+    }
+    const companyErr = checkContractCompanyAccess(auth.session?.user, currentContract, {
+      requireVerifiedOwnership: true,
+    });
+    if (companyErr) return companyErr;
 
     if (currentContract.status !== "DRAFT" && currentContract.status !== "REJECTED") {
       return NextResponse.json({
@@ -44,7 +60,8 @@ export async function PUT(request: Request, { params }: { params: { id: string }
       }, { status: 400 });
     }
 
-    const payload = await request.json();
+    const rawPayload = await request.json();
+    const { companyId: _ignoredCompanyId, ...payload } = rawPayload;
     
     // If rejected, edit transitions status back to DRAFT
     if (currentContract.status === "REJECTED") {
@@ -64,7 +81,7 @@ export async function PUT(request: Request, { params }: { params: { id: string }
 }
 
 export async function DELETE(request: Request, { params }: { params: { id: string } }) {
-  const auth = await checkApiAuth();
+  const auth = await checkApiAuth(undefined, { requiredOperation: "SECURITY_GUARDING" });
   if (auth.error) return auth.error;
 
   if (!hasPermission(auth.session?.user, "manpower.admin.full_access") &&
@@ -77,6 +94,13 @@ export async function DELETE(request: Request, { params }: { params: { id: strin
     if (!currentContract) {
       return NextResponse.json({ error: "Contract not found" }, { status: 404 });
     }
+    if (currentContract.operationType && currentContract.operationType !== "SECURITY_GUARDING") {
+      return NextResponse.json({ error: "Forbidden: Contract belongs to a different operation scope" }, { status: 403 });
+    }
+    const companyErr = checkContractCompanyAccess(auth.session?.user, currentContract, {
+      requireVerifiedOwnership: true,
+    });
+    if (companyErr) return companyErr;
 
     if (currentContract.status !== "DRAFT") {
       return NextResponse.json({ error: "Only draft contracts can be deleted." }, { status: 400 });

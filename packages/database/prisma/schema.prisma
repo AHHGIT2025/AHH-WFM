@@ -1029,6 +1029,10 @@ model Company {
   CostFormulaDefinition      CostFormulaDefinition[]
   CostPackageMaster          CostPackageMaster[]
   secfacNumberSequences      SecfacNumberSequence[]
+  manpowerClients            ManpowerClient[]
+  manpowerProjects           ManpowerProject[]
+  manpowerContracts          ManpowerContract[]
+  contractApprovalWorkflows  ContractApprovalWorkflow[]
 }
 
 
@@ -1329,6 +1333,11 @@ model ManpowerClient {
   secfacCheckpoints           SecfacCheckpoint[]
   secfacChecklistTemplates    SecfacChecklistTemplate[]
   secfacAssignments           SecfacAssignment[]
+  companyId                   String?
+  company                     Company?                  @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  isSharedClient              Boolean                   @default(false)
+
+  @@index([companyId])
 }
 
 model ManpowerContract {
@@ -1434,6 +1443,10 @@ model ManpowerContract {
   renewalCase           ManpowerContractRenewalCase?
   activities            CommercialActivity[]
   tasks                 CommercialTask[]
+  companyId             String?
+  company               Company?                       @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  @@index([companyId])
 }
 
 model ManpowerContractRenewalCase {
@@ -1583,6 +1596,10 @@ model ManpowerProject {
   rosterSlots              RosterRequirementSlot[]
   reconciliations          AttendanceRosterReconciliation[]
   reconciliationConfigs    ReconciliationGracePeriodConfig[]
+  companyId                String?
+  company                  Company?                               @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  @@index([companyId])
 }
 
 model ManpowerSite {
@@ -2087,6 +2104,10 @@ model ContractApprovalWorkflow {
   createdAt    DateTime                @default(now())
   updatedAt    DateTime                @updatedAt
   levels       ContractApprovalLevel[]
+  companyId    String?
+  company      Company?                @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  @@index([companyId])
 }
 
 model ContractApprovalLevel {

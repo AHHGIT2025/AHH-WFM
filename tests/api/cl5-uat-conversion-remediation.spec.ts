@@ -118,6 +118,16 @@ describe("CL-5 Contract Conversion UAT Remediation (DEF-049, DEF-046, DEF-047, D
 
   beforeAll(async () => {
     await cleanup();
+    await prisma.company.upsert({
+      where: { id: companyAId },
+      update: {},
+      create: { id: companyAId, companyCode: companyAId, companyName: "CL5 UAT Co A", isActive: true },
+    });
+    await prisma.company.upsert({
+      where: { id: companyBId },
+      update: {},
+      create: { id: companyBId, companyCode: companyBId, companyName: "CL5 UAT Co B", isActive: true },
+    });
 
     const sgClient = await prisma.manpowerClient.create({
       data: {

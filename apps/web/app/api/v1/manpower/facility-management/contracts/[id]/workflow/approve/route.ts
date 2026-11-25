@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { mockDb } from "@ahh-wfm/mock-data";
 import { checkApiAuth } from "@/lib/api-guards";
 import { hasPermission, isAdminUser } from "@/lib/permissions";
+import { checkContractCompanyAccess } from "@/lib/contract-company-auth";
 
 export async function POST(request: Request, { params }: { params: { id: string } }) {
   const auth = await checkApiAuth(undefined, { requiredOperation: "FACILITY_MANAGEMENT" });
@@ -47,6 +48,10 @@ export async function POST(request: Request, { params }: { params: { id: string 
         { status: 403 }
       );
     }
+    const companyErr = checkContractCompanyAccess(user, existingContract, {
+      requireVerifiedOwnership: true,
+    });
+    if (companyErr) return companyErr;
     if (Array.isArray(existingContract.workflows) && existingContract.workflows.length > 0) {
       const matchingWorkflow = existingContract.workflows.find((wf: any) =>
         Array.isArray(wf.levels) && wf.levels.some((l: any) => l.id === levelId)

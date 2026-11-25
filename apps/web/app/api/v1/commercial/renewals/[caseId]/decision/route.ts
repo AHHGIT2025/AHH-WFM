@@ -99,6 +99,7 @@ export async function POST(
         const newContract = await tx.manpowerContract.create({
           data: {
             clientId: sourceContract.clientId,
+            companyId: sourceContract.companyId || null,
             contractNumber,
             title: `Renewed Term: ${sourceContract.title}`,
             startDate: new Date(newStartDate),

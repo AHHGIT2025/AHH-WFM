@@ -14,6 +14,11 @@ describe("CL-5 Client Acceptance, Award & Contract Conversion Comprehensive Suit
   let checksum: string;
 
   beforeAll(async () => {
+    await prisma.company.upsert({
+      where: { id: companyId },
+      update: {},
+      create: { id: companyId, companyCode: companyId, companyName: "CL5 Test Company", isActive: true },
+    });
     // Clean up existing test records
     await prisma.manpowerClientDocument.deleteMany({
       where: { client: { name: { contains: "CL5" } } }

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { mockDb } from "@ahh-wfm/mock-data";
 import { checkApiAuth } from "@/lib/api-guards";
 import { hasPermission } from "@/lib/permissions";
+import { checkContractCompanyAccess } from "@/lib/contract-company-auth";
 
 export async function POST(request: Request, { params }: { params: { id: string } }) {
   const auth = await checkApiAuth(undefined, { requiredOperation: "FACILITY_MANAGEMENT" });
@@ -21,8 +22,13 @@ export async function POST(request: Request, { params }: { params: { id: string 
     if (existing.operationType && existing.operationType !== "FACILITY_MANAGEMENT") {
       return NextResponse.json({ error: "Forbidden: Contract belongs to a different operation scope" }, { status: 403 });
     }
+    const companyErr = checkContractCompanyAccess(auth.session?.user, existing, {
+      requireVerifiedOwnership: true,
+    });
+    if (companyErr) return companyErr;
     const submittedBy = auth.session?.user?.name || auth.session?.user?.email || "System";
-    const contract = await mockDb.submitContractWorkflow(params.id, submittedBy);
+    const submittedById = auth.session?.user?.id || (auth.session?.user as any)?.employeeId || null;
+    const contract = await mockDb.submitContractWorkflow(params.id, submittedBy, submittedById);
     return NextResponse.json(contract);
   } catch (e: any) {
     return NextResponse.json({ error: e.message || "Failed to submit workflow" }, { status: 500 });

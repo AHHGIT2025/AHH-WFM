@@ -487,6 +487,7 @@ export async function convertToContract(input: ConvertToContractInput) {
       const contract = await tx.manpowerContract.create({
         data: {
           clientId,
+          companyId: version.proposal.case.companyId || null,
           contractNumber: normalizedContractNumber,
           title: version.title || `Contract for ${version.proposal.case.title || "Proposal"}`,
           startDate: startDt,

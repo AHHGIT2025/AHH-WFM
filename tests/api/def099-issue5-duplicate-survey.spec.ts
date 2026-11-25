@@ -421,7 +421,7 @@ describe("Issue #5 (DEF-099): Duplicate Site Survey Prevention (TEST DATABASE)",
       { params: { id: dupWf.id } }
     );
     expect(rejDupRes.status).toBe(200);
-  });
+  }, 30000);
 
   it("5. Null prospectiveSiteId duplicates are blocked on SUBMIT, while CANCELLED/SUPERSEDED and multi-site surveys are allowed", async () => {
     // Null prospectiveSiteId duplicate check

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { mockDb } from "@ahh-wfm/mock-data";
 import { checkApiAuth } from "@/lib/api-guards";
 import { hasPermission } from "@/lib/permissions";
+import { checkContractCompanyAccess } from "@/lib/contract-company-auth";
 
 export async function GET(request: Request, { params }: { params: { id: string } }) {
   const auth = await checkApiAuth(undefined, { requiredOperation: "SECURITY_GUARDING" });
@@ -23,9 +24,8 @@ export async function GET(request: Request, { params }: { params: { id: string }
     if (contract.operationType && contract.operationType !== "SECURITY_GUARDING") {
       return NextResponse.json({ error: "Forbidden: Scope mismatch" }, { status: 403 });
     }
-    if (user?.companyId && user?.role !== "SUPER_ADMIN" && (contract as any).companyId && (contract as any).companyId !== user.companyId) {
-      return NextResponse.json({ error: "Forbidden: Company boundary violation" }, { status: 403 });
-    }
+    const companyErr = checkContractCompanyAccess(user, contract, { requireVerifiedOwnership: false });
+    if (companyErr) return companyErr;
 
     const addendums = await mockDb.getManpowerContractAddendums(params.id);
     return NextResponse.json(addendums);
@@ -54,9 +54,8 @@ export async function POST(request: Request, { params }: { params: { id: string 
     if (contract.operationType && contract.operationType !== "SECURITY_GUARDING") {
       return NextResponse.json({ error: "Forbidden: Scope mismatch" }, { status: 403 });
     }
-    if (user?.companyId && user?.role !== "SUPER_ADMIN" && (contract as any).companyId && (contract as any).companyId !== user.companyId) {
-      return NextResponse.json({ error: "Forbidden: Company boundary violation" }, { status: 403 });
-    }
+    const companyErr = checkContractCompanyAccess(user, contract, { requireVerifiedOwnership: true });
+    if (companyErr) return companyErr;
 
     // Business Rule 9 & 11: Addendum is allowed only for ACTIVE contracts.
     if (contract.status !== "ACTIVE") {

@@ -9608,11 +9608,19 @@ export const mockDb = {
   },
 
   // --- Manpower Contracts CRUD ---
-  getManpowerContracts: async (operationType?: string): Promise<any[]> => {
+  getManpowerContracts: async (
+    operationType?: string,
+    companyFilter?: { companyId?: string | null; companyIds?: string[] | null }
+  ): Promise<any[]> => {
     if (isDbConnected()) {
       await seedMySQL();
       const where: any = {};
       if (operationType) where.operationType = operationType;
+      if (companyFilter?.companyId) {
+        where.companyId = companyFilter.companyId;
+      } else if (companyFilter?.companyIds && companyFilter.companyIds.length > 0) {
+        where.companyId = { in: companyFilter.companyIds };
+      }
       const res = await prismaClient.manpowerContract.findMany({
         where,
         include: {
@@ -10406,6 +10414,7 @@ export const mockDb = {
         data: {
           id: contractId,
           clientId: data.clientId,
+          companyId: data.companyId || null,
           contractNumber,
           title: data.title,
           startDate,
@@ -14417,6 +14426,9 @@ export const mockDb = {
       if (contract.status !== "DRAFT" && contract.status !== "REJECTED") {
         throw new Error("Only draft or rejected contracts can be submitted for approval.");
       }
+      if (!contract.companyId) {
+        throw new Error("Contract company ownership is unverified and must be confirmed before workflow submission.");
+      }
 
       const moduleType = contract.operationType === "SECURITY_GUARDING" ? "SECURITY_GUARDING_CONTRACT" : "FACILITY_MANAGEMENT_CONTRACT";
       let template = await prismaClient.workflowTemplate.findFirst({
@@ -14443,77 +14455,70 @@ export const mockDb = {
         throw new Error("No active default approval workflow configured for this contract type.");
       }
 
-      // Delete any existing workflow instances for this contract
-      await prismaClient.contractApprovalWorkflow.deleteMany({
-        where: { contractId: id }
-      });
+      await prismaClient.$transaction(async (tx: any) => {
+        // Delete any existing workflow instances for this contract
+        await tx.contractApprovalWorkflow.deleteMany({
+          where: { contractId: id }
+        });
 
-      const workflow = await prismaClient.contractApprovalWorkflow.create({
-        data: {
-          contractId: id,
-          workflowName: template.workflowName,
-          appliesTo: "ACTIVATION",
-          status: "PENDING",
-          submittedAt: new Date(),
-          submittedBy: submittedBy || "System"
-        }
-      });
-
-      for (const tLvl of template.levels) {
-        const level = await prismaClient.contractApprovalLevel.create({
+        const workflow = await tx.contractApprovalWorkflow.create({
           data: {
-            workflowId: workflow.id,
-            levelNumber: tLvl.levelNumber,
-            levelName: tLvl.levelName,
-            approvalRule: tLvl.approvalRule,
-            isMandatory: tLvl.isMandatory,
-            remarks: tLvl.remarks || ""
+            contractId: id,
+            companyId: contract.companyId,
+            workflowName: template.workflowName,
+            appliesTo: "ACTIVATION",
+            status: "PENDING",
+            submittedAt: new Date(),
+            submittedBy: submittedBy || "System"
           }
         });
-        if (tLvl.approvers && tLvl.approvers.length > 0) {
-          await Promise.all(tLvl.approvers.map((ap: any) => prismaClient.contractApprovalApprover.create({
+
+        for (const tLvl of template.levels) {
+          const level = await tx.contractApprovalLevel.create({
             data: {
-              levelId: level.id,
-              employeeId: ap.employeeId,
-              employeeName: ap.employeeName,
-              employeeCode: ap.employeeCode,
-              email: ap.email,
-              roleName: ap.roleName,
-              approvalStatus: "PENDING"
+              workflowId: workflow.id,
+              levelNumber: tLvl.levelNumber,
+              levelName: tLvl.levelName,
+              approvalRule: tLvl.approvalRule,
+              isMandatory: tLvl.isMandatory,
+              remarks: tLvl.remarks || ""
             }
-          })));
+          });
+          if (tLvl.approvers && tLvl.approvers.length > 0) {
+            await Promise.all(tLvl.approvers.map((ap: any) => tx.contractApprovalApprover.create({
+              data: {
+                levelId: level.id,
+                employeeId: ap.employeeId,
+                employeeName: ap.employeeName,
+                employeeCode: ap.employeeCode,
+                email: ap.email,
+                roleName: ap.roleName,
+                approvalStatus: "PENDING"
+              }
+            })));
+          }
         }
-      }
 
-      await prismaClient.manpowerContract.update({
-        where: { id },
-        data: {
-          status: "PENDING_APPROVAL",
-          approvalStatus: "PENDING_APPROVAL"
-        }
-      });
+        await tx.manpowerContract.update({
+          where: { id },
+          data: {
+            status: "PENDING_APPROVAL",
+            approvalStatus: "PENDING_APPROVAL"
+          }
+        });
 
-      // Synchronize central WorkflowInstance for Universal Approval Center visibility
-      try {
-        await prismaClient.workflowInstance.deleteMany({
+        // Synchronize central WorkflowInstance atomically using authoritative contract.companyId (never submitter fallback)
+        await tx.workflowInstance.deleteMany({
           where: { referenceId: id, moduleType: { in: ["SECURITY_GUARDING_CONTRACT", "FACILITY_MANAGEMENT_CONTRACT", "CONTRACT"] } }
         });
-        let resolvedCompanyId: string | null = (contract as any).companyId || null;
-        if (!resolvedCompanyId && submittedById) {
-          const submitter = await prismaClient.employee.findUnique({
-            where: { id: submittedById },
-            select: { companyId: true }
-          });
-          resolvedCompanyId = submitter?.companyId || null;
-        }
-        await prismaClient.workflowInstance.create({
+        await tx.workflowInstance.create({
           data: {
             templateId: template.id,
             moduleType,
             referenceId: id,
             status: "IN_PROGRESS",
             currentLevelNumber: 1,
-            companyId: resolvedCompanyId,
+            companyId: contract.companyId,
             operationScope: contract.operationType,
             history: {
               create: {
@@ -14525,9 +14530,7 @@ export const mockDb = {
             }
           }
         });
-      } catch (wfSyncErr) {
-        console.warn("[Workflow Sync] Non-blocking central instance sync error:", wfSyncErr);
-      }
+      });
 
       return await mockDb.getManpowerContract(id);
     }
@@ -15708,6 +15711,9 @@ export const mockDb = {
       if (contract.status !== "ACTIVE") {
         throw new Error("Termination can be requested only for active contracts.");
       }
+      if (!contract.companyId) {
+        throw new Error("Contract company ownership is unverified and must be confirmed before requesting termination.");
+      }
 
       const moduleType = contract.operationType === "SECURITY_GUARDING" ? "SECURITY_GUARDING_CONTRACT" : "FACILITY_MANAGEMENT_CONTRACT";
       
@@ -15735,52 +15741,55 @@ export const mockDb = {
         throw new Error("Termination workflow is not configured.");
       }
 
-      // Create workflow instance for termination
-      const workflow = await prismaClient.contractApprovalWorkflow.create({
-        data: {
-          contractId: id,
-          workflowName: template.workflowName || "Contract Termination Workflow",
-          appliesTo: "TERMINATION",
-          status: "PENDING",
-          submittedAt: new Date(),
-          submittedBy: requestedBy
-        }
-      });
-
-      for (const tLvl of template.levels) {
-        const level = await prismaClient.contractApprovalLevel.create({
+      // Create workflow instance for termination atomically
+      await prismaClient.$transaction(async (tx: any) => {
+        const workflow = await tx.contractApprovalWorkflow.create({
           data: {
-            workflowId: workflow.id,
-            levelNumber: tLvl.levelNumber,
-            levelName: tLvl.levelName,
-            approvalRule: tLvl.approvalRule,
-            isMandatory: tLvl.isMandatory,
-            remarks: tLvl.remarks || ""
+            contractId: id,
+            companyId: contract.companyId,
+            workflowName: template.workflowName || "Contract Termination Workflow",
+            appliesTo: "TERMINATION",
+            status: "PENDING",
+            submittedAt: new Date(),
+            submittedBy: requestedBy
           }
         });
-        if (tLvl.approvers && tLvl.approvers.length > 0) {
-          await Promise.all(tLvl.approvers.map((ap: any) => prismaClient.contractApprovalApprover.create({
-            data: {
-              levelId: level.id,
-              employeeId: ap.employeeId,
-              employeeName: ap.employeeName,
-              employeeCode: ap.employeeCode,
-              email: ap.email,
-              roleName: ap.roleName,
-              approvalStatus: "PENDING"
-            }
-          })));
-        }
-      }
 
-      await prismaClient.manpowerContract.update({
-        where: { id },
-        data: {
-          terminationRequestedAt: new Date(),
-          terminationRequestedBy: requestedBy,
-          terminationReason: reason,
-          terminationStatus: "PENDING_APPROVAL"
+        for (const tLvl of template.levels) {
+          const level = await tx.contractApprovalLevel.create({
+            data: {
+              workflowId: workflow.id,
+              levelNumber: tLvl.levelNumber,
+              levelName: tLvl.levelName,
+              approvalRule: tLvl.approvalRule,
+              isMandatory: tLvl.isMandatory,
+              remarks: tLvl.remarks || ""
+            }
+          });
+          if (tLvl.approvers && tLvl.approvers.length > 0) {
+            await Promise.all(tLvl.approvers.map((ap: any) => tx.contractApprovalApprover.create({
+              data: {
+                levelId: level.id,
+                employeeId: ap.employeeId,
+                employeeName: ap.employeeName,
+                employeeCode: ap.employeeCode,
+                email: ap.email,
+                roleName: ap.roleName,
+                approvalStatus: "PENDING"
+              }
+            })));
+          }
         }
+
+        await tx.manpowerContract.update({
+          where: { id },
+          data: {
+            terminationRequestedAt: new Date(),
+            terminationRequestedBy: requestedBy,
+            terminationReason: reason,
+            terminationStatus: "PENDING_APPROVAL"
+          }
+        });
       });
 
       return await mockDb.getManpowerContract(id);

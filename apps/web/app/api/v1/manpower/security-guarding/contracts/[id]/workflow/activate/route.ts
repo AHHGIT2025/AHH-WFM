@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { mockDb } from "@ahh-wfm/mock-data";
 import { checkApiAuth } from "@/lib/api-guards";
 import { hasPermission } from "@/lib/permissions";
+import { checkContractCompanyAccess } from "@/lib/contract-company-auth";
 
 export async function POST(request: Request, { params }: { params: { id: string } }) {
   const auth = await checkApiAuth(undefined, { requiredOperation: "SECURITY_GUARDING" });
@@ -21,6 +22,10 @@ export async function POST(request: Request, { params }: { params: { id: string 
     if (existing.operationType && existing.operationType !== "SECURITY_GUARDING") {
       return NextResponse.json({ error: "Forbidden: Contract belongs to a different operation scope" }, { status: 403 });
     }
+    const companyErr = checkContractCompanyAccess(auth.session?.user, existing, {
+      requireVerifiedOwnership: true,
+    });
+    if (companyErr) return companyErr;
     const activatedBy = auth.session?.user?.name || auth.session?.user?.email || "Admin";
     const contract = await mockDb.activateContract(params.id, activatedBy);
     return NextResponse.json(contract);
