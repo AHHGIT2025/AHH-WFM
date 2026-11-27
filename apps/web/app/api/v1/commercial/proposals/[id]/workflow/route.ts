@@ -264,6 +264,21 @@ export async function POST(
         }
       });
 
+      await tx.userActivityLog.create({
+        data: {
+          userId: user?.id || "system",
+          action: `PROPOSAL_${action}`,
+          entityType: "PreContractProposal",
+          entityId: proposalId,
+          afterJson: JSON.stringify({
+            action,
+            status: newProposalStatus,
+            workflowStatus: newWorkflowStatus,
+            instanceId: workflowInstance!.id
+          })
+        }
+      });
+
       const snapshotPayload =
         action === "APPROVE" && newWorkflowStatus === "APPROVED"
           ? (() => {

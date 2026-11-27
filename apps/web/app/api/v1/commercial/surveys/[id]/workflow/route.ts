@@ -321,13 +321,30 @@ export async function POST(
       });
 
       // Update Survey State
-      return await tx.preContractSurvey.update({
+      const updated = await tx.preContractSurvey.update({
         where: { id: surveyId },
         data: {
           lifecycle: newSurveyLifecycle,
           updatedAt: new Date()
         }
       });
+
+      await tx.userActivityLog.create({
+        data: {
+          userId: user?.id || "system",
+          action: `SURVEY_${action}`,
+          entityType: "PreContractSurvey",
+          entityId: surveyId,
+          afterJson: JSON.stringify({
+            action,
+            lifecycle: newSurveyLifecycle,
+            workflowStatus: newWorkflowStatus,
+            instanceId: workflowInstance!.id
+          })
+        }
+      });
+
+      return updated;
     });
 
     return NextResponse.json({

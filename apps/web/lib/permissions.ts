@@ -169,12 +169,18 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "self.profile.view", "self.attendance.view", "self.attendance.punch", "self.leave.view", "self.leave.apply", "self.announcements.view", "self.password.change"
   ],
   FINANCE_MANAGER: [
-    "dashboard.view", "employees.view", "attendance.view", "overtime.view", "overtime.approve",
+    "dashboard.view", "settings.view", "employees.view", "attendance.view", "overtime.view", "overtime.approve",
     "reports.view", "reports.export", "sap.view",
+    "precontract.costConfig.view", "precontract.costConfig.manage", "precontract.config.view", "precontract.config.activate", "precontract.config.retire",
+    "precontract.workflow.review", "precontract.workflow.approve", "precontract.workflow.reject",
+    "precontract.costing.view", "precontract.proposal.view",
+    "commercial.activity.view", "commercial.task.view", "commercial.reports.view",
     "self.profile.view", "self.attendance.view", "self.attendance.punch", "self.leave.view", "self.leave.apply", "self.announcements.view", "self.password.change"
   ],
   FINANCE_VIEWER: [
     "dashboard.view", "reports.view", "sap.view",
+    "precontract.costConfig.view", "precontract.config.view", "precontract.costing.view",
+    "commercial.activity.view", "commercial.task.view", "commercial.reports.view",
     "self.profile.view", "self.attendance.view", "self.attendance.punch", "self.leave.view", "self.leave.apply", "self.announcements.view", "self.password.change"
   ],
   DEPARTMENT_MANAGER: [
@@ -253,7 +259,8 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "dashboard.view", "manpower.security.view", "manpower.security.reports.view", "manpower.security.manpower.view"
   ],
   SECURITY_FINANCE_VIEWER: [
-    "dashboard.view", "manpower.security.view", "manpower.security.reports.view"
+    "dashboard.view", "manpower.security.view", "manpower.security.reports.view",
+    "precontract.costConfig.view", "precontract.costing.view", "commercial.activity.view", "commercial.task.view"
   ],
   SECURITY_READ_ONLY: [
     "dashboard.view", "manpower.security.view", "manpower.security.clients.view", "manpower.security.contracts.view",
@@ -304,7 +311,8 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "dashboard.view", "manpower.fm.view", "manpower.fm.reports.view", "manpower.fm.manpower.view"
   ],
   FM_FINANCE_VIEWER: [
-    "dashboard.view", "manpower.fm.view", "manpower.fm.reports.view"
+    "dashboard.view", "manpower.fm.view", "manpower.fm.reports.view",
+    "precontract.costConfig.view", "precontract.costing.view", "commercial.activity.view", "commercial.task.view"
   ],
   FM_READ_ONLY: [
     "dashboard.view", "manpower.fm.view", "manpower.fm.clients.view", "manpower.fm.contracts.view",
@@ -379,7 +387,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "precontract.case.view", "precontract.case.manage",
     "precontract.prospectClient.view", "precontract.prospectClient.manage",
     "precontract.prospectiveSite.view", "precontract.prospectiveSite.manage",
-    "precontract.surveyConfig.view", "precontract.siteConditionConfig.view", "precontract.costConfig.view", "precontract.formulaRuleConfig.view", "precontract.config.view",
+    "precontract.surveyConfig.view", "precontract.siteConditionConfig.view", "precontract.costConfig.view", "precontract.costConfig.manage", "precontract.formulaRuleConfig.view", "precontract.config.view",
     "precontract.workflow.submit",
     "precontract.costing.view", "precontract.costing.manage",
     "precontract.proposal.view", "precontract.proposal.manage", "precontract.proposal.issue",
@@ -399,7 +407,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
   COMMERCIAL_CHECKER: [
     "dashboard.view",
     "precontract.case.view", "precontract.prospectClient.view", "precontract.prospectiveSite.view",
-    "precontract.surveyConfig.view", "precontract.siteConditionConfig.view", "precontract.costConfig.view", "precontract.formulaRuleConfig.view", "precontract.config.view",
+    "precontract.surveyConfig.view", "precontract.siteConditionConfig.view", "precontract.costConfig.view", "precontract.formulaRuleConfig.view", "precontract.config.view", "precontract.config.activate", "precontract.config.retire",
     "precontract.workflow.review", "precontract.workflow.approve", "precontract.workflow.reject",
     "precontract.costing.view", "precontract.proposal.view", "precontract.acceptance.view",
     "commercial.commandCenter.view", "commercial.commandCenter.contractHealth", "commercial.commandCenter.exceptions",
@@ -436,7 +444,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
     "precontract.case.view", "precontract.case.manage",
     "precontract.prospectClient.view", "precontract.prospectClient.manage",
     "precontract.prospectiveSite.view", "precontract.prospectiveSite.manage",
-    "precontract.surveyConfig.view", "precontract.siteConditionConfig.view", "precontract.costConfig.view", "precontract.formulaRuleConfig.view", "precontract.config.view",
+    "precontract.surveyConfig.view", "precontract.siteConditionConfig.view", "precontract.costConfig.view", "precontract.costConfig.manage", "precontract.formulaRuleConfig.view", "precontract.config.view",
     "precontract.workflow.submit",
     "precontract.costing.view", "precontract.costing.manage",
     "precontract.proposal.view", "precontract.proposal.manage", "precontract.proposal.issue",
@@ -456,7 +464,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<string, string[]> = {
   COMMERCIAL_APPROVER: [
     "dashboard.view",
     "precontract.case.view", "precontract.prospectClient.view", "precontract.prospectiveSite.view",
-    "precontract.surveyConfig.view", "precontract.siteConditionConfig.view", "precontract.costConfig.view", "precontract.formulaRuleConfig.view", "precontract.config.view",
+    "precontract.surveyConfig.view", "precontract.siteConditionConfig.view", "precontract.costConfig.view", "precontract.formulaRuleConfig.view", "precontract.config.view", "precontract.config.activate", "precontract.config.retire",
     "precontract.workflow.review", "precontract.workflow.approve", "precontract.workflow.reject",
     "precontract.costing.view", "precontract.proposal.view", "precontract.acceptance.view",
     "commercial.commandCenter.view", "commercial.commandCenter.contractHealth", "commercial.commandCenter.exceptions",

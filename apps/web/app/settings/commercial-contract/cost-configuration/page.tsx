@@ -53,6 +53,10 @@ export default function CostConfigurationPage() {
   const user = session?.user as any;
   const hasAccess = session && (isAdminUser(user) || hasPermission(user, "precontract.costConfig.view"));
   const canManage = session && (isAdminUser(user) || hasPermission(user, "precontract.costConfig.manage"));
+  const canApprove = session && (isAdminUser(user) || hasPermission(user, "precontract.workflow.approve") || hasPermission(user, "precontract.config.manage"));
+  const canReject = session && (isAdminUser(user) || hasPermission(user, "precontract.workflow.reject") || hasPermission(user, "precontract.workflow.approve") || hasPermission(user, "precontract.config.manage"));
+  const canActivate = session && (isAdminUser(user) || hasPermission(user, "precontract.config.activate"));
+  const canRetire = session && (isAdminUser(user) || hasPermission(user, "precontract.config.retire"));
 
   const [activeTab, setActiveTab] = useState<TabKey>("rate-cards");
   const [rateCards, setRateCards] = useState<RateCardMaster[]>([]);
@@ -266,7 +270,12 @@ export default function CostConfigurationPage() {
   };
 
   const handleLifecycleAction = async (versionId: string, action: string) => {
-    if (!canManage || !selectedMaster) return;
+    if (!selectedMaster) return;
+    if ((action === "SUBMIT" || action === "RESUBMIT") && !canManage) return;
+    if (action === "APPROVE" && !canApprove) return;
+    if (action === "REJECT" && !canReject) return;
+    if (action === "ACTIVATE" && !canActivate) return;
+    if (action === "RETIRE" && !canRetire) return;
     setIsLoading(true);
     setErrorMsg("");
     setSuccessMsg("");
@@ -474,9 +483,9 @@ export default function CostConfigurationPage() {
                               )}
                             </div>
 
-                            {canManage && (
+                            {(canManage || canApprove || canReject || canActivate || canRetire) && (
                               <div className="flex flex-wrap gap-2">
-                                {ver.status === "DRAFT" && (
+                                {ver.status === "DRAFT" && canManage && (
                                   <>
                                     <Button size="sm" variant="secondary" onClick={() => openEditVersionModal(ver)} disabled={isLoading}>
                                       Edit Draft
@@ -488,36 +497,44 @@ export default function CostConfigurationPage() {
                                 )}
                                 {ver.status === "UNDER_REVIEW" && (
                                   <>
-                                    <Button
-                                      size="sm"
-                                      variant="success"
-                                      onClick={() => handleLifecycleAction(ver.id, "APPROVE")}
-                                      disabled={isLoading || isMaker}
-                                      title={isMaker ? "Maker and Checker must be different users" : "Approve rate card version"}
-                                    >
-                                      {isMaker ? "Approve (Checker Only)" : "Approve"}
-                                    </Button>
-                                    <Button size="sm" variant="error" onClick={() => handleLifecycleAction(ver.id, "REJECT")} disabled={isLoading}>
-                                      Reject
-                                    </Button>
+                                    {canApprove && (
+                                      <Button
+                                        size="sm"
+                                        variant="success"
+                                        onClick={() => handleLifecycleAction(ver.id, "APPROVE")}
+                                        disabled={isLoading || isMaker}
+                                        title={isMaker ? "Maker and Checker must be different users" : "Approve rate card version"}
+                                      >
+                                        {isMaker ? "Approve (Checker Only)" : "Approve"}
+                                      </Button>
+                                    )}
+                                    {canReject && (
+                                      <Button size="sm" variant="error" onClick={() => handleLifecycleAction(ver.id, "REJECT")} disabled={isLoading}>
+                                        Reject
+                                      </Button>
+                                    )}
                                   </>
                                 )}
                                 {ver.status === "APPROVED" && (
                                   <>
-                                    <Button size="sm" variant="primary" onClick={() => handleLifecycleAction(ver.id, "ACTIVATE")} disabled={isLoading}>
-                                      Activate
-                                    </Button>
-                                    <Button size="sm" variant="error" onClick={() => handleLifecycleAction(ver.id, "RETIRE")} disabled={isLoading}>
-                                      Retire
-                                    </Button>
+                                    {canActivate && (
+                                      <Button size="sm" variant="primary" onClick={() => handleLifecycleAction(ver.id, "ACTIVATE")} disabled={isLoading}>
+                                        Activate
+                                      </Button>
+                                    )}
+                                    {canRetire && (
+                                      <Button size="sm" variant="error" onClick={() => handleLifecycleAction(ver.id, "RETIRE")} disabled={isLoading}>
+                                        Retire
+                                      </Button>
+                                    )}
                                   </>
                                 )}
-                                {ver.status === "ACTIVE" && (
+                                {ver.status === "ACTIVE" && canRetire && (
                                   <Button size="sm" variant="error" onClick={() => handleLifecycleAction(ver.id, "RETIRE")} disabled={isLoading}>
                                     Retire
                                   </Button>
                                 )}
-                                {ver.status === "REJECTED" && (
+                                {ver.status === "REJECTED" && canManage && (
                                   <Button size="sm" variant="secondary" onClick={() => handleLifecycleAction(ver.id, "RESUBMIT")} disabled={isLoading}>
                                     Clone to Draft
                                   </Button>

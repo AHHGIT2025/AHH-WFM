@@ -2,7 +2,7 @@
 // Handles: SUBMIT, APPROVE, REJECT, RETIRE, ACTIVATE, RESUBMIT
 import { NextResponse } from "next/server";
 import { prisma } from "@ahh-wfm/database";
-import { isAdminUser } from "@/lib/permissions";
+import { hasPermission, isAdminUser } from "@/lib/permissions";
 import {
   checkApiAuth, getTable, parseBody, writeAudit, safeError,
   assertValidTransition, actionToState, LifecycleActionSchema,
@@ -15,7 +15,7 @@ export async function POST(
   { params }: { params: { entityType: string; id: string; versionId: string } }
 ) {
   try {
-    const auth = await checkApiAuth(undefined, { requiredPermission: "precontract.costConfig.manage" });
+    const auth = await checkApiAuth();
     if (auth.error) return auth.error;
     const user = auth.session!.user as any;
 
@@ -27,6 +27,22 @@ export async function POST(
     if ("error" in parsed) return parsed.error as any;
 
     const { action, comment } = parsed.data;
+
+    // Action-specific Maker/Checker RBAC enforcement
+    const isAllowed =
+      isAdminUser(user) ||
+      ((action === "SUBMIT" || action === "RESUBMIT") && hasPermission(user, "precontract.costConfig.manage")) ||
+      (action === "APPROVE" && (hasPermission(user, "precontract.workflow.approve") || hasPermission(user, "precontract.config.manage") || hasPermission(user, "precontract.costConfig.manage"))) ||
+      (action === "REJECT" && (hasPermission(user, "precontract.workflow.reject") || hasPermission(user, "precontract.workflow.approve") || hasPermission(user, "precontract.config.manage") || hasPermission(user, "precontract.costConfig.manage"))) ||
+      (action === "ACTIVATE" && (hasPermission(user, "precontract.config.activate") || hasPermission(user, "precontract.costConfig.manage"))) ||
+      (action === "RETIRE" && (hasPermission(user, "precontract.config.retire") || hasPermission(user, "precontract.costConfig.manage")));
+
+    if (!isAllowed) {
+      return NextResponse.json(
+        { success: false, error: `Forbidden: Missing required permission for rate card lifecycle action ${action}.` },
+        { status: 403 }
+      );
+    }
 
     const version = await (prisma as any)[tbl.version].findUnique({
       where: { id: params.versionId },

@@ -339,7 +339,7 @@ export async function POST(
         }
       });
 
-      return await tx.preContractCostEstimate.update({
+      const updated = await tx.preContractCostEstimate.update({
         where: { id: estimateId },
         data: {
           status: newEstimateStatus,
@@ -357,6 +357,23 @@ export async function POST(
           }
         }
       });
+
+      await tx.userActivityLog.create({
+        data: {
+          userId: user?.id || "system",
+          action: `COSTING_${action}`,
+          entityType: "PreContractCostEstimate",
+          entityId: estimateId,
+          afterJson: JSON.stringify({
+            action,
+            status: newEstimateStatus,
+            workflowStatus: newWorkflowStatus,
+            instanceId: workflowInstance!.id
+          })
+        }
+      });
+
+      return updated;
     });
 
     return NextResponse.json({

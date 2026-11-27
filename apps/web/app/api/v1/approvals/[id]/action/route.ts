@@ -179,6 +179,22 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
             await adapter.onWorkflowStatusChange(instance!.referenceId, action as any, updated.status, remarks, tx);
           }
 
+          await tx.userActivityLog.create({
+            data: {
+              userId: user.id || "system",
+              action: `WORKFLOW_${action}`,
+              entityType: instance!.moduleType,
+              entityId: instance!.referenceId,
+              afterJson: JSON.stringify({
+                instanceId: updated.id,
+                action,
+                status: updated.status,
+                currentLevelNumber: updated.currentLevelNumber,
+                remarks: remarks || null
+              })
+            }
+          });
+
           return updated;
         });
 

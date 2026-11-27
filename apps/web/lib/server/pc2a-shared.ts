@@ -222,8 +222,23 @@ function assertValidTransition(current: string, next: string) {
 
 async function writeAudit(userId: string, action: string, entity: string, entityId: string, details: object) {
   try {
-    await (prisma as any).userActionAudit.create({
-      data: { userId, action, targetEntity: entity, targetId: entityId, details },
+    if (typeof (prisma as any).userActionAudit?.create === "function") {
+      await (prisma as any).userActionAudit.create({
+        data: { userId, action, targetEntity: entity, targetId: entityId, details },
+      });
+    }
+  } catch {
+    // Legacy mock compatibility
+  }
+  try {
+    await prisma.userActivityLog.create({
+      data: {
+        userId: userId || "system",
+        action,
+        entityType: entity,
+        entityId,
+        afterJson: JSON.stringify(details ?? {}),
+      },
     });
   } catch {
     // Audit must not crash the operation; log silently
