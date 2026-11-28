@@ -1,29 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@ahh-wfm/database";
 import { checkApiAuth, checkRecordCompanyAccess, resolveCompanyScope } from "@/lib/api-guards";
-import { hasPermission, isAdminUser } from "@/lib/permissions";
 import { isUserEligibleApprover } from "@/lib/workflow/approver-resolution";
-
-function isOperationScopePermitted(user: any, operationScope: string | null | undefined): boolean {
-  if (!operationScope) return true;
-  if (isAdminUser(user) || hasPermission(user, "manpower.admin.full_access")) return true;
-  const scope = operationScope.toUpperCase().trim();
-  const allowedSG = user?.operationAccess?.allowedSecurityGuarding ?? user?.allowedSecurityGuarding ?? true;
-  const allowedFM = user?.operationAccess?.allowedFacilityManagement ?? user?.allowedFacilityManagement ?? true;
-  if (scope === "SECURITY_GUARDING" && !allowedSG) return false;
-  if (scope === "FACILITY_MANAGEMENT" && !allowedFM) return false;
-  return true;
-}
-
-function buildActorIdentityTokens(user: any): string[] {
-  return Array.from(
-    new Set(
-      [user?.id, user?.employeeId, user?.email, user?.name]
-        .filter((v): v is string => typeof v === "string" && v.trim().length > 0)
-        .map((v) => v.trim())
-    )
-  );
-}
+import { isOperationScopePermitted, resolveVerifiedActorTokens } from "@/lib/workflow/actor-identity";
 
 export async function GET(request: NextRequest) {
   try {
@@ -94,7 +73,7 @@ export async function GET(request: NextRequest) {
     }
 
     // 3. Count Outbox actions taken by current user (deduplicated by instanceId to match outbox list)
-    const actorTokens = buildActorIdentityTokens(user);
+    const actorTokens = await resolveVerifiedActorTokens(user);
     const centralOutboxHistories = actorTokens.length === 0
       ? []
       : await prisma.workflowActionHistory.findMany({

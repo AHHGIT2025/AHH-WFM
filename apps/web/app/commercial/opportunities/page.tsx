@@ -56,6 +56,13 @@ export default function OpportunitiesPage() {
   const [selectedCase, setSelectedCase] = useState<OpportunityCase | null>(null);
   const [detailCase, setDetailCase] = useState<OpportunityCase | null>(null);
   const handledDeepLinkRef = useRef<string | null>(null);
+  const [linkClientMode, setLinkClientMode] = useState<"PROSPECT" | "EXISTING">("PROSPECT");
+  const [linkProspectId, setLinkProspectId] = useState<string>("");
+  const [linkExistingClientId, setLinkExistingClientId] = useState<string>("");
+  const [existingClients, setExistingClients] = useState<Array<{ id: string; name: string; operationType?: string; isActive?: boolean }>>([]);
+  const [linkingClient, setLinkingClient] = useState<boolean>(false);
+  const [linkClientError, setLinkClientError] = useState<string | null>(null);
+  const [linkClientSuccess, setLinkClientSuccess] = useState<string | null>(null);
   const [showWorkflowModal, setShowWorkflowModal] = useState<boolean>(false);
   const [workflowAction, setWorkflowAction] = useState<"SUBMIT" | "APPROVE" | "REJECT" | "RETURN">("SUBMIT");
   const [workflowRemarks, setWorkflowRemarks] = useState<string>("");
@@ -110,6 +117,69 @@ export default function OpportunitiesPage() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  useEffect(() => {
+    if (!detailCase) return;
+    setLinkClientError(null);
+    setLinkClientSuccess(null);
+    setLinkProspectId(detailCase.prospectClientId || "");
+    setLinkExistingClientId(detailCase.existingClientId || "");
+    setLinkClientMode(detailCase.existingClientId ? "EXISTING" : "PROSPECT");
+
+    const op = (detailCase.operationType || "SECURITY_GUARDING").toUpperCase();
+    const endpoint =
+      op === "FACILITY_MANAGEMENT"
+        ? "/api/v1/manpower/facility-management/clients"
+        : "/api/v1/manpower/security-guarding/clients";
+
+    fetch(endpoint)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json) => {
+        const list = Array.isArray(json?.clients) ? json.clients : Array.isArray(json?.data) ? json.data : [];
+        setExistingClients(list.filter((c: any) => c && c.isActive !== false));
+      })
+      .catch(() => setExistingClients([]));
+  }, [detailCase?.id]);
+
+  const handleSaveClientLink = async () => {
+    if (!detailCase) return;
+    setLinkingClient(true);
+    setLinkClientError(null);
+    setLinkClientSuccess(null);
+    try {
+      const payload =
+        linkClientMode === "PROSPECT"
+          ? { id: detailCase.id, prospectClientId: linkProspectId || null, existingClientId: null }
+          : { id: detailCase.id, prospectClientId: null, existingClientId: linkExistingClientId || null };
+
+      if (!payload.prospectClientId && !payload.existingClientId) {
+        setLinkClientError("Please select a verified Prospect or an Existing Client Master.");
+        setLinkingClient(false);
+        return;
+      }
+
+      const res = await fetch("/api/v1/commercial/opportunities", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(json.error || "Failed to link client to opportunity.");
+      }
+
+      const updatedCase = json.case;
+      if (updatedCase) {
+        setDetailCase((prev) => (prev ? { ...prev, ...updatedCase } : updatedCase));
+        setCases((prev) => prev.map((c) => (c.id === updatedCase.id ? { ...c, ...updatedCase } : c)));
+      }
+      setLinkClientSuccess("Client linked successfully. Opportunity, Costing, and Proposal views updated.");
+    } catch (err: any) {
+      setLinkClientError(err.message || "Failed to link client.");
+    } finally {
+      setLinkingClient(false);
+    }
+  };
 
   const handleCreateCase = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -638,6 +708,88 @@ export default function OpportunitiesPage() {
                 <div className="text-[10px] font-bold text-on-surface-variant uppercase">Created At</div>
                 <div className="font-semibold text-on-surface">{new Date(detailCase.createdAt).toLocaleDateString()}</div>
               </div>
+            </div>
+
+            {/* Direct Intake Client Association Control */}
+            <div className="p-3 rounded-lg border border-outline-variant/60 bg-surface-container-low space-y-2.5">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[11px] font-bold uppercase text-on-surface-variant">
+                  Link Client (Direct Intake Resolution)
+                </span>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setLinkClientMode("PROSPECT")}
+                    className={`px-2 py-0.5 text-[11px] rounded font-semibold ${
+                      linkClientMode === "PROSPECT"
+                        ? "bg-primary text-white"
+                        : "bg-surface-container-high text-on-surface-variant"
+                    }`}
+                  >
+                    Verified Prospect
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setLinkClientMode("EXISTING")}
+                    className={`px-2 py-0.5 text-[11px] rounded font-semibold ${
+                      linkClientMode === "EXISTING"
+                        ? "bg-primary text-white"
+                        : "bg-surface-container-high text-on-surface-variant"
+                    }`}
+                  >
+                    Existing Client
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {linkClientMode === "PROSPECT" ? (
+                  <select
+                    aria-label="Select Verified Prospect"
+                    value={linkProspectId}
+                    onChange={(e) => setLinkProspectId(e.target.value)}
+                    className="flex-1 text-xs bg-surface-container-lowest border border-outline-variant rounded-md px-2.5 py-1.5 text-on-surface"
+                  >
+                    <option value="">-- Select Verified Prospect --</option>
+                    {prospects.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <select
+                    aria-label="Select Existing Client Master"
+                    value={linkExistingClientId}
+                    onChange={(e) => setLinkExistingClientId(e.target.value)}
+                    className="flex-1 text-xs bg-surface-container-lowest border border-outline-variant rounded-md px-2.5 py-1.5 text-on-surface"
+                  >
+                    <option value="">-- Select Existing Client Master --</option>
+                    {existingClients.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+
+                <Button
+                  size="sm"
+                  variant="primary"
+                  disabled={linkingClient}
+                  onClick={handleSaveClientLink}
+                  className="text-xs whitespace-nowrap"
+                >
+                  {linkingClient ? "Saving..." : "Save Client Link"}
+                </Button>
+              </div>
+
+              {linkClientError && (
+                <div className="text-[11px] text-status-error font-medium">{linkClientError}</div>
+              )}
+              {linkClientSuccess && (
+                <div className="text-[11px] text-status-success font-medium">{linkClientSuccess}</div>
+              )}
             </div>
 
             <div className="flex flex-wrap items-center justify-end gap-2 pt-3 border-t border-outline-variant">

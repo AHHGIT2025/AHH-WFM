@@ -25,6 +25,7 @@ describe("Shana UAT Run 3 Day 10 Remediation — Priority 1 (Approval Center Out
   const RUN_ID = `DAY10-${Date.now()}`;
   const COMP_SG = `COMP-${RUN_ID}-SG`;
   const COMP_OTHER = `COMP-${RUN_ID}-OTHER`;
+  const SHARED_DISPLAY_NAME = `Mohammed Shared ${RUN_ID}`;
 
   const sgUser = {
     id: `USR-${RUN_ID}-SG`,
@@ -41,6 +42,26 @@ describe("Shana UAT Run 3 Day 10 Remediation — Priority 1 (Approval Center Out
       "precontract.proposal.manage",
       "precontract.proposal.issue",
     ],
+    operationAccess: { allowedSecurityGuarding: true, allowedFacilityManagement: false },
+  };
+
+  const sameNameUserA = {
+    id: `USR-${RUN_ID}-SAME-A`,
+    email: `same.a.${RUN_ID}@ahh-uat.local`,
+    name: SHARED_DISPLAY_NAME,
+    role: "COMMERCIAL_CHECKER",
+    companyId: COMP_SG,
+    permissions: ["precontract.case.view"],
+    operationAccess: { allowedSecurityGuarding: true, allowedFacilityManagement: false },
+  };
+
+  const sameNameUserB = {
+    id: `USR-${RUN_ID}-SAME-B`,
+    email: `same.b.${RUN_ID}@ahh-uat.local`,
+    name: SHARED_DISPLAY_NAME,
+    role: "COMMERCIAL_CHECKER",
+    companyId: COMP_SG,
+    permissions: ["precontract.case.view"],
     operationAccess: { allowedSecurityGuarding: true, allowedFacilityManagement: false },
   };
 
@@ -100,6 +121,39 @@ describe("Shana UAT Run 3 Day 10 Remediation — Priority 1 (Approval Center Out
       data: [
         { id: COMP_SG, companyCode: `SG10-${RUN_ID.slice(-5)}`, companyName: "Day10 SG Company" },
         { id: COMP_OTHER, companyCode: `OT10-${RUN_ID.slice(-5)}`, companyName: "Day10 Other Company" },
+      ],
+      skipDuplicates: true,
+    });
+
+    await prisma.employee.createMany({
+      data: [
+        {
+          id: sgUser.id,
+          name: sgUser.name,
+          email: sgUser.email,
+          department: "Commercial",
+          companyId: COMP_SG,
+          role: "EMPLOYEE",
+          status: "On Duty",
+        },
+        {
+          id: sameNameUserA.id,
+          name: SHARED_DISPLAY_NAME,
+          email: sameNameUserA.email,
+          department: "Commercial",
+          companyId: COMP_SG,
+          role: "EMPLOYEE",
+          status: "On Duty",
+        },
+        {
+          id: sameNameUserB.id,
+          name: SHARED_DISPLAY_NAME,
+          email: sameNameUserB.email,
+          department: "Commercial",
+          companyId: COMP_SG,
+          role: "EMPLOYEE",
+          status: "On Duty",
+        },
       ],
       skipDuplicates: true,
     });
@@ -249,6 +303,55 @@ describe("Shana UAT Run 3 Day 10 Remediation — Priority 1 (Approval Center Out
       },
     });
     createdWfInstanceIds.push(wiFm.id);
+
+    // E. Same-name isolation: User A acted by immutable ID; User B acted by shared display name & by User B ID
+    const wiSameA = await prisma.workflowInstance.create({
+      data: {
+        templateId: wfTemplateId,
+        moduleType: "PRE_CONTRACT_CASE",
+        referenceId: historicalCaseId,
+        status: "APPROVED",
+        currentLevelNumber: 1,
+        companyId: COMP_SG,
+        operationScope: "SECURITY_GUARDING",
+        history: {
+          create: [{ levelNumber: 1, action: "APPROVE", actedBy: sameNameUserA.id, remarks: "User A action" }],
+        },
+      },
+    });
+    createdWfInstanceIds.push(wiSameA.id);
+
+    const wiSameBByName = await prisma.workflowInstance.create({
+      data: {
+        templateId: wfTemplateId,
+        moduleType: "PRE_CONTRACT_CASE",
+        referenceId: historicalCaseId,
+        status: "APPROVED",
+        currentLevelNumber: 1,
+        companyId: COMP_SG,
+        operationScope: "SECURITY_GUARDING",
+        history: {
+          create: [{ levelNumber: 1, action: "APPROVE", actedBy: SHARED_DISPLAY_NAME, remarks: "User B legacy name action" }],
+        },
+      },
+    });
+    createdWfInstanceIds.push(wiSameBByName.id);
+
+    const wiSameBById = await prisma.workflowInstance.create({
+      data: {
+        templateId: wfTemplateId,
+        moduleType: "PRE_CONTRACT_CASE",
+        referenceId: historicalCaseId,
+        status: "APPROVED",
+        currentLevelNumber: 1,
+        companyId: COMP_SG,
+        operationScope: "SECURITY_GUARDING",
+        history: {
+          create: [{ levelNumber: 1, action: "APPROVE", actedBy: sameNameUserB.id, remarks: "User B ID action" }],
+        },
+      },
+    });
+    createdWfInstanceIds.push(wiSameBById.id);
   });
 
   afterAll(async () => {
@@ -281,6 +384,7 @@ describe("Shana UAT Run 3 Day 10 Remediation — Priority 1 (Approval Center Out
     }
     await prisma.preContractProspectClient.deleteMany({ where: { id: { in: [sgProspectId, otherCompProspectId] } } });
     await prisma.manpowerClient.deleteMany({ where: { id: { in: [sgExistingClientId, fmExistingClientId] } } });
+    await prisma.employee.deleteMany({ where: { id: { in: [sgUser.id, sameNameUserA.id, sameNameUserB.id] } } });
     await prisma.company.deleteMany({ where: { id: { in: [COMP_SG, COMP_OTHER] } } });
   });
 
@@ -326,6 +430,26 @@ describe("Shana UAT Run 3 Day 10 Remediation — Priority 1 (Approval Center Out
     const cntBody = await cntRes.json();
     expect(cntRes.status).toBe(200);
     expect(cntBody.data.actionedCount).toBe(3);
+  });
+
+  test("P1b: Same-name employees remain strictly isolated — User A never sees User B's approval history or counts", async () => {
+    setSession(sameNameUserA);
+
+    const outboxA = await getApprovals(new NextRequest("http://localhost:3100/api/v1/approvals?tab=outbox&pageSize=50"));
+    const bodyA = await outboxA.json();
+    expect(outboxA.status).toBe(200);
+
+    const idsA = (bodyA.data as any[]).map((i) => i.id);
+    // User A sees ONLY User A's immutable-ID action (wiSameA = index 4)
+    expect(idsA).toContain(createdWfInstanceIds[4]);
+    // User A MUST NOT see User B's shared-name action (index 5) or User B's ID action (index 6)
+    expect(idsA).not.toContain(createdWfInstanceIds[5]);
+    expect(idsA).not.toContain(createdWfInstanceIds[6]);
+
+    const cntA = await getApprovalCounts(new NextRequest("http://localhost:3100/api/v1/approvals/counts"));
+    const cntBodyA = await cntA.json();
+    expect(cntA.status).toBe(200);
+    expect(cntBodyA.data.actionedCount).toBe(1);
   });
 
   test("P2: Direct Intake opportunity shows 'Client not linked', blocks external Proposal issuance, and supports audited client linking across Costing & Proposal", async () => {
@@ -419,7 +543,7 @@ describe("Shana UAT Run 3 Day 10 Remediation — Priority 1 (Approval Center Out
     expect(costRes1.status).toBe(200);
     expect(costBody1.estimate.case.clientDisplayName).toBe(UNLINKED_CLIENT_LABEL);
 
-    // 3. External proposal issuance is BLOCKED (400) while client is unlinked
+    // 3. External proposal issuance is BLOCKED (400) while client is unlinked OR has an invalid/random client ID
     const issueRes = await postProposalIssue(
       new NextRequest(`http://localhost:3100/api/v1/commercial/proposals/${directProposalId}/issue`, {
         method: "POST",
@@ -431,6 +555,25 @@ describe("Shana UAT Run 3 Day 10 Remediation — Priority 1 (Approval Center Out
     const issueBody = await issueRes.json();
     expect(issueRes.status).toBe(400);
     expect(issueBody.error).toMatch(/Client Verification Guard/i);
+
+    // Random non-existent existingClientId must STILL fail Client Verification Guard (400)
+    await prisma.preContractCase.update({
+      where: { id: directCaseId },
+      data: { existingClientId: "RANDOM-NONEXISTENT-CLIENT-ID" },
+    });
+    const fakeIdIssueRes = await postProposalIssue(
+      new NextRequest(`http://localhost:3100/api/v1/commercial/proposals/${directProposalId}/issue`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ recipientEmail: "client@example.com" }),
+      }),
+      { params: { id: directProposalId } }
+    );
+    expect(fakeIdIssueRes.status).toBe(400);
+    await prisma.preContractCase.update({
+      where: { id: directCaseId },
+      data: { existingClientId: null },
+    });
 
     // 4. Negative checks: linking BOTH prospect & existing fails (400); cross-company prospect fails (403); FM existing client fails (403)
     const bothRes = await patchOpportunity(
@@ -501,5 +644,31 @@ describe("Shana UAT Run 3 Day 10 Remediation — Priority 1 (Approval Center Out
     const propListBody = await propListRes.json();
     const matchedProp = propListBody.proposals.find((p: any) => p.id === directProposalId);
     expect(matchedProp.client?.name).toBe(`Existing SG Client ${RUN_ID}`);
+
+    // 6. Switch to Verified Prospect via PATCH (clearing existingClientId) -> reflected in Opportunity, Costing & Proposal
+    const linkProspectRes = await patchOpportunity(
+      new Request("http://localhost:3100/api/v1/commercial/opportunities", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: directCaseId, prospectClientId: sgProspectId, existingClientId: null }),
+      })
+    );
+    const linkProspectBody = await linkProspectRes.json();
+    expect(linkProspectRes.status).toBe(200);
+    expect(linkProspectBody.case.clientDisplayName).toBe(`Verified SG Prospect ${RUN_ID}`);
+    expect(linkProspectBody.case.resolvedClient.type).toBe("PROSPECT");
+
+    const propListRes2 = await getProposals(new NextRequest("http://localhost:3100/api/v1/commercial/proposals"));
+    const propListBody2 = await propListRes2.json();
+    const matchedProp2 = propListBody2.proposals.find((p: any) => p.id === directProposalId);
+    expect(matchedProp2.client?.name).toBe(`Verified SG Prospect ${RUN_ID}`);
+
+    // Historical OPP6 approval record remains completely untouched
+    const histWfCheck = await prisma.workflowInstance.findUnique({
+      where: { id: createdWfInstanceIds[0] },
+      include: { history: true },
+    });
+    expect(histWfCheck?.status).toBe("APPROVED");
+    expect(histWfCheck?.history.length).toBe(1);
   });
 });

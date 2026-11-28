@@ -1,30 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@ahh-wfm/database";
 import { checkApiAuth, checkRecordCompanyAccess, resolveCompanyScope } from "@/lib/api-guards";
-import { hasPermission, isAdminUser } from "@/lib/permissions";
 import { isUserEligibleApprover } from "@/lib/workflow/approver-resolution";
 import { WorkflowAdapterRegistry } from "@/lib/workflow/adapters/registry";
-
-function isOperationScopePermitted(user: any, operationScope: string | null | undefined): boolean {
-  if (!operationScope) return true;
-  if (isAdminUser(user) || hasPermission(user, "manpower.admin.full_access")) return true;
-  const scope = operationScope.toUpperCase().trim();
-  const allowedSG = user?.operationAccess?.allowedSecurityGuarding ?? user?.allowedSecurityGuarding ?? true;
-  const allowedFM = user?.operationAccess?.allowedFacilityManagement ?? user?.allowedFacilityManagement ?? true;
-  if (scope === "SECURITY_GUARDING" && !allowedSG) return false;
-  if (scope === "FACILITY_MANAGEMENT" && !allowedFM) return false;
-  return true;
-}
-
-function buildActorIdentityTokens(user: any): string[] {
-  return Array.from(
-    new Set(
-      [user?.id, user?.employeeId, user?.email, user?.name]
-        .filter((v): v is string => typeof v === "string" && v.trim().length > 0)
-        .map((v) => v.trim())
-    )
-  );
-}
+import { isOperationScopePermitted, resolveVerifiedActorTokens } from "@/lib/workflow/actor-identity";
 
 const ARCHIVED_SOURCE_STATUSES = new Set(["CANCELLED", "SUPERSEDED", "ARCHIVED", "LOST"]);
 
@@ -87,7 +66,7 @@ export async function GET(request: NextRequest) {
       // Preserves full immutable historical audit while classifying source state.
       // =========================================================================
       const outboxItems: any[] = [];
-      const actorTokens = buildActorIdentityTokens(user);
+      const actorTokens = await resolveVerifiedActorTokens(user);
 
       // 1. Central Workflow Instances
       const centralHistories = actorTokens.length === 0

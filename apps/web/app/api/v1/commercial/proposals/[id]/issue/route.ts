@@ -64,14 +64,32 @@ export async function POST(
       );
     }
 
-    // Priority 2 Guard: Verify client identity before genuine external proposal issuance
+    // Priority 2 Guard: Verify an actual valid, active linked client before genuine external proposal issuance
     const linkedProspectId = proposal.case?.prospectClientId?.trim() || null;
     const linkedExistingClientId = proposal.case?.existingClientId?.trim() || null;
-    if (!linkedProspectId && !linkedExistingClientId) {
+    let hasVerifiedClient = false;
+
+    if (linkedProspectId && proposal.case?.prospectClient?.id === linkedProspectId) {
+      hasVerifiedClient = true;
+    } else if (linkedExistingClientId) {
+      const existingClient = await prisma.manpowerClient.findUnique({
+        where: { id: linkedExistingClientId },
+        select: { id: true, isActive: true, operationType: true }
+      });
+      if (
+        existingClient &&
+        existingClient.isActive &&
+        (!proposal.case?.operationType || existingClient.operationType === proposal.case.operationType)
+      ) {
+        hasVerifiedClient = true;
+      }
+    }
+
+    if (!hasVerifiedClient) {
       return NextResponse.json(
         {
           error:
-            "Client Verification Guard: Cannot issue proposal externally because no verified prospect or existing client is linked to this opportunity. Link a client before external issuance."
+            "Client Verification Guard: Cannot issue proposal externally because no verified, active prospect or existing client is linked to this opportunity. Link a valid client before external issuance."
         },
         { status: 400 }
       );
