@@ -3,6 +3,7 @@ import { prisma } from "@ahh-wfm/database";
 import { checkApiAuth } from "@/lib/api-guards";
 import { hasPermission, isAdminUser } from "@/lib/permissions";
 import { calculateCostingEstimate, serializeCostingEstimate, serializeCostingVersion } from "@/lib/precontract-costing";
+import { enrichCaseWithClientInfo } from "@/lib/commercial-client-resolution";
 
 export async function GET(
   request: Request,
@@ -52,7 +53,8 @@ export async function GET(
       return NextResponse.json({ error: "Forbidden: Company boundary violation." }, { status: 403 });
     }
 
-    return NextResponse.json({ estimate: serializeCostingEstimate(estimate) });
+    const enrichedCase = estimate.case ? await enrichCaseWithClientInfo(estimate.case) : estimate.case;
+    return NextResponse.json({ estimate: serializeCostingEstimate({ ...estimate, case: enrichedCase }) });
   } catch (err: any) {
     return NextResponse.json(
       { error: err.message || "Failed to fetch costing estimate detail." },

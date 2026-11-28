@@ -4,6 +4,7 @@ import { checkApiAuth } from "@/lib/api-guards";
 import { hasPermission, isAdminUser } from "@/lib/permissions";
 import { calculateCostingEstimate, serializeCostingEstimate } from "@/lib/precontract-costing";
 import { findActiveProposalsByCostingVersionIds } from "@/lib/precontract-proposal";
+import { enrichCasesWithClientInfo } from "@/lib/commercial-client-resolution";
 
 export async function GET(request: Request) {
   const auth = await checkApiAuth();
@@ -114,10 +115,16 @@ export async function GET(request: Request) {
       approvedVersionIds
     );
 
+    const enrichedCases = await enrichCasesWithClientInfo(
+      estimates.map((e) => e.case).filter(Boolean)
+    );
+    const enrichedCaseById = new Map(enrichedCases.map((c) => [c.id, c]));
+
     return NextResponse.json({
       estimates: estimates.map((est) =>
         serializeCostingEstimate({
           ...est,
+          case: est.case ? enrichedCaseById.get(est.case.id) || est.case : est.case,
           versions: (est.versions || []).map((v) => ({
             ...v,
             activeProposal: v.status === "APPROVED" ? activeProposalByVersionId.get(v.id) || null : null

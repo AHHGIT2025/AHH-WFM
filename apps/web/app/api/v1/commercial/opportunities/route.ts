@@ -3,6 +3,7 @@ import { prisma } from "@ahh-wfm/database";
 import { checkApiAuth } from "@/lib/api-guards";
 import { hasPermission, isAdminUser } from "@/lib/permissions";
 import { findActiveProposalsByCostingVersionIds } from "@/lib/precontract-proposal";
+import { enrichCasesWithClientInfo, enrichCaseWithClientInfo } from "@/lib/commercial-client-resolution";
 
 export async function GET(request: Request) {
   const auth = await checkApiAuth();
@@ -228,7 +229,8 @@ export async function GET(request: Request) {
       ? await findActiveProposalsByCostingVersionIds(prisma, approvedVersionIds)
       : new Map();
 
-    const cases = rawCases.map((c: any) => ({
+    const enrichedRawCases = await enrichCasesWithClientInfo(rawCases);
+    const cases = enrichedRawCases.map((c: any) => ({
       ...c,
       costEstimates: (c.costEstimates || []).map((est: any) => ({
         ...est,
@@ -316,9 +318,35 @@ export async function POST(request: Request) {
       }
     }
 
-    if (existingClientId) {
+    const cleanProspectId = typeof prospectClientId === "string" && prospectClientId.trim() ? prospectClientId.trim() : null;
+    const cleanExistingClientId = typeof existingClientId === "string" && existingClientId.trim() ? existingClientId.trim() : null;
+
+    if (cleanProspectId && cleanExistingClientId) {
+      return NextResponse.json(
+        { error: "Provide either a Prospect Client or an Existing Client Master, not both." },
+        { status: 400 }
+      );
+    }
+
+    if (cleanProspectId) {
+      const prospect = await prisma.preContractProspectClient.findUnique({
+        where: { id: cleanProspectId },
+        select: { id: true, name: true, companyId: true }
+      });
+      if (!prospect) {
+        return NextResponse.json({ error: "Selected Prospect Client does not exist." }, { status: 400 });
+      }
+      if (effectiveCompanyId && prospect.companyId && prospect.companyId !== effectiveCompanyId) {
+        return NextResponse.json(
+          { error: "Forbidden: Selected Prospect Client belongs to a different company." },
+          { status: 403 }
+        );
+      }
+    }
+
+    if (cleanExistingClientId) {
       const client = await prisma.manpowerClient.findUnique({
-        where: { id: String(existingClientId).trim() },
+        where: { id: cleanExistingClientId },
         select: { id: true, name: true, operationType: true, isActive: true }
       });
       if (!client) {
@@ -338,8 +366,8 @@ export async function POST(request: Request) {
     const newCase = await prisma.preContractCase.create({
       data: {
         title: title.trim(),
-        prospectClientId: prospectClientId || null,
-        existingClientId: existingClientId ? String(existingClientId).trim() : null,
+        prospectClientId: cleanProspectId,
+        existingClientId: cleanExistingClientId,
         companyId: effectiveCompanyId,
         operationType: effectiveOpType,
         lifecycle: "DRAFT",
@@ -353,7 +381,8 @@ export async function POST(request: Request) {
       }
     });
 
-    return NextResponse.json({ case: newCase }, { status: 201 });
+    const enrichedNewCase = await enrichCaseWithClientInfo(newCase);
+    return NextResponse.json({ case: enrichedNewCase }, { status: 201 });
   } catch (error: any) {
     console.error("COMMERCIAL OPPORTUNITIES POST ERROR:", error);
     return NextResponse.json(
@@ -425,9 +454,41 @@ export async function PATCH(request: Request) {
       }
     }
 
-    if (existingClientId !== undefined && existingClientId !== null && String(existingClientId).trim() !== "") {
+    const nextProspectId =
+      prospectClientId !== undefined
+        ? (typeof prospectClientId === "string" && prospectClientId.trim() ? prospectClientId.trim() : null)
+        : existing.prospectClientId;
+    const nextExistingClientId =
+      existingClientId !== undefined
+        ? (typeof existingClientId === "string" && existingClientId.trim() ? existingClientId.trim() : null)
+        : existing.existingClientId;
+
+    if (nextProspectId && nextExistingClientId) {
+      return NextResponse.json(
+        { error: "An opportunity cannot be linked to both a Prospect Client and an Existing Client Master simultaneously." },
+        { status: 400 }
+      );
+    }
+
+    if (prospectClientId !== undefined && nextProspectId) {
+      const prospect = await prisma.preContractProspectClient.findUnique({
+        where: { id: nextProspectId },
+        select: { id: true, name: true, companyId: true }
+      });
+      if (!prospect) {
+        return NextResponse.json({ error: "Selected Prospect Client does not exist." }, { status: 400 });
+      }
+      if (existing.companyId && prospect.companyId && prospect.companyId !== existing.companyId) {
+        return NextResponse.json(
+          { error: "Forbidden: Selected Prospect Client belongs to a different company." },
+          { status: 403 }
+        );
+      }
+    }
+
+    if (existingClientId !== undefined && nextExistingClientId) {
       const client = await prisma.manpowerClient.findUnique({
-        where: { id: String(existingClientId).trim() },
+        where: { id: nextExistingClientId },
         select: { id: true, name: true, operationType: true, isActive: true }
       });
       if (!client) {
@@ -444,14 +505,18 @@ export async function PATCH(request: Request) {
       }
     }
 
+    const clientLinkChanged =
+      (prospectClientId !== undefined && nextProspectId !== existing.prospectClientId) ||
+      (existingClientId !== undefined && nextExistingClientId !== existing.existingClientId);
+
     const updated = await prisma.preContractCase.update({
       where: { id },
       data: {
         ...(title && { title: title.trim() }),
         ...(businessOutcome && { businessOutcome }),
         ...(lifecycle && { lifecycle }),
-        ...(prospectClientId !== undefined && { prospectClientId: prospectClientId || null }),
-        ...(existingClientId !== undefined && { existingClientId: existingClientId ? String(existingClientId).trim() : null })
+        ...(prospectClientId !== undefined && { prospectClientId: nextProspectId }),
+        ...(existingClientId !== undefined && { existingClientId: nextExistingClientId })
       },
       include: {
         prospectClient: {
@@ -460,7 +525,27 @@ export async function PATCH(request: Request) {
       }
     });
 
-    return NextResponse.json({ case: updated });
+    if (clientLinkChanged) {
+      await prisma.userActivityLog.create({
+        data: {
+          userId: user?.id || "system",
+          action: "OPPORTUNITY_CLIENT_LINKED",
+          entityType: "PreContractCase",
+          entityId: updated.id,
+          beforeJson: JSON.stringify({
+            prospectClientId: existing.prospectClientId,
+            existingClientId: existing.existingClientId
+          }),
+          afterJson: JSON.stringify({
+            prospectClientId: updated.prospectClientId,
+            existingClientId: updated.existingClientId
+          })
+        }
+      });
+    }
+
+    const enrichedUpdated = await enrichCaseWithClientInfo(updated);
+    return NextResponse.json({ case: enrichedUpdated });
   } catch (error: any) {
     console.error("COMMERCIAL OPPORTUNITIES PATCH ERROR:", error);
     return NextResponse.json(

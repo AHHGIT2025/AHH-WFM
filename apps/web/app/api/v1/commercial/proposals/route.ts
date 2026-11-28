@@ -7,6 +7,7 @@ import {
   findActiveProposalForBaseline,
   toClientSafeProposalDTO
 } from "../../../../../lib/precontract-proposal";
+import { enrichCasesWithClientInfo } from "../../../../../lib/commercial-client-resolution";
 
 export async function GET(req: NextRequest) {
   const { session, error } = await checkApiAuth(undefined, {
@@ -107,9 +108,18 @@ export async function GET(req: NextRequest) {
       }
     });
 
-    const dtos = proposals.map((p) => toClientSafeProposalDTO(p));
+    const enrichedCases = await enrichCasesWithClientInfo(
+      proposals.map((p) => p.case).filter(Boolean)
+    );
+    const enrichedCaseById = new Map(enrichedCases.map((c) => [c.id, c]));
+    const enrichedProposals = proposals.map((p) => ({
+      ...p,
+      case: p.case ? enrichedCaseById.get(p.case.id) || p.case : p.case
+    }));
 
-    return NextResponse.json({ proposals: dtos, raw: proposals });
+    const dtos = enrichedProposals.map((p) => toClientSafeProposalDTO(p));
+
+    return NextResponse.json({ proposals: dtos, raw: enrichedProposals });
   } catch (err: any) {
     return NextResponse.json(
       { error: err.message || "Failed to fetch pre-contract proposals." },

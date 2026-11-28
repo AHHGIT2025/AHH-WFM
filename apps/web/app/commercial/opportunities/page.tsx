@@ -22,6 +22,9 @@ interface OpportunityCase {
   lifecycle: "DRAFT" | "IN_WORKFLOW" | "COMPLETED" | "CANCELLED";
   prospectClientId: string | null;
   prospectClient: ProspectClient | null;
+  existingClientId?: string | null;
+  existingClient?: { id: string; name: string } | null;
+  clientDisplayName?: string;
   createdBy: string;
   createdAt: string;
   surveys: Array<{ id: string; lifecycle: string }>;
@@ -371,7 +374,7 @@ export default function OpportunitiesPage() {
                         </div>
 
                         <div className="text-[11px] text-on-surface-variant space-y-1">
-                          <div><span className="font-semibold text-on-surface">Client:</span> {c.prospectClient?.name || "Existing Client"}</div>
+                          <div><span className="font-semibold text-on-surface">Client:</span> {c.clientDisplayName || c.prospectClient?.name || c.existingClient?.name || "Client not linked"}</div>
                           <div><span className="font-semibold text-on-surface">Scope:</span> {c.operationType || "SECURITY_GUARDING"}</div>
                           <div><span className="font-semibold text-on-surface">Created By:</span> {c.createdBy}</div>
                         </div>
@@ -468,7 +471,7 @@ export default function OpportunitiesPage() {
                   cases.map((c) => (
                     <tr key={c.id} className="hover:bg-surface-container-lowest/50 transition-colors">
                       <td className="py-2.5 px-3 font-semibold text-on-surface">{c.title}</td>
-                      <td className="py-2.5 px-3 font-medium">{c.prospectClient?.name || "Existing Client"}</td>
+                      <td className="py-2.5 px-3 font-medium">{c.clientDisplayName || c.prospectClient?.name || c.existingClient?.name || "Client not linked"}</td>
                       <td className="py-2.5 px-3">{c.operationType || "SECURITY_GUARDING"}</td>
                       <td className="py-2.5 px-3">{getLifecycleBadge(c.lifecycle)}</td>
                       <td className="py-2.5 px-3">{c.createdBy}</td>
@@ -612,8 +615,8 @@ export default function OpportunitiesPage() {
 
             <div className="grid grid-cols-2 gap-3 text-xs bg-surface-container-low p-3 rounded-lg border border-outline-variant/40">
               <div>
-                <div className="text-[10px] font-bold text-on-surface-variant uppercase">Prospect Client</div>
-                <div className="font-semibold text-on-surface">{detailCase.prospectClient?.name || "Existing / Direct Client"}</div>
+                <div className="text-[10px] font-bold text-on-surface-variant uppercase">Client</div>
+                <div className="font-semibold text-on-surface">{detailCase.clientDisplayName || detailCase.prospectClient?.name || detailCase.existingClient?.name || "Client not linked"}</div>
               </div>
               <div>
                 <div className="text-[10px] font-bold text-on-surface-variant uppercase">Operation Scope</div>

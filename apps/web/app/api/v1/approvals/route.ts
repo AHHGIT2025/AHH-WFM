@@ -1,8 +1,66 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@ahh-wfm/database";
 import { checkApiAuth, checkRecordCompanyAccess, resolveCompanyScope } from "@/lib/api-guards";
+import { hasPermission, isAdminUser } from "@/lib/permissions";
 import { isUserEligibleApprover } from "@/lib/workflow/approver-resolution";
 import { WorkflowAdapterRegistry } from "@/lib/workflow/adapters/registry";
+
+function isOperationScopePermitted(user: any, operationScope: string | null | undefined): boolean {
+  if (!operationScope) return true;
+  if (isAdminUser(user) || hasPermission(user, "manpower.admin.full_access")) return true;
+  const scope = operationScope.toUpperCase().trim();
+  const allowedSG = user?.operationAccess?.allowedSecurityGuarding ?? user?.allowedSecurityGuarding ?? true;
+  const allowedFM = user?.operationAccess?.allowedFacilityManagement ?? user?.allowedFacilityManagement ?? true;
+  if (scope === "SECURITY_GUARDING" && !allowedSG) return false;
+  if (scope === "FACILITY_MANAGEMENT" && !allowedFM) return false;
+  return true;
+}
+
+function buildActorIdentityTokens(user: any): string[] {
+  return Array.from(
+    new Set(
+      [user?.id, user?.employeeId, user?.email, user?.name]
+        .filter((v): v is string => typeof v === "string" && v.trim().length > 0)
+        .map((v) => v.trim())
+    )
+  );
+}
+
+const ARCHIVED_SOURCE_STATUSES = new Set(["CANCELLED", "SUPERSEDED", "ARCHIVED", "LOST"]);
+
+function classifyOutboxSourceState(
+  summary: any,
+  workflowStatus: string
+): { sourceState: "ACTIVE" | "HISTORICAL" | "ARCHIVED" | "MISSING_SOURCE"; sourceStateLabel: string } {
+  if (!summary) {
+    return { sourceState: "MISSING_SOURCE", sourceStateLabel: "Missing / Orphaned Source" };
+  }
+  const raw = summary.rawDetails || {};
+  const candidateStatuses = [
+    raw.c?.lifecycle,
+    raw.c?.businessOutcome,
+    raw.estimate?.status,
+    raw.estimate?.case?.lifecycle,
+    raw.estimate?.case?.businessOutcome,
+    raw.proposal?.status,
+    raw.proposal?.case?.lifecycle,
+    raw.proposal?.case?.businessOutcome,
+    raw.contract?.status
+  ]
+    .filter((v): v is string => typeof v === "string" && v.trim().length > 0)
+    .map((v) => v.toUpperCase().trim());
+
+  if (candidateStatuses.some((s) => ARCHIVED_SOURCE_STATUSES.has(s))) {
+    return { sourceState: "ARCHIVED", sourceStateLabel: "Archived / Superseded Source" };
+  }
+
+  const wf = (workflowStatus || "").toUpperCase();
+  if (wf === "APPROVED" || wf === "REJECTED" || wf === "COMPLETED") {
+    return { sourceState: "HISTORICAL", sourceStateLabel: "Completed Historical Audit" };
+  }
+
+  return { sourceState: "ACTIVE", sourceStateLabel: "Active Workflow" };
+}
 
 export async function GET(request: NextRequest) {
   try {
@@ -16,6 +74,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
 
     const tab = searchParams.get("tab") || "inbox"; // "inbox" | "outbox"
+    const view = (searchParams.get("view") || "all").toLowerCase().trim(); // "all" | "active" | "history"
     const page = Math.max(1, parseInt(searchParams.get("page") || "1", 10));
     const pageSize = Math.min(100, Math.max(1, parseInt(searchParams.get("pageSize") || "10", 10)));
     const search = searchParams.get("search")?.toLowerCase().trim() || "";
@@ -25,31 +84,35 @@ export async function GET(request: NextRequest) {
     if (tab === "outbox") {
       // =========================================================================
       // OUTBOX QUERY: Workflows where current user took an approval action
+      // Preserves full immutable historical audit while classifying source state.
       // =========================================================================
       const outboxItems: any[] = [];
+      const actorTokens = buildActorIdentityTokens(user);
 
       // 1. Central Workflow Instances
-      const centralHistories = await prisma.workflowActionHistory.findMany({
-        where: {
-          actedBy: user.id,
-          action: { in: ["APPROVE", "REJECT", "RETURN", "MARK_NOT_APPLICABLE"] }
-        },
-        include: {
-          instance: {
+      const centralHistories = actorTokens.length === 0
+        ? []
+        : await prisma.workflowActionHistory.findMany({
+            where: {
+              actedBy: { in: actorTokens },
+              action: { in: ["APPROVE", "REJECT", "RETURN", "MARK_NOT_APPLICABLE"] }
+            },
             include: {
-              template: {
+              instance: {
                 include: {
-                  levels: {
-                    orderBy: { levelNumber: "asc" },
-                    include: { approvers: true }
+                  template: {
+                    include: {
+                      levels: {
+                        orderBy: { levelNumber: "asc" },
+                        include: { approvers: true }
+                      }
+                    }
                   }
                 }
               }
-            }
-          }
-        },
-        orderBy: { createdAt: "desc" }
-      });
+            },
+            orderBy: { createdAt: "desc" }
+          });
 
       // Deduplicate by instanceId (take most recent action per instance)
       const seenInstances = new Set<string>();
@@ -61,9 +124,14 @@ export async function GET(request: NextRequest) {
         if (checkRecordCompanyAccess(user, inst.companyId, { allowSuperAdminOnly: true })) {
           continue;
         }
+        if (!isOperationScopePermitted(user, inst.operationScope)) {
+          continue;
+        }
 
         const adapter = WorkflowAdapterRegistry.getOrDefault(inst.moduleType);
         const summary = await adapter.getBusinessSummary(inst.referenceId, inst.companyId);
+        const { sourceState, sourceStateLabel } = classifyOutboxSourceState(summary, inst.status);
+        const hasValidSourceLink = sourceState !== "MISSING_SOURCE";
 
         const activeLevel = inst.template?.levels?.find(l => l.levelNumber === inst.currentLevelNumber);
         const pendingApproverNames = activeLevel?.approvers?.map(ap => ap.employeeName || ap.roleName || "Assigned Approver").join(", ") || "Completed / Terminal";
@@ -77,6 +145,10 @@ export async function GET(request: NextRequest) {
           subject: summary?.title || `${inst.moduleType} #${inst.referenceId}`,
           requesterName: summary?.requesterName || "Requester",
           companyName: summary?.companyName || "Al Hattab Holding",
+          operationScope: inst.operationScope || null,
+          sourceState,
+          sourceStateLabel,
+          hasValidSourceLink,
           myAction: h.action,
           myActionAt: h.createdAt.toISOString(),
           myActionRemarks: h.remarks,
@@ -84,29 +156,31 @@ export async function GET(request: NextRequest) {
           currentLevelNumber: inst.currentLevelNumber,
           currentPendingApprover: inst.status === "IN_PROGRESS" ? `Level ${inst.currentLevelNumber}: ${pendingApproverNames}` : "Completed",
           finalStatus: inst.status === "APPROVED" ? "Approved" : inst.status === "REJECTED" ? "Rejected" : inst.status === "RETURNED" ? "Returned" : "In Progress",
-          deepLink: adapter.getSourceDeepLink(inst.referenceId),
+          deepLink: hasValidSourceLink ? adapter.getSourceDeepLink(inst.referenceId) : null,
           updatedAt: inst.updatedAt ? inst.updatedAt.toISOString() : h.createdAt.toISOString()
         });
       }
 
       // 2. Clearance Outbox Actions
       try {
-        const clearanceResponses = await prisma.clearanceApprovalResponse.findMany({
-          where: {
-            actorId: user.id,
-            actionType: { in: ["APPROVE", "REJECT", "RETURN", "MARK_NOT_APPLICABLE"] }
-          },
-          include: {
-            step: {
+        const clearanceResponses = actorTokens.length === 0
+          ? []
+          : await prisma.clearanceApprovalResponse.findMany({
+              where: {
+                actorId: { in: actorTokens },
+                actionType: { in: ["APPROVE", "REJECT", "RETURN", "MARK_NOT_APPLICABLE"] }
+              },
               include: {
-                clearanceRequest: {
-                  include: { approvalSteps: true }
+                step: {
+                  include: {
+                    clearanceRequest: {
+                      include: { approvalSteps: true }
+                    }
+                  }
                 }
-              }
-            }
-          },
-          orderBy: { createdAt: "desc" }
-        });
+              },
+              orderBy: { createdAt: "desc" }
+            });
 
         const seenClearances = new Set<string>();
         for (const resp of clearanceResponses) {
@@ -123,6 +197,7 @@ export async function GET(request: NextRequest) {
 
           const pendingStep = req.approvalSteps?.find(s => s.status === "PENDING");
           const empName = req.employeeNameSnapshot || req.employeeId;
+          const isTerminal = req.status === "COMPLETED" || req.status === "REJECTED";
 
           outboxItems.push({
             approvalKey: `CLEARANCE:${req.id}`,
@@ -133,6 +208,10 @@ export async function GET(request: NextRequest) {
             subject: `Employee Clearance (${empName})`,
             requesterName: req.requestedById || "HR",
             companyName: "Al Hattab Holding",
+            operationScope: null,
+            sourceState: isTerminal ? "HISTORICAL" : "ACTIVE",
+            sourceStateLabel: isTerminal ? "Completed Historical Audit" : "Active Workflow",
+            hasValidSourceLink: true,
             myAction: resp.actionType,
             myActionAt: resp.createdAt.toISOString(),
             myActionRemarks: resp.remarks,
@@ -148,6 +227,11 @@ export async function GET(request: NextRequest) {
 
       // Apply filtering
       let filtered = outboxItems;
+      if (view === "active") {
+        filtered = filtered.filter(it => it.sourceState === "ACTIVE");
+      } else if (view === "history") {
+        filtered = filtered.filter(it => it.sourceState !== "ACTIVE");
+      }
       if (search) {
         filtered = filtered.filter(it => 
           it.reference.toLowerCase().includes(search) ||
@@ -207,6 +291,7 @@ export async function GET(request: NextRequest) {
     });
 
     for (const inst of inProgressInstances) {
+      if (!isOperationScopePermitted(user, inst.operationScope)) continue;
       const activeLevel = inst.template?.levels?.find(l => l.levelNumber === inst.currentLevelNumber);
       if (!activeLevel) continue;
 

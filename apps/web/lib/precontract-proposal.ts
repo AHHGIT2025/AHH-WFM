@@ -223,6 +223,9 @@ export function toClientSafeProposalDTO(proposal: any, version?: any): ClientSaf
     client: proposal.case && proposal.case.prospectClient ? {
       name: proposal.case.prospectClient.name,
       companyId: proposal.case.prospectClient.companyId
+    } : proposal.case && proposal.case.existingClient ? {
+      name: proposal.case.existingClient.name,
+      companyId: proposal.case.companyId || null
     } : null,
     opportunity: proposal.case ? {
       title: proposal.case.title,

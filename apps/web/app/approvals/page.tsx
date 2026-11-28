@@ -29,6 +29,7 @@ export default function ApprovalCenterPage() {
   const [search, setSearch] = useState("");
   const [moduleFilter, setModuleFilter] = useState("ALL");
   const [statusFilter, setStatusFilter] = useState("ALL");
+  const [outboxView, setOutboxView] = useState<"all" | "active" | "history">("all");
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
@@ -59,7 +60,8 @@ export default function ApprovalCenterPage() {
         pageSize: "12",
         ...(search ? { search } : {}),
         ...(moduleFilter !== "ALL" ? { module: moduleFilter } : {}),
-        ...(tab === "outbox" && statusFilter !== "ALL" ? { status: statusFilter } : {})
+        ...(tab === "outbox" && statusFilter !== "ALL" ? { status: statusFilter } : {}),
+        ...(tab === "outbox" && outboxView !== "all" ? { view: outboxView } : {})
       });
 
       const listRes = await fetch(`/api/v1/approvals?${queryParams.toString()}`);
@@ -76,7 +78,7 @@ export default function ApprovalCenterPage() {
     } finally {
       setLoading(false);
     }
-  }, [tab, page, search, moduleFilter, statusFilter]);
+  }, [tab, page, search, moduleFilter, statusFilter, outboxView]);
 
   useEffect(() => {
     loadData();
@@ -176,17 +178,33 @@ export default function ApprovalCenterPage() {
           </select>
 
           {tab === "outbox" && (
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="text-xs bg-surface-container-low border border-border-subtle rounded-md py-1.5 px-3 focus:outline-none focus:ring-1 focus:ring-primary font-medium text-on-surface"
-            >
-              <option value="ALL">All Statuses</option>
-              <option value="APPROVED">Approved</option>
-              <option value="IN_PROGRESS">In Progress</option>
-              <option value="RETURNED">Returned</option>
-              <option value="REJECTED">Rejected</option>
-            </select>
+            <>
+              <select
+                value={outboxView}
+                onChange={(e) => {
+                  setOutboxView(e.target.value as "all" | "active" | "history");
+                  setPage(1);
+                }}
+                className="text-xs bg-surface-container-low border border-border-subtle rounded-md py-1.5 px-3 focus:outline-none focus:ring-1 focus:ring-primary font-medium text-on-surface"
+                aria-label="Filter outbox view"
+              >
+                <option value="all">All Actions</option>
+                <option value="active">Active Workflows</option>
+                <option value="history">Historical &amp; Archived</option>
+              </select>
+
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="text-xs bg-surface-container-low border border-border-subtle rounded-md py-1.5 px-3 focus:outline-none focus:ring-1 focus:ring-primary font-medium text-on-surface"
+              >
+                <option value="ALL">All Statuses</option>
+                <option value="APPROVED">Approved</option>
+                <option value="IN_PROGRESS">In Progress</option>
+                <option value="RETURNED">Returned</option>
+                <option value="REJECTED">Rejected</option>
+              </select>
+            </>
           )}
         </div>
 
@@ -303,8 +321,23 @@ export default function ApprovalCenterPage() {
                         {item.sourceModule}
                       </Badge>
                     </td>
-                    <td className="py-3 px-4 font-semibold text-on-surface max-w-xs truncate">
-                      {item.subject}
+                    <td className="py-3 px-4 font-semibold text-on-surface max-w-xs">
+                      <div className="truncate">{item.subject}</div>
+                      {item.sourceState === "MISSING_SOURCE" && (
+                        <Badge variant="error" className="text-[9px] font-bold mt-0.5">
+                          Source Missing
+                        </Badge>
+                      )}
+                      {item.sourceState === "ARCHIVED" && (
+                        <Badge variant="warning" className="text-[9px] font-bold mt-0.5">
+                          Archived / Superseded
+                        </Badge>
+                      )}
+                      {item.sourceState === "HISTORICAL" && (
+                        <Badge variant="neutral" className="text-[9px] font-bold mt-0.5">
+                          Historical Audit
+                        </Badge>
+                      )}
                     </td>
                     <td className="py-3 px-4 text-on-surface font-medium whitespace-nowrap">
                       {item.requesterName}

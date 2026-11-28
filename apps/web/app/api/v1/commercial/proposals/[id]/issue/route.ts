@@ -26,6 +26,9 @@ export async function POST(
     const proposal = await prisma.preContractProposal.findUnique({
       where: { id: proposalId },
       include: {
+        case: {
+          include: { prospectClient: true }
+        },
         versions: {
           orderBy: { versionNumber: "desc" },
           include: {
@@ -57,6 +60,19 @@ export async function POST(
     if (currentVersion.status !== "APPROVED_INTERNAL" && currentVersion.status !== "ISSUED_TO_CLIENT") {
       return NextResponse.json(
         { error: `Issuance Guard: Proposal version v${currentVersion.versionNumber} is in ${currentVersion.status} status. Only APPROVED_INTERNAL proposals can be issued to client.` },
+        { status: 400 }
+      );
+    }
+
+    // Priority 2 Guard: Verify client identity before genuine external proposal issuance
+    const linkedProspectId = proposal.case?.prospectClientId?.trim() || null;
+    const linkedExistingClientId = proposal.case?.existingClientId?.trim() || null;
+    if (!linkedProspectId && !linkedExistingClientId) {
+      return NextResponse.json(
+        {
+          error:
+            "Client Verification Guard: Cannot issue proposal externally because no verified prospect or existing client is linked to this opportunity. Link a client before external issuance."
+        },
         { status: 400 }
       );
     }

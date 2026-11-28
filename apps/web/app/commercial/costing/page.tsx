@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { Card, Badge, Button, Input } from "@ahh-wfm/ui/src";
 import { hasPermission, isAdminUser } from "@/lib/permissions";
@@ -18,6 +19,10 @@ interface PreContractCase {
   companyId?: string | null;
   lifecycle: string;
   prospectClient?: ProspectClient | null;
+  existingClientId?: string | null;
+  existingClient?: { id: string; name: string } | null;
+  clientDisplayName?: string;
+  resolvedClient?: { id: string | null; name: string | null; type: string; isLinked: boolean };
 }
 
 interface PreContractSurvey {
@@ -577,7 +582,9 @@ export default function CostingPage() {
                       </td>
                       <td className="py-2.5 px-3">
                         <div className="font-bold text-on-surface">{est.case?.title || "Commercial Opportunity"}</div>
-                        <div className="text-[10px] text-on-surface-variant">{est.case?.prospectClient?.name || "Prospect Client"}</div>
+                        <div className="text-[10px] text-on-surface-variant">
+                          {est.case?.clientDisplayName || est.case?.prospectClient?.name || est.case?.existingClient?.name || "Client not linked"}
+                        </div>
                       </td>
                       <td className="py-2.5 px-3">
                         <Badge variant="secondary">
@@ -765,7 +772,24 @@ export default function CostingPage() {
                 </div>
                 <h2 className="text-base font-bold text-on-surface mt-0.5">{selectedEstimate.case?.title}</h2>
                 <p className="text-xs text-on-surface-variant">
-                  Client: {selectedEstimate.case?.prospectClient?.name || "N/A"} | Site: {selectedEstimate.survey?.prospectiveSite?.name || "N/A"}
+                  Client:{" "}
+                  {selectedEstimate.case?.clientDisplayName ||
+                    selectedEstimate.case?.prospectClient?.name ||
+                    selectedEstimate.case?.existingClient?.name ||
+                    "Client not linked"}
+                  {!(
+                    selectedEstimate.case?.prospectClient?.name ||
+                    selectedEstimate.case?.existingClient?.name ||
+                    selectedEstimate.case?.resolvedClient?.isLinked
+                  ) && (
+                    <Link
+                      href={`/commercial/opportunities?id=${selectedEstimate.caseId}`}
+                      className="ml-2 text-primary underline font-semibold hover:opacity-80"
+                    >
+                      Link Client
+                    </Link>
+                  )}{" "}
+                  | Site: {selectedEstimate.survey?.prospectiveSite?.name || "Not specified"}
                 </p>
               </div>
 
