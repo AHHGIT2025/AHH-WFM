@@ -5,7 +5,11 @@ import { WorkflowEngine } from "@/lib/workflow-engine";
 import { WorkflowAdapterRegistry } from "@/lib/workflow/adapters/registry";
 import { executeClearanceApprove, executeClearanceReject, executeClearanceReturn, executeClearanceMarkNotApplicable } from "@/lib/clearance-execution";
 import { assessCostingValidation, formatCostingValidationBlockError } from "@/lib/precontract-costing";
-import { evaluateUatCostingException, UAT_UNVALIDATED_COSTING_BANNER } from "@/lib/uat-costing-exception";
+import {
+  evaluateUatCostingException,
+  hasSubmitterApproverConflict,
+  UAT_UNVALIDATED_COSTING_BANNER
+} from "@/lib/uat-costing-exception";
 import { validateSurveyStaffingForSubmission } from "@/lib/survey-validation";
 import { findConflictingActiveSurvey, formatDuplicateSurveyMessage } from "@/lib/survey-uniqueness";
 import { checkOpportunityEligibilityForSurvey } from "@/lib/survey-eligibility";
@@ -28,12 +32,14 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
     // 1. Check if ID is a WorkflowInstance
     let instance = await prisma.workflowInstance.findUnique({
-      where: { id: approvalId }
+      where: { id: approvalId },
+      include: { history: { orderBy: { createdAt: "desc" } } }
     });
 
     if (!instance) {
       instance = await prisma.workflowInstance.findFirst({
-        where: { referenceId: approvalId }
+        where: { referenceId: approvalId },
+        include: { history: { orderBy: { createdAt: "desc" } } }
       });
     }
 
@@ -161,6 +167,27 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
               );
             }
             uatExceptionAudit = uatDecision.auditPayload;
+          }
+
+          // Enforce strict Submitter/Approver SoD using stable authenticated SUBMIT actor
+          // (handles legacy createdBy labels like "UAT Creator" and blocks ADMIN/SUPER_ADMIN self-approval under UAT exception)
+          const sodCheck = hasSubmitterApproverConflict({
+            user,
+            workflowHistory: instance.history,
+            creatorIds: [est.createdBy, est.versions?.[0]?.createdBy]
+          });
+          if (sodCheck.conflict && (uatExceptionAudit || user.role !== "SUPER_ADMIN")) {
+            return NextResponse.json(
+              {
+                success: false,
+                error:
+                  "Forbidden: Segregation of Duties prohibits the user who submitted or created this costing from approving the same costing."
+              },
+              { status: 403 }
+            );
+          }
+          if (sodCheck.matchedActor) {
+            creatorId = sodCheck.matchedActor;
           }
         }
       } else if (instance.moduleType === "COMMERCIAL_PROPOSAL" || instance.moduleType === "PRE_CONTRACT_PROPOSAL") {

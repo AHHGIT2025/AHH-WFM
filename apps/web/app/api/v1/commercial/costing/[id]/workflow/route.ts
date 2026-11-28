@@ -4,7 +4,11 @@ import { checkApiAuth } from "@/lib/api-guards";
 import { hasPermission, isAdminUser } from "@/lib/permissions";
 import { assessCostingValidation, formatCostingValidationBlockError, generateCostingSnapshot, serializeCostingEstimate } from "@/lib/precontract-costing";
 import { resolveCommercialWorkflowTemplate } from "@/lib/commercial-workflow-template";
-import { evaluateUatCostingException, UAT_UNVALIDATED_COSTING_BANNER } from "@/lib/uat-costing-exception";
+import {
+  evaluateUatCostingException,
+  hasSubmitterApproverConflict,
+  UAT_UNVALIDATED_COSTING_BANNER
+} from "@/lib/uat-costing-exception";
 
 export async function POST(
   request: Request,
@@ -164,13 +168,13 @@ export async function POST(
           });
         }
 
-        // Log SUBMIT action
+        // Log SUBMIT action using stable authenticated user ID for SoD & audit integrity
         await tx.workflowActionHistory.create({
           data: {
             instanceId: inst.id,
             levelNumber: 1,
             action: "SUBMIT",
-            actedBy: user?.name || user?.email || user?.id || "USER",
+            actedBy: user?.id || user?.employeeId || user?.email || "USER",
             remarks: remarks?.trim() || "Submitted for commercial costing approval."
           }
         });
@@ -295,14 +299,35 @@ export async function POST(
       );
     }
 
-    // Segregation of Duties (SoD) Check
-    if (action === "APPROVE" && estimate.createdBy === user.id && user.role !== "SUPER_ADMIN") {
-      const isExplicitSelfApprover = currentLevel?.approvers.some(ap => ap.approverType === "SPECIFIC_EMPLOYEE" && ap.employeeId === user.id);
-      if (!isExplicitSelfApprover) {
-        return NextResponse.json(
-          { error: "Forbidden: Segregation of Duties policy prohibits costing preparer from self-approving." },
-          { status: 403 }
-        );
+    // Segregation of Duties (SoD) Check — uses stable authenticated SUBMIT actor & creator IDs
+    // Under UAT costing exception, NO role (including ADMIN / SUPER_ADMIN) may self-approve.
+    if (action === "APPROVE") {
+      const sodCheck = hasSubmitterApproverConflict({
+        user,
+        workflowHistory: workflowInstance.history,
+        creatorIds: [estimate.createdBy, currentVersion.createdBy]
+      });
+      if (sodCheck.conflict) {
+        if (uatExceptionAudit) {
+          return NextResponse.json(
+            {
+              error:
+                "Forbidden: Segregation of Duties prohibits the user who submitted or created this costing from approving it under the UAT costing exception."
+            },
+            { status: 403 }
+          );
+        }
+        if (user.role !== "SUPER_ADMIN") {
+          const isExplicitSelfApprover = currentLevel?.approvers.some(
+            (ap) => ap.approverType === "SPECIFIC_EMPLOYEE" && ap.employeeId === user.id
+          );
+          if (!isExplicitSelfApprover) {
+            return NextResponse.json(
+              { error: "Forbidden: Segregation of Duties policy prohibits costing preparer or submitter from self-approving." },
+              { status: 403 }
+            );
+          }
+        }
       }
     }
 

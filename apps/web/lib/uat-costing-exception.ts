@@ -3,6 +3,50 @@ import type { CostingValidationSummary } from "./precontract-costing";
 
 export const UAT_UNVALIDATED_COSTING_BANNER = "UAT ONLY — UNVALIDATED COSTING";
 
+/**
+ * Checks whether the current authenticated approver is the same user who
+ * submitted or created the costing workflow, using stable authenticated IDs
+ * (and legacy email match if a prior SUBMIT stored email).
+ * Never relies solely on display labels like "UAT Creator".
+ */
+export function hasSubmitterApproverConflict(params: {
+  user: any;
+  workflowHistory?: Array<{ action: string; actedBy?: string | null; createdAt?: Date | string }> | null;
+  creatorIds?: Array<string | null | undefined>;
+}): { conflict: boolean; matchedActor: string | null } {
+  const { user, workflowHistory, creatorIds = [] } = params;
+  const userTokens = new Set(
+    [user?.id, user?.employeeId, user?.email]
+      .filter((v): v is string => typeof v === "string" && v.trim().length > 0)
+      .map((v) => v.trim().toLowerCase())
+  );
+  if (userTokens.size === 0) return { conflict: false, matchedActor: null };
+
+  // 1. Check latest SUBMIT actor in workflow history (authoritative for actual logged-in Maker)
+  if (Array.isArray(workflowHistory) && workflowHistory.length > 0) {
+    const submitEntries = workflowHistory
+      .filter((h) => h.action === "SUBMIT" && typeof h.actedBy === "string" && h.actedBy.trim().length > 0)
+      .sort((a, b) => {
+        const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return tb - ta;
+      });
+    const latestSubmitActor = submitEntries[0]?.actedBy?.trim();
+    if (latestSubmitActor && userTokens.has(latestSubmitActor.toLowerCase())) {
+      return { conflict: true, matchedActor: latestSubmitActor };
+    }
+  }
+
+  // 2. Check explicit creator IDs (e.g., estimate.createdBy, version.createdBy)
+  for (const cid of creatorIds) {
+    if (typeof cid === "string" && cid.trim().length > 0 && userTokens.has(cid.trim().toLowerCase())) {
+      return { conflict: true, matchedActor: cid.trim() };
+    }
+  }
+
+  return { conflict: false, matchedActor: null };
+}
+
 export interface UatCostingExceptionContext {
   estimate: {
     id: string;

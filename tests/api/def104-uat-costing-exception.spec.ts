@@ -682,4 +682,149 @@ describe("DEF-104 Scoped UAT Costing Fallback Exception", () => {
     expect(convertBody.error).toContain(UAT_UNVALIDATED_COSTING_BANNER);
     expect(convertBody.uatBanner).toBe(UAT_UNVALIDATED_COSTING_BANNER);
   });
+
+  test("6. Submitter/Approver SoD with legacy 'UAT Creator' label: same logged-in ADMIN/Maker who submits CANNOT approve under UAT exception, while independent Checker CAN", async () => {
+    const LEGACY_CREATOR_EST_ID = `EST-${RUN_ID}-LEGACY-SOD`;
+    await prisma.preContractCostEstimate.create({
+      data: {
+        id: LEGACY_CREATOR_EST_ID,
+        caseId,
+        surveyId,
+        companyId: COMP_SG,
+        operationType: "SECURITY_GUARDING",
+        currentVersionNumber: 1,
+        status: "DRAFT",
+        createdBy: "UAT Creator", // Mirrors live SERVER estimate 93a7e4bf createdBy label
+        versions: {
+          create: {
+            versionNumber: 1,
+            status: "DRAFT",
+            costConfigVersionId: null,
+            totalDirectCost: new Decimal(65450),
+            totalIndirectCost: new Decimal(0),
+            totalCost: new Decimal(65450),
+            sellingPrice: new Decimal(77000),
+            pricingBasis: "MARGIN",
+            targetMarginPercentage: new Decimal(15),
+            createdBy: "UAT Creator",
+            items: {
+              create: [
+                {
+                  elementCode: "BASIC_PAY",
+                  elementName: "Basic Pay",
+                  categoryCode: "DIRECT_LABOR",
+                  isDirect: true,
+                  quantity: new Decimal(14),
+                  unitRate: new Decimal(2500),
+                  totalAmount: new Decimal(35000),
+                  calculationBasis: "FALLBACK",
+                },
+                {
+                  elementCode: "ALLOWANCES",
+                  elementName: "Allowances",
+                  categoryCode: "DIRECT_LABOR",
+                  isDirect: true,
+                  quantity: new Decimal(14),
+                  unitRate: new Decimal(1000),
+                  totalAmount: new Decimal(14000),
+                  calculationBasis: "FALLBACK",
+                },
+                {
+                  elementCode: "RELIEVER_COST",
+                  elementName: "Reliever Cost",
+                  categoryCode: "DIRECT_LABOR",
+                  isDirect: true,
+                  quantity: new Decimal(3),
+                  unitRate: new Decimal(3500),
+                  totalAmount: new Decimal(10500),
+                  calculationBasis: "FALLBACK",
+                },
+              ],
+            },
+          },
+        },
+      },
+    });
+
+    const allowlistedAdminMaker = {
+      id: `USR-${RUN_ID}-ADMIN-MAKER`,
+      email: "uat.admin.maker@ahh-uat.local",
+      name: "UAT Admin Maker",
+      role: "ADMIN",
+      companyId: COMP_SG,
+      permissions: [
+        "manpower.admin.full_access",
+        "precontract.costing.view",
+        "precontract.costing.manage",
+        "precontract.workflow.submit",
+        "precontract.workflow.approve",
+      ],
+      operationAccess: { allowedSecurityGuarding: true, allowedFacilityManagement: false },
+    };
+
+    try {
+      process.env.AHH_WFM_UAT_COSTING_EXCEPTION_ENABLED = "true";
+      process.env.AHH_WFM_UAT_COSTING_ALLOWLIST = LEGACY_CREATOR_EST_ID;
+      process.env.AHH_WFM_UAT_COSTING_AUTHORIZED_USERS = `${allowlistedAdminMaker.id},${mockChecker.id}`;
+
+      // 1. Allowlisted ADMIN Maker submits the "UAT Creator" costing -> 200
+      setSession(allowlistedAdminMaker);
+      const submitRes = await postCostingWorkflow(
+        makeReq(`http://localhost:3100/api/v1/commercial/costing/${LEGACY_CREATOR_EST_ID}/workflow`, {
+          action: "SUBMIT",
+          remarks: "UAT Maker submit on legacy createdBy record",
+        }),
+        { params: { id: LEGACY_CREATOR_EST_ID } }
+      );
+      const submitBody = await submitRes.json();
+      expect(submitRes.status).toBe(200);
+      const instId = submitBody.workflow?.instanceId;
+      expect(instId).toBeTruthy();
+
+      // Verify SUBMIT history stored stable authenticated user ID (NOT display name)
+      const hist = await prisma.workflowActionHistory.findFirst({
+        where: { instanceId: instId, action: "SUBMIT" },
+        orderBy: { createdAt: "desc" },
+      });
+      expect(hist?.actedBy).toBe(allowlistedAdminMaker.id);
+
+      // 2. Same ADMIN Maker tries to self-approve via costing workflow route -> BLOCKED (403)
+      const selfApproveCostingRes = await postCostingWorkflow(
+        makeReq(`http://localhost:3100/api/v1/commercial/costing/${LEGACY_CREATOR_EST_ID}/workflow`, {
+          action: "APPROVE",
+          remarks: "Same-user self-approve via costing route",
+        }),
+        { params: { id: LEGACY_CREATOR_EST_ID } }
+      );
+      expect(selfApproveCostingRes.status).toBe(403);
+
+      // 3. Same ADMIN Maker tries to self-approve via Approval Center route -> BLOCKED (403)
+      const selfApproveCenterRes = await postApprovalAction(
+        makeReq(`http://localhost:3100/api/v1/approvals/${instId}/action`, {
+          action: "APPROVE",
+          remarks: "Same-user self-approve via Approval Center",
+        }),
+        { params: { id: instId } }
+      );
+      expect(selfApproveCenterRes.status).toBe(403);
+
+      // 4. Different independent authorized Checker approves -> ALLOWED (200)
+      setSession(mockChecker);
+      const checkerApproveRes = await postApprovalAction(
+        makeReq(`http://localhost:3100/api/v1/approvals/${instId}/action`, {
+          action: "APPROVE",
+          remarks: "Independent authorized Checker approval",
+        }),
+        { params: { id: instId } }
+      );
+      expect(checkerApproveRes.status).toBe(200);
+    } finally {
+      await prisma.userActivityLog.deleteMany({ where: { entityId: LEGACY_CREATOR_EST_ID } });
+      await prisma.workflowActionHistory.deleteMany({ where: { instance: { referenceId: LEGACY_CREATOR_EST_ID } } });
+      await prisma.workflowInstance.deleteMany({ where: { referenceId: LEGACY_CREATOR_EST_ID } });
+      await prisma.preContractCostEstimateItem.deleteMany({ where: { estimateVersion: { estimateId: LEGACY_CREATOR_EST_ID } } });
+      await prisma.preContractCostEstimateVersion.deleteMany({ where: { estimateId: LEGACY_CREATOR_EST_ID } });
+      await prisma.preContractCostEstimate.deleteMany({ where: { id: LEGACY_CREATOR_EST_ID } });
+    }
+  });
 });
