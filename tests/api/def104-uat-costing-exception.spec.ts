@@ -808,6 +808,26 @@ describe("DEF-104 Scoped UAT Costing Fallback Exception", () => {
       );
       expect(selfApproveCenterRes.status).toBe(403);
 
+      // 3b. Even SUPER_ADMIN (same user ID) is BLOCKED from self-approving under UAT exception via BOTH paths (403)
+      setSession({ ...allowlistedAdminMaker, role: "SUPER_ADMIN" });
+      const superAdminCostingRes = await postCostingWorkflow(
+        makeReq(`http://localhost:3100/api/v1/commercial/costing/${LEGACY_CREATOR_EST_ID}/workflow`, {
+          action: "APPROVE",
+          remarks: "SUPER_ADMIN self-approve via costing route",
+        }),
+        { params: { id: LEGACY_CREATOR_EST_ID } }
+      );
+      expect(superAdminCostingRes.status).toBe(403);
+
+      const superAdminCenterRes = await postApprovalAction(
+        makeReq(`http://localhost:3100/api/v1/approvals/${instId}/action`, {
+          action: "APPROVE",
+          remarks: "SUPER_ADMIN self-approve via Approval Center",
+        }),
+        { params: { id: instId } }
+      );
+      expect(superAdminCenterRes.status).toBe(403);
+
       // 4. Different independent authorized Checker approves -> ALLOWED (200)
       setSession(mockChecker);
       const checkerApproveRes = await postApprovalAction(
