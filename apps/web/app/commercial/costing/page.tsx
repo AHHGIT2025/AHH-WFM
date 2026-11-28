@@ -103,6 +103,7 @@ interface CostingEstimate {
   survey: PreContractSurvey;
   versions: CostingVersion[];
   validationSummary?: CostingValidationSummary;
+  uatUnvalidatedBanner?: string | null;
 }
 
 function toSafeNumber(val: unknown, fallback: number = 0): number {
@@ -834,6 +835,16 @@ export default function CostingPage() {
                 if (!vSummary || !vSummary.requiresValidation) return null;
                 return (
                   <div className="p-3.5 rounded-lg border border-status-warning bg-status-warning/10 space-y-1.5">
+                    {selectedEstimate.uatUnvalidatedBanner && (
+                      <div className="p-2 rounded border border-status-error bg-status-error/10 flex flex-wrap items-center justify-between gap-2">
+                        <span className="text-xs font-extrabold tracking-wide text-status-error">
+                          {selectedEstimate.uatUnvalidatedBanner}
+                        </span>
+                        <span className="text-[11px] font-medium text-on-surface-variant">
+                          Scoped UAT fallback exception active — client issuance &amp; contract conversion remain blocked.
+                        </span>
+                      </div>
+                    )}
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2 text-xs font-bold text-status-warning">
                         <span className="material-symbols-outlined text-base">warning</span>

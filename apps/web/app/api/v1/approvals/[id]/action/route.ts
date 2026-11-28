@@ -5,6 +5,7 @@ import { WorkflowEngine } from "@/lib/workflow-engine";
 import { WorkflowAdapterRegistry } from "@/lib/workflow/adapters/registry";
 import { executeClearanceApprove, executeClearanceReject, executeClearanceReturn, executeClearanceMarkNotApplicable } from "@/lib/clearance-execution";
 import { assessCostingValidation, formatCostingValidationBlockError } from "@/lib/precontract-costing";
+import { evaluateUatCostingException, UAT_UNVALIDATED_COSTING_BANNER } from "@/lib/uat-costing-exception";
 import { validateSurveyStaffingForSubmission } from "@/lib/survey-validation";
 import { findConflictingActiveSurvey, formatDuplicateSurveyMessage } from "@/lib/survey-uniqueness";
 import { checkOpportunityEligibilityForSurvey } from "@/lib/survey-eligibility";
@@ -54,6 +55,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
       // Resolve creatorId for SoD enforcement on pre-contract modules
       let creatorId: string | null = null;
+      let uatExceptionAudit: any = null;
       if (instance.moduleType === "PRE_CONTRACT_CASE" || instance.moduleType === "COMMERCIAL_OPPORTUNITY") {
         const opp = await prisma.preContractCase.findUnique({
           where: { id: instance.referenceId },
@@ -117,6 +119,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         const est = await prisma.preContractCostEstimate.findUnique({
           where: { id: instance.referenceId },
           select: {
+            caseId: true,
             createdBy: true,
             survey: { select: { responses: true } },
             versions: {
@@ -136,14 +139,28 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         if (action === "APPROVE" && est?.versions?.[0]) {
           const validationSummary = assessCostingValidation(est.survey?.responses, est.versions[0]);
           if (validationSummary.blocksCommercialSubmission) {
-            return NextResponse.json(
-              {
-                success: false,
-                error: formatCostingValidationBlockError(validationSummary, "approval"),
-                validationSummary
+            const uatDecision = evaluateUatCostingException({
+              estimate: {
+                id: instance.referenceId,
+                caseId: est.caseId || null,
+                estimateCode: `COST-${instance.referenceId.slice(0, 8).toUpperCase()}`,
               },
-              { status: 400 }
-            );
+              validationSummary,
+              user,
+              action: "APPROVE",
+              reason: remarks,
+            });
+            if (!uatDecision.allowed || !uatDecision.auditPayload) {
+              return NextResponse.json(
+                {
+                  success: false,
+                  error: formatCostingValidationBlockError(validationSummary, "approval"),
+                  validationSummary
+                },
+                { status: 400 }
+              );
+            }
+            uatExceptionAudit = uatDecision.auditPayload;
           }
         }
       } else if (instance.moduleType === "COMMERCIAL_PROPOSAL" || instance.moduleType === "PRE_CONTRACT_PROPOSAL") {
@@ -195,12 +212,33 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
             }
           });
 
+          if (uatExceptionAudit) {
+            await tx.userActivityLog.create({
+              data: {
+                userId: user.id || "system",
+                action: "UAT_COSTING_FALLBACK_EXCEPTION",
+                entityType: "PreContractCostEstimate",
+                entityId: instance!.referenceId,
+                afterJson: JSON.stringify(uatExceptionAudit)
+              }
+            });
+          }
+
           return updated;
         });
 
         return NextResponse.json({
           success: true,
           message: `Action ${action} executed successfully.`,
+          ...(uatExceptionAudit
+            ? {
+                uatException: {
+                  active: true,
+                  banner: UAT_UNVALIDATED_COSTING_BANNER,
+                  ...uatExceptionAudit,
+                },
+              }
+            : {}),
           data: {
             instanceId: updatedInstance.id,
             status: updatedInstance.status,

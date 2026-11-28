@@ -1,5 +1,9 @@
 import { prisma, Prisma } from "@ahh-wfm/database";
 import crypto from "crypto";
+import {
+  isAllowlistedUatCostingRecord,
+  UAT_UNVALIDATED_COSTING_BANNER
+} from "./uat-costing-exception";
 
 type Decimal = Prisma.Decimal;
 const Decimal = Prisma.Decimal;
@@ -969,9 +973,22 @@ export function serializeCostingEstimate<T extends Record<string, any> | null | 
   const serializedVersions = Array.isArray(estimate.versions)
     ? estimate.versions.map((ver: any) => serializeCostingVersion(ver, surveyResponses))
     : undefined;
+  const validationSummary =
+    serializedVersions?.[0]?.validationSummary ?? assessCostingValidation(surveyResponses, null);
+  const uatUnvalidatedBanner =
+    validationSummary?.blocksCommercialSubmission &&
+    typeof estimate.id === "string" &&
+    isAllowlistedUatCostingRecord({
+      id: estimate.id,
+      caseId: estimate.caseId ?? null,
+      estimateCode: `COST-${estimate.id.slice(0, 8).toUpperCase()}`,
+    })
+      ? UAT_UNVALIDATED_COSTING_BANNER
+      : null;
   return {
     ...estimate,
-    validationSummary: serializedVersions?.[0]?.validationSummary ?? assessCostingValidation(surveyResponses, null),
+    validationSummary,
+    ...(uatUnvalidatedBanner ? { uatUnvalidatedBanner } : {}),
     ...(serializedVersions ? { versions: serializedVersions } : {})
   };
 }

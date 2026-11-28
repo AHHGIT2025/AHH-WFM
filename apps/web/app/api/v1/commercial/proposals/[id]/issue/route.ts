@@ -3,6 +3,7 @@ import { prisma } from "@ahh-wfm/database";
 import { checkApiAuth } from "../../../../../../../lib/api-guards";
 import { toClientSafeProposalDTO } from "../../../../../../../lib/precontract-proposal";
 import { assessCostingValidation, formatCostingValidationBlockError } from "../../../../../../../lib/precontract-costing";
+import { isAllowlistedUatCostingRecord, UAT_UNVALIDATED_COSTING_BANNER } from "../../../../../../../lib/uat-costing-exception";
 
 export async function POST(
   req: NextRequest,
@@ -66,9 +67,20 @@ export async function POST(
         currentVersion.costEstimateVersion
       );
       if (validationSummary.blocksCommercialSubmission) {
+        const isUat = currentVersion.costEstimate
+          ? isAllowlistedUatCostingRecord({
+              id: currentVersion.costEstimate.id,
+              caseId: currentVersion.costEstimate.caseId,
+              estimateCode: `COST-${currentVersion.costEstimate.id.slice(0, 8).toUpperCase()}`,
+            })
+          : false;
+        const baseError = formatCostingValidationBlockError(validationSummary, "issuing proposal to client", "DEF-104 Issuance Guard");
         return NextResponse.json(
           {
-            error: formatCostingValidationBlockError(validationSummary, "issuing proposal to client", "DEF-104 Issuance Guard"),
+            error: isUat
+              ? `${UAT_UNVALIDATED_COSTING_BANNER}: Real client issuance and external sending are blocked for UAT-excepted unvalidated costing. ${baseError}`
+              : baseError,
+            uatBanner: isUat ? UAT_UNVALIDATED_COSTING_BANNER : undefined,
             validationSummary
           },
           { status: 400 }

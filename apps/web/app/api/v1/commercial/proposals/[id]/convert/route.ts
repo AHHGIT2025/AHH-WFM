@@ -3,6 +3,8 @@ import { prisma } from "@ahh-wfm/database";
 import { checkApiAuth } from "../../../../../../../lib/api-guards";
 import { hasPermission, isAdminUser } from "../../../../../../../lib/permissions";
 import { convertToContract } from "../../../../../../../lib/contract-conversion";
+import { assessCostingValidation, formatCostingValidationBlockError } from "../../../../../../../lib/precontract-costing";
+import { isAllowlistedUatCostingRecord, UAT_UNVALIDATED_COSTING_BANNER } from "../../../../../../../lib/uat-costing-exception";
 
 export async function POST(
   req: NextRequest,
@@ -24,7 +26,11 @@ export async function POST(
         case: true,
         versions: {
           orderBy: { versionNumber: "desc" },
-          take: 1
+          take: 1,
+          include: {
+            costEstimate: { include: { survey: { include: { responses: true } } } },
+            costEstimateVersion: { include: { items: true, overrides: true } }
+          }
         }
       }
     });
@@ -55,6 +61,34 @@ export async function POST(
     const latestVersion = proposal.versions[0];
     if (!latestVersion) {
       return NextResponse.json({ error: "No version found for proposal." }, { status: 404 });
+    }
+
+    // Hard block contract conversion (and downstream billing/payroll/SAP) on unvalidated or UAT-excepted costing
+    if (latestVersion.costEstimateVersion) {
+      const validationSummary = assessCostingValidation(
+        latestVersion.costEstimate?.survey?.responses,
+        latestVersion.costEstimateVersion
+      );
+      if (validationSummary.blocksCommercialSubmission) {
+        const isUat = latestVersion.costEstimate
+          ? isAllowlistedUatCostingRecord({
+              id: latestVersion.costEstimate.id,
+              caseId: latestVersion.costEstimate.caseId,
+              estimateCode: `COST-${latestVersion.costEstimate.id.slice(0, 8).toUpperCase()}`,
+            })
+          : false;
+        const baseError = formatCostingValidationBlockError(validationSummary, "converting proposal to contract", "DEF-104 Conversion Guard");
+        return NextResponse.json(
+          {
+            error: isUat
+              ? `${UAT_UNVALIDATED_COSTING_BANNER}: Contract conversion, billing, payroll, and SAP posting are blocked for UAT-excepted unvalidated costing. ${baseError}`
+              : baseError,
+            uatBanner: isUat ? UAT_UNVALIDATED_COSTING_BANNER : undefined,
+            validationSummary
+          },
+          { status: 400 }
+        );
+      }
     }
 
     const body = await req.json();

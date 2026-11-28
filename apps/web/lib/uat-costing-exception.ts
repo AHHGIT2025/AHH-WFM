@@ -1,0 +1,206 @@
+import { hasPermission, isAdminUser } from "./permissions";
+import type { CostingValidationSummary } from "./precontract-costing";
+
+export const UAT_UNVALIDATED_COSTING_BANNER = "UAT ONLY — UNVALIDATED COSTING";
+
+export interface UatCostingExceptionContext {
+  estimate: {
+    id: string;
+    caseId?: string | null;
+    estimateCode?: string | null;
+  };
+  validationSummary: CostingValidationSummary;
+  user: any;
+  action: "SUBMIT" | "APPROVE";
+  reason?: string | null;
+}
+
+export interface UatCostingExceptionDecision {
+  allowed: boolean;
+  banner: string | null;
+  bypassedChecks: string[];
+  denialReason: string | null;
+  auditPayload: {
+    banner: string;
+    userId: string;
+    userEmail: string | null;
+    userRole: string;
+    action: "SUBMIT" | "APPROVE";
+    reason: string;
+    recordedAt: string;
+    estimateId: string;
+    estimateCode: string | null;
+    caseId: string | null;
+    bypassedChecks: string[];
+  } | null;
+}
+
+function parseCsvEnv(raw?: string | null): string[] {
+  if (!raw) return [];
+  return raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0 && s !== "*");
+}
+
+/**
+ * Checks whether the server-side UAT costing exception feature flag is explicitly enabled
+ * and whether the given costing record is in the explicit allowlist.
+ * Disabled by default. Never accepts wildcard "*" or empty allowlists.
+ */
+export function isAllowlistedUatCostingRecord(estimate: {
+  id: string;
+  caseId?: string | null;
+  estimateCode?: string | null;
+}): boolean {
+  if (process.env.AHH_WFM_UAT_COSTING_EXCEPTION_ENABLED !== "true") {
+    return false;
+  }
+  const allowlist = parseCsvEnv(process.env.AHH_WFM_UAT_COSTING_ALLOWLIST);
+  if (allowlist.length === 0) {
+    return false;
+  }
+  const candidates = [estimate.id, estimate.estimateCode, estimate.caseId]
+    .filter((v): v is string => typeof v === "string" && v.trim().length > 0)
+    .map((v) => v.trim().toLowerCase());
+
+  return allowlist.some((entry) => candidates.includes(entry.toLowerCase()));
+}
+
+/**
+ * Evaluates whether a tightly scoped UAT-only exception may bypass ONLY the
+ * missing ACTIVE PC-2A rate card / fallback-rate block during SUBMIT or APPROVE.
+ *
+ * Strictly preserves:
+ * - Default-off server-side feature flag
+ * - Explicit synthetic record allowlist
+ * - Authorized UAT user & RBAC check
+ * - Mandatory staffing/headcount and survey consistency (NEVER bypassed)
+ * - Downstream hard blocks on client issuance and contract conversion
+ */
+export function evaluateUatCostingException(
+  ctx: UatCostingExceptionContext
+): UatCostingExceptionDecision {
+  const { estimate, validationSummary, user, action, reason } = ctx;
+
+  // 1. Server-side feature flag must be explicitly enabled
+  if (process.env.AHH_WFM_UAT_COSTING_EXCEPTION_ENABLED !== "true") {
+    return {
+      allowed: false,
+      banner: null,
+      bypassedChecks: [],
+      denialReason: "UAT costing exception feature flag is disabled.",
+      auditPayload: null,
+    };
+  }
+
+  // 2. Record must be explicitly allowlisted (no wildcards)
+  if (!isAllowlistedUatCostingRecord(estimate)) {
+    return {
+      allowed: false,
+      banner: null,
+      bypassedChecks: [],
+      denialReason: "Costing record is not in AHH_WFM_UAT_COSTING_ALLOWLIST.",
+      auditPayload: null,
+    };
+  }
+
+  // 3. Actor must be authorized for the requested workflow action + optional explicit UAT user list
+  const hasActionPerm =
+    isAdminUser(user) ||
+    hasPermission(user, "manpower.admin.full_access") ||
+    (action === "SUBMIT" &&
+      (hasPermission(user, "precontract.workflow.submit") ||
+        hasPermission(user, "precontract.costing.manage"))) ||
+    (action === "APPROVE" &&
+      (hasPermission(user, "precontract.workflow.approve") ||
+        hasPermission(user, "precontract.workflow.review")));
+
+  if (!hasActionPerm) {
+    return {
+      allowed: false,
+      banner: null,
+      bypassedChecks: [],
+      denialReason: `User is not authorized for ${action} under UAT costing exception.`,
+      auditPayload: null,
+    };
+  }
+
+  const authorizedUsers = parseCsvEnv(process.env.AHH_WFM_UAT_COSTING_AUTHORIZED_USERS);
+  if (authorizedUsers.length > 0 && !isAdminUser(user)) {
+    const userTokens = [user?.id, user?.email, user?.employeeId]
+      .filter((v): v is string => typeof v === "string" && v.trim().length > 0)
+      .map((v) => v.trim().toLowerCase());
+    const userAllowed = authorizedUsers.some((entry) => userTokens.includes(entry.toLowerCase()));
+    if (!userAllowed) {
+      return {
+        allowed: false,
+        banner: null,
+        bypassedChecks: [],
+        denialReason: "User is not in AHH_WFM_UAT_COSTING_AUTHORIZED_USERS.",
+        auditPayload: null,
+      };
+    }
+  }
+
+  // 4. NEVER bypass mandatory staffing/headcount or survey consistency guards
+  if (
+    !validationSummary.hasMappedSurveyHeadcount ||
+    !validationSummary.hasMappedReliefDriver ||
+    validationSummary.assumedFallbackHeadcount ||
+    validationSummary.unmappedSurveyManpowerFields.length > 0
+  ) {
+    return {
+      allowed: false,
+      banner: null,
+      bypassedChecks: [],
+      denialReason:
+        "UAT exception cannot bypass mandatory survey headcount, relief driver, or unmapped staffing validations.",
+      auditPayload: null,
+    };
+  }
+
+  // 5. Exception applies ONLY to missing ACTIVE rate card / fallback unit rates
+  const bypassedChecks: string[] = [];
+  if (!validationSummary.hasActiveCostConfig) {
+    bypassedChecks.push("NO_ACTIVE_PC2A_RATE_CARD");
+  }
+  for (const item of validationSummary.fallbackRateItems) {
+    bypassedChecks.push(`FALLBACK_RATE:${item}`);
+  }
+
+  if (bypassedChecks.length === 0) {
+    return {
+      allowed: false,
+      banner: null,
+      bypassedChecks: [],
+      denialReason: "No fallback-rate condition eligible for UAT exception.",
+      auditPayload: null,
+    };
+  }
+
+  const normalizedReason =
+    typeof reason === "string" && reason.trim().length > 0
+      ? reason.trim()
+      : `Authorized UAT-only fallback rate exception for ${action}`;
+
+  return {
+    allowed: true,
+    banner: UAT_UNVALIDATED_COSTING_BANNER,
+    bypassedChecks,
+    denialReason: null,
+    auditPayload: {
+      banner: UAT_UNVALIDATED_COSTING_BANNER,
+      userId: String(user?.id || "unknown"),
+      userEmail: user?.email ? String(user.email) : null,
+      userRole: String(user?.role || "UNKNOWN"),
+      action,
+      reason: normalizedReason,
+      recordedAt: new Date().toISOString(),
+      estimateId: estimate.id,
+      estimateCode: estimate.estimateCode || null,
+      caseId: estimate.caseId || null,
+      bypassedChecks,
+    },
+  };
+}

@@ -4,6 +4,7 @@ import { checkApiAuth } from "@/lib/api-guards";
 import { hasPermission, isAdminUser } from "@/lib/permissions";
 import { assessCostingValidation, formatCostingValidationBlockError, generateCostingSnapshot, serializeCostingEstimate } from "@/lib/precontract-costing";
 import { resolveCommercialWorkflowTemplate } from "@/lib/commercial-workflow-template";
+import { evaluateUatCostingException, UAT_UNVALIDATED_COSTING_BANNER } from "@/lib/uat-costing-exception";
 
 export async function POST(
   request: Request,
@@ -82,16 +83,31 @@ export async function POST(
       return NextResponse.json({ error: "No version found for this costing estimate." }, { status: 404 });
     }
 
+    let uatExceptionAudit: any = null;
     if (action === "SUBMIT" || action === "APPROVE") {
       const validationSummary = assessCostingValidation(estimate.survey?.responses, currentVersion);
       if (validationSummary.blocksCommercialSubmission) {
-        return NextResponse.json(
-          {
-            error: formatCostingValidationBlockError(validationSummary, action.toLowerCase()),
-            validationSummary
+        const uatDecision = evaluateUatCostingException({
+          estimate: {
+            id: estimate.id,
+            caseId: estimate.caseId,
+            estimateCode: `COST-${estimate.id.slice(0, 8).toUpperCase()}`,
           },
-          { status: 400 }
-        );
+          validationSummary,
+          user,
+          action,
+          reason: remarks,
+        });
+        if (!uatDecision.allowed || !uatDecision.auditPayload) {
+          return NextResponse.json(
+            {
+              error: formatCostingValidationBlockError(validationSummary, action.toLowerCase()),
+              validationSummary
+            },
+            { status: 400 }
+          );
+        }
+        uatExceptionAudit = uatDecision.auditPayload;
       }
     }
 
@@ -159,6 +175,18 @@ export async function POST(
           }
         });
 
+        if (uatExceptionAudit) {
+          await tx.userActivityLog.create({
+            data: {
+              userId: user?.id || "system",
+              action: "UAT_COSTING_FALLBACK_EXCEPTION",
+              entityType: "PreContractCostEstimate",
+              entityId: estimateId,
+              afterJson: JSON.stringify(uatExceptionAudit)
+            }
+          });
+        }
+
         // Update version & header projection atomically
         await tx.preContractCostEstimateVersion.update({
           where: { id: currentVersion.id },
@@ -194,6 +222,15 @@ export async function POST(
 
       return NextResponse.json({
         estimate: serializeCostingEstimate(updatedEstimate),
+        ...(uatExceptionAudit
+          ? {
+              uatException: {
+                active: true,
+                banner: UAT_UNVALIDATED_COSTING_BANNER,
+                ...uatExceptionAudit,
+              },
+            }
+          : {}),
         workflow: {
           instanceId: savedInstance.id,
           action: "SUBMIT",
@@ -373,11 +410,32 @@ export async function POST(
         }
       });
 
+      if (uatExceptionAudit) {
+        await tx.userActivityLog.create({
+          data: {
+            userId: user?.id || "system",
+            action: "UAT_COSTING_FALLBACK_EXCEPTION",
+            entityType: "PreContractCostEstimate",
+            entityId: estimateId,
+            afterJson: JSON.stringify(uatExceptionAudit)
+          }
+        });
+      }
+
       return updated;
     });
 
     return NextResponse.json({
       estimate: serializeCostingEstimate(updatedEstimate),
+      ...(uatExceptionAudit
+        ? {
+            uatException: {
+              active: true,
+              banner: UAT_UNVALIDATED_COSTING_BANNER,
+              ...uatExceptionAudit,
+            },
+          }
+        : {}),
       workflow: {
         instanceId: workflowInstance.id,
         action,
