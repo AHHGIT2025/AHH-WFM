@@ -395,7 +395,7 @@ describe("DEF-104 Scoped UAT Costing Fallback Exception", () => {
     expect(body.error).toMatch(/No active PC-2A Rate Card|FALLBACK/i);
   });
 
-  test("2. Allowlist strictness: wildcard '*' and non-allowlisted records are rejected (400)", async () => {
+  test("2. Allowlist strictness: wildcard '*', case ID, COST-code, empty user list, and non-allowlisted records are rejected (400)", async () => {
     setSession(mockMaker);
     process.env.AHH_WFM_UAT_COSTING_EXCEPTION_ENABLED = "true";
     process.env.AHH_WFM_UAT_COSTING_ALLOWLIST = "*";
@@ -410,7 +410,42 @@ describe("DEF-104 Scoped UAT Costing Fallback Exception", () => {
     );
     expect(wildcardRes.status).toBe(400);
 
+    // Case ID allowlisting MUST be rejected (no case-wide allowlisting)
+    process.env.AHH_WFM_UAT_COSTING_ALLOWLIST = caseId;
+    const caseWideRes = await postCostingWorkflow(
+      makeReq(`http://localhost:3100/api/v1/commercial/costing/${EST_UAT_ID}/workflow`, {
+        action: "SUBMIT",
+        remarks: "Case-wide allowlist attempt",
+      }),
+      { params: { id: EST_UAT_ID } }
+    );
+    expect(caseWideRes.status).toBe(400);
+
+    // COST-prefix code allowlisting MUST be rejected (exact estimate ID only)
+    process.env.AHH_WFM_UAT_COSTING_ALLOWLIST = `COST-${EST_UAT_ID.slice(0, 8).toUpperCase()}`;
+    const codeRes = await postCostingWorkflow(
+      makeReq(`http://localhost:3100/api/v1/commercial/costing/${EST_UAT_ID}/workflow`, {
+        action: "SUBMIT",
+        remarks: "COST-code allowlist attempt",
+      }),
+      { params: { id: EST_UAT_ID } }
+    );
+    expect(codeRes.status).toBe(400);
+
+    // Empty authorized-user allowlist MUST be rejected
     process.env.AHH_WFM_UAT_COSTING_ALLOWLIST = EST_UAT_ID;
+    process.env.AHH_WFM_UAT_COSTING_AUTHORIZED_USERS = "   ";
+    const emptyUsersRes = await postCostingWorkflow(
+      makeReq(`http://localhost:3100/api/v1/commercial/costing/${EST_UAT_ID}/workflow`, {
+        action: "SUBMIT",
+        remarks: "Empty authorized users attempt",
+      }),
+      { params: { id: EST_UAT_ID } }
+    );
+    expect(emptyUsersRes.status).toBe(400);
+
+    // Non-allowlisted estimate under the SAME case MUST be rejected
+    process.env.AHH_WFM_UAT_COSTING_AUTHORIZED_USERS = "shana.maker@ahh-uat.local";
     const prodRes = await postCostingWorkflow(
       makeReq(`http://localhost:3100/api/v1/commercial/costing/${EST_PROD_ID}/workflow`, {
         action: "SUBMIT",
@@ -419,6 +454,43 @@ describe("DEF-104 Scoped UAT Costing Fallback Exception", () => {
       { params: { id: EST_PROD_ID } }
     );
     expect(prodRes.status).toBe(400);
+  });
+
+  test("2b. Admin & SuperAdmin absent from authorized-user allowlist are rejected (400)", async () => {
+    process.env.AHH_WFM_UAT_COSTING_EXCEPTION_ENABLED = "true";
+    process.env.AHH_WFM_UAT_COSTING_ALLOWLIST = EST_UAT_ID;
+    process.env.AHH_WFM_UAT_COSTING_AUTHORIZED_USERS = "shana.maker@ahh-uat.local";
+
+    const mockAdminNotAllowlisted = {
+      id: `USR-${RUN_ID}-ADMIN`,
+      email: "admin.unlisted@ahh-uat.local",
+      name: "Unlisted Super Admin",
+      role: "SUPER_ADMIN",
+      companyId: COMP_SG,
+      permissions: ["manpower.admin.full_access", "precontract.workflow.submit", "precontract.workflow.approve"],
+      operationAccess: { allowedSecurityGuarding: true, allowedFacilityManagement: true },
+    };
+
+    setSession(mockAdminNotAllowlisted);
+    const adminRes = await postCostingWorkflow(
+      makeReq(`http://localhost:3100/api/v1/commercial/costing/${EST_UAT_ID}/workflow`, {
+        action: "SUBMIT",
+        remarks: "Unlisted Admin attempt",
+      }),
+      { params: { id: EST_UAT_ID } }
+    );
+    expect(adminRes.status).toBe(400);
+
+    // Also rejected when authorized-user list is unset
+    delete process.env.AHH_WFM_UAT_COSTING_AUTHORIZED_USERS;
+    const adminEmptyListRes = await postCostingWorkflow(
+      makeReq(`http://localhost:3100/api/v1/commercial/costing/${EST_UAT_ID}/workflow`, {
+        action: "SUBMIT",
+        remarks: "Admin with empty allowlist attempt",
+      }),
+      { params: { id: EST_UAT_ID } }
+    );
+    expect(adminEmptyListRes.status).toBe(400);
   });
 
   test("3. Security & RBAC: Finance Viewer, non-UAT user, cross-company, and cross-operation users are blocked", async () => {

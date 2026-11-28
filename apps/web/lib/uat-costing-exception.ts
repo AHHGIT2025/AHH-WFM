@@ -37,16 +37,20 @@ export interface UatCostingExceptionDecision {
 
 function parseCsvEnv(raw?: string | null): string[] {
   if (!raw) return [];
-  return raw
+  const entries = raw
     .split(",")
     .map((s) => s.trim())
-    .filter((s) => s.length > 0 && s !== "*");
+    .filter((s) => s.length > 0);
+  if (entries.some((s) => s.includes("*"))) {
+    return [];
+  }
+  return entries;
 }
 
 /**
  * Checks whether the server-side UAT costing exception feature flag is explicitly enabled
- * and whether the given costing record is in the explicit allowlist.
- * Disabled by default. Never accepts wildcard "*" or empty allowlists.
+ * and whether the given costing record's EXACT synthetic estimate ID is in the explicit allowlist.
+ * Disabled by default. Never accepts wildcard "*", case-wide IDs, COST-prefix codes, or empty allowlists.
  */
 export function isAllowlistedUatCostingRecord(estimate: {
   id: string;
@@ -60,11 +64,12 @@ export function isAllowlistedUatCostingRecord(estimate: {
   if (allowlist.length === 0) {
     return false;
   }
-  const candidates = [estimate.id, estimate.estimateCode, estimate.caseId]
-    .filter((v): v is string => typeof v === "string" && v.trim().length > 0)
-    .map((v) => v.trim().toLowerCase());
+  const exactEstimateId = typeof estimate.id === "string" ? estimate.id.trim().toLowerCase() : "";
+  if (!exactEstimateId) {
+    return false;
+  }
 
-  return allowlist.some((entry) => candidates.includes(entry.toLowerCase()));
+  return allowlist.some((entry) => entry.toLowerCase() === exactEstimateId);
 }
 
 /**
@@ -126,21 +131,29 @@ export function evaluateUatCostingException(
     };
   }
 
+  // 3b. Authorized-user allowlist MUST be non-empty and enforced for ALL roles (including ADMIN & SUPER_ADMIN)
   const authorizedUsers = parseCsvEnv(process.env.AHH_WFM_UAT_COSTING_AUTHORIZED_USERS);
-  if (authorizedUsers.length > 0 && !isAdminUser(user)) {
-    const userTokens = [user?.id, user?.email, user?.employeeId]
-      .filter((v): v is string => typeof v === "string" && v.trim().length > 0)
-      .map((v) => v.trim().toLowerCase());
-    const userAllowed = authorizedUsers.some((entry) => userTokens.includes(entry.toLowerCase()));
-    if (!userAllowed) {
-      return {
-        allowed: false,
-        banner: null,
-        bypassedChecks: [],
-        denialReason: "User is not in AHH_WFM_UAT_COSTING_AUTHORIZED_USERS.",
-        auditPayload: null,
-      };
-    }
+  if (authorizedUsers.length === 0) {
+    return {
+      allowed: false,
+      banner: null,
+      bypassedChecks: [],
+      denialReason: "AHH_WFM_UAT_COSTING_AUTHORIZED_USERS must be non-empty to use UAT costing exception.",
+      auditPayload: null,
+    };
+  }
+  const userTokens = [user?.id, user?.email, user?.employeeId]
+    .filter((v): v is string => typeof v === "string" && v.trim().length > 0)
+    .map((v) => v.trim().toLowerCase());
+  const userAllowed = authorizedUsers.some((entry) => userTokens.includes(entry.toLowerCase()));
+  if (!userAllowed) {
+    return {
+      allowed: false,
+      banner: null,
+      bypassedChecks: [],
+      denialReason: "User is not in AHH_WFM_UAT_COSTING_AUTHORIZED_USERS.",
+      auditPayload: null,
+    };
   }
 
   // 4. NEVER bypass mandatory staffing/headcount or survey consistency guards
